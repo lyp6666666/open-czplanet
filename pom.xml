@@ -1,0 +1,128 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.ai.tutor</groupId>
+  <artifactId>ai-tutor-platform</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>ai-tutor-platform</name>
+
+
+  <properties>
+    <java.version>21</java.version>
+    <spring.boot.version>3.2.4</spring.boot.version>
+    <spring.cloud.version>2023.0.1</spring.cloud.version>
+    <spring.cloud.alibaba.version>2023.0.1.0</spring.cloud.alibaba.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <!--子工程-->
+  <modules>
+    <module>tutor-appointment-service</module>
+    <module>videoCall-IM-service</module>
+  </modules>
+
+  <!-- 统一依赖版本管理 -->
+  <dependencyManagement>
+    <dependencies>
+
+      <!-- Spring Boot 这里使用BOM来统一管理springboot相关的所有版本-->
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring.boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-boot-starter</artifactId>
+        <version>3.5.7</version> <!-- Spring Boot 3.2.x 推荐版本 -->
+      </dependency>
+
+      <!-- Spring Cloud Alibaba -->
+      <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+        <version>${spring.cloud.alibaba.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.mybatis.spring.boot</groupId>
+        <artifactId>mybatis-spring-boot-starter</artifactId>
+        <version>3.0.5</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <version>3.5.7</version>
+        <scope>runtime</scope>
+        <optional>true</optional>
+      </dependency>
+      <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>1.18.36</version>
+        <optional>true</optional>
+      </dependency>
+      <!-- JJwt -->
+      <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
+      <dependency>
+        <groupId>org.apache.spark</groupId>
+        <artifactId>spark-core_2.13</artifactId>
+        <version>4.0.0</version>
+      </dependency>
+      <!-- swagger -->
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>2.6.0</version>
+      </dependency>
+      <!-- alibab hutool -->
+      <dependency>
+        <groupId>cn.hutool</groupId>
+        <artifactId>hutool-all</artifactId>
+        <version>5.8.18</version> <!-- 2025年最新稳定版推荐 5.8.x -->
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+
+  <!-- Maven 仓库配置 -->
+  <repositories>
+    <repository>
+      <id>aliyunmaven</id>
+      <name>Aliyun Maven</name>
+      <url>https://maven.aliyun.com/repository/public</url>
+    </repository>
+  </repositories>
+
+  <!-- 父 pom.xml -->
+  <build>
+    <pluginManagement>
+      <plugins>
+        <!-- 关键：声明 spring-boot-maven-plugin 版本 -->
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <version>${spring.boot.version}</version>
+          <executions>
+            <execution>
+              <goals>
+                <goal>repackage</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+
+</project>

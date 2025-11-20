@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.StudentProfileMapper">
+
+    <resultMap id="StudentInfoMap" type="com.ai.tutor.appointment.model.entity.StudentProfile">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.StudentProfile"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO student_profile (
+            user_id, real_name, age, school, grade, parent_contact,
+            status, create_time, update_time
+        ) VALUES (
+                     #{userId}, #{realName}, #{age}, #{school}, #{grade}, #{parentContact},
+                     #{status}, #{createTime}, #{updateTime}
+                 )
+    </insert>
+
+    <select id="selectByUserId" parameterType="long" resultType="com.ai.tutor.appointment.model.entity.StudentProfile">
+        SELECT * FROM student_profile WHERE user_id = #{userId}
+    </select>
+
+
+</mapper>
