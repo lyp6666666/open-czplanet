@@ -1,7 +1,6 @@
 package com.ai.tutor.appointment.interceptor;
 
 import com.ai.tutor.appointment.utils.JwtUtil;
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +9,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
 public class JwtInterceptor implements HandlerInterceptor {
+
+    public static final String ATTRIBUTE_UID = "uid";
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -22,6 +23,8 @@ public class JwtInterceptor implements HandlerInterceptor {
         if (token == null || !token.startsWith("Bearer ")) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("Missing or invalid token");
+            String requestURI = request.getRequestURI();
+            System.out.println("拦截器拦截路径: " + requestURI);
             return false;
         }
 
@@ -35,11 +38,11 @@ public class JwtInterceptor implements HandlerInterceptor {
             return false;
         }
 
-        // 解析 Token，取出手机号
+        //  JWT 里目前只存了手机号，所以手机号作为 UID
         String phone = jwtUtil.getPhone(token);
 
-        // 将手机号放入请求属性，后续 Controller 可以直接取出
-        request.setAttribute("phone", phone);
+        // ✔ 用 uid 作为统一标识
+        request.setAttribute(ATTRIBUTE_UID, phone);
 
         return true; // 放行请求
     }

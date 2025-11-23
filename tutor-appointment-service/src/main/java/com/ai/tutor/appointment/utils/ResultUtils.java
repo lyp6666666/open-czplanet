@@ -2,11 +2,17 @@ package com.ai.tutor.appointment.utils;
 
 import com.ai.tutor.appointment.common.BaseResponse;
 import com.ai.tutor.appointment.enums.ErrorCode;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
 
 /**
  * 响应工具类
  */
-public class ResultUtils {
+@Data
+public class ResultUtils implements Serializable {
 
     /**
      * 成功

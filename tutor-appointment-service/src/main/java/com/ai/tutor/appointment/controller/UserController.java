@@ -1,8 +1,10 @@
 package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.common.BaseResponse;
+import com.ai.tutor.appointment.common.annotation.FrequencyControl;
 import com.ai.tutor.appointment.enums.ErrorCode;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.UserService;
@@ -12,10 +14,9 @@ import com.ai.tutor.appointment.utils.ThrowUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/user")
@@ -23,21 +24,36 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     @Resource
-    private SmsServiceImpl smsServiceImpl;
+    private SmsServiceImpl smsService;
     @Resource
     private UserService userService;
 
     /**
      *  获取验证码
-     * @param phone
+     * @param sendCodeRequest
      * @return
      */
-    @PostMapping("/sendCode")
+    @PostMapping("/sendcode")
     @Operation(summary = "发送验证码", description = "根据手机号发送验证码（模拟）")
-    public BaseResponse<String> sendCode(String phone) {
-        ThrowUtils.throwIf(phone == null || phone.isEmpty(), ErrorCode.PARAMS_ERROR);
+    @FrequencyControl(
+            prefixKey = "sms:send:",   // Redis key 前缀
+            target = FrequencyControl.Target.EL,  // 通过 EL 取手机号
+            spEl = "#phone",           // 取入参 phone 参数
+            time = 1,                  // 时间范围（1 分钟）
+            unit = TimeUnit.MINUTES,   // 时间单位：分钟
+            count = 1                  // 限制 1 次
+    )
+    @FrequencyControl(
+            prefixKey = "sms:send:ip:",
+            target = FrequencyControl.Target.IP,
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 5
+    )
+    public BaseResponse<String> sendCode(@RequestBody SendCodeRequest sendCodeRequest) {
+        ThrowUtils.throwIf(sendCodeRequest.getPhone() == null || sendCodeRequest.getPhone().isEmpty(), ErrorCode.PARAMS_ERROR);
         // 生成并发送验证码
-        smsServiceImpl.sendCode(phone);
+        smsService.sendCode(sendCodeRequest.getPhone());
         return ResultUtils.success("验证码发送成功(模拟)");
     }
 
@@ -57,4 +73,6 @@ public class UserController {
         LoginUserVO loginUserVO = userService.userLoginOrRegister(phone, code, userRoleEnum);
         return ResultUtils.success(loginUserVO);
     }
+
+
 }

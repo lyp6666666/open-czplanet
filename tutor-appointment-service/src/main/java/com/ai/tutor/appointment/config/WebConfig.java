@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.config;
 
+import com.ai.tutor.appointment.interceptor.CollectorInterceptor;
 import com.ai.tutor.appointment.interceptor.JwtInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -12,10 +13,32 @@ public class WebConfig implements WebMvcConfigurer {
     @Autowired
     private JwtInterceptor jwtInterceptor;
 
+    @Autowired
+    private CollectorInterceptor collectorInterceptor;
+
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+
+        // 必须先执行 CollectorInterceptor，负责设置 RequestHolder
+        registry.addInterceptor(collectorInterceptor)
+                .addPathPatterns("/**")
+                .order(1);  // 优先级最高
+
         registry.addInterceptor(jwtInterceptor)
-                .addPathPatterns("/**")                // 拦截所有请求
-                .excludePathPatterns("/loginOrRegister", "/sendCode"); // 放行登录和验证码接口
+                .addPathPatterns("/**")
+                // 登录和验证码
+                .excludePathPatterns("/user/loginOrRegister", "/user/sendcode")
+                // swagger-ui 静态资源
+                .excludePathPatterns(
+                "/swagger-ui/**",
+                "/swagger-ui.html",
+                "/v3/api-docs/**",
+                "/swagger-resources/**",
+                "/favicon.ico",
+                "/webjars/**"
+                )
+                // OpenAPI 文档
+                .excludePathPatterns("/v3/api-docs/**", "/swagger-resources/**")
+                .excludePathPatterns("/error","/actuator/httpexchanges");
     }
 }

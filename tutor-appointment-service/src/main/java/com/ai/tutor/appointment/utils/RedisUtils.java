@@ -5,8 +5,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 
-import java.util.Collections;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class RedisUtils {
@@ -16,6 +17,19 @@ public class RedisUtils {
     static {
         RedisUtils.stringRedisTemplate = SpringUtil.getBean(StringRedisTemplate.class);
     }
+
+
+//    public static <T> List<T> mget(Collection<String> keys, Class<T> tClass) {
+//        List<String> list = stringRedisTemplate.opsForValue().multiGet(keys);
+//        if (Objects.isNull(list)) {
+//            return new ArrayList<>();
+//        }
+//        return list.stream().map(o -> toBeanOrNull(o, tClass)).collect(Collectors.toList());
+//    }
+
+//    static <T> T toBeanOrNull(String json, Class<T> tClass) {
+//        return json == null ? null : JsonUtils.toObj(json, tClass);
+//    }
 
     private static final String LUA_INCR_EXPIRE =
             "local key,ttl=KEYS[1],ARGV[1] \n" +
