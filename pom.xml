@@ -23,6 +23,7 @@
   <modules>
     <module>tutor-appointment-service</module>
     <module>videoCall-IM-service</module>
+    <module>ai-tutor-common</module>
   </modules>
 
   <!-- 统一依赖版本管理 -->

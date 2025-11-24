@@ -19,8 +19,13 @@
 		<java.version>21</java.version>
 	</properties>
 
-
 	<dependencies>
+		<dependency>
+			<groupId>com.ai.tutor</groupId>
+			<artifactId>ai-tutor-common</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+
 		<!-- Spring Boot Web -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -58,16 +63,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
-<!--		<dependency>-->
-<!--			<groupId>org.springframework.boot</groupId>-->
-<!--			<artifactId>spring-boot-starter-data-redis</artifactId>-->
-<!--		</dependency>-->
-
-<!--		<dependency>-->
-<!--			<groupId>org.redisson</groupId>-->
-<!--			<artifactId>redisson-spring-boot-starter</artifactId>-->
-<!--			<version>3.26.0</version>-->
-<!--		</dependency>-->
 
 		<!-- Nacos 服务发现 -->
 <!--		<dependency>-->
@@ -96,6 +91,7 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
 		<!-- swagger -->
 		<dependency>
 			<groupId>org.springdoc</groupId>
@@ -103,6 +99,4 @@
 		</dependency>
 
 	</dependencies>
-
-
 </project>
