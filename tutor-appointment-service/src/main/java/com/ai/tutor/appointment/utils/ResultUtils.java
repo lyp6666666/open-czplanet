@@ -1,10 +1,9 @@
 package com.ai.tutor.appointment.utils;
 
-import com.ai.tutor.appointment.common.BaseResponse;
-import com.ai.tutor.appointment.enums.ErrorCode;
-import lombok.AllArgsConstructor;
+
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.enums.ErrorCode;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 

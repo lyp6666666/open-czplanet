@@ -1,8 +1,8 @@
 package com.ai.tutor.appointment.utils;
 
-import com.ai.tutor.appointment.enums.ErrorCode;
-import com.ai.tutor.appointment.exception.BusinessException;
 
+import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.exception.BusinessException;
 
 /**
  * 异常处理工具类

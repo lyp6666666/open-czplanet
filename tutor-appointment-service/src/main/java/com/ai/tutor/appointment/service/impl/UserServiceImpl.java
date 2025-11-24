@@ -1,6 +1,5 @@
 package com.ai.tutor.appointment.service.impl;
 
-import com.ai.tutor.appointment.enums.ErrorCode;
 import com.ai.tutor.appointment.enums.RedisKeyPrefix;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
@@ -14,6 +13,7 @@ import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.appointment.utils.ThrowUtils;
+import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;

@@ -1,8 +1,6 @@
 package com.ai.tutor.appointment.controller;
 
-import com.ai.tutor.appointment.common.BaseResponse;
-import com.ai.tutor.appointment.common.annotation.FrequencyControl;
-import com.ai.tutor.appointment.enums.ErrorCode;
+
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
@@ -11,6 +9,9 @@ import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
 import com.ai.tutor.appointment.utils.ResultUtils;
 import com.ai.tutor.appointment.utils.ThrowUtils;
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.annotation.FrequencyControl;
+import com.ai.tutor.enums.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;

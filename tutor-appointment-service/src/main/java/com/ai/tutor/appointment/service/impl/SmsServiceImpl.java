@@ -1,12 +1,11 @@
 package com.ai.tutor.appointment.service.impl;
 
-import com.ai.tutor.appointment.enums.ErrorCode;
 import com.ai.tutor.appointment.enums.RedisKeyPrefix;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.utils.ThrowUtils;
+import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Random;

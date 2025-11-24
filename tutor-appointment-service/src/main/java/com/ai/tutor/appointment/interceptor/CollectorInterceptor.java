@@ -1,7 +1,8 @@
 package com.ai.tutor.appointment.interceptor;
 
-import com.ai.tutor.appointment.model.dto.RequestInfo;
-import com.ai.tutor.appointment.utils.RequestHolder;
+
+import com.ai.tutor.common.service.dto.RequestInfo;
+import com.ai.tutor.utils.RequestHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
