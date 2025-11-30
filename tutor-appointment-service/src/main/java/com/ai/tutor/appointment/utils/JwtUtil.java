@@ -2,24 +2,30 @@ package com.ai.tutor.appointment.utils;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import io.jsonwebtoken.Claims;
+
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
 @Component
 public class JwtUtil {
-    private static final String SECRET_KEY = "LypJwtSecretKey123";
-    private static final long EXPIRATION_TIME = 1000 * 60 * 60 * 24; // 24小时
+
+    private static final String SECRET_KEY = "LypJwtSecretKey123LypJwtSecretKey123"; // >= 32 字节
+    private static final long EXPIRATION_TIME = 1000 * 60 * 60 * 24; // 24 小时
+
+    private Key getSigningKey() {
+        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+    }
 
     /**
      * 生成 Token
-     * @param phone 用户手机号
-     * @param role 用户角色枚举
-     * @return JWT字符串
      */
     public String generateToken(String phone, UserRoleEnum role) {
         Map<String, Object> claims = new HashMap<>();
@@ -30,23 +36,23 @@ public class JwtUtil {
                 .setSubject(phone)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
 
     /**
-     * 解析Token
+     * 解析 Token
      */
     public Claims parseToken(String token) {
-        return Jwts.parser()
-                .setSigningKey(SECRET_KEY)
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
 
     /**
-     * 校验Token是否有效
+     * 校验 Token
      */
     public boolean validateToken(String token) {
         try {
@@ -65,7 +71,7 @@ public class JwtUtil {
     }
 
     /**
-     * 获取用户角色枚举
+     * 获取用户角色
      */
     public UserRoleEnum getRole(String token) {
         Claims claims = parseToken(token);

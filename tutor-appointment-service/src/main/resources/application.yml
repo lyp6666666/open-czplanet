@@ -3,7 +3,7 @@ spring:
     name: tutor-appointment-service
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/
+    url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     username: root
     password: Aa123456
 
@@ -44,3 +44,7 @@ springdoc:
 logging:
   level:
     org.springframework.web: DEBUG
+
+mybatis-plus:
+  configuration:
+    default-enum-type-handler: com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler

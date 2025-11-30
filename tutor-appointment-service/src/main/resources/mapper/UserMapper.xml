@@ -16,18 +16,21 @@
 
     <resultMap id="BaseUserResultMap" type="com.ai.tutor.appointment.model.entity.User">
         <id property="id" column="id"/>
+
         <result property="name" column="name"/>
         <result property="avatar" column="avatar"/>
         <result property="sex" column="sex"/>
         <result property="openId" column="open_id"/>
+        <result property="phone" column="phone"/>
         <result property="activeStatus" column="active_status"/>
         <result property="lastOptTime" column="last_opt_time"/>
         <result property="ipInfo" column="ip_info" jdbcType="VARCHAR"/>
         <result property="itemId" column="item_id"/>
         <result property="status" column="status"/>
+        <result property="refId" column="ref_id"/>
+        <result property="userType" column="user_type"/>
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
-        <result property="userType" column="user_type"/>
     </resultMap>
 
     <select id="selectByPhoneAndUserType"
@@ -38,6 +41,43 @@
           AND user_type = #{userType}
             LIMIT 1
     </select>
+
+
+    <!-- 插入用户（包含所有 NOT NULL 字段） -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (
+            name,
+            phone,
+            avatar,
+            sex,
+            open_id,
+            active_status,
+            last_opt_time,
+            ip_info,
+            item_id,
+            status,
+            user_type,
+            ref_id,
+            create_time,
+            update_time
+        )
+        VALUES (
+                   #{name},
+                   #{phone},
+                   #{avatar},
+                   #{sex},
+                   #{openId},
+                   #{activeStatus},
+                   #{lastOptTime},
+                   #{ipInfo},
+                   #{itemId},
+                   #{status},
+                   #{userType},
+                   #{refId},
+                   #{createTime},
+                   #{updateTime}
+               )
+    </insert>
 
 
 </mapper>

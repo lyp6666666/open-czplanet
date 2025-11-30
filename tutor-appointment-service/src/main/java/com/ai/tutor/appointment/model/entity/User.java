@@ -1,5 +1,7 @@
 package com.ai.tutor.appointment.model.entity;
 
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,6 +40,7 @@ public class User {
     private LocalDateTime lastOptTime;
 
     /** ip信息（JSON格式） */
+    @TableField(typeHandler = JacksonTypeHandler.class)
     private String ipInfo;
 
     /** 佩戴的徽章id */

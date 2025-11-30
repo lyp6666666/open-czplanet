@@ -92,6 +92,13 @@
         <artifactId>hutool-all</artifactId>
         <version>5.8.18</version> <!-- 2025年最新稳定版推荐 5.8.x -->
       </dependency>
+
+      <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-boot-starter</artifactId>
+        <version>3.5.7</version>
+      </dependency>
+
     </dependencies>
   </dependencyManagement>
 

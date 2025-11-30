@@ -6,7 +6,7 @@ import lombok.Getter;
 public enum UserRoleEnum {
 
     TEACHER(1, "teacher", "教师"),
-    STUDENT(2, "student", "家长");
+    STUDENT(2, "student", "学生");
 
     private final int value;     // 数据库存储值
     private final String code;   // 标识符

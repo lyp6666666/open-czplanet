@@ -18,14 +18,16 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class StudentProfile {
 
-    /** 家长资料id */
+    /** 学生资料id */
     private Long id;
 
     /** 用户id（逻辑外键） */
     private Long userId;
 
-    /** 家长姓名 */
+    /** 学生姓名 */
     private String realName;
+
+    private Integer age;
 
     /** 孩子年龄 */
     private Integer childAge;
