@@ -26,6 +26,9 @@ public class LoginUserVO implements Serializable {
     /** 用户类型 1教师 2学生 */
     private Integer userType;
 
+    /*返回的登录凭证*/
+    private String token;
+
 
     private static final long serialVersionUID = 1L;
 }

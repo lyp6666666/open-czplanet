@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.mapper;
 
+import com.ai.tutor.appointment.model.dto.user.BaseUserInfo;
 import com.ai.tutor.appointment.model.entity.User;
 import org.apache.ibatis.annotations.*;
 
@@ -21,4 +22,6 @@ public interface UserMapper {
      */
     User selectByPhoneAndUserType(@Param("phone") String phone,
                                   @Param("userType") Integer userType);
+
+    int updateUserBaseInfo(@Param("userInfo") BaseUserInfo userInfo,@Param("id") Long id);
 }

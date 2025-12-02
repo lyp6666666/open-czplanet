@@ -8,6 +8,8 @@ import com.ai.tutor.common.service.dto.RequestInfo;
  */
 public class RequestHolder {
 
+    public static final String ATTRIBUTE_UID = "uid";
+
     private static final ThreadLocal<RequestInfo> threadLocal = new ThreadLocal<>();
 
     public static void set(RequestInfo requestInfo) {

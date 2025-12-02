@@ -4,6 +4,7 @@ package com.ai.tutor.appointment.controller;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
+import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
@@ -15,6 +16,7 @@ import com.ai.tutor.enums.ErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.concurrent.TimeUnit;
@@ -73,6 +75,14 @@ public class UserController {
         UserRoleEnum userRoleEnum = userLoginRequest.getUserRoleEnum();
         LoginUserVO loginUserVO = userService.userLoginOrRegister(phone, code, userRoleEnum);
         return ResultUtils.success(loginUserVO);
+    }
+
+    @PostMapping("/updateUserInfo")
+    @Operation(summary = "更新用户信息", description = "更新用户信息")
+    public BaseResponse<String> updateUserInfo(@RequestBody UserUpdateRequest requestDto, HttpServletRequest request) {
+
+        userService.updateUserInfo(requestDto,request);
+        return ResultUtils.success("更新成功");
     }
 
 

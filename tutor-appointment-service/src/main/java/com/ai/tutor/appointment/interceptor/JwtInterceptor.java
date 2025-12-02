@@ -7,10 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
+
 @Component
 public class JwtInterceptor implements HandlerInterceptor {
-
-    public static final String ATTRIBUTE_UID = "uid";
 
     @Autowired
     private JwtUtil jwtUtil;

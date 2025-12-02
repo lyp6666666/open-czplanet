@@ -7,7 +7,13 @@
         <id column="id" property="id"/>
         <result column="user_id" property="userId"/>
         <result column="subject" property="subject"/>
-
+        <result column="education" property="education"/>
+        <result column="experience_years" property="experienceYears"/>
+        <result column="rate_per_hour" property="ratePerHour"/>
+        <result column="introduction" property="introduction"/>
+        <result column="certificate_urls" property="certificateUrls"/>
+        <result column="status" property="status"/>
+        <result column="update_time" property="updateTime"/>
         <result column="create_time" property="createTime"/>
     </resultMap>
 
@@ -21,6 +27,40 @@
                      #{ratePerHour}, #{introduction}, #{certificateUrls}, #{status}, #{createTime}, #{updateTime}
                  )
     </insert>
+
+    <update id="updateTeacherProfile">
+        update teacher_profile
+        <set>
+
+            <if test="teacherExtInfo.realName != null">
+                real_name = #{teacherExtInfo.realName},
+            </if>
+            <if test="teacherExtInfo.education != null">
+                education = #{teacherExtInfo.education},
+            </if>
+            <if test="teacherExtInfo.subject != null">
+                subject = #{teacherExtInfo.subject},
+            </if>
+            <if test="teacherExtInfo.experienceYears != null">
+                experience_years = #{teacherExtInfo.experienceYears},
+            </if>
+            <if test="teacherExtInfo.ratePerHour != null">
+                rate_per_hour = #{teacherExtInfo.ratePerHour},
+            </if>
+            <if test="teacherExtInfo.introduction != null">
+                introduction = #{teacherExtInfo.introduction},
+            </if>
+            <if test="teacherExtInfo.certificateUrls != null">
+                certificate_urls = #{teacherExtInfo.certificateUrls},
+            </if>
+            <if test="teacherExtInfo.status != null">
+                status = #{teacherExtInfo.status},
+            </if>
+
+            update_time = now()
+        </set>
+        where user_id = #{userId}
+    </update>
 
     <select id="selectByUserId" parameterType="long" resultType="com.ai.tutor.appointment.model.entity.TeacherProfile">
         SELECT * FROM teacher_profile WHERE user_id = #{userId}

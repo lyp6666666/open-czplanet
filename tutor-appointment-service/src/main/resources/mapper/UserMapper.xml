@@ -32,6 +32,34 @@
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
     </resultMap>
+    <update id="updateUserBaseInfo" parameterType="com.ai.tutor.appointment.model.dto.user.BaseUserInfo">
+        UPDATE user
+        <set>
+            <if test="userInfo.name != null">
+                name = #{userInfo.name},
+            </if>
+            <if test="userInfo.avatar != null">
+                avatar = #{userInfo.avatar},
+            </if>
+            <if test="userInfo.sex != null">
+                sex = #{userInfo.sex},
+            </if>
+            <if test="userInfo.activeStatus != null">
+                active_status = #{userInfo.activeStatus},
+            </if>
+            <if test="userInfo.ipInfo != null">
+                ip_info = #{userInfo.ipInfo},
+            </if>
+            <if test="userInfo.itemId != null">
+                item_id = #{userInfo.itemId},
+            </if>
+            <if test="userInfo.status != null">
+                status = #{userInfo.status},
+            </if>
+            update_time = now()
+        </set>
+        where id = #{id}
+    </update>
 
     <select id="selectByPhoneAndUserType"
             parameterType="map"

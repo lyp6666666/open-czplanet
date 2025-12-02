@@ -21,6 +21,34 @@
                  )
     </insert>
 
+    <update id="updateStudentProfile">
+        UPDATE student_profile
+        <set>
+            <if test="studentExtInfo.realName != null">
+                real_name = #{studentExtInfo.realName},
+            </if>
+            <if test="studentExtInfo.age != null">
+                age = #{studentExtInfo.age},
+            </if>
+            <if test="studentExtInfo.childAge != null">
+                child_age = #{studentExtInfo.childAge},
+            </if>
+            <if test="studentExtInfo.address != null">
+                address = #{studentExtInfo.address},
+            </if>
+            <if test="studentExtInfo.demandDescription != null">
+                demand_description = #{studentExtInfo.demandDescription},
+            </if>
+            <if test="studentExtInfo.budget != null">
+                budget = #{studentExtInfo.budget},
+            </if>
+            <if test="studentExtInfo.status != null">
+                status = #{studentExtInfo.status},
+            </if>
+        </set>
+        where id = #{userId}
+    </update>
+
     <select id="selectByUserId" parameterType="long" resultType="com.ai.tutor.appointment.model.entity.StudentProfile">
         SELECT * FROM student_profile WHERE user_id = #{userId}
     </select>
