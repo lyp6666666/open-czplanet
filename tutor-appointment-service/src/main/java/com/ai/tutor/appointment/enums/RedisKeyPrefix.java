@@ -1,5 +1,9 @@
 package com.ai.tutor.appointment.enums;
 
+
+import lombok.Getter;
+
+@Getter
 public enum RedisKeyPrefix {
 
     SMS_CODE("sms:code:", "短信验证码"),

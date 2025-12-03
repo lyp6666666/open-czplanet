@@ -18,10 +18,10 @@ public class SmsServiceImpl implements SmsService {
     private RedisTemplate<String, Object> redisTemplate;
 
 
-    public String sendCode(String phone) {
+    public String sendCode(String phone,String prefix) {
         String code = String.format("%04d", new Random().nextInt(10000));
         // 构造Key
-        String key = RedisKeyPrefix.SMS_CODE.key(phone);
+        String key = prefix + phone;
         // 存入Redis，设置过期时间 60 秒
         redisTemplate.opsForValue().set(key, code, 60, TimeUnit.SECONDS);
         //todo 这里应该调用云服务进行短信发送
@@ -29,7 +29,7 @@ public class SmsServiceImpl implements SmsService {
         return code;
     }
 
-    public boolean verifyCode(String phone, String code) {
+    public boolean verifyCode(String phone, String code,String prefix) {
         String key = RedisKeyPrefix.SMS_CODE.key(phone);
         String storedCode = (String) redisTemplate.opsForValue().get(key);
         ThrowUtils.throwIf(storedCode == null, ErrorCode.VERIFICATION_EXPIRED_ERROR);

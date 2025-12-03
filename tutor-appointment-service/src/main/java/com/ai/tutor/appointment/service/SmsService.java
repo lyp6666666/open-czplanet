@@ -7,7 +7,7 @@ public interface SmsService {
      * @param phone
      * @return
      */
-    String sendCode(String phone);
+    String sendCode(String phone,String prefix);
 
 
     /**
@@ -16,5 +16,5 @@ public interface SmsService {
      * @param code
      * @return
      */
-    boolean verifyCode(String phone, String code);
+    boolean verifyCode(String phone, String code,String prefix);
 }

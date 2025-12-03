@@ -1,6 +1,7 @@
 package com.ai.tutor.appointment.controller;
 
 
+import com.ai.tutor.appointment.enums.RedisKeyPrefix;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
@@ -56,7 +57,7 @@ public class UserController {
     public BaseResponse<String> sendCode(@RequestBody SendCodeRequest sendCodeRequest) {
         ThrowUtils.throwIf(sendCodeRequest.getPhone() == null || sendCodeRequest.getPhone().isEmpty(), ErrorCode.PARAMS_ERROR);
         // 生成并发送验证码
-        smsService.sendCode(sendCodeRequest.getPhone());
+        smsService.sendCode(sendCodeRequest.getPhone(), RedisKeyPrefix.SMS_CODE.getPrefix());
         return ResultUtils.success("验证码发送成功(模拟)");
     }
 

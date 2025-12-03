@@ -64,7 +64,7 @@ public class UserServiceImpl implements UserService {
         ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
 
         //1. 验证验证码是否正确
-        boolean isValid = smsService.verifyCode(phone, code);
+        boolean isValid = smsService.verifyCode(phone, code,RedisKeyPrefix.SMS_CODE.getPrefix());
         ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
 
         //2. 查询该用户是否存在
