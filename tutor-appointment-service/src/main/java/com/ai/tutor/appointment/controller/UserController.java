@@ -4,6 +4,7 @@ package com.ai.tutor.appointment.controller;
 import com.ai.tutor.appointment.enums.RedisKeyPrefix;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
+import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
@@ -84,6 +85,23 @@ public class UserController {
 
         userService.updateUserInfo(requestDto,request);
         return ResultUtils.success("更新成功");
+    }
+
+    @PostMapping("/updateUserPhone")
+    @Operation(summary = "更新用户手机号", description = "更新用户手机号")
+    public BaseResponse<String> updateUserPhone(@RequestBody UpdatePhoneRequest requestDto, HttpServletRequest request) {
+        userService.updateUserPhone(requestDto,request);
+        return ResultUtils.success("更新成功 请重新登录");
+    }
+
+    @GetMapping("/sendUpdateUserPhoneCode")
+    @Operation(summary = "发送更新用户手机号验证码", description = "发送更新用户手机号验证码")
+    public BaseResponse<String> sendUpdateUserPhoneCode(@RequestBody SendCodeRequest request) {
+        String phone = request.getPhone();
+        ThrowUtils.throwIf(phone == null || phone.isEmpty(), ErrorCode.PARAMS_ERROR);
+        // 获取验证码
+        String code = smsService.sendCode(phone, RedisKeyPrefix.USER_PHONE.getPrefix());
+        return ResultUtils.success(code);
     }
 
 

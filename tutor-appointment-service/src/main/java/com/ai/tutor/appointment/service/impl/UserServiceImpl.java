@@ -5,10 +5,7 @@ import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
-import com.ai.tutor.appointment.model.dto.user.BaseUserInfo;
-import com.ai.tutor.appointment.model.dto.user.StudentExtInfo;
-import com.ai.tutor.appointment.model.dto.user.TeacherExtInfo;
-import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
+import com.ai.tutor.appointment.model.dto.user.*;
 import com.ai.tutor.appointment.model.entity.StudentProfile;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
@@ -126,6 +123,7 @@ public class UserServiceImpl implements UserService {
         String uid = (String)request.getAttribute(ATTRIBUTE_UID);
         ThrowUtils.throwIf(!phone.equals(uid), ErrorCode.NO_AUTH_ERROR);
         ThrowUtils.throwIf(phone == null , ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(requestDto.getBaseUserInfo()==null&&requestDto.getTeacherExtInfo()==null&&requestDto.getStudentExtInfo()==null, ErrorCode.PARAMS_ERROR);
         User user = userMapper.selectByPhone(phone);
         StudentExtInfo studentExtInfo = requestDto.getStudentExtInfo();
         TeacherExtInfo teacherExtInfo = requestDto.getTeacherExtInfo();
@@ -167,6 +165,25 @@ public class UserServiceImpl implements UserService {
             }
             return false;
         });
+
+    }
+
+    @Override
+    public void updateUserPhone(UpdatePhoneRequest requestDto, HttpServletRequest request) {
+        String newPhone = requestDto.getNewPhone();
+        String code = requestDto.getCode();
+        ThrowUtils.throwIf(newPhone == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
+        String oldPhone = (String) request.getAttribute(ATTRIBUTE_UID);
+        User user = userMapper.selectByPhone(oldPhone);
+        ThrowUtils.throwIf(!oldPhone.equals(user.getPhone()), ErrorCode.NO_AUTH_ERROR);
+        boolean isValid = smsService.verifyCode(oldPhone, code,RedisKeyPrefix.USER_PHONE.getPrefix());
+        ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
+        int count = userMapper.updateUserPhone(newPhone, user.getId());
+        ThrowUtils.throwIf(count <= 0, ErrorCode.OPERATION_ERROR);
+        redisTemplate.delete(RedisKeyPrefix.USER_PHONE.getPrefix() + oldPhone);
+        redisTemplate.delete(RedisKeyPrefix.USER_TOKEN.getPrefix() + oldPhone);
+        log.info("更新手机号成功");
 
     }
 

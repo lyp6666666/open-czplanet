@@ -24,4 +24,10 @@ public interface UserMapper {
                                   @Param("userType") Integer userType);
 
     int updateUserBaseInfo(@Param("userInfo") BaseUserInfo userInfo,@Param("id") Long id);
+
+    @Update("UPDATE user SET password = #{newPassword} WHERE id = #{id}")
+    int updateUserPassWord(String newPassword, Long id);
+
+    @Update("UPDATE user SET phone = #{newPhone} WHERE id = #{id}")
+    int updateUserPhone(@Param("newPhone") String newPhone, @Param("id") Long id);
 }

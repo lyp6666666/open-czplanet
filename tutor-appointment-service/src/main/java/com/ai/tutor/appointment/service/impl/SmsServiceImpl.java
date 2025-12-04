@@ -30,7 +30,7 @@ public class SmsServiceImpl implements SmsService {
     }
 
     public boolean verifyCode(String phone, String code,String prefix) {
-        String key = RedisKeyPrefix.SMS_CODE.key(phone);
+        String key = prefix + phone;
         String storedCode = (String) redisTemplate.opsForValue().get(key);
         ThrowUtils.throwIf(storedCode == null, ErrorCode.VERIFICATION_EXPIRED_ERROR);
         return code != null && code.equals(storedCode);

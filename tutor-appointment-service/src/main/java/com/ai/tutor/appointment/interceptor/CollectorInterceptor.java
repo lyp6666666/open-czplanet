@@ -12,6 +12,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Optional;
 
+import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
+
 /**
  * 信息收集的拦截器
  */
@@ -24,7 +26,7 @@ public class CollectorInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         RequestInfo info = new RequestInfo();
         info.setUid(
-                Optional.ofNullable(request.getAttribute(JwtInterceptor.ATTRIBUTE_UID))
+                Optional.ofNullable(request.getAttribute(ATTRIBUTE_UID))
                         .map(Object::toString)
                         .map(Long::parseLong)
                         .orElse(null)
