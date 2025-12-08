@@ -10,7 +10,7 @@ import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
-import com.ai.tutor.appointment.utils.ResultUtils;
+import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.appointment.utils.ThrowUtils;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.common.annotation.FrequencyControl;

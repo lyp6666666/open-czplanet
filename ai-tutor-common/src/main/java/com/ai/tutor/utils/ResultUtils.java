@@ -1,4 +1,4 @@
-package com.ai.tutor.appointment.utils;
+package com.ai.tutor.utils;
 
 
 import com.ai.tutor.common.BaseResponse;

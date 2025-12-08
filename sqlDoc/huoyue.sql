@@ -173,6 +173,45 @@ CREATE TABLE `user`  (
   INDEX `idx_active_status_last_opt_time`(`active_status`, `last_opt_time`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
 
+
+DROP TABLE IF EXISTS `room`;
+CREATE TABLE `room` (
+            `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '会话id',
+            `teacher_profile_id` bigint(20) NOT NULL COMMENT '教师资料id（逻辑外键）',
+            `student_profile_id` bigint(20) NOT NULL COMMENT '学生资料id（逻辑外键）',
+            `active_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '最后消息时间',
+            `last_msg_id` bigint(20) DEFAULT NULL COMMENT '最后一条消息id',
+            `status` tinyint(4) DEFAULT 1 COMMENT '状态 1正常 0关闭/归档',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_teacher_profile_id` (`teacher_profile_id`),
+            KEY `idx_student_profile_id` (`student_profile_id`),
+            KEY `idx_active_time` (`active_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='学生与教师之间的1对1会话表';
+
+
+DROP TABLE IF EXISTS `message`;
+CREATE TABLE `message` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '消息id',
+            `room_id` bigint(20) NOT NULL COMMENT '会话id',
+            `from_uid` bigint(20) NOT NULL COMMENT '发送者 user_id',
+            `to_uid` bigint(20) NOT NULL COMMENT '接收者 user_id',
+            `content` varchar(1024) DEFAULT NULL COMMENT '消息内容',
+            `reply_msg_id` bigint(20) DEFAULT NULL COMMENT '被回复的消息id',
+            `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态 0正常 1删除',
+            `gap_count` int DEFAULT NULL COMMENT '与被回复消息的间隔数',
+            `type` tinyint(4) NOT NULL DEFAULT 1 COMMENT '消息类型 1文本 2撤回',
+            `extra` json DEFAULT NULL COMMENT '扩展信息',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_room_id` (`room_id`),
+            KEY `idx_from_uid` (`from_uid`),
+            KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
+
+
 -- ----------------------------
 -- Records of user
 -- ----------------------------
