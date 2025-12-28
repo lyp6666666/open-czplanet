@@ -7,13 +7,14 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseRes
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 ;
 
 @Mapper
 public interface MessageMapper extends BaseMapper<Message> {
 
-    CursorPageBaseResp<Message> getCursorPage(Long roomId, ChatMessagePageReq request);
+    CursorPageBaseResp<Message> getCursorPage(@Param("roomId") Long roomId,@Param("request") ChatMessagePageReq request);
 
     @Select("SELECT * FROM message WHERE id = #{msgId}")
     Message getById(Long msgId);

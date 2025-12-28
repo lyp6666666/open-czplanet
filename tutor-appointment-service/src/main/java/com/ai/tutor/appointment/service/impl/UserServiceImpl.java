@@ -13,7 +13,7 @@ import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.utils.JwtUtil;
-import com.ai.tutor.appointment.utils.ThrowUtils;
+import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,7 +22,6 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 

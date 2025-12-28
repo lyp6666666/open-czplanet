@@ -10,8 +10,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class MQProducer {
 
-    @Resource
-    private RocketMQTemplate rocketMQTemplate;
+
+    private final RocketMQTemplate rocketMQTemplate;
+
+    public MQProducer(RocketMQTemplate rocketMQTemplate) {
+        this.rocketMQTemplate = rocketMQTemplate;
+    }
 
     public void sendMsg(String topic, Object body) {
         Message<Object> build = MessageBuilder.withPayload(body).build();

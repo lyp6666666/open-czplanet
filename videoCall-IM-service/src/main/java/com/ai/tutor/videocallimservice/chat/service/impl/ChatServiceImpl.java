@@ -3,6 +3,8 @@ package com.ai.tutor.videocallimservice.chat.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
@@ -37,6 +39,8 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public CursorPageBaseResp<ChatMessageResp> getMsgPage(ChatMessagePageReq request, Long receiveUid) {
+        ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR, "request 为空");
+        ThrowUtils.throwIf(receiveUid == null, ErrorCode.PARAMS_ERROR, "receiveUid为空");
         CursorPageBaseResp<Message> cursorPage = messageMapper.getCursorPage(request.getRoomId(), request);
         if (cursorPage.isEmpty()) {
             return CursorPageBaseResp.empty();
