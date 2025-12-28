@@ -10,8 +10,6 @@ public interface UserMapper {
     @Select("SELECT * FROM user WHERE phone = #{phone} LIMIT 1")
     User selectByPhone(String phone);
 
-
-
     int insert(User user);
 
     /**

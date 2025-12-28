@@ -32,6 +32,7 @@
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
     </resultMap>
+
     <update id="updateUserBaseInfo" parameterType="com.ai.tutor.appointment.model.dto.user.BaseUserInfo">
         UPDATE user
         <set>
@@ -69,7 +70,6 @@
           AND user_type = #{userType}
             LIMIT 1
     </select>
-
 
     <!-- 插入用户（包含所有 NOT NULL 字段） -->
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">

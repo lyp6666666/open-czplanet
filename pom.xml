@@ -24,6 +24,8 @@
     <module>tutor-appointment-service</module>
     <module>videoCall-IM-service</module>
     <module>ai-tutor-common</module>
+      <module>ai-tutor-mq</module>
+      <module>ai-tutor-starter</module>
   </modules>
 
   <!-- 统一依赖版本管理 -->
@@ -97,6 +99,13 @@
         <groupId>com.baomidou</groupId>
         <artifactId>mybatis-plus-boot-starter</artifactId>
         <version>3.5.7</version>
+      </dependency>
+
+      <!-- RocketMQ Spring Boot Starter -->
+      <dependency>
+        <groupId>org.apache.rocketmq</groupId>
+        <artifactId>rocketmq-spring-boot-starter</artifactId>
+        <version>2.2.3</version>
       </dependency>
 
     </dependencies>
