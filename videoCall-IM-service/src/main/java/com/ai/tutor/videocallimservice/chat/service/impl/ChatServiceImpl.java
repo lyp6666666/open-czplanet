@@ -8,6 +8,7 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.CursorPageBaseReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
@@ -16,6 +17,9 @@ import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
 import com.ai.tutor.videocallimservice.chat.service.strategy.MsgHandlerFactory;
 import com.ai.tutor.videocallimservice.common.event.MessageSendEvent;
+import com.ai.tutor.videocallimservice.common.util.CursorUtils;
+import com.baomidou.mybatisplus.extension.service.IService;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -24,11 +28,11 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+
 
 @Service
 @Slf4j
-public class ChatServiceImpl implements ChatService {
+public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> implements ChatService {
 
 
     @Autowired
@@ -41,11 +45,23 @@ public class ChatServiceImpl implements ChatService {
     public CursorPageBaseResp<ChatMessageResp> getMsgPage(ChatMessagePageReq request, Long receiveUid) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR, "request 为空");
         ThrowUtils.throwIf(receiveUid == null, ErrorCode.PARAMS_ERROR, "receiveUid为空");
-        CursorPageBaseResp<Message> cursorPage = messageMapper.getCursorPage(request.getRoomId(), request);
+        CursorPageBaseResp<Message> cursorPage = getCursorPage(request.getRoomId(), request);
         if (cursorPage.isEmpty()) {
             return CursorPageBaseResp.empty();
         }
         return CursorPageBaseResp.init(cursorPage, getMsgRespBatch(cursorPage.getList(), receiveUid));
+    }
+
+    private CursorPageBaseResp<Message> getCursorPage(Long roomId, CursorPageBaseReq request) {
+        return CursorUtils.getCursorPageByMysql(
+                this, // IService<Message>
+                request,
+                wrapper -> {
+                    wrapper.eq(Message::getRoomId, roomId);
+                    wrapper.eq(Message::getStatus, 0); // 只查正常消息
+                },
+                Message::getId // 游标字段：message.id
+        );
     }
 
     @Override

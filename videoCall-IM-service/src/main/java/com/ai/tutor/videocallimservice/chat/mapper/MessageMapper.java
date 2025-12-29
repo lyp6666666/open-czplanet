@@ -14,7 +14,7 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface MessageMapper extends BaseMapper<Message> {
 
-    CursorPageBaseResp<Message> getCursorPage(@Param("roomId") Long roomId,@Param("request") ChatMessagePageReq request);
+    CursorPageBaseResp<Message> getCursorPage(Long roomId, ChatMessagePageReq request);
 
     @Select("SELECT * FROM message WHERE id = #{msgId}")
     Message getById(Long msgId);
