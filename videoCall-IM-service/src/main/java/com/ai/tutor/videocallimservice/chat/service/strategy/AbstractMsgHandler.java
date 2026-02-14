@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 
 import java.lang.reflect.ParameterizedType;
+import java.time.LocalDateTime;
 
 /**
  * 消息处理器抽象类
@@ -47,10 +48,13 @@ public abstract class AbstractMsgHandler<Req> {
         //子类扩展校验
         checkMsg(body, request.getRoomId(), uid);
         Message insert = MessageAdapter.buildMsgSave(request, uid);
+        insert.setStatus(0);
+        insert.setCreateTime(LocalDateTime.now());
+        insert.setUpdateTime(LocalDateTime.now());
+        //子类扩展保存（填充 toUid/content/extra 等必要字段）
+        saveMsg(insert, body);
         //统一保存
         messageMapper.save(insert);
-        //子类扩展保存
-        saveMsg(insert, body);
         return insert.getId();
     }
 

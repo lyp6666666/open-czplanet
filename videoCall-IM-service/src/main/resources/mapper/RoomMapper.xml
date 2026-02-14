@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.RoomMapper">
+
+    <resultMap id="RoomMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.Room">
+        <id column="id" property="id"/>
+        <result column="teacher_profile_id" property="teacherProfileId"/>
+        <result column="student_profile_id" property="studentProfileId"/>
+        <result column="active_time" property="activeTime"/>
+        <result column="last_msg_id" property="lastMsgId"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="RoomMap">
+        SELECT
+            id,
+            teacher_profile_id,
+            student_profile_id,
+            active_time,
+            last_msg_id,
+            status,
+            create_time,
+            update_time
+        FROM room
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByTeacherAndStudent" resultMap="RoomMap">
+        SELECT
+            id,
+            teacher_profile_id,
+            student_profile_id,
+            active_time,
+            last_msg_id,
+            status,
+            create_time,
+            update_time
+        FROM room
+        WHERE teacher_profile_id = #{teacherProfileId}
+          AND student_profile_id = #{studentProfileId}
+          AND status = 1
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.Room" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO room
+        (teacher_profile_id, student_profile_id, active_time, last_msg_id, status, create_time, update_time)
+        VALUES
+        (#{teacherProfileId}, #{studentProfileId}, #{activeTime}, #{lastMsgId}, #{status}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="updateAfterSend">
+        UPDATE room
+        SET last_msg_id = #{lastMsgId},
+            active_time = CURRENT_TIMESTAMP,
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{roomId}
+    </update>
+
+    <select id="listByTeacherProfileId" resultMap="RoomMap">
+        SELECT
+            id,
+            teacher_profile_id,
+            student_profile_id,
+            active_time,
+            last_msg_id,
+            status,
+            create_time,
+            update_time
+        FROM room
+        WHERE teacher_profile_id = #{teacherProfileId}
+          AND status = 1
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listByStudentProfileId" resultMap="RoomMap">
+        SELECT
+            id,
+            teacher_profile_id,
+            student_profile_id,
+            active_time,
+            last_msg_id,
+            status,
+            create_time,
+            update_time
+        FROM room
+        WHERE student_profile_id = #{studentProfileId}
+          AND status = 1
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+</mapper>

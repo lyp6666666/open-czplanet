@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.TeacherJobPostingMapper">
+
+    <resultMap id="TeacherJobPostingMap" type="com.ai.tutor.appointment.model.entity.TeacherJobPosting">
+        <id column="id" property="id"/>
+        <result column="tutor_id" property="tutorId"/>
+        <result column="subject_id" property="subjectId"/>
+        <result column="title" property="title"/>
+        <result column="description" property="description"/>
+        <result column="price_per_hour" property="pricePerHour"/>
+        <result column="mode" property="mode"/>
+        <result column="city" property="city"/>
+        <result column="available_time" property="availableTime"/>
+        <result column="max_students" property="maxStudents"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.TeacherJobPosting" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO teacher_job_posting
+        (tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time, max_students, status, create_time, update_time)
+        VALUES
+        (#{tutorId}, #{subjectId}, #{title}, #{description}, #{pricePerHour}, #{mode}, #{city}, #{availableTime},
+         #{maxStudents}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="updateById" parameterType="com.ai.tutor.appointment.model.entity.TeacherJobPosting">
+        UPDATE teacher_job_posting
+        <set>
+            <if test="subjectId != null">subject_id = #{subjectId},</if>
+            <if test="title != null">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="pricePerHour != null">price_per_hour = #{pricePerHour},</if>
+            <if test="mode != null">mode = #{mode},</if>
+            <if test="city != null">city = #{city},</if>
+            <if test="availableTime != null">available_time = #{availableTime},</if>
+            <if test="maxStudents != null">max_students = #{maxStudents},</if>
+            <if test="status != null">status = #{status},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM teacher_job_posting
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="listByTutorId" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM teacher_job_posting
+        WHERE tutor_id = #{tutorId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listPublished" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM teacher_job_posting
+        WHERE status = 1
+        <if test="subjectId != null">
+            AND subject_id = #{subjectId}
+        </if>
+        <if test="mode != null and mode != ''">
+            AND mode = #{mode}
+        </if>
+        <if test="city != null and city != ''">
+            AND city = #{city}
+        </if>
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+</mapper>
+

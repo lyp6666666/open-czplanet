@@ -7,6 +7,8 @@ import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
+import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
@@ -32,6 +34,8 @@ public class UserController {
     private SmsServiceImpl smsService;
     @Resource
     private UserService userService;
+    @Resource
+    private UserMapper userMapper;
 
     /**
      *  获取验证码
@@ -96,11 +100,13 @@ public class UserController {
 
     @GetMapping("/sendUpdateUserPhoneCode")
     @Operation(summary = "发送更新用户手机号验证码", description = "发送更新用户手机号验证码")
-    public BaseResponse<String> sendUpdateUserPhoneCode(@RequestBody SendCodeRequest request) {
-        String phone = request.getPhone();
-        ThrowUtils.throwIf(phone == null || phone.isEmpty(), ErrorCode.PARAMS_ERROR);
-        // 获取验证码
-        String code = smsService.sendCode(phone, RedisKeyPrefix.USER_PHONE.getPrefix());
+    public BaseResponse<String> sendUpdateUserPhoneCode(HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+        String code = smsService.sendCode(user.getPhone(), RedisKeyPrefix.USER_PHONE.getPrefix());
         return ResultUtils.success(code);
     }
 

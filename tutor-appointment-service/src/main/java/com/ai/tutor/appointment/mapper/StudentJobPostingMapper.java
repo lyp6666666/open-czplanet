@@ -1,0 +1,28 @@
+package com.ai.tutor.appointment.mapper;
+
+import com.ai.tutor.appointment.model.entity.StudentJobPosting;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+@Mapper
+public interface StudentJobPostingMapper {
+
+    int insert(StudentJobPosting posting);
+
+    int updateById(StudentJobPosting posting);
+
+    StudentJobPosting selectById(@Param("id") Long id);
+
+    List<StudentJobPosting> listByParentId(@Param("parentId") Long parentId,
+                                          @Param("cursor") Long cursor,
+                                          @Param("pageSize") Integer pageSize);
+
+    List<StudentJobPosting> listPublished(@Param("subjectId") Long subjectId,
+                                          @Param("city") String city,
+                                          @Param("classMode") String classMode,
+                                          @Param("cursor") Long cursor,
+                                          @Param("pageSize") Integer pageSize);
+}
+

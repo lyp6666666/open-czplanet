@@ -48,3 +48,9 @@ logging:
 mybatis-plus:
   configuration:
     default-enum-type-handler: com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler
+
+jwt:
+  secrets:
+    - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
+  expiration: 24h
+  issuer: ai-tutor

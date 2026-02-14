@@ -9,7 +9,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
-import com.ai.tutor.videocallimservice.common.annotation.FrequencyControl;
+import com.ai.tutor.common.annotation.FrequencyControl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;

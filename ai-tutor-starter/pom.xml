@@ -57,7 +57,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.ai.tutor.start.TutorStartApplication</mainClass>
+                    <mainClass>com.ai.tutor.TutorStartApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>

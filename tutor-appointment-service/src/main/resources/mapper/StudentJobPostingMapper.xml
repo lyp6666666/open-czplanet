@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.StudentJobPostingMapper">
+
+    <resultMap id="StudentJobPostingMap" type="com.ai.tutor.appointment.model.entity.StudentJobPosting">
+        <id column="id" property="id"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="subject_id" property="subjectId"/>
+        <result column="title" property="title"/>
+        <result column="description" property="description"/>
+        <result column="child_age" property="childAge"/>
+        <result column="class_mode" property="classMode"/>
+        <result column="city" property="city"/>
+        <result column="address" property="address"/>
+        <result column="budget_min" property="budgetMin"/>
+        <result column="budget_max" property="budgetMax"/>
+        <result column="schedule" property="schedule"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.StudentJobPosting" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO student_job_posting
+        (parent_id, subject_id, title, description, child_age, class_mode, city, address, budget_min, budget_max, schedule, status, create_time, update_time)
+        VALUES
+        (#{parentId}, #{subjectId}, #{title}, #{description}, #{childAge}, #{classMode}, #{city}, #{address},
+         #{budgetMin}, #{budgetMax}, #{schedule}, #{status}, NOW(), NOW())
+    </insert>
+
+    <update id="updateById" parameterType="com.ai.tutor.appointment.model.entity.StudentJobPosting">
+        UPDATE student_job_posting
+        <set>
+            <if test="subjectId != null">subject_id = #{subjectId},</if>
+            <if test="title != null">title = #{title},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="childAge != null">child_age = #{childAge},</if>
+            <if test="classMode != null">class_mode = #{classMode},</if>
+            <if test="city != null">city = #{city},</if>
+            <if test="address != null">address = #{address},</if>
+            <if test="budgetMin != null">budget_min = #{budgetMin},</if>
+            <if test="budgetMax != null">budget_max = #{budgetMax},</if>
+            <if test="schedule != null">schedule = #{schedule},</if>
+            <if test="status != null">status = #{status},</if>
+            update_time = NOW()
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectById" resultMap="StudentJobPostingMap">
+        SELECT
+            id, parent_id, subject_id, title, description, child_age, class_mode, city, address,
+            budget_min, budget_max, schedule, status, create_time, update_time
+        FROM student_job_posting
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="listByParentId" resultMap="StudentJobPostingMap">
+        SELECT
+            id, parent_id, subject_id, title, description, child_age, class_mode, city, address,
+            budget_min, budget_max, schedule, status, create_time, update_time
+        FROM student_job_posting
+        WHERE parent_id = #{parentId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listPublished" resultMap="StudentJobPostingMap">
+        SELECT
+            id, parent_id, subject_id, title, description, child_age, class_mode, city, address,
+            budget_min, budget_max, schedule, status, create_time, update_time
+        FROM student_job_posting
+        WHERE status = 1
+        <if test="subjectId != null">
+            AND subject_id = #{subjectId}
+        </if>
+        <if test="classMode != null and classMode != ''">
+            AND class_mode = #{classMode}
+        </if>
+        <if test="city != null and city != ''">
+            AND city = #{city}
+        </if>
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+</mapper>
+

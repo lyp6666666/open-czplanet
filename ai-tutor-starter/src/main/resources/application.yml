@@ -39,3 +39,8 @@ mybatis:
 rocketmq:
   name-server: 127.0.0.1:9876
 
+jwt:
+  secrets:
+    - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
+  expiration: 24h
+  issuer: ai-tutor

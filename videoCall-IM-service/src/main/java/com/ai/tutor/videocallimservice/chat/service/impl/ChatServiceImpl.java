@@ -12,6 +12,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.CursorPageBaseReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
@@ -40,6 +41,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Autowired
     private ApplicationEventPublisher applicationEventPublisher;
+
+    @Autowired
+    private RoomMapper roomMapper;
 
     @Override
     public CursorPageBaseResp<ChatMessageResp> getMsgPage(ChatMessagePageReq request, Long receiveUid) {
@@ -70,6 +74,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
         //根据消息类型，得到专门处理该消息的处理器
         AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
         Long msgId = msgHandler.checkAndSaveMsg(request, uid);
+        roomMapper.updateAfterSend(request.getRoomId(), msgId);
         applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
         return msgId;
     }

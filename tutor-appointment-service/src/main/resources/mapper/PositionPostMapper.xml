@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.PositionPostMapper">
+
+    <resultMap id="PositionPostMap" type="com.ai.tutor.appointment.model.entity.PositionPost">
+        <id column="id" property="id"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="name" property="name"/>
+        <result column="grade" property="grade"/>
+        <result column="description" property="description"/>
+        <result column="sort" property="sort"/>
+        <result column="enable_status" property="enableStatus"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectEnabledAll" resultMap="PositionPostMap">
+        SELECT
+            id,
+            parent_id,
+            name,
+            grade,
+            description,
+            sort,
+            enable_status,
+            create_time,
+            update_time
+        FROM position_post
+        WHERE enable_status = 1
+        ORDER BY sort ASC, id ASC
+    </select>
+
+    <select id="searchEnabledByKeyword" resultMap="PositionPostMap">
+        SELECT
+            id,
+            parent_id,
+            name,
+            grade,
+            description,
+            sort,
+            enable_status,
+            create_time,
+            update_time
+        FROM position_post
+        WHERE enable_status = 1
+          AND name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY sort ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

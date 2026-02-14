@@ -185,6 +185,7 @@ CREATE TABLE `room` (
             `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
             `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
             PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_teacher_student` (`teacher_profile_id`, `student_profile_id`),
             KEY `idx_teacher_profile_id` (`teacher_profile_id`),
             KEY `idx_student_profile_id` (`student_profile_id`),
             KEY `idx_active_time` (`active_time`)
@@ -210,6 +211,34 @@ CREATE TABLE `message` (
             KEY `idx_from_uid` (`from_uid`),
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
+
+DROP TABLE IF EXISTS `tutor_appointment`;
+CREATE TABLE `tutor_appointment` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '预约id',
+            `parent_id` bigint(20) NOT NULL COMMENT '家长 user_id',
+            `tutor_id` bigint(20) NOT NULL COMMENT '教师 user_id',
+            `parent_job_posting_id` bigint(20) DEFAULT NULL COMMENT '家长需求贴id',
+            `tutor_job_posting_id` bigint(20) DEFAULT NULL COMMENT '教师服务贴id',
+            `subject_id` bigint(20) NOT NULL COMMENT '科目id（position_post.id）',
+            `class_mode` varchar(50) DEFAULT NULL COMMENT '授课方式：online/offline/both',
+            `city` varchar(100) DEFAULT NULL COMMENT '城市（线下）',
+            `address` varchar(255) DEFAULT NULL COMMENT '地址（线下）',
+            `start_time` datetime(3) NOT NULL COMMENT '开始时间',
+            `duration_minutes` int NOT NULL DEFAULT 60 COMMENT '时长（分钟）',
+            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态：1待确认 2已确认 3待改期确认 4已取消 5已完成',
+            `created_by` bigint(20) NOT NULL COMMENT '发起人 user_id',
+            `proposed_start_time` datetime(3) DEFAULT NULL COMMENT '改期提议时间',
+            `proposed_by` bigint(20) DEFAULT NULL COMMENT '改期发起人 user_id',
+            `cancel_by` bigint(20) DEFAULT NULL COMMENT '取消人 user_id',
+            `remark` varchar(255) DEFAULT NULL COMMENT '备注/取消原因',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_parent_id` (`parent_id`),
+            KEY `idx_tutor_id` (`tutor_id`),
+            KEY `idx_status` (`status`),
+            KEY `idx_start_time` (`start_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约/邀约表';
 
 
 -- ----------------------------

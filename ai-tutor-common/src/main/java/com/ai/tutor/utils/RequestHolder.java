@@ -9,6 +9,7 @@ import com.ai.tutor.common.service.dto.RequestInfo;
 public class RequestHolder {
 
     public static final String ATTRIBUTE_UID = "uid";
+    public static final String ATTRIBUTE_PHONE = "phone";
 
     private static final ThreadLocal<RequestInfo> threadLocal = new ThreadLocal<>();
 
@@ -24,4 +25,3 @@ public class RequestHolder {
         threadLocal.remove();
     }
 }
-

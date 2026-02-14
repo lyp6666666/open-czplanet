@@ -1,6 +1,8 @@
 package com.ai.tutor.appointment.interceptor;
 
 import com.ai.tutor.appointment.utils.JwtUtil;
+import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.exception.BusinessException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -8,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
+import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_PHONE;
 
 @Component
 public class JwtInterceptor implements HandlerInterceptor {
@@ -21,11 +24,7 @@ public class JwtInterceptor implements HandlerInterceptor {
         String token = request.getHeader("Authorization");
 
         if (token == null || !token.startsWith("Bearer ")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Missing or invalid token");
-            String requestURI = request.getRequestURI();
-            System.out.println("拦截器拦截路径: " + requestURI);
-            return false;
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "缺少 Authorization: Bearer token");
         }
 
         // 去掉 Bearer 前缀
@@ -33,16 +32,19 @@ public class JwtInterceptor implements HandlerInterceptor {
 
         // 校验 token 是否有效
         if (!jwtUtil.validateToken(token)) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Token expired or invalid");
-            return false;
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "token 已过期或无效");
         }
 
-        //  JWT 里目前只存了手机号，所以手机号作为 UID
+        Long userId = jwtUtil.getUserId(token);
         String phone = jwtUtil.getPhone(token);
 
-        // ✔ 用 uid 作为统一标识
-        request.setAttribute(ATTRIBUTE_UID, phone);
+        // 统一用 userId 作为用户身份标识，避免手机号变更导致身份漂移
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "token 缺少 userId");
+        }
+
+        request.setAttribute(ATTRIBUTE_UID, String.valueOf(userId));
+        request.setAttribute(ATTRIBUTE_PHONE, phone);
 
         return true; // 放行请求
     }

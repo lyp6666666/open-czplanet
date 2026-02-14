@@ -98,8 +98,8 @@ public class UserServiceImpl implements UserService {
 
         }
 
-        // 5. 生成 JWT Token
-        String token = jwtUtil.generateToken(phone, role);
+        // 5. 生成 JWT Token（把 userId 写入 claim，后续所有鉴权都以 userId 为准）
+        String token = jwtUtil.generateToken(user.getId(), phone, role);
 
         // 6. 缓存登录态
         String key = RedisKeyPrefix.USER_TOKEN.key(phone);
@@ -118,12 +118,23 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void updateUserInfo(UserUpdateRequest requestDto, HttpServletRequest request) {
-        String phone = requestDto.getPhone();
-        String uid = (String)request.getAttribute(ATTRIBUTE_UID);
-        ThrowUtils.throwIf(!phone.equals(uid), ErrorCode.NO_AUTH_ERROR);
-        ThrowUtils.throwIf(phone == null , ErrorCode.PARAMS_ERROR);
-        ThrowUtils.throwIf(requestDto.getBaseUserInfo()==null&&requestDto.getTeacherExtInfo()==null&&requestDto.getStudentExtInfo()==null, ErrorCode.PARAMS_ERROR);
-        User user = userMapper.selectByPhone(phone);
+        ThrowUtils.throwIf(requestDto == null, ErrorCode.PARAMS_ERROR);
+        String uidStr = (String) request.getAttribute(ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+
+        ThrowUtils.throwIf(requestDto.getBaseUserInfo() == null
+                && requestDto.getTeacherExtInfo() == null
+                && requestDto.getStudentExtInfo() == null, ErrorCode.PARAMS_ERROR);
+
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+
+        // 兼容旧入参：如果前端还传 phone，则必须与当前登录用户一致
+        if (requestDto.getPhone() != null) {
+            ThrowUtils.throwIf(!requestDto.getPhone().equals(user.getPhone()), ErrorCode.NO_AUTH_ERROR);
+        }
+
         StudentExtInfo studentExtInfo = requestDto.getStudentExtInfo();
         TeacherExtInfo teacherExtInfo = requestDto.getTeacherExtInfo();
 
@@ -173,9 +184,13 @@ public class UserServiceImpl implements UserService {
         String code = requestDto.getCode();
         ThrowUtils.throwIf(newPhone == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
-        String oldPhone = (String) request.getAttribute(ATTRIBUTE_UID);
-        User user = userMapper.selectByPhone(oldPhone);
-        ThrowUtils.throwIf(!oldPhone.equals(user.getPhone()), ErrorCode.NO_AUTH_ERROR);
+        String uidStr = (String) request.getAttribute(ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+        String oldPhone = user.getPhone();
+
         boolean isValid = smsService.verifyCode(oldPhone, code,RedisKeyPrefix.USER_PHONE.getPrefix());
         ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
         int count = userMapper.updateUserPhone(newPhone, user.getId());

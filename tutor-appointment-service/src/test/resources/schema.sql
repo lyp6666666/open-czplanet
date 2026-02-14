@@ -1,0 +1,21 @@
+CREATE TABLE tutor_appointment (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT NOT NULL,
+  tutor_id BIGINT NOT NULL,
+  parent_job_posting_id BIGINT,
+  tutor_job_posting_id BIGINT,
+  subject_id BIGINT NOT NULL,
+  class_mode VARCHAR(50),
+  city VARCHAR(100),
+  address VARCHAR(255),
+  start_time TIMESTAMP NOT NULL,
+  duration_minutes INT NOT NULL DEFAULT 60,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_by BIGINT NOT NULL,
+  proposed_start_time TIMESTAMP,
+  proposed_by BIGINT,
+  cancel_by BIGINT,
+  remark VARCHAR(255),
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
