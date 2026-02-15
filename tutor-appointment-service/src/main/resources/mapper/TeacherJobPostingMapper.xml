@@ -88,5 +88,94 @@
         LIMIT #{pageSize}
     </select>
 
-</mapper>
+    <select id="listPublishedSorted" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM teacher_job_posting
+        WHERE status = 1
+        <if test="subjectId != null">
+            AND subject_id = #{subjectId}
+        </if>
+        <if test="mode != null and mode != ''">
+            AND mode = #{mode}
+        </if>
+        <if test="city != null and city != ''">
+            AND city = #{city}
+        </if>
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        <choose>
+            <when test="sort == 'priceAsc'">
+                ORDER BY price_per_hour ASC, id DESC
+            </when>
+            <when test="sort == 'priceDesc'">
+                ORDER BY price_per_hour DESC, id DESC
+            </when>
+            <otherwise>
+                ORDER BY id DESC
+            </otherwise>
+        </choose>
+        LIMIT #{pageSize}
+    </select>
 
+    <select id="searchPublishedByTitle" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM teacher_job_posting
+        WHERE status = 1
+          AND title LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <resultMap id="HomeHotTutorAggRowMap" type="com.ai.tutor.appointment.model.dto.home.HomeHotTutorAggRow">
+        <result column="tutor_id" property="tutorId"/>
+        <result column="cursor_key" property="cursorKey"/>
+    </resultMap>
+
+    <select id="listHotTutors" resultMap="HomeHotTutorAggRowMap">
+        SELECT
+            tutor_id,
+            MAX(id) AS cursor_key
+        FROM teacher_job_posting
+        WHERE status = 1
+        <if test="subjectId != null">
+            AND subject_id = #{subjectId}
+        </if>
+        <if test="mode != null and mode != ''">
+            AND mode = #{mode}
+        </if>
+        <if test="city != null and city != ''">
+            AND city = #{city}
+        </if>
+        GROUP BY tutor_id
+        <if test="cursor != null">
+            HAVING MAX(id) &lt; #{cursor}
+        </if>
+        ORDER BY cursor_key DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listTopNByTutorIds" resultMap="TeacherJobPostingMap">
+        SELECT
+            id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,
+            max_students, status, create_time, update_time
+        FROM (
+            SELECT
+                t.*,
+                ROW_NUMBER() OVER (PARTITION BY tutor_id ORDER BY id DESC) AS rn
+            FROM teacher_job_posting t
+            WHERE status = 1
+              AND tutor_id IN
+              <foreach collection="tutorIds" item="tid" open="(" separator="," close=")">
+                  #{tid}
+              </foreach>
+        ) x
+        WHERE x.rn &lt;= #{topN}
+        ORDER BY tutor_id, id DESC
+    </select>
+
+</mapper>

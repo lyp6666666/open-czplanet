@@ -28,6 +28,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .addPathPatterns("/**")
                 // 登录和验证码
                 .excludePathPatterns("/user/loginOrRegister", "/user/sendcode")
+                // 未登录可访问的首页接口（Guest Home）
+                .excludePathPatterns("/api/v1/public/**")
                 // swagger-ui 静态资源
                 .excludePathPatterns(
                 "/swagger-ui/**",

@@ -107,5 +107,14 @@
                )
     </insert>
 
+    <select id="selectByIds" resultMap="BaseUserResultMap">
+        SELECT *
+        FROM user
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
 
 </mapper>

@@ -66,5 +66,13 @@
         SELECT * FROM teacher_profile WHERE user_id = #{userId}
     </select>
 
+    <select id="listByUserIds" resultType="com.ai.tutor.appointment.model.entity.TeacherProfile">
+        SELECT *
+        FROM teacher_profile
+        WHERE user_id IN
+        <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+            #{uid}
+        </foreach>
+    </select>
 
 </mapper>

@@ -24,5 +24,14 @@ public interface StudentJobPostingMapper {
                                           @Param("classMode") String classMode,
                                           @Param("cursor") Long cursor,
                                           @Param("pageSize") Integer pageSize);
-}
 
+    List<StudentJobPosting> listPublishedSorted(@Param("subjectId") Long subjectId,
+                                               @Param("city") String city,
+                                               @Param("classMode") String classMode,
+                                               @Param("sort") String sort,
+                                               @Param("cursor") Long cursor,
+                                               @Param("pageSize") Integer pageSize);
+
+    List<StudentJobPosting> searchPublishedByTitle(@Param("keyword") String keyword,
+                                                  @Param("limit") Integer limit);
+}

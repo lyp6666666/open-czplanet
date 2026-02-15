@@ -12,5 +12,6 @@ public interface PositionPostMapper {
     List<PositionPost> selectEnabledAll();
 
     List<PositionPost> searchEnabledByKeyword(@Param("keyword") String keyword, @Param("limit") Integer limit);
-}
 
+    List<PositionPost> selectByIds(@Param("ids") List<Long> ids);
+}

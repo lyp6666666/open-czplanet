@@ -4,6 +4,8 @@ import com.ai.tutor.appointment.model.dto.user.BaseUserInfo;
 import com.ai.tutor.appointment.model.entity.User;
 import org.apache.ibatis.annotations.*;
 
+import java.util.List;
+
 @Mapper
 public interface UserMapper {
 
@@ -31,4 +33,6 @@ public interface UserMapper {
 
     @Update("UPDATE user SET phone = #{newPhone} WHERE id = #{id}")
     int updateUserPhone(@Param("newPhone") String newPhone, @Param("id") Long id);
+
+    List<User> selectByIds(@Param("ids") List<Long> ids);
 }

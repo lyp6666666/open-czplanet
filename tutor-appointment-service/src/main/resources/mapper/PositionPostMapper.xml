@@ -49,5 +49,22 @@
         LIMIT #{limit}
     </select>
 
-</mapper>
+    <select id="selectByIds" resultMap="PositionPostMap">
+        SELECT
+            id,
+            parent_id,
+            name,
+            grade,
+            description,
+            sort,
+            enable_status,
+            create_time,
+            update_time
+        FROM position_post
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
 
+</mapper>

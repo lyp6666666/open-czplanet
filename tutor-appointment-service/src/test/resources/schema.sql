@@ -19,3 +19,83 @@ CREATE TABLE tutor_appointment (
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE position_post (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT,
+  name VARCHAR(255) NOT NULL,
+  grade VARCHAR(50),
+  description VARCHAR(500),
+  sort INT,
+  enable_status TINYINT NOT NULL DEFAULT 1,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE teacher_job_posting (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tutor_id BIGINT NOT NULL,
+  subject_id BIGINT,
+  title VARCHAR(255) NOT NULL,
+  description VARCHAR(2000),
+  price_per_hour DECIMAL(10,2),
+  mode VARCHAR(20),
+  city VARCHAR(100),
+  available_time VARCHAR(2000),
+  max_students INT,
+  status TINYINT NOT NULL DEFAULT 1,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE student_job_posting (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT NOT NULL,
+  subject_id BIGINT,
+  title VARCHAR(255) NOT NULL,
+  description VARCHAR(2000),
+  child_age INT,
+  class_mode VARCHAR(20),
+  city VARCHAR(100),
+  address VARCHAR(255),
+  budget_min DECIMAL(10,2),
+  budget_max DECIMAL(10,2),
+  schedule VARCHAR(2000),
+  status TINYINT NOT NULL DEFAULT 1,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255),
+  phone VARCHAR(32),
+  avatar VARCHAR(1000),
+  sex INT,
+  open_id VARCHAR(255),
+  active_status INT,
+  last_opt_time TIMESTAMP,
+  ip_info VARCHAR(2000),
+  item_id BIGINT,
+  status INT,
+  user_type INT,
+  ref_id BIGINT,
+  password VARCHAR(255),
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE teacher_profile (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  real_name VARCHAR(100),
+  education VARCHAR(100),
+  subject VARCHAR(255),
+  experience_years INT,
+  rate_per_hour DECIMAL(10,2),
+  introduction VARCHAR(2000),
+  certificate_urls VARCHAR(2000),
+  status INT,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

@@ -17,10 +17,11 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @MybatisTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.ANY)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ContextConfiguration(classes = TutorAppointmentMapperTest.TestConfig.class)
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1"
+        "spring.datasource.url=jdbc:h2:mem:tutor_appointment_testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1",
+        "spring.datasource.driver-class-name=org.h2.Driver"
 })
 class TutorAppointmentMapperTest {
 
