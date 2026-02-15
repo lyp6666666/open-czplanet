@@ -182,4 +182,20 @@ export const handlers = [
       ],
     }),
   ),
+
+  http.post('http://localhost/user/sendcode', async () => ok('验证码发送成功(模拟)')),
+
+  http.post('http://localhost/user/loginOrRegister', async ({ request }: { request: Request }) => {
+    const body = (await request.json()) as { phone: string; code: string; userRoleEnum: 'TEACHER' | 'STUDENT' }
+    const isTutor = body.userRoleEnum === 'TEACHER'
+    return ok({
+      id: isTutor ? 1001 : 2001,
+      name: isTutor ? `教师${body.phone.slice(-4)}` : `学生${body.phone.slice(-4)}`,
+      phone: body.phone,
+      avatar: isTutor ? 'https://example.com/tutor.png' : 'https://example.com/student.png',
+      sex: null,
+      userType: isTutor ? 1 : 2,
+      token: isTutor ? 'mock.teacher.token' : 'mock.student.token',
+    })
+  }),
 ]

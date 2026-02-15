@@ -3,6 +3,8 @@ import type { AxiosError, AxiosResponse } from 'axios'
 
 import type { BaseResponse } from './types'
 
+const STORAGE_TOKEN_KEY = 'ai_tutor_token'
+
 function getBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL
   if (typeof configured === 'string' && configured.trim().length > 0) {
@@ -26,6 +28,16 @@ export class ApiError extends Error {
 export const http = axios.create({
   baseURL: getBaseUrl(),
   timeout: 10_000,
+})
+
+http.interceptors.request.use((config) => {
+  // 统一在请求头补齐登录态，避免业务代码到处拼接 Authorization
+  const token = localStorage.getItem(STORAGE_TOKEN_KEY)
+  if (typeof token === 'string' && token.trim().length > 0) {
+    config.headers = config.headers ?? {}
+    config.headers.Authorization = `Bearer ${token.trim()}`
+  }
+  return config
 })
 
 http.interceptors.response.use(

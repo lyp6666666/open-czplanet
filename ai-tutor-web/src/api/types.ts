@@ -152,3 +152,15 @@ export interface HotTutorCardVO {
 export interface FooterLinksVO {
   links: Array<{ name: string; url: string }>
 }
+
+export type UserRoleEnum = 'TEACHER' | 'STUDENT'
+
+export interface LoginUserVO {
+  id: number
+  name: string
+  phone: string
+  avatar: string | null
+  sex: number | null
+  userType: number
+  token: string
+}

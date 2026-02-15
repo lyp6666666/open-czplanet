@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { homeGuestApi } from '@/api/homeGuest'
 import type { HomeConfigVO, HotWordsVO, SearchSuggestVO } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import { debounce } from '@/utils/debounce'
 
 const props = defineProps<{
@@ -14,6 +16,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'city-change', city: string): void
 }>()
+
+const router = useRouter()
+const auth = useAuthStore()
+const userMenuOpen = ref(false)
 
 const cities = computed(() => {
   const base = [props.city, '北京', '上海', '广州', '深圳', '杭州']
@@ -63,6 +69,28 @@ function closeSuggest() {
     suggestOpen.value = false
   }, 150)
 }
+
+function hasToken() {
+  // 这里仅做“是否存在 token”判断，后续可扩展为调用后端接口校验/刷新登录态
+  return auth.isLoggedIn
+}
+
+async function goAuth(role: 'TEACHER' | 'STUDENT') {
+  // 入口按钮统一先检查 token；已登录则不再进入登录页
+  if (hasToken()) return
+  await router.push({ name: role === 'TEACHER' ? 'authTutor' : 'authStudent' })
+}
+
+async function logout() {
+  auth.logout()
+  userMenuOpen.value = false
+  await router.replace({ name: 'home' })
+}
+
+const userInitial = computed(() => {
+  const n = auth.user?.name?.trim()
+  return n && n.length > 0 ? n.slice(0, 1) : 'U'
+})
 </script>
 
 <template>
@@ -114,7 +142,22 @@ function closeSuggest() {
       </div>
 
       <div class="right">
-        <a class="btn" :href="config?.authEntry?.link || '#/login'">{{ config?.authEntry?.loginText || '登录/注册' }}</a>
+        <template v-if="auth.isLoggedIn && auth.user">
+          <div class="user" @mouseenter="userMenuOpen = true" @mouseleave="userMenuOpen = false">
+            <img v-if="auth.user.avatar" class="avatar" :src="auth.user.avatar" alt="avatar" />
+            <div v-else class="avatar fallback">{{ userInitial }}</div>
+
+            <div v-if="userMenuOpen" class="menu card">
+              <button class="menu-item" type="button">个人主页（模拟）</button>
+              <button class="menu-item danger" type="button" @click="logout">退出登录</button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <button class="btn" type="button" @click="goAuth('TEACHER')">我要当家教</button>
+          <button class="btn btn-primary" type="button" @click="goAuth('STUDENT')">我要找家教</button>
+        </template>
       </div>
     </div>
   </header>
@@ -132,7 +175,7 @@ function closeSuggest() {
 
 .bar {
   display: grid;
-  grid-template-columns: 260px 1fr 140px;
+  grid-template-columns: 260px 1fr auto;
   gap: 14px;
   align-items: start;
   padding: 14px 0;
@@ -270,5 +313,64 @@ function closeSuggest() {
   display: flex;
   justify-content: flex-end;
   padding-top: 2px;
+  gap: 10px;
+  align-items: center;
+}
+
+.user {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.avatar.fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--primary);
+  background: rgba(0, 190, 189, 0.12);
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  width: 180px;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  z-index: 30;
+}
+
+.menu-item {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  text-align: left;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.menu-item:hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.menu-item.danger {
+  color: #d83a34;
 }
 </style>
