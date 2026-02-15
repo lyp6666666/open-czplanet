@@ -120,7 +120,7 @@ async function onSubmit() {
   busy.value = true
   try {
     await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''))
-    await router.replace({ name: 'home' })
+    await router.replace(props.role === 'TEACHER' ? '/tutor/jobs' : '/student/post')
   } catch (e) {
     hint.value = e instanceof Error ? e.message : '登录失败'
   } finally {

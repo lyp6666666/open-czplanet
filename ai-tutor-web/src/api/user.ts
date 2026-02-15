@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { LoginUserVO, UserRoleEnum } from './types'
+import type { LoginUserVO, UserMeVO, UserRoleEnum, UserSimpleVO } from './types'
 
 export interface SendCodeRequest {
   phone: string
@@ -11,6 +11,29 @@ export interface LoginOrRegisterRequest {
   userRoleEnum: UserRoleEnum
 }
 
+export interface UserUpdateRequest {
+  baseUserInfo?: {
+    name?: string
+    avatar?: string
+    sex?: number
+  }
+  teacherExtInfo?: {
+    realName?: string
+    education?: string
+    subject?: string
+    experienceYears?: number
+    ratePerHour?: number
+    introduction?: string
+  }
+  studentExtInfo?: {
+    realName?: string
+    childAge?: number
+    address?: string
+    demandDescription?: string
+    budget?: number
+  }
+}
+
 export const userApi = {
   sendCode(phone: string) {
     return http.post<unknown, string>('/user/sendcode', { phone } satisfies SendCodeRequest)
@@ -19,5 +42,16 @@ export const userApi = {
   loginOrRegister(request: LoginOrRegisterRequest) {
     return http.post<unknown, LoginUserVO>('/user/loginOrRegister', request)
   },
-}
 
+  me() {
+    return http.get<unknown, UserMeVO>('/user/me')
+  },
+
+  batch(ids: number[]) {
+    return http.get<unknown, UserSimpleVO[]>('/user/batch', { params: { ids: ids.join(',') } })
+  },
+
+  updateUserInfo(request: UserUpdateRequest) {
+    return http.post<unknown, string>('/user/updateUserInfo', request)
+  },
+}

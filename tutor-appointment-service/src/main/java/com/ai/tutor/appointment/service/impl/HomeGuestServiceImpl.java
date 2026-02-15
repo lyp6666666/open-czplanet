@@ -296,6 +296,7 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                         subjectId,
                         city,
                         classMode,
+                        null,
                         effectiveSort,
                         req.getCursor(),
                         req.getPageSize()

@@ -16,5 +16,5 @@ public interface StudentJobPostingService {
 
     CursorPageResponse<StudentJobPosting> listMine(CursorPageRequest request, Long uid);
 
-    CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, CursorPageRequest request);
+    CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, String keyword, String sort, CursorPageRequest request);
 }

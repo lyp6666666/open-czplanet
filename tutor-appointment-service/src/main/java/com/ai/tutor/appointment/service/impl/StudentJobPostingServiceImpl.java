@@ -87,11 +87,16 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     }
 
     @Override
-    public CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, CursorPageRequest request) {
+    public CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, String keyword, String sort, CursorPageRequest request) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         Integer pageSize = request.getPageSize();
 
-        List<StudentJobPosting> list = studentJobPostingMapper.listPublished(subjectId, city, classMode, request.getCursor(), pageSize);
+        List<StudentJobPosting> list;
+        if ((keyword != null && !keyword.isBlank()) || (sort != null && !sort.isBlank())) {
+            list = studentJobPostingMapper.listPublishedSorted(subjectId, city, classMode, keyword, sort, request.getCursor(), pageSize);
+        } else {
+            list = studentJobPostingMapper.listPublished(subjectId, city, classMode, request.getCursor(), pageSize);
+        }
         return buildCursorResponse(list, pageSize);
     }
 

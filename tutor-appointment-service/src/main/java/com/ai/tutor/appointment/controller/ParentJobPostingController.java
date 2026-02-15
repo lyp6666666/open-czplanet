@@ -54,7 +54,9 @@ public class ParentJobPostingController {
     public BaseResponse<CursorPageResponse<StudentJobPosting>> feed(@RequestParam(value = "subjectId", required = false) Long subjectId,
                                                                     @RequestParam(value = "city", required = false) String city,
                                                                     @RequestParam(value = "classMode", required = false) String classMode,
+                                                                    @RequestParam(value = "q", required = false) String keyword,
+                                                                    @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, keyword, sort, request));
     }
 }

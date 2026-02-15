@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.interceptor;
 
+import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
@@ -17,6 +18,8 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    private static final String ATTRIBUTE_ROLE = "role";
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -47,6 +50,7 @@ public class JwtInterceptor implements HandlerInterceptor {
 
         Long userId = jwtUtil.getUserId(token);
         String phone = jwtUtil.getPhone(token);
+        UserRoleEnum role = jwtUtil.getRole(token);
 
         // 统一用 userId 作为用户身份标识，避免手机号变更导致身份漂移
         if (userId == null) {
@@ -55,6 +59,7 @@ public class JwtInterceptor implements HandlerInterceptor {
 
         request.setAttribute(ATTRIBUTE_UID, String.valueOf(userId));
         request.setAttribute(ATTRIBUTE_PHONE, phone);
+        request.setAttribute(ATTRIBUTE_ROLE, role);
 
         return true; // 放行请求
     }

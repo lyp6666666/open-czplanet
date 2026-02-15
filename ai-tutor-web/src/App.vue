@@ -1,7 +1,18 @@
 <script setup lang="ts">
-import { onErrorCaptured, ref } from 'vue'
+import { computed, onErrorCaptured, ref } from 'vue'
+import { useRoute } from 'vue-router'
+
+import AppTopBar from '@/ui/layout/AppTopBar.vue'
 
 const fatalError = ref<unknown>(null)
+const route = useRoute()
+
+const useAppFrame = computed(() => {
+  const p = route.path
+  if (p.startsWith('/auth/')) return false
+  if (p === '/') return false
+  return p.startsWith('/tutor/') || p.startsWith('/student/') || p.startsWith('/chat') || p === '/me'
+})
 
 onErrorCaptured((err) => {
   fatalError.value = err
@@ -13,6 +24,14 @@ onErrorCaptured((err) => {
   <div v-if="fatalError" class="fatal">
     <div class="title">页面渲染失败</div>
     <pre class="detail">{{ String(fatalError) }}</pre>
+  </div>
+  <div v-else-if="useAppFrame" class="app">
+    <AppTopBar />
+    <main class="main">
+      <div class="container">
+        <RouterView />
+      </div>
+    </main>
   </div>
   <RouterView v-else />
 </template>
@@ -36,5 +55,9 @@ onErrorCaptured((err) => {
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
+}
+
+.main {
+  padding: 18px 0 32px;
 }
 </style>

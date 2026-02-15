@@ -107,6 +107,9 @@
         <if test="city != null and city != ''">
             AND city = #{city}
         </if>
+        <if test="keyword != null and keyword != ''">
+            AND (title LIKE CONCAT('%', #{keyword}, '%') OR description LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
         <if test="cursor != null">
             AND id &lt; #{cursor}
         </if>

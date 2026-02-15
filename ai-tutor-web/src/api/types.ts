@@ -164,3 +164,93 @@ export interface LoginUserVO {
   userType: number
   token: string
 }
+
+export interface TeacherProfile {
+  id: number
+  userId: number
+  realName: string
+  education: string | null
+  subject: string | null
+  experienceYears: number | null
+  ratePerHour: string | null
+  introduction: string | null
+  certificateUrls: string | null
+  status: number
+  createTime: string
+  updateTime: string
+}
+
+export interface StudentProfile {
+  id: number
+  userId: number
+  realName: string
+  age: number | null
+  childAge: number | null
+  address: string | null
+  demandDescription: string | null
+  budget: string | null
+  status: number
+  createTime: string
+  updateTime: string
+}
+
+export interface UserMeVO {
+  id: number
+  name: string
+  phone: string
+  avatar: string | null
+  sex: number | null
+  userType: number
+  teacherProfile?: TeacherProfile | null
+  studentProfile?: StudentProfile | null
+}
+
+export interface UserSimpleVO {
+  id: number
+  name: string
+  avatar: string | null
+  userType: number
+}
+
+export interface StudentJobPosting {
+  id: number
+  parentId: number
+  subjectId: number
+  title: string
+  description: string | null
+  childAge: number | null
+  classMode: string | null
+  city: string | null
+  address: string | null
+  budgetMin: string | null
+  budgetMax: string | null
+  schedule: string | null
+  status: number
+  createTime: string
+  updateTime: string
+}
+
+export interface ChatRoomItemResp {
+  roomId: number
+  otherUid: number
+  lastMsgId: number | null
+  lastMsgBody: unknown
+  activeTime: string
+}
+
+export interface CursorPageResp<T> {
+  cursor: number | null
+  isLast: boolean
+  list: T[]
+}
+
+export interface ChatMessageResp {
+  fromUser: { uid: number }
+  message: { id: number; roomId: number; sendTime: string; body: unknown }
+}
+
+export interface CursorPageBaseResp<T> {
+  cursor: string | null
+  isLast: boolean
+  list: T[]
+}

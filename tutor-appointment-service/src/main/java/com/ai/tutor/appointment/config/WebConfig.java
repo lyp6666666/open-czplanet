@@ -2,6 +2,7 @@ package com.ai.tutor.appointment.config;
 
 import com.ai.tutor.appointment.interceptor.CollectorInterceptor;
 import com.ai.tutor.appointment.interceptor.JwtInterceptor;
+import com.ai.tutor.appointment.interceptor.RoleInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -15,6 +16,9 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Autowired
     private CollectorInterceptor collectorInterceptor;
+
+    @Autowired
+    private RoleInterceptor roleInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -42,5 +46,9 @@ public class WebConfig implements WebMvcConfigurer {
                 // OpenAPI 文档
                 .excludePathPatterns("/v3/api-docs/**", "/swagger-resources/**")
                 .excludePathPatterns("/error","/actuator/httpexchanges");
+
+        registry.addInterceptor(roleInterceptor)
+                .addPathPatterns("/**")
+                .order(3);
     }
 }

@@ -7,9 +7,13 @@ import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
+import com.ai.tutor.appointment.mapper.StudentProfileMapper;
+import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
+import com.ai.tutor.appointment.model.vo.UserMeVO;
+import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
 import com.ai.tutor.utils.ResultUtils;
@@ -23,6 +27,9 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 @RestController
@@ -36,6 +43,10 @@ public class UserController {
     private UserService userService;
     @Resource
     private UserMapper userMapper;
+    @Resource
+    private TeacherProfileMapper teacherProfileMapper;
+    @Resource
+    private StudentProfileMapper studentProfileMapper;
 
     /**
      *  获取验证码
@@ -89,6 +100,52 @@ public class UserController {
 
         userService.updateUserInfo(requestDto,request);
         return ResultUtils.success("更新成功");
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "获取当前登录用户信息", description = "基于当前登录态返回用户基础信息与角色扩展资料")
+    public BaseResponse<UserMeVO> me(HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        UserMeVO.UserMeVOBuilder builder = UserMeVO.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .phone(user.getPhone())
+                .avatar(user.getAvatar())
+                .sex(user.getSex())
+                .userType(user.getUserType());
+        if (role == UserRoleEnum.TEACHER) {
+            builder.teacherProfile(teacherProfileMapper.selectByUserId(userId));
+        } else if (role == UserRoleEnum.STUDENT) {
+            builder.studentProfile(studentProfileMapper.selectByUserId(userId));
+        }
+        return ResultUtils.success(builder.build());
+    }
+
+    @GetMapping("/batch")
+    @Operation(summary = "批量获取用户基础信息", description = "用于会话列表/聊天等场景的昵称头像补齐")
+    public BaseResponse<List<UserSimpleVO>> batch(@RequestParam(value = "ids", required = false) List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ResultUtils.success(Collections.emptyList());
+        }
+        List<User> users = userMapper.selectByIds(ids);
+        if (users == null || users.isEmpty()) {
+            return ResultUtils.success(Collections.emptyList());
+        }
+        List<UserSimpleVO> result = users.stream()
+                .map(u -> UserSimpleVO.builder()
+                        .id(u.getId())
+                        .name(u.getName())
+                        .avatar(u.getAvatar())
+                        .userType(u.getUserType())
+                        .build())
+                .collect(Collectors.toList());
+        return ResultUtils.success(result);
     }
 
     @PostMapping("/updateUserPhone")

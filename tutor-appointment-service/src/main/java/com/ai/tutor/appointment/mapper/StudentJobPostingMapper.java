@@ -28,6 +28,7 @@ public interface StudentJobPostingMapper {
     List<StudentJobPosting> listPublishedSorted(@Param("subjectId") Long subjectId,
                                                @Param("city") String city,
                                                @Param("classMode") String classMode,
+                                               @Param("keyword") String keyword,
                                                @Param("sort") String sort,
                                                @Param("cursor") Long cursor,
                                                @Param("pageSize") Integer pageSize);
