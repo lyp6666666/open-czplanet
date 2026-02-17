@@ -10,6 +10,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+
 /**
  * 全局异常处理器：
  * 1. 保证接口在发生异常时，依然返回统一的 BaseResponse 结构，便于前端处理。
@@ -62,7 +69,47 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public BaseResponse<?> handleException(Exception e) {
         log.error("Unhandled exception", e);
+        // #region debug-point
+        String dbgUrl = System.getProperty("TRAE_DEBUG_URL");
+        if (dbgUrl != null && !dbgUrl.isBlank()) {
+            try {
+                String exName = e.getClass().getName();
+                String exMsg = e.getMessage() == null ? "" : e.getMessage();
+                String top = "";
+                StackTraceElement[] st = e.getStackTrace();
+                if (st != null && st.length > 0 && st[0] != null) {
+                    top = st[0].toString();
+                }
+                String body = "{\"ts\":\"" + Instant.now() + "\",\"event\":\"unhandled_exception\""
+                        + ",\"name\":\"" + escapeJson(exName) + "\""
+                        + ",\"msg\":\"" + escapeJson(exMsg) + "\""
+                        + ",\"top\":\"" + escapeJson(top) + "\"}";
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(dbgUrl.trim()))
+                        .timeout(java.time.Duration.ofSeconds(2))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                        .build();
+                HttpClient.newHttpClient().sendAsync(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception ignored) {
+            }
+        }
+        // #endregion debug-point
         return ResultUtils.error(ErrorCode.SYSTEM_ERROR);
     }
-}
 
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\') out.append("\\\\");
+            else if (c == '"') out.append("\\\"");
+            else if (c == '\n') out.append("\\n");
+            else if (c == '\r') out.append("\\r");
+            else if (c == '\t') out.append("\\t");
+            else out.append(c);
+        }
+        return out.toString();
+    }
+}

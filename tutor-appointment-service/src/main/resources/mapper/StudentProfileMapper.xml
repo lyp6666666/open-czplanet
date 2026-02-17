@@ -6,17 +6,23 @@
     <resultMap id="StudentInfoMap" type="com.ai.tutor.appointment.model.entity.StudentProfile">
         <id column="id" property="id"/>
         <result column="user_id" property="userId"/>
-
+        <result column="real_name" property="realName"/>
+        <result column="age" property="age"/>
+        <result column="address" property="address"/>
+        <result column="demand_description" property="demandDescription"/>
+        <result column="budget" property="budget"/>
+        <result column="status" property="status"/>
         <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.StudentProfile"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO student_profile (
-            user_id, real_name, age, school, grade, parent_contact,
+            user_id, real_name, age, address, demand_description, budget,
             status, create_time, update_time
         ) VALUES (
-                     #{userId}, #{realName}, #{age}, #{school}, #{grade}, #{parentContact},
+                     #{userId}, #{realName}, #{age}, #{address}, #{demandDescription}, #{budget},
                      #{status}, #{createTime}, #{updateTime}
                  )
     </insert>
@@ -30,8 +36,8 @@
             <if test="studentExtInfo.age != null">
                 age = #{studentExtInfo.age},
             </if>
-            <if test="studentExtInfo.childAge != null">
-                child_age = #{studentExtInfo.childAge},
+            <if test="studentExtInfo.age == null and studentExtInfo.childAge != null">
+                age = #{studentExtInfo.childAge},
             </if>
             <if test="studentExtInfo.address != null">
                 address = #{studentExtInfo.address},
@@ -46,7 +52,7 @@
                 status = #{studentExtInfo.status},
             </if>
         </set>
-        where id = #{userId}
+        where user_id = #{userId}
     </update>
 
     <select id="selectByUserId" parameterType="long" resultType="com.ai.tutor.appointment.model.entity.StudentProfile">

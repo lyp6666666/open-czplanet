@@ -9,4 +9,5 @@ import lombok.Data;
 public class RequestInfo {
     private Long uid;
     private String ip;
+    private Integer role;
 }

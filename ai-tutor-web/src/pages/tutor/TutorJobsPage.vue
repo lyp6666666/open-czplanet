@@ -30,6 +30,10 @@ const budgetMaxInput = ref('')
 const list = ref<StudentJobPosting[]>([])
 const cursor = ref<number | null>(null)
 const isLast = ref(false)
+const selectedId = ref<number | null>(null)
+const detailLoading = ref(false)
+const detailError = ref<string | null>(null)
+const detail = ref<StudentJobPosting | null>(null)
 
 const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu'>('')
 
@@ -148,6 +152,9 @@ async function refresh() {
   isLast.value = false
   checkedFavoriteIds.clear()
   favoriteMap.value = {}
+  selectedId.value = null
+  detail.value = null
+  detailError.value = null
   await loadMore()
 }
 
@@ -172,6 +179,9 @@ async function loadMore() {
     cursor.value = page.nextCursor ?? null
     isLast.value = !!page.isLast
     await syncFavorites((page.list || []).map((it) => it.id))
+    if (selectedId.value == null && list.value.length > 0) {
+      selectedId.value = list.value[0]?.id ?? null
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -180,7 +190,7 @@ async function loadMore() {
 }
 
 function openDetail(it: StudentJobPosting) {
-  void router.push({ name: 'tutorJobDetail', params: { id: it.id } })
+  selectedId.value = it.id
 }
 
 async function onChat(it: StudentJobPosting) {
@@ -209,6 +219,26 @@ async function onToggleFavorite(it: StudentJobPosting) {
 watch([classMode, stageCode, educationRequirement], () => {
   void refresh()
 })
+
+watch(
+  () => selectedId.value,
+  (id) => {
+    if (id == null) return
+    void (async () => {
+      detailLoading.value = true
+      detailError.value = null
+      try {
+        detail.value = await jobsApi.getDemand(id)
+      } catch (e) {
+        detailError.value = e instanceof Error ? e.message : '加载详情失败'
+        detail.value = null
+      } finally {
+        detailLoading.value = false
+      }
+    })()
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   const raw = route.query.q
@@ -286,40 +316,82 @@ onMounted(() => {
 
     <div v-if="error" class="hint error">{{ error }}</div>
 
-    <div class="card list">
-      <div v-if="list.length === 0 && !loading" class="empty">
-        <div class="empty-title">暂无匹配需求</div>
-        <div class="empty-desc">换个关键词或筛选条件试试</div>
-      </div>
+    <div class="workbench">
+      <aside class="card left">
+        <div v-if="list.length === 0 && !loading" class="empty">
+          <div class="empty-title">暂无匹配需求</div>
+          <div class="empty-desc">换个关键词或筛选条件试试</div>
+        </div>
 
-      <div v-else class="items">
-        <div v-for="it in list" :key="it.id" class="item">
-          <button class="main" type="button" @click="openDetail(it)">
+        <div v-else class="items">
+          <button
+            v-for="it in list"
+            :key="it.id"
+            class="item"
+            type="button"
+            :class="{ active: selectedId === it.id }"
+            @click="openDetail(it)"
+          >
             <div class="t">{{ it.title }}</div>
             <div class="meta">
               <span v-if="it.city">{{ it.city }}</span>
               <span v-if="it.classMode">{{ formatClassMode(it.classMode) }}</span>
               <span v-if="it.stageCode">{{ stageOptions.find((o) => o.value === it.stageCode)?.label || it.stageCode }}</span>
               <span v-if="it.educationRequirement">{{ eduOptions.find((o) => o.value === it.educationRequirement)?.label || it.educationRequirement }}</span>
-              <span v-if="it.budgetMin || it.budgetMax">
-                {{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时
-              </span>
+              <span v-if="it.budgetMin || it.budgetMax">{{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时</span>
             </div>
             <div v-if="it.description" class="desc">{{ it.description }}</div>
           </button>
-          <div class="ops">
-            <button class="btn" type="button" @click="onToggleFavorite(it)">{{ favoriteMap[it.id] ? '已收藏' : '收藏' }}</button>
-            <button class="btn btn-primary" type="button" @click="onChat(it)">立即沟通</button>
+        </div>
+
+        <div class="footer" v-if="list.length > 0">
+          <button class="btn" type="button" :disabled="loading || isLast" @click="loadMore">
+            <span v-if="isLast">没有更多了</span>
+            <span v-else>{{ loading ? '加载中...' : '加载更多' }}</span>
+          </button>
+        </div>
+      </aside>
+
+      <section class="right">
+        <div v-if="detailError" class="hint error">{{ detailError }}</div>
+        <div v-else-if="detailLoading" class="card detail">
+          <div class="d-title skeleton" />
+          <div class="d-line skeleton" />
+          <div class="d-line skeleton" />
+          <div class="d-line skeleton" />
+        </div>
+        <div v-else-if="detail" class="card detail">
+          <div class="detail-head">
+            <div class="detail-title">{{ detail.title }}</div>
+            <div class="detail-ops">
+              <button class="btn" type="button" @click="onToggleFavorite(detail)">{{ favoriteMap[detail.id] ? '已收藏' : '收藏' }}</button>
+              <button class="btn btn-primary" type="button" @click="onChat(detail)">立即沟通</button>
+            </div>
+          </div>
+
+          <div class="detail-meta">
+            <span v-if="detail.city">{{ detail.city }}</span>
+            <span v-if="detail.classMode">{{ formatClassMode(detail.classMode) }}</span>
+            <span v-if="detail.stageCode">{{ stageOptions.find((o) => o.value === (detail?.stageCode ?? ''))?.label || detail.stageCode }}</span>
+            <span v-if="detail.educationRequirement">{{ eduOptions.find((o) => o.value === (detail?.educationRequirement ?? ''))?.label || detail.educationRequirement }}</span>
+            <span v-if="detail.budgetMin || detail.budgetMax">{{ detail.budgetMin || '-' }}-{{ detail.budgetMax || '-' }}/小时</span>
+          </div>
+
+          <div v-if="detail.description" class="detail-block">
+            <div class="detail-label">需求描述</div>
+            <div class="detail-text">{{ detail.description }}</div>
+          </div>
+
+          <div v-if="detail.schedule" class="detail-block">
+            <div class="detail-label">期望时间</div>
+            <div class="detail-text">{{ detail.schedule }}</div>
           </div>
         </div>
-      </div>
-
-      <div class="footer" v-if="list.length > 0">
-        <button class="btn" type="button" :disabled="loading || isLast" @click="loadMore">
-          <span v-if="isLast">没有更多了</span>
-          <span v-else>{{ loading ? '加载中...' : '加载更多' }}</span>
-        </button>
-      </div>
+        <div v-else class="card detail empty-detail">
+          <div class="empty-title">选择一条需求查看详情</div>
+          <div class="empty-desc">从左侧列表点击即可预览</div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -456,8 +528,130 @@ onMounted(() => {
 }
 
 
-.list {
-  padding: 14px;
+.workbench {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 640px;
+}
+
+.left {
+  padding: 12px;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.items {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.item {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.item.active {
+  border-color: rgba(0, 190, 189, 0.45);
+  background: rgba(0, 190, 189, 0.06);
+}
+
+.t {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+}
+
+.right {
+  min-height: 640px;
+}
+
+.detail {
+  padding: 16px;
+  height: 100%;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-title {
+  font-weight: 900;
+  font-size: 18px;
+}
+
+.detail-ops {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-block {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-label {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.detail-text {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .empty {
@@ -475,60 +669,23 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.items {
+.empty-detail {
   display: grid;
-  gap: 10px;
+  place-items: center;
+  align-content: center;
+  text-align: center;
 }
 
-.item {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
+.d-title {
+  height: 18px;
+  width: 70%;
+  border-radius: 10px;
 }
 
-.main {
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 0;
-  cursor: pointer;
-}
-
-.t {
-  font-weight: 900;
-  font-size: 14px;
-}
-
-.meta {
-  margin-top: 6px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.desc {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.ops {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 14px;
+.d-line {
+  height: 14px;
+  width: 100%;
+  border-radius: 10px;
 }
 
 .hint {
@@ -545,8 +702,17 @@ onMounted(() => {
 }
 
 @media (max-width: 980px) {
-  .filters {
+  .workbench {
     grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .left {
+    max-height: 420px;
+  }
+
+  .right {
+    min-height: auto;
   }
 }
 </style>

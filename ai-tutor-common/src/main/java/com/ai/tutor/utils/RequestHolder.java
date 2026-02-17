@@ -10,6 +10,7 @@ public class RequestHolder {
 
     public static final String ATTRIBUTE_UID = "uid";
     public static final String ATTRIBUTE_PHONE = "phone";
+    public static final String ATTRIBUTE_ROLE = "role";
 
     private static final ThreadLocal<RequestInfo> threadLocal = new ThreadLocal<>();
 

@@ -4,11 +4,14 @@ import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
+import com.ai.tutor.common.service.dto.RequestInfo;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+
+import com.ai.tutor.utils.RequestHolder;
 
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_PHONE;
@@ -60,6 +63,11 @@ public class JwtInterceptor implements HandlerInterceptor {
         request.setAttribute(ATTRIBUTE_UID, String.valueOf(userId));
         request.setAttribute(ATTRIBUTE_PHONE, phone);
         request.setAttribute(ATTRIBUTE_ROLE, role);
+
+        RequestInfo info = RequestHolder.get();
+        if (info != null) {
+            info.setRole(role == null ? null : role.getValue());
+        }
 
         return true; // 放行请求
     }
