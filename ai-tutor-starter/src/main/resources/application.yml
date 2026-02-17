@@ -44,3 +44,44 @@ jwt:
     - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
   expiration: 24h
   issuer: ai-tutor
+
+home:
+  guest:
+    banners:
+      carousel:
+        - id: carousel-1
+          title: 家教直聘
+          subtitle: 快速匹配合适老师，先聊再约课
+          imageUrl: /banners/carousel-1.svg
+          link:
+            type: ROUTE
+            url: /
+        - id: carousel-2
+          title: 初中数学提分
+          subtitle: 一对一讲解 + 习题巩固，循序渐进
+          imageUrl: /banners/carousel-2.svg
+          link:
+            type: ROUTE
+            url: /
+        - id: carousel-3
+          title: 英语口语陪练
+          subtitle: 沉浸式对话纠音，表达更自信
+          imageUrl: /banners/carousel-3.svg
+          link:
+            type: ROUTE
+            url: /
+      cards:
+        - id: card-1
+          title: 新手指南
+          subtitle: 快速了解发布需求与挑选家教
+          imageUrl: /banners/card-1.svg
+          link:
+            type: ROUTE
+            url: /
+        - id: card-2
+          title: 在线沟通
+          subtitle: 先聊再约课，沟通更高效
+          imageUrl: /banners/card-2.svg
+          link:
+            type: ROUTE
+            url: /

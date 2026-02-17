@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#052e2b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="75%" cy="35%" r="75%">
+      <stop offset="0" stop-color="#22c55e" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="360" fill="url(#bg)"/>
+  <rect width="1200" height="360" fill="url(#glow)"/>
+  <g fill="#ffffff">
+    <text x="64" y="160" font-size="40" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">英语口语陪练</text>
+    <text x="64" y="208" font-size="20" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" opacity="0.9">沉浸式对话纠音，表达更自信</text>
+  </g>
+  <g opacity="0.18" fill="#ffffff">
+    <path d="M880 112c0-18 14-32 32-32h176c18 0 32 14 32 32v88c0 18-14 32-32 32H996l-54 44v-44h-30c-18 0-32-14-32-32z"/>
+    <circle cx="942" cy="148" r="10"/>
+    <circle cx="986" cy="148" r="10"/>
+    <circle cx="1030" cy="148" r="10"/>
+  </g>
+</svg>

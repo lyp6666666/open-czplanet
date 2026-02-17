@@ -28,6 +28,9 @@ public interface UserMapper {
 
     int updateUserBaseInfo(@Param("userInfo") BaseUserInfo userInfo,@Param("id") Long id);
 
+    @Update("UPDATE user SET user_type = #{userType}, update_time = now() WHERE id = #{id}")
+    int updateUserType(@Param("id") Long id, @Param("userType") Integer userType);
+
     @Update("UPDATE user SET password = #{newPassword} WHERE id = #{id}")
     int updateUserPassWord(String newPassword, Long id);
 

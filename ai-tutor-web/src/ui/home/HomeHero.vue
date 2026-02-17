@@ -3,6 +3,12 @@ import { computed, ref } from 'vue'
 
 import type { BannersVO, SubjectTreeNode } from '@/api/types'
 
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import { Autoplay, Pagination } from 'swiper/modules'
+
+import 'swiper/css'
+import 'swiper/css/pagination'
+
 const props = defineProps<{
   city: string
   subjectTree: SubjectTreeNode[]
@@ -18,7 +24,19 @@ const topSubjects = computed(() => {
 
 const activeSubject = computed(() => topSubjects.value.find((s) => s.id === activeId.value) || null)
 
-const firstCarousel = computed(() => props.banners?.carousel?.[0] || null)
+const carouselItems = computed(() => (Array.isArray(props.banners?.carousel) ? props.banners!.carousel : []))
+const cardItems = computed(() => (Array.isArray(props.banners?.cards) ? props.banners!.cards : []))
+
+type BannerLink = { type?: string; url?: string } | null | undefined
+
+function linkSpec(link: BannerLink) {
+  const url = link?.url?.trim()
+  if (!url) return { is: 'div', attrs: {} as Record<string, unknown> }
+  if (link?.type === 'ROUTE' || url.startsWith('/')) return { is: 'RouterLink', attrs: { to: url } }
+  return { is: 'a', attrs: { href: url, target: '_blank', rel: 'noreferrer' } }
+}
+
+const swiperModules = [Autoplay, Pagination]
 </script>
 
 <template>
@@ -60,29 +78,61 @@ const firstCarousel = computed(() => props.banners?.carousel?.[0] || null)
       </aside>
 
       <div class="main">
-        <div class="carousel card" v-if="firstCarousel">
-          <div class="carousel-inner">
-            <a class="slide" :href="firstCarousel.link.url">
-              <img class="img" :src="firstCarousel.imageUrl" :alt="firstCarousel.title" />
-              <div class="mask">
-                <div class="slide-title">{{ firstCarousel.title }}</div>
-                <div class="slide-sub">{{ firstCarousel.subtitle }}</div>
-              </div>
-            </a>
+        <div v-if="loading" class="carousel card skeleton" />
+        <div v-else-if="carouselItems.length" class="carousel card">
+          <Swiper
+            class="carousel-inner"
+            :modules="swiperModules"
+            :loop="carouselItems.length > 1"
+            :autoplay="{ delay: 3500, disableOnInteraction: false }"
+            :pagination="{ clickable: true }"
+          >
+            <SwiperSlide v-for="c in carouselItems" :key="c.id">
+              <component :is="linkSpec(c.link).is" v-bind="linkSpec(c.link).attrs" class="slide">
+                <img class="img" :src="c.imageUrl" :alt="c.title" />
+                <div class="mask">
+                  <div class="slide-title">{{ c.title }}</div>
+                  <div class="slide-sub">{{ c.subtitle }}</div>
+                </div>
+              </component>
+            </SwiperSlide>
+          </Swiper>
+        </div>
+        <div v-else class="carousel card empty">
+          <div class="empty-inner">
+            <div class="empty-title">为你推荐优质家教</div>
+            <div class="empty-sub">运营位暂未配置，可先浏览热门服务与热门需求</div>
           </div>
         </div>
-        <div v-else class="carousel card skeleton" />
 
         <div class="cards">
-          <a v-for="c in banners?.cards || []" :key="c.id" class="small card" :href="c.link.url">
-            <img class="img" :src="c.imageUrl" :alt="c.title" />
-            <div class="info">
-              <div class="small-title">{{ c.title }}</div>
-              <div class="small-sub">{{ c.subtitle }}</div>
+          <template v-if="loading">
+            <div class="small card skeleton" />
+            <div class="small card skeleton" />
+          </template>
+          <template v-else>
+            <component
+              v-for="c in cardItems"
+              :key="c.id"
+              :is="linkSpec(c.link).is"
+              v-bind="linkSpec(c.link).attrs"
+              class="small card"
+            >
+              <img class="img" :src="c.imageUrl" :alt="c.title" />
+              <div class="info">
+                <div class="small-title">{{ c.title }}</div>
+                <div class="small-sub">{{ c.subtitle }}</div>
+              </div>
+            </component>
+            <div v-if="!cardItems.length" class="small card empty-card">
+              <div class="empty-card-title">新手指南</div>
+              <div class="empty-card-sub">快速了解发布需求与挑选家教</div>
             </div>
-          </a>
-          <div v-if="!banners?.cards?.length" class="small card skeleton" />
-          <div v-if="!banners?.cards?.length" class="small card skeleton" />
+            <div v-if="!cardItems.length" class="small card empty-card">
+              <div class="empty-card-title">在线沟通</div>
+              <div class="empty-card-sub">先聊再约课，匹配更高效</div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -205,6 +255,19 @@ const firstCarousel = computed(() => props.banners?.carousel?.[0] || null)
   height: 100%;
 }
 
+:deep(.swiper) {
+  height: 100%;
+}
+
+:deep(.swiper-pagination-bullet) {
+  background: rgba(255, 255, 255, 0.9);
+  opacity: 0.65;
+}
+
+:deep(.swiper-pagination-bullet-active) {
+  opacity: 1;
+}
+
 .slide {
   height: 100%;
   display: block;
@@ -281,5 +344,66 @@ const firstCarousel = computed(() => props.banners?.carousel?.[0] || null)
 
 .skeleton.row {
   height: 44px;
+}
+
+.empty {
+  background: radial-gradient(1200px 420px at 20% 10%, rgba(0, 190, 189, 0.22), transparent 55%),
+    radial-gradient(900px 380px at 80% 70%, rgba(0, 190, 189, 0.14), transparent 60%), #0e1620;
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.empty-inner {
+  padding: 18px;
+  text-align: center;
+  display: grid;
+  gap: 6px;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+.empty-sub {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.empty-card {
+  overflow: hidden;
+  display: grid;
+  align-content: end;
+  padding: 12px;
+  background: radial-gradient(620px 220px at 30% 10%, rgba(0, 190, 189, 0.2), transparent 55%),
+    radial-gradient(620px 220px at 70% 90%, rgba(0, 190, 189, 0.14), transparent 58%), #0e1620;
+  color: #fff;
+}
+
+.empty-card-title {
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.empty-card-sub {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    display: none;
+  }
 }
 </style>

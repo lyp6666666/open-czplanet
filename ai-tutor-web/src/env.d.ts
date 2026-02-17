@@ -6,6 +6,9 @@ declare module '*.vue' {
   export default component
 }
 
+declare module 'swiper/css'
+declare module 'swiper/css/pagination'
+
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
 }
@@ -13,4 +16,3 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
-

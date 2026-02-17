@@ -18,11 +18,13 @@ import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
@@ -63,40 +65,65 @@ public class UserServiceImpl implements UserService {
         boolean isValid = smsService.verifyCode(phone, code,RedisKeyPrefix.SMS_CODE.getPrefix());
         ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
 
-        //2. 查询该用户是否存在
-        // 查询用户
-        User user = userMapper.selectByPhoneAndUserType(phone, role.getValue());
+        //2. 查询手机号是否已存在账号（登录/注册同入口：存在则直接登录）
+        User user = userMapper.selectByPhone(phone);
 
-        // 如果用户不存在就注册用户到user表和教师或学生表
         if (user == null) {
-            user = new User();
-            user.setName("用户" + phone.substring(phone.length() - 4));
-            user.setPhone(phone);
-            user.setUserType(role.getValue());
-            user.setStatus(0);
-            user.setActiveStatus(2);
-            user.setCreateTime(LocalDateTime.now());
-            user.setUpdateTime(LocalDateTime.now());
-            user.setUserType(role.getValue());
-            userMapper.insert(user);
+            User created = transactionTemplate.execute(status -> {
+                try {
+                    String baseName = "用户" + phone.substring(phone.length() - 4);
+                    User u = new User();
+                    u.setName(baseName);
+                    u.setPhone(phone);
+                    u.setUserType(role.getValue());
+                    u.setStatus(0);
+                    u.setActiveStatus(2);
+                    u.setCreateTime(LocalDateTime.now());
+                    u.setUpdateTime(LocalDateTime.now());
+                    userMapper.insert(u);
+                    ensureProfile(u.getId(), phone, role);
+                    return u;
+                } catch (DuplicateKeyException e) {
+                    User existing = userMapper.selectByPhone(phone);
+                    if (existing != null) {
+                        ensureProfile(existing.getId(), phone, role);
+                        return existing;
+                    }
 
-            // 教师注册逻辑
-            // 2. 再建 profile
-            if (role == UserRoleEnum.TEACHER) {
-                TeacherProfile tp = new TeacherProfile();
-                tp.setUserId(user.getId());
-                tp.setRealName("教师" + phone.substring(phone.length() - 4));
-                tp.setStatus(1);
-                teacherProfileMapper.insert(tp);
-            } else {
-                StudentProfile sp = new StudentProfile();
-                sp.setUserId(user.getId());
-                sp.setRealName("学生" + phone.substring(phone.length() - 4));
-                sp.setStatus(1);
-                studentProfileMapper.insert(sp);
-            }
+                    String baseName = "用户" + phone.substring(phone.length() - 4);
+                    for (int i = 0; i < 3; i++) {
+                        try {
+                            User u = new User();
+                            u.setName(baseName + "-" + ThreadLocalRandom.current().nextInt(1000, 10000));
+                            u.setPhone(phone);
+                            u.setUserType(role.getValue());
+                            u.setStatus(0);
+                            u.setActiveStatus(2);
+                            u.setCreateTime(LocalDateTime.now());
+                            u.setUpdateTime(LocalDateTime.now());
+                            userMapper.insert(u);
+                            ensureProfile(u.getId(), phone, role);
+                            return u;
+                        } catch (DuplicateKeyException ignored) {
+                        }
+                    }
 
+                    ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
+                    return null;
+                }
+            });
+            ThrowUtils.throwIf(created == null, ErrorCode.SYSTEM_ERROR);
+            user = created;
+        } else {
+            Long userId = user.getId();
+            transactionTemplate.execute(status -> {
+                ensureProfile(userId, phone, role);
+                return true;
+            });
         }
+
+        user.setUserType(role.getValue());
+        userMapper.updateUserType(user.getId(), role.getValue());
 
         // 5. 生成 JWT Token（把 userId 写入 claim，后续所有鉴权都以 userId 为准）
         String token = jwtUtil.generateToken(user.getId(), phone, role);
@@ -114,6 +141,30 @@ public class UserServiceImpl implements UserService {
                 .userType(user.getUserType())
                 .token(token)
                 .build();
+    }
+
+    private void ensureProfile(Long userId, String phone, UserRoleEnum role) {
+        if (role == UserRoleEnum.TEACHER) {
+            TeacherProfile tp = teacherProfileMapper.selectByUserId(userId);
+            if (tp != null) return;
+            TeacherProfile created = new TeacherProfile();
+            created.setUserId(userId);
+            created.setRealName("教师" + phone.substring(phone.length() - 4));
+            created.setStatus(1);
+            created.setCreateTime(LocalDateTime.now());
+            created.setUpdateTime(LocalDateTime.now());
+            teacherProfileMapper.insert(created);
+        } else {
+            StudentProfile sp = studentProfileMapper.selectByUserId(userId);
+            if (sp != null) return;
+            StudentProfile created = new StudentProfile();
+            created.setUserId(userId);
+            created.setRealName("学生" + phone.substring(phone.length() - 4));
+            created.setStatus(1);
+            created.setCreateTime(LocalDateTime.now());
+            created.setUpdateTime(LocalDateTime.now());
+            studentProfileMapper.insert(created);
+        }
     }
 
     @Override

@@ -94,10 +94,38 @@ export const useHomeStore = defineStore('home', {
       }
     },
 
+    async refreshCityMeta() {
+      const [hotWords, banners, hotTabsService, hotTabsDemand] = await Promise.all([
+        homeGuestApi.getHotWords({ city: this.city, limit: 10 }),
+        homeGuestApi.getBanners({ city: this.city, scene: 'home' }),
+        homeGuestApi.getHotTabs({ type: 'service', city: this.city, limit: 12 }),
+        homeGuestApi.getHotTabs({ type: 'demand', city: this.city, limit: 12 }),
+      ])
+
+      this.hotWords = hotWords
+      this.banners = banners
+      this.hotTabsService = hotTabsService
+      this.hotTabsDemand = hotTabsDemand
+
+      const firstServiceTabId = hotTabsService.tabs?.[0]?.tabId
+      if (firstServiceTabId) this.selectedServiceTabId = firstServiceTabId
+      const firstDemandTabId = hotTabsDemand.tabs?.[0]?.tabId
+      if (firstDemandTabId) this.selectedDemandTabId = firstDemandTabId
+    },
+
     async setCity(city: string) {
       if (!city || city === this.city) return
       this.city = city
-      await Promise.all([this.refreshHotServices(), this.refreshHotDemands(), this.refreshHotTutors()])
+      this.loading = true
+      this.error = null
+      try {
+        await this.refreshCityMeta()
+        await Promise.all([this.refreshHotServices(), this.refreshHotDemands(), this.refreshHotTutors()])
+      } catch (e) {
+        this.error = e instanceof Error ? e.message : '加载失败'
+      } finally {
+        this.loading = false
+      }
     },
 
     async refreshHotServices() {

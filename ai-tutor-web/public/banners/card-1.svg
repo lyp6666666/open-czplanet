@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="224" viewBox="0 0 560 224">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0e1620"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="30%" cy="25%" r="80%">
+      <stop offset="0" stop-color="#00bebd" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#00bebd" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="560" height="224" fill="url(#bg)"/>
+  <rect width="560" height="224" fill="url(#glow)"/>
+  <g fill="#ffffff">
+    <text x="24" y="106" font-size="26" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">新手指南</text>
+    <text x="24" y="142" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" opacity="0.9">快速了解发布需求与挑选家教</text>
+  </g>
+  <g opacity="0.22" fill="#ffffff">
+    <rect x="402" y="54" width="120" height="120" rx="20"/>
+    <rect x="424" y="82" width="76" height="12" rx="6"/>
+    <rect x="424" y="106" width="88" height="12" rx="6"/>
+    <rect x="424" y="130" width="56" height="12" rx="6"/>
+  </g>
+</svg>

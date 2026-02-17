@@ -167,7 +167,7 @@ CREATE TABLE `user`  (
   `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uniq_open_id`(`open_id`) USING BTREE,
-  UNIQUE INDEX `uniq_name`(`name`) USING BTREE,
+  UNIQUE INDEX `uniq_phone`(`phone`) USING BTREE,
   INDEX `idx_create_time`(`create_time`) USING BTREE,
   INDEX `idx_update_time`(`update_time`) USING BTREE,
   INDEX `idx_active_status_last_opt_time`(`active_status`, `last_opt_time`) USING BTREE

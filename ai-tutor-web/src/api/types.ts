@@ -74,20 +74,20 @@ export interface BannersVO {
     title: string
     subtitle: string
     imageUrl: string
-    link: {
+    link?: {
       type: string
       url: string
-    }
+    } | null
   }>
   cards: Array<{
     id: string
     title: string
     subtitle: string
     imageUrl: string
-    link: {
+    link?: {
       type: string
       url: string
-    }
+    } | null
   }>
 }
 
