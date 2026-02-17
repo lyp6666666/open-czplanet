@@ -14,6 +14,9 @@ const props = defineProps<{
   hotServices: PageState<HotServiceCardVO>
   hotDemands: PageState<HotDemandCardVO>
   hotTutors: PageState<HotTutorCardVO>
+  showServices?: boolean
+  showDemands?: boolean
+  showTutors?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +30,9 @@ const emit = defineEmits<{
 
 const serviceTabs = computed(() => props.hotTabsService?.tabs || [])
 const demandTabs = computed(() => props.hotTabsDemand?.tabs || [])
+const showServices = computed(() => props.showServices !== false)
+const showDemands = computed(() => props.showDemands !== false)
+const showTutors = computed(() => props.showTutors !== false)
 
 function range(n: number) {
   return Array.from({ length: n }, (_, i) => i)
@@ -55,7 +61,7 @@ function selectDemandTab(tabId: string) {
       <button class="btn" type="button" @click="emit('refresh')">换一批</button>
     </div>
 
-    <div class="block card">
+    <div v-if="showServices" class="block card">
       <div class="block-head">
         <div class="block-title">热门服务</div>
         <div class="tabs">
@@ -140,7 +146,7 @@ function selectDemandTab(tabId: string) {
       </div>
     </div>
 
-    <div class="block card">
+    <div v-if="showDemands" class="block card">
       <div class="block-head">
         <div class="block-title">热门需求</div>
         <div class="tabs">
@@ -227,7 +233,7 @@ function selectDemandTab(tabId: string) {
       </div>
     </div>
 
-    <div class="block card">
+    <div v-if="showTutors" class="block card">
       <div class="block-head">
         <div class="block-title">推荐老师</div>
       </div>

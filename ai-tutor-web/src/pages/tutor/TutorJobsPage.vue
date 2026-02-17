@@ -458,6 +458,7 @@ onMounted(() => {
 
 .list {
   padding: 14px;
+}
 
 .empty {
   padding: 28px 10px;

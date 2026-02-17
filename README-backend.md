@@ -23,6 +23,27 @@ CREATE DATABASE IF NOT EXISTS ai_tutor DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_u
 
 > 具体账号、密码、连接串以各模块 `application.yml` 为准，你可以按自己本机环境修改。
 
+## 2.1 数据库升级（已有旧库时必做）
+
+如果你之前已创建过 `ai_tutor` 库且导入过旧版 SQL，需要执行以下增量变更（否则会出现“首页热门需求/需求广场接口 500 / Unknown column”一类错误）：
+
+```sql
+ALTER TABLE student_job_posting
+  ADD COLUMN stage_code varchar(32) NULL COMMENT '授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER',
+  ADD COLUMN education_requirement varchar(32) NULL COMMENT '学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等';
+
+CREATE TABLE IF NOT EXISTS tutor_favorite_demand (
+  id bigint(20) NOT NULL AUTO_INCREMENT COMMENT '收藏ID',
+  tutor_id bigint(20) NOT NULL COMMENT '教师用户ID（user.id）',
+  demand_id bigint(20) NOT NULL COMMENT '需求贴ID（student_job_posting.id）',
+  create_time datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_tutor_demand (tutor_id, demand_id),
+  KEY idx_tutor_id (tutor_id),
+  KEY idx_demand_id (demand_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
 ## 3. 配置说明（按需修改）
 
 默认配置文件：

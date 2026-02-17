@@ -17,8 +17,16 @@ const keyword = ref('')
 
 const isTeacher = computed(() => auth.user?.userType === 1)
 
+const showHotServices = computed(() => !auth.isLoggedIn || !isTeacher.value)
+const showHotDemands = computed(() => !auth.isLoggedIn || isTeacher.value)
+const showHotTutors = computed(() => !auth.isLoggedIn || !isTeacher.value)
+
 async function refreshAll() {
-  await Promise.all([home.refreshHotServices(), home.refreshHotDemands(), home.refreshHotTutors()])
+  const tasks: Array<Promise<unknown>> = []
+  if (showHotServices.value) tasks.push(home.refreshHotServices())
+  if (showHotDemands.value) tasks.push(home.refreshHotDemands())
+  if (showHotTutors.value) tasks.push(home.refreshHotTutors())
+  await Promise.all(tasks)
 }
 
 async function onSearch() {
@@ -74,6 +82,9 @@ onMounted(() => {
           :hot-services="home.hotServices"
           :hot-demands="home.hotDemands"
           :hot-tutors="home.hotTutors"
+          :show-services="showHotServices"
+          :show-demands="showHotDemands"
+          :show-tutors="showHotTutors"
           @load-more-services="home.loadMoreHotServices"
           @load-more-demands="home.loadMoreHotDemands"
           @load-more-tutors="home.loadMoreHotTutors"
