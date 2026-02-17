@@ -45,21 +45,25 @@ const swiperModules = [Autoplay, Pagination]
       <aside class="subjects card">
         <div class="title">学科分类</div>
 
-        <div v-if="loading" class="skeleton-list">
-          <div v-for="i in 10" :key="i" class="skeleton row skeleton" />
-        </div>
+        <div class="body" @mouseleave="activeId = null">
+          <div v-if="loading" class="skeleton-list">
+            <div v-for="i in 10" :key="i" class="skeleton row skeleton" />
+          </div>
 
-        <div v-else class="list" @mouseleave="activeId = null">
-          <button
-            v-for="s in topSubjects"
-            :key="s.id"
-            class="row"
-            type="button"
-            @mouseenter="activeId = s.id"
-          >
-            <div class="name">{{ s.name }}</div>
-            <div class="meta">{{ s.children?.slice(0, 3).map((c) => c.name).join(' / ') }}</div>
-          </button>
+          <div v-else-if="topSubjects.length" class="list">
+            <button
+              v-for="s in topSubjects"
+              :key="s.id"
+              class="row"
+              type="button"
+              @mouseenter="activeId = s.id"
+            >
+              <div class="name">{{ s.name }}</div>
+              <div class="meta">{{ s.children?.slice(0, 3).map((c) => c.name).join(' / ') }}</div>
+            </button>
+          </div>
+
+          <div v-else class="subjects-empty">暂无学科分类</div>
         </div>
 
         <div v-if="activeSubject" class="panel card">
@@ -141,6 +145,8 @@ const swiperModules = [Autoplay, Pagination]
 
 <style scoped>
 .hero {
+  --hero-h: 264px;
+  --hero-gap: 16px;
   margin-bottom: 16px;
 }
 
@@ -155,12 +161,21 @@ const swiperModules = [Autoplay, Pagination]
   position: relative;
   padding: 14px;
   overflow: visible;
+  height: var(--hero-h);
+  display: flex;
+  flex-direction: column;
 }
 
 .title {
   font-size: 14px;
   font-weight: 700;
   margin-bottom: 10px;
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .list {
@@ -247,7 +262,7 @@ const swiperModules = [Autoplay, Pagination]
 }
 
 .carousel {
-  height: 240px;
+  height: var(--hero-h);
   overflow: hidden;
 }
 
@@ -304,8 +319,8 @@ const swiperModules = [Autoplay, Pagination]
 
 .cards {
   display: grid;
-  grid-auto-rows: 112px;
-  gap: 16px;
+  grid-auto-rows: calc((var(--hero-h) - var(--hero-gap)) / 2);
+  gap: var(--hero-gap);
 }
 
 .small {
@@ -340,10 +355,22 @@ const swiperModules = [Autoplay, Pagination]
 .skeleton-list {
   display: grid;
   gap: 8px;
+  height: 100%;
 }
 
 .skeleton.row {
   height: 44px;
+}
+
+.subjects-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  border: 1px dashed rgba(31, 35, 41, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .empty {
@@ -400,6 +427,19 @@ const swiperModules = [Autoplay, Pagination]
 
   .main {
     grid-template-columns: 1fr;
+  }
+
+  .subjects {
+    height: auto;
+  }
+
+  .carousel {
+    height: 220px;
+  }
+
+  .cards {
+    grid-auto-rows: 112px;
+    gap: 16px;
   }
 
   .panel {

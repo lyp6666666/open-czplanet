@@ -27,6 +27,14 @@ const emit = defineEmits<{
 const serviceTabs = computed(() => props.hotTabsService?.tabs || [])
 const demandTabs = computed(() => props.hotTabsDemand?.tabs || [])
 
+function range(n: number) {
+  return Array.from({ length: n }, (_, i) => i)
+}
+
+const servicePlaceholders = computed(() => range(6))
+const demandPlaceholders = computed(() => range(6))
+const tutorPlaceholders = computed(() => range(4))
+
 function selectServiceTab(tabId: string) {
   emit('update:serviceTabId', tabId)
   emit('refresh')
@@ -50,40 +58,76 @@ function selectDemandTab(tabId: string) {
       <div class="block-head">
         <div class="block-title">热门服务</div>
         <div class="tabs">
-          <button
-            v-for="t in serviceTabs"
-            :key="t.tabId"
-            class="tab"
-            :class="{ active: t.tabId === serviceTabId }"
-            type="button"
-            @click="selectServiceTab(t.tabId)"
-          >
-            {{ t.name }}
-          </button>
+          <template v-if="serviceTabs.length">
+            <button
+              v-for="t in serviceTabs"
+              :key="t.tabId"
+              class="tab"
+              :class="{ active: t.tabId === serviceTabId }"
+              type="button"
+              @click="selectServiceTab(t.tabId)"
+            >
+              {{ t.name }}
+            </button>
+          </template>
+          <button v-else class="tab active" type="button" @click="emit('refresh')">推荐</button>
         </div>
       </div>
 
       <div v-if="hotServices.error" class="hint">{{ hotServices.error }}</div>
       <div class="grid">
-        <article v-for="it in hotServices.list" :key="it.serviceId" class="item">
-          <div class="item-title">{{ it.title }}</div>
-          <div class="line">
-            <span class="pill">{{ it.subject.name }}</span>
-            <span class="muted">{{ it.mode }}</span>
-            <span class="muted">{{ it.city }}</span>
-          </div>
-          <div class="person">
-            <img class="avatar" :src="it.tutor.avatar" alt="" />
-            <div class="info">
-              <div class="name">{{ it.tutor.displayName }}</div>
-              <div class="sub">{{ it.tutor.education }} · {{ it.tutor.experienceYears }}年</div>
+        <template v-if="hotServices.loading">
+          <article v-for="i in servicePlaceholders" :key="i" class="item">
+            <div class="skeleton sk-title skeleton" />
+            <div class="sk-line">
+              <span class="skeleton sk-pill skeleton" />
+              <span class="skeleton sk-pill skeleton" />
+              <span class="skeleton sk-pill skeleton" />
             </div>
-            <div class="price">¥{{ it.pricePerHour }}/小时</div>
-          </div>
-          <div class="tags">
-            <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
-          </div>
-        </article>
+            <div class="person">
+              <div class="avatar skeleton" />
+              <div class="info">
+                <div class="skeleton sk-name skeleton" />
+                <div class="skeleton sk-sub skeleton" />
+              </div>
+              <div class="skeleton sk-price skeleton" />
+            </div>
+            <div class="sk-tags">
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+            </div>
+          </article>
+        </template>
+
+        <template v-else-if="hotServices.list.length">
+          <article v-for="it in hotServices.list" :key="it.serviceId" class="item">
+            <div class="item-title">{{ it.title }}</div>
+            <div class="line">
+              <span class="pill">{{ it.subject.name }}</span>
+              <span class="muted">{{ it.mode }}</span>
+              <span class="muted">{{ it.city }}</span>
+            </div>
+            <div class="person">
+              <img class="avatar" :src="it.tutor.avatar" alt="" />
+              <div class="info">
+                <div class="name">{{ it.tutor.displayName }}</div>
+                <div class="sub">{{ it.tutor.education }} · {{ it.tutor.experienceYears }}年</div>
+              </div>
+              <div class="price">¥{{ it.pricePerHour }}/小时</div>
+            </div>
+            <div class="tags">
+              <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+          </article>
+        </template>
+
+        <template v-else>
+          <article v-for="i in servicePlaceholders" :key="i" class="item empty-item">
+            <div class="empty-title">暂无推荐服务</div>
+            <div class="empty-sub">稍后再来看看</div>
+          </article>
+        </template>
       </div>
 
       <div class="more">
@@ -99,41 +143,78 @@ function selectDemandTab(tabId: string) {
       <div class="block-head">
         <div class="block-title">热门需求</div>
         <div class="tabs">
-          <button
-            v-for="t in demandTabs"
-            :key="t.tabId"
-            class="tab"
-            :class="{ active: t.tabId === demandTabId }"
-            type="button"
-            @click="selectDemandTab(t.tabId)"
-          >
-            {{ t.name }}
-          </button>
+          <template v-if="demandTabs.length">
+            <button
+              v-for="t in demandTabs"
+              :key="t.tabId"
+              class="tab"
+              :class="{ active: t.tabId === demandTabId }"
+              type="button"
+              @click="selectDemandTab(t.tabId)"
+            >
+              {{ t.name }}
+            </button>
+          </template>
+          <button v-else class="tab active" type="button" @click="emit('refresh')">推荐</button>
         </div>
       </div>
 
       <div v-if="hotDemands.error" class="hint">{{ hotDemands.error }}</div>
       <div class="grid">
-        <article v-for="it in hotDemands.list" :key="it.demandId" class="item">
-          <div class="item-title">{{ it.title }}</div>
-          <div class="line">
-            <span class="pill">{{ it.subject.name }}</span>
-            <span class="muted">{{ it.classMode }}</span>
-            <span class="muted">{{ it.city }}</span>
-            <span class="muted">{{ it.addressSimple }}</span>
-          </div>
-          <div class="person">
-            <img class="avatar" :src="it.parent.avatar" alt="" />
-            <div class="info">
-              <div class="name">{{ it.parent.displayName }}</div>
-              <div class="sub">{{ it.scheduleText }}</div>
+        <template v-if="hotDemands.loading">
+          <article v-for="i in demandPlaceholders" :key="i" class="item">
+            <div class="skeleton sk-title skeleton" />
+            <div class="sk-line">
+              <span class="skeleton sk-pill skeleton" />
+              <span class="skeleton sk-pill skeleton" />
+              <span class="skeleton sk-pill skeleton" />
+              <span class="skeleton sk-pill skeleton" />
             </div>
-            <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ it.budget.unit }}</div>
-          </div>
-          <div class="tags">
-            <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
-          </div>
-        </article>
+            <div class="person">
+              <div class="avatar skeleton" />
+              <div class="info">
+                <div class="skeleton sk-name skeleton" />
+                <div class="skeleton sk-sub skeleton" />
+              </div>
+              <div class="skeleton sk-price skeleton" />
+            </div>
+            <div class="sk-tags">
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+            </div>
+          </article>
+        </template>
+
+        <template v-else-if="hotDemands.list.length">
+          <article v-for="it in hotDemands.list" :key="it.demandId" class="item">
+            <div class="item-title">{{ it.title }}</div>
+            <div class="line">
+              <span class="pill">{{ it.subject.name }}</span>
+              <span class="muted">{{ it.classMode }}</span>
+              <span class="muted">{{ it.city }}</span>
+              <span class="muted">{{ it.addressSimple }}</span>
+            </div>
+            <div class="person">
+              <img class="avatar" :src="it.parent.avatar" alt="" />
+              <div class="info">
+                <div class="name">{{ it.parent.displayName }}</div>
+                <div class="sub">{{ it.scheduleText }}</div>
+              </div>
+              <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ it.budget.unit }}</div>
+            </div>
+            <div class="tags">
+              <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+          </article>
+        </template>
+
+        <template v-else>
+          <article v-for="i in demandPlaceholders" :key="i" class="item empty-item">
+            <div class="empty-title">暂无推荐需求</div>
+            <div class="empty-sub">稍后再来看看</div>
+          </article>
+        </template>
       </div>
 
       <div class="more">
@@ -152,22 +233,53 @@ function selectDemandTab(tabId: string) {
 
       <div v-if="hotTutors.error" class="hint">{{ hotTutors.error }}</div>
       <div class="grid tutors">
-        <article v-for="it in hotTutors.list" :key="it.userId" class="item tutor-item">
-          <div class="person">
-            <img class="avatar big" :src="it.avatar" alt="" />
-            <div class="info">
-              <div class="name">{{ it.displayName }}</div>
-              <div class="sub">{{ it.education }} · {{ it.experienceYears }}年 · {{ it.city }}</div>
+        <template v-if="hotTutors.loading">
+          <article v-for="i in tutorPlaceholders" :key="i" class="item tutor-item">
+            <div class="person">
+              <div class="avatar big skeleton" />
+              <div class="info">
+                <div class="skeleton sk-name skeleton" />
+                <div class="skeleton sk-sub skeleton" />
+              </div>
+              <div class="skeleton sk-price skeleton" />
             </div>
-            <div class="price">¥{{ it.ratePerHour }}/小时</div>
-          </div>
-          <div class="tags">
-            <span v-for="tag in it.subjectTags" :key="tag" class="tag">{{ tag }}</span>
-          </div>
-          <div class="highlights">
-            <span v-for="h in it.highlights" :key="h" class="hl">{{ h }}</span>
-          </div>
-        </article>
+            <div class="sk-tags">
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+            </div>
+            <div class="sk-tags">
+              <span class="skeleton sk-tag skeleton" />
+              <span class="skeleton sk-tag skeleton" />
+            </div>
+          </article>
+        </template>
+
+        <template v-else-if="hotTutors.list.length">
+          <article v-for="it in hotTutors.list" :key="it.userId" class="item tutor-item">
+            <div class="person">
+              <img class="avatar big" :src="it.avatar" alt="" />
+              <div class="info">
+                <div class="name">{{ it.displayName }}</div>
+                <div class="sub">{{ it.education }} · {{ it.experienceYears }}年 · {{ it.city }}</div>
+              </div>
+              <div class="price">¥{{ it.ratePerHour }}/小时</div>
+            </div>
+            <div class="tags">
+              <span v-for="tag in it.subjectTags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+            <div class="highlights">
+              <span v-for="h in it.highlights" :key="h" class="hl">{{ h }}</span>
+            </div>
+          </article>
+        </template>
+
+        <template v-else>
+          <article v-for="i in tutorPlaceholders" :key="i" class="item tutor-item empty-item">
+            <div class="empty-title">暂无推荐老师</div>
+            <div class="empty-sub">稍后再来看看</div>
+          </article>
+        </template>
       </div>
 
       <div class="more">
@@ -260,6 +372,77 @@ function selectDemandTab(tabId: string) {
   border-radius: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.empty-item {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 6px;
+  min-height: 150px;
+  background: rgba(255, 255, 255, 0.6);
+  border-style: dashed;
+}
+
+.empty-title {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.empty-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.sk-line {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.sk-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sk-title {
+  height: 16px;
+  width: 72%;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.sk-name {
+  height: 14px;
+  width: 70%;
+  border-radius: 8px;
+}
+
+.sk-sub {
+  height: 12px;
+  width: 92%;
+  border-radius: 8px;
+  margin-top: 6px;
+}
+
+.sk-price {
+  height: 14px;
+  width: 64px;
+  border-radius: 8px;
+}
+
+.sk-pill {
+  height: 16px;
+  width: 52px;
+  border-radius: 999px;
+}
+
+.sk-tag {
+  height: 16px;
+  width: 46px;
+  border-radius: 999px;
 }
 
 .item-title {
