@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
 import type { StudentJobPosting } from '@/api/types'
+import { formatClassMode } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
@@ -72,9 +73,9 @@ onMounted(() => {
             <div class="t">{{ it.title }}</div>
             <div class="meta">
               <span v-if="it.city">{{ it.city }}</span>
-              <span v-if="it.classMode">{{ it.classMode }}</span>
+              <span v-if="it.classMode">{{ formatClassMode(it.classMode) }}</span>
               <span v-if="it.budgetMin || it.budgetMax">
-                {{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/h
+                {{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时
               </span>
             </div>
           </div>
@@ -186,4 +187,3 @@ onMounted(() => {
   background: rgba(255, 0, 0, 0.06);
 }
 </style>
-

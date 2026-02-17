@@ -153,8 +153,8 @@ onMounted(() => {
       </div>
 
       <label class="field">
-        <div class="label">期望时间（JSON）</div>
-        <input v-model="schedule" class="input" placeholder='例如：["Tue 19-21","Sat 10-12"]' />
+        <div class="label">期望时间（JSON 格式）</div>
+        <input v-model="schedule" class="input" placeholder='例如：["周二 19-21","周六 10-12"]' />
       </label>
     </div>
   </div>

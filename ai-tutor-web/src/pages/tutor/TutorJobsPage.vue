@@ -6,6 +6,7 @@ import { chatApi } from '@/api/chat'
 import { jobsApi } from '@/api/jobs'
 import { homeGuestApi } from '@/api/homeGuest'
 import type { StudentJobPosting, SubjectTreeNode } from '@/api/types'
+import { formatClassMode } from '@/utils/present'
 
 const router = useRouter()
 
@@ -126,9 +127,9 @@ onMounted(() => {
             <div class="t">{{ it.title }}</div>
             <div class="meta">
               <span v-if="it.city">{{ it.city }}</span>
-              <span v-if="it.classMode">{{ it.classMode }}</span>
+              <span v-if="it.classMode">{{ formatClassMode(it.classMode) }}</span>
               <span v-if="it.budgetMin || it.budgetMax">
-                {{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/h
+                {{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时
               </span>
             </div>
             <div v-if="it.description" class="desc">{{ it.description }}</div>

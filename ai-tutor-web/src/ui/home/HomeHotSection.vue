@@ -3,6 +3,7 @@ import { computed } from 'vue'
 
 import type { HotDemandCardVO, HotServiceCardVO, HotTabsVO, HotTutorCardVO } from '@/api/types'
 import type { PageState } from '@/stores/home'
+import { formatBudgetUnit, formatClassMode, formatScheduleText } from '@/utils/present'
 
 const props = defineProps<{
   city: string
@@ -105,7 +106,7 @@ function selectDemandTab(tabId: string) {
             <div class="item-title">{{ it.title }}</div>
             <div class="line">
               <span class="pill">{{ it.subject.name }}</span>
-              <span class="muted">{{ it.mode }}</span>
+              <span class="muted">{{ formatClassMode(it.mode) }}</span>
               <span class="muted">{{ it.city }}</span>
             </div>
             <div class="person">
@@ -191,7 +192,7 @@ function selectDemandTab(tabId: string) {
             <div class="item-title">{{ it.title }}</div>
             <div class="line">
               <span class="pill">{{ it.subject.name }}</span>
-              <span class="muted">{{ it.classMode }}</span>
+              <span class="muted">{{ formatClassMode(it.classMode) }}</span>
               <span class="muted">{{ it.city }}</span>
               <span class="muted">{{ it.addressSimple }}</span>
             </div>
@@ -199,9 +200,9 @@ function selectDemandTab(tabId: string) {
               <img class="avatar" :src="it.parent.avatar" alt="" />
               <div class="info">
                 <div class="name">{{ it.parent.displayName }}</div>
-                <div class="sub">{{ it.scheduleText }}</div>
+                <div class="sub">{{ formatScheduleText(it.scheduleText) }}</div>
               </div>
-              <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ it.budget.unit }}</div>
+              <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ formatBudgetUnit(it.budget.unit) }}</div>
             </div>
             <div class="tags">
               <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>

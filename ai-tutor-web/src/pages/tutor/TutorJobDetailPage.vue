@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { chatApi } from '@/api/chat'
 import { jobsApi } from '@/api/jobs'
 import type { StudentJobPosting } from '@/api/types'
+import { formatClassMode, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,8 +57,8 @@ onMounted(() => {
       <div class="t">{{ data.title }}</div>
       <div class="meta">
         <span v-if="data.city">{{ data.city }}</span>
-        <span v-if="data.classMode">{{ data.classMode }}</span>
-        <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/h</span>
+        <span v-if="data.classMode">{{ formatClassMode(data.classMode) }}</span>
+        <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
       </div>
 
       <div class="sec">
@@ -77,7 +78,7 @@ onMounted(() => {
 
       <div class="sec">
         <div class="sec-title">期望时间</div>
-        <div class="sec-body">{{ data.schedule || '—' }}</div>
+        <div class="sec-body">{{ data.schedule ? formatScheduleText(data.schedule) : '—' }}</div>
       </div>
     </div>
   </div>
