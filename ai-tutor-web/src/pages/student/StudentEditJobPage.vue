@@ -19,6 +19,27 @@ const doneHint = ref<string | null>(null)
 const subjects = ref<SubjectTreeNode[]>([])
 const form = ref<StudentJobPosting | null>(null)
 
+const stageOptions = [
+  { value: '', label: '不限' },
+  { value: 'PRESCHOOL', label: '幼教育' },
+  { value: 'PRIMARY', label: '小学' },
+  { value: 'JUNIOR', label: '初中' },
+  { value: 'SENIOR', label: '高中' },
+  { value: 'OTHER', label: '其他' },
+]
+
+const eduOptions = [
+  { value: '', label: '不限' },
+  { value: 'TOP2', label: 'top2' },
+  { value: 'C985', label: '985' },
+  { value: 'C211', label: '211' },
+  { value: 'DOUBLE_FIRST_CLASS', label: '双一流' },
+  { value: 'FIRST_TIER', label: '一本' },
+  { value: 'BACHELOR', label: '本科' },
+  { value: 'OVERSEAS', label: '海归' },
+  { value: 'QS50', label: 'QS前50' },
+]
+
 const subjectOptions = computed(() => {
   const out: Array<{ id: number; label: string }> = []
   function walk(node: SubjectTreeNode, prefix: string) {
@@ -65,6 +86,8 @@ async function onSave() {
       address: form.value.classMode === 'online' ? undefined : form.value.address || undefined,
       budgetMin: form.value.budgetMin != null ? Number(form.value.budgetMin) : undefined,
       budgetMax: form.value.budgetMax != null ? Number(form.value.budgetMax) : undefined,
+      stageCode: form.value.stageCode || undefined,
+      educationRequirement: form.value.educationRequirement || undefined,
       schedule: form.value.schedule || undefined,
       status: form.value.status ?? undefined,
     })
@@ -126,6 +149,21 @@ onMounted(() => {
         <label class="field">
           <div class="label">孩子年龄</div>
           <input v-model.number="form.childAge" class="input" inputmode="numeric" placeholder="例如：9" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <div class="label">授课学段</div>
+          <select v-model="form.stageCode" class="input">
+            <option v-for="o in stageOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="label">学历要求</div>
+          <select v-model="form.educationRequirement" class="input">
+            <option v-for="o in eduOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
         </label>
       </div>
 

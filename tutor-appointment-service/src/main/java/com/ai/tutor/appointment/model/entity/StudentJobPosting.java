@@ -51,6 +51,12 @@ public class StudentJobPosting {
     /** 预算上限（每小时） */
     private BigDecimal budgetMax;
 
+    /** 授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER */
+    private String stageCode;
+
+    /** 学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等 */
+    private String educationRequirement;
+
     /** 期望上课时间，JSON 格式 */
     private String schedule;
 

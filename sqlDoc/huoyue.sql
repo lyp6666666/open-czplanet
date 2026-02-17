@@ -55,6 +55,8 @@ CREATE TABLE `student_job_posting`  (
   `address` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '具体上课地址（offline 时可选）',
   `budget_min` decimal(10, 2) NULL DEFAULT NULL COMMENT '预算下限（每小时）',
   `budget_max` decimal(10, 2) NULL DEFAULT NULL COMMENT '预算上限（每小时）',
+  `stage_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER',
+  `education_requirement` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等',
   `schedule` json NULL COMMENT '期望上课时间，例如：[\"Tue 19-21\",\"Sat 10-12\"]',
   `status` tinyint(4) NULL DEFAULT 1 COMMENT '状态：1发布中 0关闭',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -68,6 +70,21 @@ CREATE TABLE `student_job_posting`  (
 -- ----------------------------
 -- Records of student_job_posting
 -- ----------------------------
+
+-- ----------------------------
+-- Table structure for tutor_favorite_demand
+-- ----------------------------
+DROP TABLE IF EXISTS `tutor_favorite_demand`;
+CREATE TABLE `tutor_favorite_demand`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '收藏ID',
+  `tutor_id` bigint(20) NOT NULL COMMENT '教师用户ID（user.id）',
+  `demand_id` bigint(20) NOT NULL COMMENT '需求贴ID（student_job_posting.id）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_tutor_demand`(`tutor_id`, `demand_id`) USING BTREE,
+  INDEX `idx_tutor_id`(`tutor_id`) USING BTREE,
+  INDEX `idx_demand_id`(`demand_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '教师收藏需求贴表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for student_profile

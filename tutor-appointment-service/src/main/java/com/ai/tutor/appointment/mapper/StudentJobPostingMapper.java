@@ -4,6 +4,7 @@ import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Mapper
@@ -32,6 +33,18 @@ public interface StudentJobPostingMapper {
                                                @Param("sort") String sort,
                                                @Param("cursor") Long cursor,
                                                @Param("pageSize") Integer pageSize);
+
+    List<StudentJobPosting> listPublishedFiltered(@Param("subjectId") Long subjectId,
+                                                 @Param("city") String city,
+                                                 @Param("classMode") String classMode,
+                                                 @Param("stageCode") String stageCode,
+                                                 @Param("educationRequirement") String educationRequirement,
+                                                 @Param("budgetMin") BigDecimal budgetMin,
+                                                 @Param("budgetMax") BigDecimal budgetMax,
+                                                 @Param("keyword") String keyword,
+                                                 @Param("sort") String sort,
+                                                 @Param("cursor") Long cursor,
+                                                 @Param("pageSize") Integer pageSize);
 
     List<StudentJobPosting> searchPublishedByTitle(@Param("keyword") String keyword,
                                                   @Param("limit") Integer limit);

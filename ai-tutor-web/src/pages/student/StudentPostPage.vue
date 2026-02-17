@@ -23,7 +23,30 @@ const address = ref('')
 const childAge = ref<number | null>(null)
 const budgetMin = ref<number | null>(null)
 const budgetMax = ref<number | null>(null)
+const stageCode = ref('')
+const educationRequirement = ref('')
 const schedule = ref('')
+
+const stageOptions = [
+  { value: '', label: '不限' },
+  { value: 'PRESCHOOL', label: '幼教育' },
+  { value: 'PRIMARY', label: '小学' },
+  { value: 'JUNIOR', label: '初中' },
+  { value: 'SENIOR', label: '高中' },
+  { value: 'OTHER', label: '其他' },
+]
+
+const eduOptions = [
+  { value: '', label: '不限' },
+  { value: 'TOP2', label: 'top2' },
+  { value: 'C985', label: '985' },
+  { value: 'C211', label: '211' },
+  { value: 'DOUBLE_FIRST_CLASS', label: '双一流' },
+  { value: 'FIRST_TIER', label: '一本' },
+  { value: 'BACHELOR', label: '本科' },
+  { value: 'OVERSEAS', label: '海归' },
+  { value: 'QS50', label: 'QS前50' },
+]
 
 const subjectOptions = computed(() => {
   const out: Array<{ id: number; label: string }> = []
@@ -67,6 +90,8 @@ async function onSubmit() {
       childAge: childAge.value ?? undefined,
       budgetMin: budgetMin.value ?? undefined,
       budgetMax: budgetMax.value ?? undefined,
+      stageCode: stageCode.value || undefined,
+      educationRequirement: educationRequirement.value || undefined,
       schedule: schedule.value.trim() || undefined,
     })
     doneHint.value = '发布成功'
@@ -127,6 +152,21 @@ onMounted(() => {
         <label class="field">
           <div class="label">孩子年龄</div>
           <input v-model.number="childAge" class="input" inputmode="numeric" placeholder="例如：9" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <div class="label">授课学段</div>
+          <select v-model="stageCode" class="input">
+            <option v-for="o in stageOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="label">学历要求</div>
+          <select v-model="educationRequirement" class="input">
+            <option v-for="o in eduOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
         </label>
       </div>
 

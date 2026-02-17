@@ -56,6 +56,10 @@ public class RoleInterceptor implements HandlerInterceptor {
             require(role, UserRoleEnum.TEACHER);
         }
 
+        if (uri.startsWith("/api/v1/tutor/favorites/")) {
+            require(role, UserRoleEnum.TEACHER);
+        }
+
         return true;
     }
 
@@ -65,4 +69,3 @@ public class RoleInterceptor implements HandlerInterceptor {
         }
     }
 }
-

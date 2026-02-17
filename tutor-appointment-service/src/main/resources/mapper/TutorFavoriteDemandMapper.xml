@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.TutorFavoriteDemandMapper">
+
+    <resultMap id="TutorFavoriteDemandMap" type="com.ai.tutor.appointment.model.entity.TutorFavoriteDemand">
+        <id column="id" property="id"/>
+        <result column="tutor_id" property="tutorId"/>
+        <result column="demand_id" property="demandId"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO tutor_favorite_demand (tutor_id, demand_id, create_time)
+        VALUES (#{tutorId}, #{demandId}, NOW())
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM tutor_favorite_demand
+        WHERE tutor_id = #{tutorId}
+          AND demand_id = #{demandId}
+    </delete>
+
+    <select id="exists" resultType="int">
+        SELECT 1
+        FROM tutor_favorite_demand
+        WHERE tutor_id = #{tutorId}
+          AND demand_id = #{demandId}
+        LIMIT 1
+    </select>
+
+    <select id="listDemandIdsByTutor" resultType="long">
+        SELECT demand_id
+        FROM tutor_favorite_demand
+        WHERE tutor_id = #{tutorId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listFavoritedDemandIds" resultType="long">
+        SELECT demand_id
+        FROM tutor_favorite_demand
+        WHERE tutor_id = #{tutorId}
+          AND demand_id IN
+        <foreach collection="demandIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="listByTutor" resultMap="TutorFavoriteDemandMap">
+        SELECT id, tutor_id, demand_id, create_time
+        FROM tutor_favorite_demand
+        WHERE tutor_id = #{tutorId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+</mapper>
+

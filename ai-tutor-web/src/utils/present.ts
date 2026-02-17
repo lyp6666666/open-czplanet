@@ -47,6 +47,32 @@ export function formatBudgetUnit(raw: string | null | undefined): string {
   return raw
 }
 
+export function formatStageCode(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const v = raw.trim().toUpperCase()
+  if (v === 'PRESCHOOL') return '幼教育'
+  if (v === 'PRIMARY') return '小学'
+  if (v === 'JUNIOR') return '初中'
+  if (v === 'SENIOR') return '高中'
+  if (v === 'OTHER') return '其他'
+  return raw
+}
+
+export function formatEducationRequirement(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const v = raw.trim().toUpperCase()
+  if (v === 'UNLIMITED') return '不限'
+  if (v === 'TOP2') return 'top2'
+  if (v === 'C985') return '985'
+  if (v === 'C211') return '211'
+  if (v === 'DOUBLE_FIRST_CLASS') return '双一流'
+  if (v === 'FIRST_TIER') return '一本'
+  if (v === 'BACHELOR') return '本科'
+  if (v === 'OVERSEAS') return '海归'
+  if (v === 'QS50') return 'QS前50'
+  return raw
+}
+
 export function formatScheduleItem(raw: string): string {
   const s = raw.trim().replace(/^['"]|['"]$/g, '')
   if (!s) return ''

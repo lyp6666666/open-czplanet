@@ -60,10 +60,19 @@ CREATE TABLE student_job_posting (
   address VARCHAR(255),
   budget_min DECIMAL(10,2),
   budget_max DECIMAL(10,2),
+  stage_code VARCHAR(32),
+  education_requirement VARCHAR(32),
   schedule VARCHAR(2000),
   status TINYINT NOT NULL DEFAULT 1,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tutor_favorite_demand (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tutor_id BIGINT NOT NULL,
+  demand_id BIGINT NOT NULL,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE user (

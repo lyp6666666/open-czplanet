@@ -224,6 +224,8 @@ export interface StudentJobPosting {
   address: string | null
   budgetMin: string | null
   budgetMax: string | null
+  stageCode: string | null
+  educationRequirement: string | null
   schedule: string | null
   status: number
   createTime: string

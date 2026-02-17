@@ -40,7 +40,12 @@ public class CreateStudentJobPostingRequest {
     @Schema(description = "预算上限（每小时）", example = "120")
     private BigDecimal budgetMax;
 
+    @Schema(description = "授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER", example = "JUNIOR")
+    private String stageCode;
+
+    @Schema(description = "学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50/UNLIMITED", example = "C985")
+    private String educationRequirement;
+
     @Schema(description = "期望上课时间(JSON)", example = "[\"Tue 19-21\",\"Sat 10-12\"]")
     private String schedule;
 }
-

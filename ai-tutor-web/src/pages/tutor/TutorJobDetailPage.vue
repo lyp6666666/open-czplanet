@@ -3,9 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
+import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { StudentJobPosting } from '@/api/types'
-import { formatClassMode, formatScheduleText } from '@/utils/present'
+import { formatClassMode, formatEducationRequirement, formatScheduleText, formatStageCode } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,12 +16,19 @@ const id = computed(() => Number(route.params.id))
 const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<StudentJobPosting | null>(null)
+const favorited = ref(false)
 
 async function load() {
   loading.value = true
   error.value = null
   try {
     data.value = await jobsApi.getDemand(id.value)
+    try {
+      const fav = await favoritesApi.checkDemandFavorites([id.value])
+      favorited.value = Array.isArray(fav) && fav.includes(id.value)
+    } catch {
+      favorited.value = false
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -38,6 +46,21 @@ async function onChat() {
   }
 }
 
+async function onToggleFavorite() {
+  if (!data.value) return
+  try {
+    if (favorited.value) {
+      await favoritesApi.unfavoriteDemand(data.value.id)
+      favorited.value = false
+    } else {
+      await favoritesApi.favoriteDemand(data.value.id)
+      favorited.value = true
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '操作失败'
+  }
+}
+
 onMounted(() => {
   void load()
 })
@@ -48,7 +71,12 @@ onMounted(() => {
     <div class="head">
       <button class="btn" type="button" @click="router.back()">返回</button>
       <div class="title">需求详情</div>
-      <button class="btn btn-primary" type="button" :disabled="loading || !data" @click="onChat">立即沟通</button>
+      <div class="head-ops">
+        <button class="btn" type="button" :disabled="loading || !data" @click="onToggleFavorite">
+          {{ favorited ? '已收藏' : '收藏' }}
+        </button>
+        <button class="btn btn-primary" type="button" :disabled="loading || !data" @click="onChat">立即沟通</button>
+      </div>
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>
@@ -58,6 +86,8 @@ onMounted(() => {
       <div class="meta">
         <span v-if="data.city">{{ data.city }}</span>
         <span v-if="data.classMode">{{ formatClassMode(data.classMode) }}</span>
+        <span v-if="data.stageCode">{{ formatStageCode(data.stageCode) }}</span>
+        <span v-if="data.educationRequirement">{{ formatEducationRequirement(data.educationRequirement) }}</span>
         <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
       </div>
 
@@ -95,6 +125,12 @@ onMounted(() => {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
+}
+
+.head-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .title {

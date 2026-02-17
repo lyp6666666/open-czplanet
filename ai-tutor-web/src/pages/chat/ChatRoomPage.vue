@@ -113,7 +113,7 @@ onMounted(() => {
 <template>
   <div class="wrap">
     <div class="head card">
-      <button class="btn" type="button" @click="router.back()">返回</button>
+      <button class="btn back" type="button" @click="router.push({ name: 'chatList' })">返回</button>
       <div class="name">{{ otherUser?.name || (otherUid ? `用户${otherUid}` : `会话 ${roomId}`) }}</div>
       <div />
     </div>
@@ -153,6 +153,7 @@ onMounted(() => {
 .wrap {
   display: grid;
   gap: 12px;
+  height: 100%;
 }
 
 .head {
@@ -248,5 +249,10 @@ onMounted(() => {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
 }
-</style>
 
+@media (min-width: 981px) {
+  .back {
+    display: none;
+  }
+}
+</style>

@@ -36,10 +36,15 @@ public class UpdateStudentJobPostingRequest {
     @Schema(description = "预算上限（每小时）", example = "120")
     private BigDecimal budgetMax;
 
+    @Schema(description = "授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER", example = "JUNIOR")
+    private String stageCode;
+
+    @Schema(description = "学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50/UNLIMITED", example = "C985")
+    private String educationRequirement;
+
     @Schema(description = "期望上课时间(JSON)")
     private String schedule;
 
     @Schema(description = "状态：1发布中 0关闭", example = "1")
     private Integer status;
 }
-

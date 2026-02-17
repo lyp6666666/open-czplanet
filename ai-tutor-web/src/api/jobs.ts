@@ -11,6 +11,8 @@ export interface CreateStudentJobPostingRequest {
   address?: string
   budgetMin?: number
   budgetMax?: number
+  stageCode?: string
+  educationRequirement?: string
   schedule?: string
 }
 
@@ -24,6 +26,8 @@ export interface UpdateStudentJobPostingRequest {
   address?: string
   budgetMin?: number
   budgetMax?: number
+  stageCode?: string
+  educationRequirement?: string
   schedule?: string
   status?: number
 }
@@ -49,6 +53,10 @@ export const jobsApi = {
     subjectId?: number
     city?: string
     classMode?: string
+    stageCode?: string
+    educationRequirement?: string
+    budgetMin?: number
+    budgetMax?: number
     pageSize?: number
     cursor?: number | null
     q?: string
@@ -57,4 +65,3 @@ export const jobsApi = {
     return http.get<unknown, CursorPageResponse<StudentJobPosting>>('/api/v1/parent/jobs/feed', { params })
   },
 }
-

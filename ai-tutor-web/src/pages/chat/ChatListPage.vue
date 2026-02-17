@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
 import { userApi } from '@/api/user'
 import type { ChatRoomItemResp, UserSimpleVO } from '@/api/types'
 
+const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
@@ -16,6 +17,7 @@ const cursor = ref<number | null>(null)
 const isLast = ref(false)
 
 const userMap = ref<Record<number, UserSimpleVO>>({})
+const search = ref('')
 
 function lastMsgText(raw: unknown): string {
   if (!raw) return ''
@@ -66,28 +68,51 @@ function openRoom(roomId: number, otherUid: number) {
 
 const hasAny = computed(() => rooms.value.length > 0)
 
+const activeRoomId = computed(() => {
+  const raw = route.params.roomId
+  const v = typeof raw === 'string' ? Number(raw) : Number.NaN
+  return Number.isFinite(v) ? v : null
+})
+
+const filteredRooms = computed(() => {
+  const kw = search.value.trim().toLowerCase()
+  if (!kw) return rooms.value
+  return rooms.value.filter((r) => {
+    const name = userMap.value[r.otherUid]?.name || `用户${r.otherUid}`
+    return name.toLowerCase().includes(kw) || lastMsgText(r.lastMsgBody).toLowerCase().includes(kw)
+  })
+})
+
 onMounted(() => {
   void loadMore()
 })
 </script>
 
 <template>
-  <div class="wrap">
-    <div class="head">
-      <div class="title">消息</div>
-    </div>
+  <div class="workbench">
+    <aside class="left card">
+      <div class="left-head">
+        <div class="title">消息</div>
+        <input v-model="search" class="search" placeholder="搜索会话" />
+      </div>
 
-    <div v-if="error" class="hint error">{{ error }}</div>
+      <div v-if="error" class="hint error">{{ error }}</div>
 
-    <div class="card list">
       <div v-if="!hasAny && !loading" class="empty">
         <div class="empty-title">暂无会话</div>
         <div class="empty-desc">从需求详情点击“立即沟通”即可开始聊天</div>
       </div>
 
       <div v-else class="items">
-        <button v-for="r in rooms" :key="r.roomId" class="item" type="button" @click="openRoom(r.roomId, r.otherUid)">
-          <div class="avatar" />
+        <button
+          v-for="r in filteredRooms"
+          :key="r.roomId"
+          class="item"
+          type="button"
+          :class="{ active: activeRoomId === r.roomId }"
+          @click="openRoom(r.roomId, r.otherUid)"
+        >
+          <div class="avatar">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</div>
           <div class="main">
             <div class="row1">
               <div class="name">{{ userMap[r.otherUid]?.name || `用户${r.otherUid}` }}</div>
@@ -104,35 +129,50 @@ onMounted(() => {
           <span v-else>{{ loading ? '加载中...' : '加载更多' }}</span>
         </button>
       </div>
-    </div>
+    </aside>
+
+    <section class="right">
+      <RouterView v-slot="{ Component }">
+        <component :is="Component" v-if="Component" />
+        <div v-else class="placeholder card">
+          <div class="placeholder-title">选择一个会话开始沟通</div>
+          <div class="placeholder-desc">也可以从需求列表点击“立即沟通”自动进入</div>
+        </div>
+      </RouterView>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.wrap {
+.workbench {
   display: grid;
+  grid-template-columns: 340px 1fr;
   gap: 12px;
+  align-items: stretch;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.left {
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   gap: 12px;
+  min-height: 640px;
+}
+
+.left-head {
+  display: grid;
+  gap: 10px;
 }
 
 .title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
-}
-
-.list {
-  padding: 14px;
 }
 
 .items {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  align-content: start;
 }
 
 .item {
@@ -140,7 +180,7 @@ onMounted(() => {
   grid-template-columns: 44px 1fr;
   gap: 12px;
   align-items: center;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
@@ -148,11 +188,20 @@ onMounted(() => {
   text-align: left;
 }
 
+.item.active {
+  border-color: rgba(0, 190, 189, 0.45);
+  background: rgba(0, 190, 189, 0.06);
+}
+
 .avatar {
   width: 44px;
   height: 44px;
   border-radius: 14px;
   background: rgba(31, 35, 41, 0.08);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: var(--text);
 }
 
 .row1 {
@@ -184,7 +233,6 @@ onMounted(() => {
 .footer {
   display: flex;
   justify-content: center;
-  margin-top: 14px;
 }
 
 .empty {
@@ -213,5 +261,54 @@ onMounted(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.search {
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  outline: none;
+  background: #fff;
+}
+
+.search:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-weak);
+}
+
+.right {
+  min-height: 640px;
+}
+
+.placeholder {
+  height: 100%;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 20px;
+  background: #fbfcfe;
+}
+
+.placeholder-title {
+  font-weight: 900;
+}
+
+.placeholder-desc {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .left {
+    min-height: auto;
+  }
+  .right {
+    min-height: auto;
+  }
 }
 </style>

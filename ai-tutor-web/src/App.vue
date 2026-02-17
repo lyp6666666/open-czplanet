@@ -3,14 +3,16 @@ import { computed, onErrorCaptured, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppTopBar from '@/ui/layout/AppTopBar.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const fatalError = ref<unknown>(null)
 const route = useRoute()
+const auth = useAuthStore()
 
 const useAppFrame = computed(() => {
   const p = route.path
   if (p.startsWith('/auth/')) return false
-  if (p === '/') return false
+  if (p === '/') return auth.isLoggedIn
   return p.startsWith('/tutor/') || p.startsWith('/student/') || p.startsWith('/chat') || p === '/me'
 })
 

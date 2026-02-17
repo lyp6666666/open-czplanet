@@ -82,11 +82,13 @@ export const router = createRouter({
       path: '/chat',
       name: 'chatList',
       component: ChatListPage,
-    },
-    {
-      path: '/chat/:roomId',
-      name: 'chatRoom',
-      component: ChatRoomPage,
+      children: [
+        {
+          path: ':roomId',
+          name: 'chatRoom',
+          component: ChatRoomPage,
+        },
+      ],
     },
   ],
 })

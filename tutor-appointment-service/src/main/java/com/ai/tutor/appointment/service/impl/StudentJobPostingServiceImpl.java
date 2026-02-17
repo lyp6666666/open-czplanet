@@ -12,6 +12,7 @@ import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -35,6 +36,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .address(request.getAddress())
                 .budgetMin(request.getBudgetMin())
                 .budgetMax(request.getBudgetMax())
+                .stageCode(request.getStageCode())
+                .educationRequirement(normalizeEducationRequirement(request.getEducationRequirement()))
                 .schedule(request.getSchedule())
                 .status(1)
                 .build();
@@ -62,6 +65,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .address(request.getAddress())
                 .budgetMin(request.getBudgetMin())
                 .budgetMax(request.getBudgetMax())
+                .stageCode(request.getStageCode())
+                .educationRequirement(normalizeEducationRequirement(request.getEducationRequirement()))
                 .schedule(request.getSchedule())
                 .status(request.getStatus())
                 .build();
@@ -87,17 +92,42 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     }
 
     @Override
-    public CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, String keyword, String sort, CursorPageRequest request) {
+    public CursorPageResponse<StudentJobPosting> listPublished(Long subjectId,
+                                                              String city,
+                                                              String classMode,
+                                                              String stageCode,
+                                                              String educationRequirement,
+                                                              BigDecimal budgetMin,
+                                                              BigDecimal budgetMax,
+                                                              String keyword,
+                                                              String sort,
+                                                              CursorPageRequest request) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         Integer pageSize = request.getPageSize();
 
-        List<StudentJobPosting> list;
-        if ((keyword != null && !keyword.isBlank()) || (sort != null && !sort.isBlank())) {
-            list = studentJobPostingMapper.listPublishedSorted(subjectId, city, classMode, keyword, sort, request.getCursor(), pageSize);
-        } else {
-            list = studentJobPostingMapper.listPublished(subjectId, city, classMode, request.getCursor(), pageSize);
-        }
+        String edu = normalizeEducationRequirement(educationRequirement);
+        List<StudentJobPosting> list = studentJobPostingMapper.listPublishedFiltered(
+                subjectId,
+                city,
+                classMode,
+                stageCode,
+                edu,
+                budgetMin,
+                budgetMax,
+                keyword,
+                sort,
+                request.getCursor(),
+                pageSize
+        );
         return buildCursorResponse(list, pageSize);
+    }
+
+    private static String normalizeEducationRequirement(String raw) {
+        if (raw == null) return null;
+        String v = raw.trim();
+        if (v.isEmpty()) return null;
+        if ("UNLIMITED".equalsIgnoreCase(v)) return null;
+        return v;
     }
 
     private static CursorPageResponse<StudentJobPosting> buildCursorResponse(List<StudentJobPosting> list, Integer pageSize) {

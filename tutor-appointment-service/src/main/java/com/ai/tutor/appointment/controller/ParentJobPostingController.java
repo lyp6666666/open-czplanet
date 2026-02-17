@@ -15,6 +15,8 @@ import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/api/v1/parent/jobs")
 @Tag(name = "家长需求贴接口", description = "家长发布/管理自己的需求贴，以及浏览公开需求")
@@ -54,9 +56,13 @@ public class ParentJobPostingController {
     public BaseResponse<CursorPageResponse<StudentJobPosting>> feed(@RequestParam(value = "subjectId", required = false) Long subjectId,
                                                                     @RequestParam(value = "city", required = false) String city,
                                                                     @RequestParam(value = "classMode", required = false) String classMode,
+                                                                    @RequestParam(value = "stageCode", required = false) String stageCode,
+                                                                    @RequestParam(value = "educationRequirement", required = false) String educationRequirement,
+                                                                    @RequestParam(value = "budgetMin", required = false) BigDecimal budgetMin,
+                                                                    @RequestParam(value = "budgetMax", required = false) BigDecimal budgetMax,
                                                                     @RequestParam(value = "q", required = false) String keyword,
                                                                     @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, keyword, sort, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, educationRequirement, budgetMin, budgetMax, keyword, sort, request));
     }
 }

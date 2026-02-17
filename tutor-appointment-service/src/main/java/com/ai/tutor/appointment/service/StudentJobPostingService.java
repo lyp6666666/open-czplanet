@@ -6,6 +6,8 @@ import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
 
+import java.math.BigDecimal;
+
 public interface StudentJobPostingService {
 
     Long create(CreateStudentJobPostingRequest request, Long uid);
@@ -16,5 +18,14 @@ public interface StudentJobPostingService {
 
     CursorPageResponse<StudentJobPosting> listMine(CursorPageRequest request, Long uid);
 
-    CursorPageResponse<StudentJobPosting> listPublished(Long subjectId, String city, String classMode, String keyword, String sort, CursorPageRequest request);
+    CursorPageResponse<StudentJobPosting> listPublished(Long subjectId,
+                                                       String city,
+                                                       String classMode,
+                                                       String stageCode,
+                                                       String educationRequirement,
+                                                       BigDecimal budgetMin,
+                                                       BigDecimal budgetMax,
+                                                       String keyword,
+                                                       String sort,
+                                                       CursorPageRequest request);
 }
