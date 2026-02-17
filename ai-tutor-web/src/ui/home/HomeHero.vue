@@ -18,8 +18,22 @@ const props = defineProps<{
 
 const activeId = ref<number | null>(null)
 
+const fallbackSubjects = [
+  { id: -1, parentId: 0, name: '小学', children: [] },
+  { id: -2, parentId: 0, name: '初中', children: [] },
+  { id: -3, parentId: 0, name: '高中', children: [] },
+  { id: -4, parentId: 0, name: '英语', children: [] },
+  { id: -5, parentId: 0, name: '数学', children: [] },
+  { id: -6, parentId: 0, name: '语文', children: [] },
+  { id: -7, parentId: 0, name: '物理', children: [] },
+  { id: -8, parentId: 0, name: '编程', children: [] },
+] satisfies SubjectTreeNode[]
+
 const topSubjects = computed(() => {
-  return Array.isArray(props.subjectTree) ? props.subjectTree.slice(0, 12) : []
+  const list = Array.isArray(props.subjectTree) ? props.subjectTree : []
+  const picked = list.slice(0, 8)
+  if (picked.length >= 8) return picked
+  return [...picked, ...fallbackSubjects.slice(0, 8 - picked.length)]
 })
 
 const activeSubject = computed(() => topSubjects.value.find((s) => s.id === activeId.value) || null)
@@ -47,10 +61,10 @@ const swiperModules = [Autoplay, Pagination]
 
         <div class="body" @mouseleave="activeId = null">
           <div v-if="loading" class="skeleton-list">
-            <div v-for="i in 10" :key="i" class="skeleton row skeleton" />
+            <div v-for="i in 8" :key="i" class="skeleton row skeleton" />
           </div>
 
-          <div v-else-if="topSubjects.length" class="list">
+          <div v-else class="list">
             <button
               v-for="s in topSubjects"
               :key="s.id"
@@ -59,11 +73,10 @@ const swiperModules = [Autoplay, Pagination]
               @mouseenter="activeId = s.id"
             >
               <div class="name">{{ s.name }}</div>
-              <div class="meta">{{ s.children?.slice(0, 3).map((c) => c.name).join(' / ') }}</div>
+              <div v-if="s.children?.length" class="meta">{{ s.children?.slice(0, 3).map((c) => c.name).join(' / ') }}</div>
+              <div v-else class="meta">热门学科推荐</div>
             </button>
           </div>
-
-          <div v-else class="subjects-empty">暂无学科分类</div>
         </div>
 
         <div v-if="activeSubject" class="panel card">
@@ -145,7 +158,7 @@ const swiperModules = [Autoplay, Pagination]
 
 <style scoped>
 .hero {
-  --hero-h: 264px;
+  --hero-h: 320px;
   --hero-gap: 16px;
   margin-bottom: 16px;
 }
@@ -159,40 +172,41 @@ const swiperModules = [Autoplay, Pagination]
 
 .subjects {
   position: relative;
-  padding: 14px;
+  padding: 16px;
   overflow: visible;
   height: var(--hero-h);
   display: flex;
   flex-direction: column;
+  border-radius: 16px;
 }
 
 .title {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 900;
+  margin-bottom: 12px;
 }
 
 .body {
   flex: 1;
-  overflow: auto;
-  padding-right: 2px;
+  overflow: hidden;
 }
 
 .list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .row {
   width: 100%;
   text-align: left;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 10px;
-  padding: 10px 10px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 12px;
   cursor: pointer;
   display: grid;
   gap: 3px;
+  position: relative;
 }
 
 .row:hover {
@@ -200,14 +214,28 @@ const swiperModules = [Autoplay, Pagination]
   background: var(--primary-weak);
 }
 
+.row:hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
 .name {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .meta {
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel {
@@ -216,7 +244,7 @@ const swiperModules = [Autoplay, Pagination]
   top: 12px;
   width: 520px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 16px;
 }
 
 .panel-title {
@@ -264,6 +292,7 @@ const swiperModules = [Autoplay, Pagination]
 .carousel {
   height: var(--hero-h);
   overflow: hidden;
+  border-radius: 16px;
 }
 
 .carousel-inner {
@@ -303,13 +332,13 @@ const swiperModules = [Autoplay, Pagination]
   color: #fff;
   display: grid;
   align-content: end;
-  padding: 14px;
-  gap: 4px;
+  padding: 18px;
+  gap: 6px;
 }
 
 .slide-title {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 900;
 }
 
 .slide-sub {
@@ -327,6 +356,7 @@ const swiperModules = [Autoplay, Pagination]
   overflow: hidden;
   position: relative;
   display: block;
+  border-radius: 16px;
 }
 
 .small .img {
@@ -336,7 +366,7 @@ const swiperModules = [Autoplay, Pagination]
 .info {
   position: absolute;
   inset: auto 0 0 0;
-  padding: 10px;
+  padding: 14px;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.55));
   color: #fff;
 }
@@ -359,18 +389,7 @@ const swiperModules = [Autoplay, Pagination]
 }
 
 .skeleton.row {
-  height: 44px;
-}
-
-.subjects-empty {
-  height: 100%;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  font-size: 13px;
-  border: 1px dashed rgba(31, 35, 41, 0.14);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
+  height: 52px;
 }
 
 .empty {
