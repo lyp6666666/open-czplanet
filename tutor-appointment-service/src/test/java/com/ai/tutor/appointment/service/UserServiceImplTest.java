@@ -8,9 +8,14 @@ import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.StudentProfile;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.model.dto.user.BaseUserInfo;
+import com.ai.tutor.appointment.model.dto.user.TeacherExtInfo;
+import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.impl.UserServiceImpl;
 import com.ai.tutor.appointment.utils.JwtUtil;
+import com.ai.tutor.appointment.storage.MinioProperties;
+import com.ai.tutor.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,10 +29,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -64,8 +71,13 @@ class UserServiceImplTest {
         ReflectionTestUtils.setField(userService, "studentProfileMapper", studentProfileMapper);
         ReflectionTestUtils.setField(userService, "transactionTemplate", transactionTemplate);
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(transactionTemplate.execute(any())).thenAnswer(inv -> {
+        MinioProperties minioProperties = new MinioProperties();
+        minioProperties.setEnabled(true);
+        minioProperties.setPublicBaseUrl("https://assets.example.com/ai-tutor");
+        ReflectionTestUtils.setField(userService, "minioProperties", minioProperties);
+
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(inv -> {
             TransactionCallback<?> cb = inv.getArgument(0);
             return cb.doInTransaction(new SimpleTransactionStatus());
         });
@@ -172,5 +184,82 @@ class UserServiceImplTest {
         ArgumentCaptor<User> inserted = ArgumentCaptor.forClass(User.class);
         verify(userMapper, times(2)).insert(inserted.capture());
         assertThat(inserted.getAllValues().get(1).getName()).startsWith("用户5678-");
+    }
+
+    @Test
+    void updateUserInfoShouldRejectAvatarOutsideAllowlist() {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute("uid")).thenReturn("1001");
+
+        User user = new User();
+        user.setId(1001L);
+        user.setPhone("13800006909");
+        user.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectById(1001L)).thenReturn(user);
+
+        BaseUserInfo base = new BaseUserInfo();
+        base.setAvatar("https://evil.example.com/a.png");
+        UserUpdateRequest dto = new UserUpdateRequest();
+        dto.setBaseUserInfo(base);
+
+        assertThatThrownBy(() -> userService.updateUserInfo(dto, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("头像地址不合法");
+        verify(userMapper, never()).updateUserBaseInfo(any(), anyLong());
+    }
+
+    @Test
+    void updateUserInfoShouldAllowAvatarWithPublicBaseUrl() {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute("uid")).thenReturn("1001");
+
+        User user = new User();
+        user.setId(1001L);
+        user.setPhone("13800006909");
+        user.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectById(1001L)).thenReturn(user);
+
+        when(userMapper.updateUserBaseInfo(any(), anyLong())).thenReturn(1);
+
+        BaseUserInfo base = new BaseUserInfo();
+        base.setAvatar("https://assets.example.com/ai-tutor/avatars/1001/20260218/x.png");
+        UserUpdateRequest dto = new UserUpdateRequest();
+        dto.setBaseUserInfo(base);
+
+        userService.updateUserInfo(dto, req);
+        verify(userMapper, times(1)).updateUserBaseInfo(any(), eq(1001L));
+    }
+
+    @Test
+    void updateUserInfoShouldUpdateTeacherDefaultGreeting() {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute("uid")).thenReturn("1001");
+
+        User user = new User();
+        user.setId(1001L);
+        user.setPhone("13800006909");
+        user.setUserType(UserRoleEnum.TEACHER.getValue());
+        when(userMapper.selectById(1001L)).thenReturn(user);
+
+        TeacherProfile profile = new TeacherProfile();
+        profile.setUserId(1001L);
+        profile.setRealName("张老师");
+        profile.setEducation("本科");
+        profile.setStatus(1);
+        when(teacherProfileMapper.selectByUserId(1001L)).thenReturn(profile);
+
+        when(userMapper.updateUserBaseInfo(any(), anyLong())).thenReturn(0);
+        when(teacherProfileMapper.updateTeacherProfile(any(), anyLong())).thenReturn(1);
+
+        TeacherExtInfo ext = new TeacherExtInfo();
+        ext.setDefaultGreeting("你好");
+        UserUpdateRequest dto = new UserUpdateRequest();
+        dto.setTeacherExtInfo(ext);
+
+        userService.updateUserInfo(dto, req);
+
+        ArgumentCaptor<TeacherExtInfo> captor = ArgumentCaptor.forClass(TeacherExtInfo.class);
+        verify(teacherProfileMapper, times(1)).updateTeacherProfile(captor.capture(), eq(1001L));
+        assertThat(captor.getValue().getDefaultGreeting()).isEqualTo("你好");
     }
 }

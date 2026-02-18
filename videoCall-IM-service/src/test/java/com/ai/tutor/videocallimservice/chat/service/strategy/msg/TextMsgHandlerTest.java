@@ -11,6 +11,8 @@ import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
+import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
+import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -25,6 +27,8 @@ class TextMsgHandlerTest {
         MessageMapper messageMapper = mock(MessageMapper.class);
         RoomMapper roomMapper = mock(RoomMapper.class);
         ImUserMapper imUserMapper = mock(ImUserMapper.class);
+        TeacherProfileLiteMapper teacherProfileLiteMapper = mock(TeacherProfileLiteMapper.class);
+        StudentProfileLiteMapper studentProfileLiteMapper = mock(StudentProfileLiteMapper.class);
 
         Room room = Room.builder()
                 .id(100L)
@@ -39,14 +43,16 @@ class TextMsgHandlerTest {
         teacher.setUserType(1);
         teacher.setRefId(10L);
         teacher.setStatus(0);
-        when(imUserMapper.selectByUserTypeAndRefId(1, 10L)).thenReturn(teacher);
+        when(teacherProfileLiteMapper.selectUserIdById(10L)).thenReturn(1L);
+        when(imUserMapper.selectById(1L)).thenReturn(teacher);
 
         ImUser student = new ImUser();
         student.setId(2L);
         student.setUserType(2);
         student.setRefId(20L);
         student.setStatus(0);
-        when(imUserMapper.selectByUserTypeAndRefId(2, 20L)).thenReturn(student);
+        when(studentProfileLiteMapper.selectUserIdById(20L)).thenReturn(2L);
+        when(imUserMapper.selectById(2L)).thenReturn(student);
 
         doAnswer(invocation -> {
             Message m = invocation.getArgument(0, Message.class);
@@ -58,6 +64,8 @@ class TextMsgHandlerTest {
         ReflectionTestUtils.setField(textMsgHandler, "roomMapper", roomMapper);
         ReflectionTestUtils.setField(textMsgHandler, "imUserMapper", imUserMapper);
         ReflectionTestUtils.setField(textMsgHandler, "messageMapper", messageMapper);
+        ReflectionTestUtils.setField(textMsgHandler, "teacherProfileLiteMapper", teacherProfileLiteMapper);
+        ReflectionTestUtils.setField(textMsgHandler, "studentProfileLiteMapper", studentProfileLiteMapper);
         ReflectionTestUtils.invokeMethod(textMsgHandler, "init");
 
         ChatMessageReq req = ChatMessageReq.builder()

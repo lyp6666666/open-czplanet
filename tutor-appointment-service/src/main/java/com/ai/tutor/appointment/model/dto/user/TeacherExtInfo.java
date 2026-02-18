@@ -22,6 +22,8 @@ public class TeacherExtInfo {
 
     private String introduction; // 简介
 
+    private String defaultGreeting;
+
     private String certificateUrls; // 证书链接（JSON）
 
     private Integer status; // 状态 1正常 0禁用

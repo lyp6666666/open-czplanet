@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -61,6 +62,12 @@ public class GlobalExceptionHandler {
                 .orElse(ErrorCode.PARAMS_ERROR.getMessage());
         log.warn("MethodArgumentNotValidException: {}", message);
         return ResultUtils.error(ErrorCode.PARAMS_ERROR, message);
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public BaseResponse<?> handleNoResourceFoundException(NoResourceFoundException e) {
+        String msg = e.getMessage() == null || e.getMessage().isBlank() ? ErrorCode.NOT_FOUND_ERROR.getMessage() : e.getMessage();
+        return ResultUtils.error(ErrorCode.NOT_FOUND_ERROR, msg);
     }
 
     /**

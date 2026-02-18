@@ -30,6 +30,13 @@ public class FrequencyControlAspect {
 
     @Around("@annotation(com.ai.tutor.common.annotation.FrequencyControl)||@annotation(com.ai.tutor.common.annotation.FrequencyControlContainer)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
+        String disabled = System.getProperty("dev.disableFrequencyControl");
+        if (disabled == null || disabled.isBlank()) {
+            disabled = System.getenv("DEV_DISABLE_FREQUENCY_CONTROL");
+        }
+        if (disabled != null && disabled.equalsIgnoreCase("true")) {
+            return joinPoint.proceed();
+        }
         // 读取所有注解实例
         Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
         FrequencyControl[] annotationsByType = method.getAnnotationsByType(FrequencyControl.class);

@@ -5,11 +5,12 @@ import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.converter.MappingJackson2MessageConverter;
 
 @Configuration
 public class RocketMQManualConfig {
 
-    @Value("${rocketmq.name-server}")
+    @Value("${rocketmq.name-server:127.0.0.1:9876}")
     private String nameServer;
 
     @Bean
@@ -23,6 +24,7 @@ public class RocketMQManualConfig {
     public RocketMQTemplate rocketMQTemplate(DefaultMQProducer producer) {
         RocketMQTemplate template = new RocketMQTemplate();
         template.setProducer(producer);
+        template.setMessageConverter(new MappingJackson2MessageConverter());
         return template;
     }
 }

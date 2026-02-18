@@ -6,10 +6,12 @@ import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO, StudentJobPosting } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import { formatClassMode, formatEducationRequirement } from '@/utils/present'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -207,7 +209,11 @@ function openDetail(it: StudentJobPosting) {
 
 async function onChat(it: StudentJobPosting) {
   try {
-    const roomId = await chatApi.getOrCreateRoom(it.parentId)
+    if (!auth.me) {
+      await auth.refreshMe()
+    }
+    const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
+    const roomId = await chatApi.startRoom(it.parentId, greeting)
     await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parentId) } })
   } catch (e) {
     error.value = e instanceof Error ? e.message : '发起沟通失败'
@@ -586,8 +592,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 360px 1fr;
   gap: 12px;
-  align-items: stretch;
-  min-height: 640px;
+  align-items: start;
 }
 
 .left {
@@ -669,14 +674,14 @@ onMounted(() => {
 }
 
 .right {
-  min-height: 640px;
+  align-self: start;
 }
 
 .detail {
   padding: 16px;
-  height: 100%;
-  overflow: auto;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 12px;
 }
 

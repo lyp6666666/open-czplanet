@@ -56,6 +56,13 @@ public class HomeGuestProperties {
     private Banner banners = new Banner();
 
     /**
+     * Banner 图片地址是否按 MinIO 对外域名拼装：
+     * - true：imageUrl 配置为 objectKey（例如 banners/carousel-1.svg），后端自动拼 publicBaseUrl；
+     * - false：imageUrl 原样透传（兼容旧的 /banners/* 静态资源方案）。
+     */
+    private Boolean bannersUseMinio = false;
+
+    /**
      * 热门区 tab（用于“热门服务/热门需求”）。
      * - 允许配置固定 tab；
      * - 若为空，则由后端根据科目树自动生成默认 tab。
@@ -136,4 +143,3 @@ public class HomeGuestProperties {
         private String url;
     }
 }
-

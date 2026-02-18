@@ -47,6 +47,7 @@ jwt:
 
 home:
   guest:
+    bannersUseMinio: true
     banners:
       carousel:
         - id: carousel-1
@@ -85,3 +86,24 @@ home:
           link:
             type: ROUTE
             url: /
+
+storage:
+  minio:
+    enabled: true
+    endpoint: http://127.0.0.1:9000
+    accessKey: minioadmin
+    secretKey: minioadmin
+    bucket: ai-tutor-assets
+    publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
+    autoCreateBucket: true
+    allowedAvatarUrlPrefixes:
+      - http://127.0.0.1:9000/ai-tutor-assets
+  upload:
+    maxSizeBytes: 5242880
+    avatarMaxSizeBytes: 2097152
+    allowedContentTypes:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - image/gif
+      - image/svg+xml

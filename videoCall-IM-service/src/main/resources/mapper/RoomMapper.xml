@@ -29,6 +29,22 @@
         LIMIT 1
     </select>
 
+    <select id="selectByIdForUpdate" resultMap="RoomMap">
+        SELECT
+            id,
+            teacher_profile_id,
+            student_profile_id,
+            active_time,
+            last_msg_id,
+            status,
+            create_time,
+            update_time
+        FROM room
+        WHERE id = #{id}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="selectByTeacherAndStudent" resultMap="RoomMap">
         SELECT
             id,

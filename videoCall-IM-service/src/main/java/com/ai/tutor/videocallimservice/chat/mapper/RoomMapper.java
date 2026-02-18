@@ -11,6 +11,8 @@ public interface RoomMapper {
 
     Room selectById(@Param("id") Long id);
 
+    Room selectByIdForUpdate(@Param("id") Long id);
+
     Room selectByTeacherAndStudent(@Param("teacherProfileId") Long teacherProfileId,
                                    @Param("studentProfileId") Long studentProfileId);
 
@@ -26,4 +28,3 @@ public interface RoomMapper {
                                       @Param("cursor") Long cursor,
                                       @Param("pageSize") Integer pageSize);
 }
-

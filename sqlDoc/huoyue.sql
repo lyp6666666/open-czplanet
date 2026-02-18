@@ -152,7 +152,23 @@ CREATE TABLE `teacher_profile`  (
   `experience_years` int(11) NULL DEFAULT NULL COMMENT '教学经验（年数）',
   `rate_per_hour` decimal(10, 2) NULL DEFAULT NULL COMMENT '每小时收费',
   `introduction` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '教师简介',
+  `default_greeting` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '默认打招呼语',
   `certificate_urls` json NULL COMMENT '教师证书或资格证明文件链接',
+  `basic_completed` tinyint(1) NOT NULL DEFAULT 0 COMMENT '基础信息是否已补全 0否 1是',
+  `realname_verify_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '实名认证状态 0未提交 1审核中 2通过 3驳回',
+  `realname_verify_method` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '实名认证提交方式 ID_PHOTO/NAME_IDNO',
+  `realname_verify_id_front_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '身份证人像面截图',
+  `realname_verify_id_back_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '身份证国徽面截图',
+  `realname_verify_idno_cipher` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '身份证号密文/Hash',
+  `realname_verify_idno_masked` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '身份证号脱敏展示',
+  `realname_verify_reject_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '实名认证驳回原因',
+  `realname_verify_submit_time` datetime NULL DEFAULT NULL COMMENT '实名认证提交时间',
+  `realname_verify_time` datetime NULL DEFAULT NULL COMMENT '实名认证通过时间',
+  `edu_verify_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '学籍/学历认证状态 0未提交 1审核中 2通过 3驳回',
+  `edu_verify_proof_urls` json NULL COMMENT '学籍/学历认证材料截图（JSON数组）',
+  `edu_verify_reject_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学籍/学历认证驳回原因',
+  `edu_verify_submit_time` datetime NULL DEFAULT NULL COMMENT '学籍/学历认证提交时间',
+  `edu_verify_time` datetime NULL DEFAULT NULL COMMENT '学籍/学历认证通过时间',
   `status` int(11) NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -230,6 +246,21 @@ CREATE TABLE `message` (
             KEY `idx_from_uid` (`from_uid`),
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
+
+DROP TABLE IF EXISTS `room_read_state`;
+CREATE TABLE `room_read_state` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '已读状态id',
+            `room_id` bigint(20) NOT NULL COMMENT '会话id',
+            `uid` bigint(20) NOT NULL COMMENT '用户id',
+            `last_read_msg_id` bigint(20) DEFAULT NULL COMMENT '最后已读消息id',
+            `last_read_time` datetime(3) DEFAULT NULL COMMENT '最后已读时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_room_uid` (`room_id`, `uid`),
+            KEY `idx_uid` (`uid`),
+            KEY `idx_room_id` (`room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话已读状态表';
 
 DROP TABLE IF EXISTS `tutor_appointment`;
 CREATE TABLE `tutor_appointment` (

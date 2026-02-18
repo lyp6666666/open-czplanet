@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -10,7 +11,7 @@ const auth = useAuthStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
-const displayName = computed(() => auth.user?.name || '未登录')
+const displayName = computed(() => auth.me?.teacherProfile?.realName || auth.user?.name || '未登录')
 
 const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
 watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
@@ -27,6 +28,10 @@ const userInitial = computed(() => {
 
 const menuOpen = ref(false)
 const switchModalOpen = ref(false)
+const greetingModalOpen = ref(false)
+const greetingText = ref('')
+const greetingBusy = ref(false)
+const greetingError = ref<string | null>(null)
 
 const switchLabel = computed(() => (isTeacher.value ? '切换为招聘者' : '切换为教师端'))
 const switchTitle = computed(() => (isTeacher.value ? '是否将身份切换为招聘者' : '是否将身份切换为教师端'))
@@ -49,6 +54,31 @@ function closeMenu() {
 function onSwitchClick() {
   closeMenu()
   switchModalOpen.value = true
+}
+
+async function onGreetingClick() {
+  closeMenu()
+  greetingError.value = null
+  if (!auth.me) {
+    await auth.refreshMe()
+  }
+  greetingText.value = (auth.me?.teacherProfile?.defaultGreeting || '').trim()
+  greetingModalOpen.value = true
+}
+
+async function saveGreeting() {
+  if (greetingBusy.value) return
+  greetingBusy.value = true
+  greetingError.value = null
+  try {
+    await userApi.updateUserInfo({ teacherExtInfo: { defaultGreeting: greetingText.value.trim() } })
+    await auth.refreshMe()
+    greetingModalOpen.value = false
+  } catch (e) {
+    greetingError.value = e instanceof Error ? e.message : '保存失败'
+  } finally {
+    greetingBusy.value = false
+  }
 }
 
 function confirmSwitch() {
@@ -108,6 +138,7 @@ function onLogout() {
 
           <div v-if="menuOpen" class="menu card" @click.stop>
             <button class="menu-item" type="button" @click="go('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
             <button class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
             <button class="menu-item danger" type="button" @click="onLogout">退出登录</button>
           </div>
@@ -126,6 +157,21 @@ function onLogout() {
         <div class="m-ops">
           <button class="btn" type="button" @click="switchModalOpen = false">取消</button>
           <button class="btn btn-primary" type="button" @click="confirmSwitch">切换</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="greetingModalOpen" class="mask" @click.self="greetingModalOpen = false">
+      <div class="modal card">
+        <div class="m-title">默认打招呼语</div>
+        <div class="m-desc">首次发起沟通时自动发送</div>
+        <div v-if="greetingError" class="m-error">{{ greetingError }}</div>
+        <textarea v-model="greetingText" class="m-textarea" rows="4" placeholder="例如：您好，我是张老师，擅长数学提分，方便聊聊孩子情况吗？" />
+        <div class="m-ops">
+          <button class="btn" type="button" :disabled="greetingBusy" @click="greetingModalOpen = false">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="greetingBusy" @click="saveGreeting">
+            {{ greetingBusy ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -324,6 +370,27 @@ function onLogout() {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.m-error {
+  color: #d4380d;
+  font-size: 13px;
+}
+
+.m-textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  outline: none;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.m-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-weak);
 }
 
 .m-ops {

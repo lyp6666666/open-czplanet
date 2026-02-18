@@ -65,9 +65,12 @@ public class JwtInterceptor implements HandlerInterceptor {
         request.setAttribute(ATTRIBUTE_ROLE, role);
 
         RequestInfo info = RequestHolder.get();
-        if (info != null) {
-            info.setRole(role == null ? null : role.getValue());
+        if (info == null) {
+            info = new RequestInfo();
         }
+        info.setUid(userId);
+        info.setRole(role == null ? null : role.getValue());
+        RequestHolder.set(info);
 
         return true; // 放行请求
     }

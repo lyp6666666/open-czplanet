@@ -158,7 +158,7 @@ const swiperModules = [Autoplay, Pagination]
 
 <style scoped>
 .hero {
-  --hero-h: 320px;
+  --hero-h: 339px;
   --hero-gap: 16px;
   margin-bottom: 16px;
 }

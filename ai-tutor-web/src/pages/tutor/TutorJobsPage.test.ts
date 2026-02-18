@@ -30,6 +30,7 @@ vi.mock('@/api/favorites', () => ({
 vi.mock('@/api/chat', () => ({
   chatApi: {
     getOrCreateRoom: vi.fn(),
+    startRoom: vi.fn(),
   },
 }))
 

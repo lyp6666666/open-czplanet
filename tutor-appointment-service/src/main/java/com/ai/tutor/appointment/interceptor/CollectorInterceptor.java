@@ -24,13 +24,14 @@ public class CollectorInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        RequestInfo info = new RequestInfo();
-        info.setUid(
-                Optional.ofNullable(request.getAttribute(ATTRIBUTE_UID))
-                        .map(Object::toString)
-                        .map(Long::parseLong)
-                        .orElse(null)
-        );
+        RequestInfo info = Optional.ofNullable(RequestHolder.get()).orElseGet(RequestInfo::new);
+        Long uid = Optional.ofNullable(request.getAttribute(ATTRIBUTE_UID))
+                .map(Object::toString)
+                .map(Long::parseLong)
+                .orElse(null);
+        if (uid != null) {
+            info.setUid(uid);
+        }
         info.setIp(getClientIp(request));
 
         RequestHolder.set(info);

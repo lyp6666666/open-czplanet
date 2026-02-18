@@ -1,0 +1,78 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
+import { createRouter, createWebHashHistory } from 'vue-router'
+
+import MePage from './MePage.vue'
+
+const mocks = vi.hoisted(() => ({
+  uploadImage: vi.fn(),
+  me: vi.fn(),
+  updateUserInfo: vi.fn(),
+}))
+
+vi.mock('@/api/assets', () => ({
+  assetsApi: {
+    uploadImage: mocks.uploadImage,
+  },
+}))
+
+vi.mock('@/api/user', () => ({
+  userApi: {
+    me: mocks.me,
+    updateUserInfo: mocks.updateUserInfo,
+    sendCode: vi.fn(),
+    loginOrRegister: vi.fn(),
+    batch: vi.fn(),
+  },
+}))
+
+function createTestRouter() {
+  return createRouter({
+    history: createWebHashHistory(),
+    routes: [{ path: '/me', name: 'me', component: { template: '<div />' } }],
+  })
+}
+
+describe('MePage avatar upload', () => {
+  it('uploads avatar then saves avatar url', async () => {
+    localStorage.setItem('ai_tutor_token', 't')
+    localStorage.setItem(
+      'ai_tutor_user',
+      JSON.stringify({ id: 1001, token: 't', userType: 2, name: '用户', phone: '13800001111', avatar: '', sex: 1 }),
+    )
+
+    mocks.me.mockReset()
+    mocks.updateUserInfo.mockReset()
+    mocks.uploadImage.mockReset()
+
+    mocks.me.mockResolvedValue({ name: '用户', phone: '13800001111', avatar: '', sex: 1, userType: 2, teacherProfile: null, studentProfile: null })
+    mocks.uploadImage.mockResolvedValue({ objectKey: 'avatars/1001/x.png', url: 'https://assets.example.com/ai-tutor/avatars/1001/x.png', contentType: 'image/png', size: 3 })
+    mocks.updateUserInfo.mockResolvedValue('ok')
+
+    const router = createTestRouter()
+    await router.push('/me')
+    await router.isReady()
+
+    const wrapper = mount(MePage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image/png' })
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text().trim() === '保存')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.uploadImage).toHaveBeenCalledTimes(1)
+    expect(mocks.updateUserInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.updateUserInfo.mock.calls[0]![0]).toMatchObject({
+      baseUserInfo: { avatar: 'https://assets.example.com/ai-tutor/avatars/1001/x.png' },
+    })
+  })
+})

@@ -62,7 +62,7 @@ class VideoCallImServiceApplicationTests {
 
         RequestInfo info = new RequestInfo();
         info.setUid(1L);
-        info.setRole(1);
+        ReflectionTestUtils.setField(info, "role", 1);
         RequestHolder.set(info);
         try {
             Long roomId = service.getOrCreateRoomWithUser(2L, 1L);

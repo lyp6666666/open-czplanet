@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -31,6 +31,17 @@ const isLast = ref(false)
 const messages = ref<ChatMessageResp[]>([])
 
 const myUid = computed(() => auth.user?.id ?? 0)
+
+type StreamMsgEvent = {
+  msgId: number
+  roomId: number
+  fromUid: number
+  toUid: number
+  sendTime: unknown
+  body: unknown
+}
+
+const streamAbort = ref<AbortController | null>(null)
 
 function msgText(raw: unknown): string {
   if (!raw) return ''
@@ -87,6 +98,14 @@ async function loadMore() {
   }
 }
 
+async function ackLatest() {
+  const latest = messages.value.reduce((max, m) => Math.max(max, m.message?.id || 0), 0)
+  if (latest <= 0) return
+  try {
+    await chatApi.ackRead(roomId.value, latest)
+  } catch {}
+}
+
 async function onSend() {
   const text = input.value.trim()
   if (!text) return
@@ -104,10 +123,87 @@ async function onSend() {
   }
 }
 
+function normalizeBaseUrl(raw: unknown) {
+  const s = typeof raw === 'string' ? raw.trim() : ''
+  return s.length > 0 ? s : ''
+}
+
+async function startStream() {
+  if (!auth.isLoggedIn || !auth.token) return
+  if (streamAbort.value) return
+  const controller = new AbortController()
+  streamAbort.value = controller
+
+  const baseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
+  const url = `${baseUrl}/chat/stream`
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${auth.token}` },
+    signal: controller.signal,
+  })
+  if (!res.ok || !res.body) {
+    streamAbort.value = null
+    return
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+    for (const part of parts) {
+      const lines = part.split('\n').map((l) => l.trimEnd())
+      let event = 'message'
+      const dataLines: string[] = []
+      for (const line of lines) {
+        if (line.startsWith('event:')) event = line.slice(6).trim()
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+      }
+      const dataRaw = dataLines.join('\n')
+      if (!dataRaw) continue
+      if (event !== 'message') continue
+      try {
+        const ev = JSON.parse(dataRaw) as StreamMsgEvent
+        if (!ev || ev.roomId !== roomId.value) continue
+        const msg: ChatMessageResp = {
+          fromUser: { uid: ev.fromUid },
+          message: { id: ev.msgId, roomId: ev.roomId, sendTime: ev.sendTime == null ? '' : String(ev.sendTime), body: ev.body },
+        }
+        mergeMessages([msg], 'append')
+        await ackLatest()
+      } catch {}
+    }
+  }
+  streamAbort.value = null
+}
+
+function stopStream() {
+  streamAbort.value?.abort()
+  streamAbort.value = null
+}
+
 onMounted(() => {
   void loadOtherUser()
-  void loadMore()
+  void loadMore().then(() => ackLatest())
+  void startStream()
 })
+
+onBeforeUnmount(() => {
+  stopStream()
+})
+
+watch(
+  () => roomId.value,
+  () => {
+    stopStream()
+    void startStream()
+  },
+)
 </script>
 
 <template>
@@ -187,6 +283,7 @@ onMounted(() => {
   display: grid;
   gap: 10px;
   background: #fbfcfe;
+  align-content: start;
 }
 
 .msg {

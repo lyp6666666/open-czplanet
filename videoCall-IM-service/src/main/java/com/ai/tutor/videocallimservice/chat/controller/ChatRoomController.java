@@ -5,6 +5,7 @@ import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomCreateReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomPageReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomStartReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatRoomItemResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
@@ -33,10 +34,16 @@ public class ChatRoomController {
         return ResultUtils.success(roomId);
     }
 
+    @PostMapping("/start")
+    @Operation(summary = "发起沟通（可带首条招呼语）", description = "获取或创建1对1会话，并在首次建立联系时可选发送招呼语")
+    public BaseResponse<Long> start(@Valid @RequestBody ChatRoomStartReq request) {
+        Long roomId = chatRoomService.startChat(request, RequestHolder.get().getUid());
+        return ResultUtils.success(roomId);
+    }
+
     @GetMapping("/page")
     @Operation(summary = "会话列表（游标分页）")
     public BaseResponse<CursorPageResp<ChatRoomItemResp>> page(@Valid ChatRoomPageReq request) {
         return ResultUtils.success(chatRoomService.listRooms(request, RequestHolder.get().getUid()));
     }
 }
-

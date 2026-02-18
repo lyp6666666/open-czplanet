@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -42,8 +43,41 @@ public class TeacherProfile {
     /** 教师简介 */
     private String introduction;
 
+    private String defaultGreeting;
+
     /** 教师证书或资格证明文件链接（JSON格式） */
     private String certificateUrls;
+
+    private Integer basicCompleted;
+
+    private Integer realnameVerifyStatus;
+
+    private String realnameVerifyMethod;
+
+    private String realnameVerifyIdFrontUrl;
+
+    private String realnameVerifyIdBackUrl;
+
+    @JsonIgnore
+    private String realnameVerifyIdnoCipher;
+
+    private String realnameVerifyIdnoMasked;
+
+    private String realnameVerifyRejectReason;
+
+    private LocalDateTime realnameVerifySubmitTime;
+
+    private LocalDateTime realnameVerifyTime;
+
+    private Integer eduVerifyStatus;
+
+    private String eduVerifyProofUrls;
+
+    private String eduVerifyRejectReason;
+
+    private LocalDateTime eduVerifySubmitTime;
+
+    private LocalDateTime eduVerifyTime;
 
     /** 状态 1正常 0禁用 */
     private Integer status;

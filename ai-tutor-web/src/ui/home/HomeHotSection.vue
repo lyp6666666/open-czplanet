@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 import type { HotDemandCardVO, HotServiceCardVO, HotTabsVO, HotTutorCardVO } from '@/api/types'
+import { chatApi } from '@/api/chat'
 import type { PageState } from '@/stores/home'
+import { useAuthStore } from '@/stores/auth'
 import { formatBudgetUnit, formatClassMode, formatScheduleText } from '@/utils/present'
 
 const props = defineProps<{
@@ -34,6 +37,10 @@ const showServices = computed(() => props.showServices !== false)
 const showDemands = computed(() => props.showDemands !== false)
 const showTutors = computed(() => props.showTutors !== false)
 
+const router = useRouter()
+const auth = useAuthStore()
+const canChat = computed(() => auth.isLoggedIn && auth.user?.userType === 1)
+
 function range(n: number) {
   return Array.from({ length: n }, (_, i) => i)
 }
@@ -50,6 +57,16 @@ function selectServiceTab(tabId: string) {
 function selectDemandTab(tabId: string) {
   emit('update:demandTabId', tabId)
   emit('refresh')
+}
+
+async function onChatDemand(it: HotDemandCardVO) {
+  if (!canChat.value) return
+  if (!auth.me) {
+    await auth.refreshMe()
+  }
+  const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
+  const roomId = await chatApi.startRoom(it.parent.userId, greeting)
+  await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parent.userId) } })
 }
 </script>
 
@@ -212,6 +229,9 @@ function selectDemandTab(tabId: string) {
             </div>
             <div class="tags">
               <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+            <div v-if="canChat" class="ops">
+              <button class="btn btn-primary" type="button" @click="onChatDemand(it)">立即沟通</button>
             </div>
           </article>
         </template>
@@ -531,6 +551,12 @@ function selectDemandTab(tabId: string) {
   padding: 2px 8px;
   border-radius: 999px;
   background: #fff;
+}
+
+.ops {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .highlights {

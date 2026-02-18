@@ -6,12 +6,29 @@
     <resultMap id="TeacherInfoMap" type="com.ai.tutor.appointment.model.entity.TeacherProfile">
         <id column="id" property="id"/>
         <result column="user_id" property="userId"/>
+        <result column="real_name" property="realName"/>
         <result column="subject" property="subject"/>
         <result column="education" property="education"/>
         <result column="experience_years" property="experienceYears"/>
         <result column="rate_per_hour" property="ratePerHour"/>
         <result column="introduction" property="introduction"/>
+        <result column="default_greeting" property="defaultGreeting"/>
         <result column="certificate_urls" property="certificateUrls"/>
+        <result column="basic_completed" property="basicCompleted"/>
+        <result column="realname_verify_status" property="realnameVerifyStatus"/>
+        <result column="realname_verify_method" property="realnameVerifyMethod"/>
+        <result column="realname_verify_id_front_url" property="realnameVerifyIdFrontUrl"/>
+        <result column="realname_verify_id_back_url" property="realnameVerifyIdBackUrl"/>
+        <result column="realname_verify_idno_cipher" property="realnameVerifyIdnoCipher"/>
+        <result column="realname_verify_idno_masked" property="realnameVerifyIdnoMasked"/>
+        <result column="realname_verify_reject_reason" property="realnameVerifyRejectReason"/>
+        <result column="realname_verify_submit_time" property="realnameVerifySubmitTime"/>
+        <result column="realname_verify_time" property="realnameVerifyTime"/>
+        <result column="edu_verify_status" property="eduVerifyStatus"/>
+        <result column="edu_verify_proof_urls" property="eduVerifyProofUrls"/>
+        <result column="edu_verify_reject_reason" property="eduVerifyRejectReason"/>
+        <result column="edu_verify_submit_time" property="eduVerifySubmitTime"/>
+        <result column="edu_verify_time" property="eduVerifyTime"/>
         <result column="status" property="status"/>
         <result column="update_time" property="updateTime"/>
         <result column="create_time" property="createTime"/>
@@ -21,10 +38,10 @@
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO teacher_profile (
             user_id, real_name, education, subject, experience_years,
-            rate_per_hour, introduction, certificate_urls, status, create_time, update_time
+            rate_per_hour, introduction, default_greeting, certificate_urls, status, create_time, update_time
         ) VALUES (
                      #{userId}, #{realName}, #{education}, #{subject}, #{experienceYears},
-                     #{ratePerHour}, #{introduction}, #{certificateUrls}, #{status}, #{createTime}, #{updateTime}
+                     #{ratePerHour}, #{introduction}, #{defaultGreeting}, #{certificateUrls}, #{status}, #{createTime}, #{updateTime}
                  )
     </insert>
 
@@ -50,6 +67,9 @@
             <if test="teacherExtInfo.introduction != null">
                 introduction = #{teacherExtInfo.introduction},
             </if>
+            <if test="teacherExtInfo.defaultGreeting != null">
+                default_greeting = #{teacherExtInfo.defaultGreeting},
+            </if>
             <if test="teacherExtInfo.certificateUrls != null">
                 certificate_urls = #{teacherExtInfo.certificateUrls},
             </if>
@@ -62,11 +82,11 @@
         where user_id = #{userId}
     </update>
 
-    <select id="selectByUserId" parameterType="long" resultType="com.ai.tutor.appointment.model.entity.TeacherProfile">
+    <select id="selectByUserId" parameterType="long" resultMap="TeacherInfoMap">
         SELECT * FROM teacher_profile WHERE user_id = #{userId}
     </select>
 
-    <select id="listByUserIds" resultType="com.ai.tutor.appointment.model.entity.TeacherProfile">
+    <select id="listByUserIds" resultMap="TeacherInfoMap">
         SELECT *
         FROM teacher_profile
         WHERE user_id IN
@@ -74,5 +94,95 @@
             #{uid}
         </foreach>
     </select>
+
+    <update id="submitEduVerification">
+        update teacher_profile
+        set edu_verify_status = 1,
+            edu_verify_proof_urls = #{proofUrls},
+            edu_verify_reject_reason = null,
+            edu_verify_submit_time = #{submitTime},
+            update_time = now()
+        where user_id = #{userId}
+          and edu_verify_status in (0, 3)
+    </update>
+
+    <update id="submitRealnameVerificationIdPhoto">
+        update teacher_profile
+        set realname_verify_status = 1,
+            realname_verify_method = 'ID_PHOTO',
+            realname_verify_id_front_url = #{idFrontUrl},
+            realname_verify_id_back_url = #{idBackUrl},
+            realname_verify_idno_cipher = null,
+            realname_verify_idno_masked = null,
+            realname_verify_reject_reason = null,
+            realname_verify_submit_time = #{submitTime},
+            update_time = now()
+        where user_id = #{userId}
+          and realname_verify_status in (0, 3)
+    </update>
+
+    <update id="submitRealnameVerificationNameIdno">
+        update teacher_profile
+        set real_name = #{realName},
+            realname_verify_status = 1,
+            realname_verify_method = 'NAME_IDNO',
+            realname_verify_id_front_url = null,
+            realname_verify_id_back_url = null,
+            realname_verify_idno_cipher = #{idnoCipher},
+            realname_verify_idno_masked = #{idnoMasked},
+            realname_verify_reject_reason = null,
+            realname_verify_submit_time = #{submitTime},
+            update_time = now()
+        where user_id = #{userId}
+          and realname_verify_status in (0, 3)
+    </update>
+
+    <update id="approveRealnameVerification">
+        update teacher_profile
+        set realname_verify_status = 2,
+            realname_verify_reject_reason = null,
+            realname_verify_time = #{verifyTime},
+            update_time = now()
+        where user_id = #{userId}
+          and realname_verify_status = 1
+    </update>
+
+    <update id="rejectRealnameVerification">
+        update teacher_profile
+        set realname_verify_status = 3,
+            realname_verify_reject_reason = #{reason},
+            realname_verify_time = #{verifyTime},
+            update_time = now()
+        where user_id = #{userId}
+          and realname_verify_status = 1
+    </update>
+
+    <update id="approveEduVerification">
+        update teacher_profile
+        set edu_verify_status = 2,
+            edu_verify_reject_reason = null,
+            edu_verify_time = #{verifyTime},
+            update_time = now()
+        where user_id = #{userId}
+          and edu_verify_status = 1
+    </update>
+
+    <update id="rejectEduVerification">
+        update teacher_profile
+        set edu_verify_status = 3,
+            edu_verify_reject_reason = #{reason},
+            edu_verify_time = #{verifyTime},
+            update_time = now()
+        where user_id = #{userId}
+          and edu_verify_status = 1
+    </update>
+
+    <update id="markBasicCompleted">
+        update teacher_profile
+        set basic_completed = 1,
+            update_time = now()
+        where user_id = #{userId}
+          and basic_completed = 0
+    </update>
 
 </mapper>

@@ -24,6 +24,7 @@ export interface UserUpdateRequest {
     experienceYears?: number
     ratePerHour?: number
     introduction?: string
+    defaultGreeting?: string
   }
   studentExtInfo?: {
     realName?: string

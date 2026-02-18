@@ -13,8 +13,10 @@ import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.utils.JwtUtil;
+import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.exception.BusinessException;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +49,9 @@ public class UserServiceImpl implements UserService {
     private StudentProfileMapper studentProfileMapper;
     @Resource
     private TransactionTemplate transactionTemplate;
+
+    @Resource
+    private MinioProperties minioProperties;
 
 
     /**
@@ -130,7 +135,10 @@ public class UserServiceImpl implements UserService {
 
         // 6. 缓存登录态
         String key = RedisKeyPrefix.USER_TOKEN.key(phone);
-        redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
+        try {
+            redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
+        } catch (Exception ignored) {
+        }
 
         return LoginUserVO.builder()
                 .id(user.getId())
@@ -189,9 +197,13 @@ public class UserServiceImpl implements UserService {
         StudentExtInfo studentExtInfo = requestDto.getStudentExtInfo();
         TeacherExtInfo teacherExtInfo = requestDto.getTeacherExtInfo();
 
+        BaseUserInfo baseUserInfo = requestDto.getBaseUserInfo();
+        if (baseUserInfo != null && baseUserInfo.getAvatar() != null && !baseUserInfo.getAvatar().trim().isEmpty()) {
+            validateAvatarUrl(baseUserInfo.getAvatar());
+        }
+
         transactionTemplate.execute(status ->{
             try {
-                BaseUserInfo baseUserInfo = requestDto.getBaseUserInfo();
                 int updateCount = userMapper.updateUserBaseInfo(baseUserInfo, user.getId());
                 Integer userType = user.getUserType();
                 UserRoleEnum userRoleEnum = UserRoleEnum.fromValue(userType);
@@ -215,11 +227,31 @@ public class UserServiceImpl implements UserService {
                         break;
                     }
                 }
+
+                if (userRoleEnum == UserRoleEnum.TEACHER) {
+                    User latestUser = userMapper.selectById(user.getId());
+                    TeacherProfile latestProfile = teacherProfileMapper.selectByUserId(user.getId());
+                    boolean completed = latestUser != null
+                            && latestUser.getAvatar() != null
+                            && !latestUser.getAvatar().trim().isEmpty()
+                            && latestProfile != null
+                            && latestProfile.getRealName() != null
+                            && !latestProfile.getRealName().trim().isEmpty()
+                            && latestProfile.getEducation() != null
+                            && !latestProfile.getEducation().trim().isEmpty();
+                    if (completed) {
+                        teacherProfileMapper.markBasicCompleted(user.getId());
+                    }
+                }
+
                 ThrowUtils.throwIf(updateCount <= 0, ErrorCode.OPERATION_ERROR);
                 log.info("更新用户信息成功");
                 return true;
 
             }catch (Exception e) {
+                if (e instanceof BusinessException) {
+                    throw (BusinessException) e;
+                }
                 status.setRollbackOnly();
                 log.info("更新用户信息失败");
                 ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
@@ -227,6 +259,31 @@ public class UserServiceImpl implements UserService {
             return false;
         });
 
+    }
+
+    /**
+     * 头像 URL 写入白名单校验：
+     * - 允许写入本项目的 MinIO 对外域名（publicBaseUrl 前缀）；
+     * - 兼容历史 `/avatars/` 相对路径（便于灰度/迁移期不断图）；
+     * - 可通过配置额外放行前缀（例如旧 CDN 域名）。
+     */
+    private void validateAvatarUrl(String avatar) {
+        String v = avatar.trim();
+        if (v.startsWith("/avatars/")) {
+            return;
+        }
+        String publicBaseUrl = minioProperties == null ? null : minioProperties.getPublicBaseUrl();
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank() && v.startsWith(publicBaseUrl)) {
+            return;
+        }
+        if (minioProperties != null && minioProperties.getAllowedAvatarUrlPrefixes() != null) {
+            for (String prefix : minioProperties.getAllowedAvatarUrlPrefixes()) {
+                if (prefix != null && !prefix.isBlank() && v.startsWith(prefix)) {
+                    return;
+                }
+            }
+        }
+        ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "头像地址不合法");
     }
 
     @Override

@@ -46,6 +46,24 @@
         LIMIT #{request.pageSize}
     </select>
 
+    <select id="listUnreadCounts" resultType="com.ai.tutor.videocallimservice.chat.domain.vo.response.RoomUnreadCount">
+        SELECT
+            m.room_id AS roomId,
+            COUNT(1) AS unreadCount
+        FROM message m
+        LEFT JOIN room_read_state r
+            ON r.room_id = m.room_id
+            AND r.uid = #{uid}
+        WHERE m.room_id IN
+        <foreach collection="roomIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+          AND m.to_uid = #{uid}
+          AND m.status = 0
+          AND m.id &gt; COALESCE(r.last_read_msg_id, 0)
+        GROUP BY m.room_id
+    </select>
+
 
     <insert id="save"
             parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.Message"

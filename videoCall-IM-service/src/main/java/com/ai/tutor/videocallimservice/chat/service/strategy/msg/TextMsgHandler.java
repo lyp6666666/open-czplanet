@@ -10,6 +10,8 @@ import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
+import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
+import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +23,12 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
 
     @Resource
     private ImUserMapper imUserMapper;
+
+    @Resource
+    private TeacherProfileLiteMapper teacherProfileLiteMapper;
+
+    @Resource
+    private StudentProfileLiteMapper studentProfileLiteMapper;
 
     @Override
     protected MessageTypeEnum getMsgTypeEnum() {
@@ -78,7 +86,18 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
         if (refId == null) {
             return null;
         }
-        ImUser user = imUserMapper.selectByUserTypeAndRefId(userType, refId);
+        Long userId;
+        if (userType == 1) {
+            userId = teacherProfileLiteMapper.selectUserIdById(refId);
+        } else if (userType == 2) {
+            userId = studentProfileLiteMapper.selectUserIdById(refId);
+        } else {
+            return null;
+        }
+        if (userId == null) {
+            return null;
+        }
+        ImUser user = imUserMapper.selectById(userId);
         if (user == null) {
             return null;
         }

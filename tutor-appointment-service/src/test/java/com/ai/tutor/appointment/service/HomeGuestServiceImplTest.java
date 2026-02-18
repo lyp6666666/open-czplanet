@@ -7,6 +7,7 @@ import com.ai.tutor.appointment.model.vo.SubjectTreeNodeVO;
 import com.ai.tutor.appointment.model.vo.home.HomeGuestVOs;
 import com.ai.tutor.appointment.service.impl.HomeGuestServiceImpl;
 import com.ai.tutor.appointment.service.impl.SubjectQueryServiceImpl;
+import com.ai.tutor.appointment.storage.MinioProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -63,7 +64,7 @@ class HomeGuestServiceImplTest {
         jdbcTemplate.update("INSERT INTO teacher_job_posting(id, tutor_id, subject_id, title, description, price_per_hour, mode, city, status) VALUES (11, 1001, 2, '初中数学冲刺', '', 150.00, 'online', '北京', 1)");
         jdbcTemplate.update("INSERT INTO teacher_job_posting(id, tutor_id, subject_id, title, description, price_per_hour, mode, city, status) VALUES (12, 1002, 2, '数学提分课', '', 80.00, 'online', '北京', 1)");
 
-        jdbcTemplate.update("INSERT INTO student_job_posting(id, parent_id, subject_id, title, description, child_age, class_mode, city, address, budget_min, budget_max, schedule, status) VALUES (20, 2001, 2, '找初中数学老师', '', 13, 'offline', '北京', '北京市海淀区xxx路', 100.00, 160.00, '周末', 1)");
+        jdbcTemplate.update("INSERT INTO student_job_posting(id, parent_id, subject_id, title, description, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, publisher_identity, schedule, status) VALUES (20, 2001, 2, '找初中数学老师', '', 13, 'offline', '北京', '北京市海淀区xxx路', 2, 100.00, 160.00, 'PARENT', '周末', 1)");
     }
 
     @Test
@@ -130,6 +131,14 @@ class HomeGuestServiceImplTest {
         @Bean
         public HomeGuestProperties homeGuestProperties() {
             return new HomeGuestProperties();
+        }
+
+        @Bean
+        public MinioProperties minioProperties() {
+            MinioProperties p = new MinioProperties();
+            p.setEnabled(false);
+            p.setPublicBaseUrl("https://assets.example.com/ai-tutor");
+            return p;
         }
     }
 }

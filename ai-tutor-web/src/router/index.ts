@@ -8,11 +8,13 @@ const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vu
 const StudentEditJobPage = () => import('@/pages/student/StudentEditJobPage.vue')
 const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
 const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
+const TutorOnboardingBasicPage = () => import('@/pages/tutor/TutorOnboardingBasicPage.vue')
 const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
+const STORAGE_TUTOR_BASIC_COMPLETED_KEY = 'ai_tutor_tutor_basic_completed'
 
 function readAuthFromStorage(): { token: string | null; userType: number | null } {
   const rawToken = localStorage.getItem(STORAGE_TOKEN_KEY)
@@ -74,6 +76,11 @@ export const router = createRouter({
       component: TutorJobsPage,
     },
     {
+      path: '/tutor/onboarding/basic',
+      name: 'tutorOnboardingBasic',
+      component: TutorOnboardingBasicPage,
+    },
+    {
       path: '/tutor/jobs/:id',
       name: 'tutorJobDetail',
       component: TutorJobDetailPage,
@@ -114,6 +121,15 @@ router.beforeEach((to) => {
   if (loggedIn && userType != null) {
     if (to.path.startsWith('/tutor/') && userType !== 1) return { path: '/student/post' }
     if (to.path.startsWith('/student/') && userType !== 2) return { path: '/tutor/jobs' }
+  }
+
+  if (loggedIn && userType === 1 && to.path.startsWith('/tutor/')) {
+    const completed = localStorage.getItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY)
+    if (to.path.startsWith('/tutor/onboarding')) {
+      if (completed === '1') return { path: '/tutor/jobs' }
+    } else {
+      if (completed === '0') return { path: '/tutor/onboarding/basic' }
+    }
   }
 
   return true

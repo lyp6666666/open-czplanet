@@ -5,6 +5,7 @@ import type { LoginUserVO, UserMeVO, UserRoleEnum } from '@/api/types'
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
+const STORAGE_TUTOR_BASIC_COMPLETED_KEY = 'ai_tutor_tutor_basic_completed'
 
 function readTokenFromStorage(): string | null {
   const raw = localStorage.getItem(STORAGE_TOKEN_KEY)
@@ -30,6 +31,7 @@ function persistAuth(user: LoginUserVO) {
 function clearPersistedAuth() {
   localStorage.removeItem(STORAGE_TOKEN_KEY)
   localStorage.removeItem(STORAGE_USER_KEY)
+  localStorage.removeItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY)
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -68,6 +70,10 @@ export const useAuthStore = defineStore('auth', {
         const merged = { ...this.user, name: me.name, phone: me.phone, avatar: me.avatar, sex: me.sex, userType: me.userType }
         this.user = merged
         persistAuth(merged)
+      }
+      if (me?.userType === 1) {
+        const completed = !!(me.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())
+        localStorage.setItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY, completed ? '1' : '0')
       }
       return me
     },

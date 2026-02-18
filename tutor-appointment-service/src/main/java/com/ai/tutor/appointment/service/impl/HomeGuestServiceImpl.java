@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.ai.tutor.appointment.config.HomeGuestProperties;
+import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.appointment.mapper.*;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.home.HomeHotTutorAggRow;
@@ -47,6 +48,9 @@ public class HomeGuestServiceImpl implements HomeGuestService {
 
     @Resource
     private TeacherProfileMapper teacherProfileMapper;
+
+    @Resource
+    private MinioProperties minioProperties;
 
     @Override
     public HomeGuestVOs.HomeConfigVO getHomeConfig(String city) {
@@ -401,7 +405,16 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                     .toList();
 
             List<String> subjectTags = buildTutorSubjectTags(profile);
-            List<String> highlights = List.of("实名认证", "响应快");
+            List<String> highlights = new ArrayList<>();
+            if (profile != null
+                    && profile.getRealnameVerifyStatus() != null
+                    && profile.getEduVerifyStatus() != null
+                    && profile.getRealnameVerifyStatus() == 2
+                    && profile.getEduVerifyStatus() == 2) {
+                highlights.add("实名认证");
+                highlights.add("学籍认证");
+            }
+            highlights.add("响应快");
 
             list.add(new HomeGuestVOs.HotTutorCardVO(
                     tutorId,
@@ -436,7 +449,36 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         if (b.getLink() != null) {
             link = new HomeGuestVOs.BannersVO.Link(b.getLink().getType(), b.getLink().getUrl());
         }
-        return new HomeGuestVOs.BannersVO.BannerItem(b.getId(), b.getTitle(), b.getSubtitle(), b.getImageUrl(), link);
+        String imageUrl = normalizeBannerImageUrl(b.getImageUrl());
+        return new HomeGuestVOs.BannersVO.BannerItem(b.getId(), b.getTitle(), b.getSubtitle(), imageUrl, link);
+    }
+
+    /**
+     * Banner 图片地址兼容策略：
+     * - bannersUseMinio=false：原样透传（兼容旧的 /banners/* 静态资源）；
+     * - bannersUseMinio=true：imageUrl 视为 objectKey，拼 publicBaseUrl 输出完整 URL。
+     */
+    private String normalizeBannerImageUrl(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String v = raw.trim();
+        if (v.isEmpty()) {
+            return null;
+        }
+        if (Boolean.FALSE.equals(homeGuestProperties.getBannersUseMinio())) {
+            return v;
+        }
+        if (v.startsWith("http://") || v.startsWith("https://")) {
+            return v;
+        }
+        String base = minioProperties == null ? null : minioProperties.getPublicBaseUrl();
+        if (base == null || base.isBlank()) {
+            return v;
+        }
+        String b = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+        String p = v.startsWith("/") ? v.substring(1) : v;
+        return b + "/" + p;
     }
 
     private HomeGuestVOs.HotTabsVO.TabItem toTabItem(HomeGuestProperties.TabItem tab) {

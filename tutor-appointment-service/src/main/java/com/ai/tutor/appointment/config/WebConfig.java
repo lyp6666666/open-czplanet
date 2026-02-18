@@ -45,7 +45,8 @@ public class WebConfig implements WebMvcConfigurer {
                 )
                 // OpenAPI 文档
                 .excludePathPatterns("/v3/api-docs/**", "/swagger-resources/**")
-                .excludePathPatterns("/error","/actuator/httpexchanges");
+                .excludePathPatterns("/error","/actuator/httpexchanges")
+                .order(2);
 
         registry.addInterceptor(roleInterceptor)
                 .addPathPatterns("/**")

@@ -6,10 +6,12 @@ import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const id = computed(() => Number(route.params.id))
 
@@ -39,7 +41,11 @@ async function load() {
 async function onChat() {
   if (!data.value) return
   try {
-    const roomId = await chatApi.getOrCreateRoom(data.value.parentId)
+    if (!auth.me) {
+      await auth.refreshMe()
+    }
+    const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
+    const roomId = await chatApi.startRoom(data.value.parentId, greeting)
     await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(data.value.parentId) } })
   } catch (e) {
     error.value = e instanceof Error ? e.message : '发起沟通失败'

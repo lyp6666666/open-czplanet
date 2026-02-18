@@ -33,26 +33,30 @@ public class TotalCountWithInFixTimeFrequencyController extends AbstractFrequenc
      */
     @Override
     protected boolean reachRateLimit(Map<String, FrequencyControlDTO> frequencyControlMap) {
-        //批量获取redis统计的值
-        List<String> frequencyKeys = new ArrayList<>(frequencyControlMap.keySet());
-        List<Object> countList = redisTemplate.opsForValue().multiGet(frequencyKeys);
-        for (int i = 0; i < frequencyKeys.size(); i++) {
-            String key = frequencyKeys.get(i);
-            Object countObj = countList.get(i);
+        try {
+            List<String> frequencyKeys = new ArrayList<>(frequencyControlMap.keySet());
+            List<Object> countList = redisTemplate.opsForValue().multiGet(frequencyKeys);
+            for (int i = 0; i < frequencyKeys.size(); i++) {
+                String key = frequencyKeys.get(i);
+                Object countObj = countList.get(i);
 
-            if (countObj == null) {
-                continue;
+                if (countObj == null) {
+                    continue;
+                }
+
+                int currentCount = Integer.parseInt(countObj.toString());
+                int limitCount = frequencyControlMap.get(key).getCount();
+
+                if (currentCount >= limitCount) {
+                    log.warn("frequencyControl limit key:{}, count:{}", key, currentCount);
+                    return true;
+                }
             }
-
-            int currentCount = Integer.parseInt(countObj.toString());
-            int limitCount = frequencyControlMap.get(key).getCount();
-
-            if (currentCount >= limitCount) {
-                log.warn("frequencyControl limit key:{}, count:{}", key, currentCount);
-                return true;
-            }
+            return false;
+        } catch (Exception e) {
+            log.warn("frequencyControl redis unavailable, bypassing rate limit");
+            return false;
         }
-        return false;
     }
 
 
@@ -63,15 +67,16 @@ public class TotalCountWithInFixTimeFrequencyController extends AbstractFrequenc
      */
     @Override
     protected void addFrequencyControlStatisticsCount(Map<String, FrequencyControlDTO> frequencyControlMap) {
-        frequencyControlMap.forEach((key, config) -> {
-            // 原子递增
-            Long newValue = redisTemplate.opsForValue().increment(key);
-
-            // 设置过期时间（仅当首次创建 key 时才设置）
-            if (newValue != null && newValue == 1) {
-                redisTemplate.expire(key, config.getTime(), config.getUnit());
-            }
-        });
+        try {
+            frequencyControlMap.forEach((key, config) -> {
+                Long newValue = redisTemplate.opsForValue().increment(key);
+                if (newValue != null && newValue == 1) {
+                    redisTemplate.expire(key, config.getTime(), config.getUnit());
+                }
+            });
+        } catch (Exception e) {
+            log.warn("frequencyControl redis unavailable, skipping statistics");
+        }
     }
 
     @Override

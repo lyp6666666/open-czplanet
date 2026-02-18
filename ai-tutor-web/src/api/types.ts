@@ -174,7 +174,22 @@ export interface TeacherProfile {
   experienceYears: number | null
   ratePerHour: string | null
   introduction: string | null
+  defaultGreeting?: string | null
   certificateUrls: string | null
+  basicCompleted?: number | null
+  realnameVerifyStatus?: number | null
+  realnameVerifyMethod?: string | null
+  realnameVerifyIdFrontUrl?: string | null
+  realnameVerifyIdBackUrl?: string | null
+  realnameVerifyIdnoMasked?: string | null
+  realnameVerifyRejectReason?: string | null
+  realnameVerifySubmitTime?: string | null
+  realnameVerifyTime?: string | null
+  eduVerifyStatus?: number | null
+  eduVerifyProofUrls?: string | null
+  eduVerifyRejectReason?: string | null
+  eduVerifySubmitTime?: string | null
+  eduVerifyTime?: string | null
   status: number
   createTime: string
   updateTime: string
@@ -250,6 +265,7 @@ export interface ChatRoomItemResp {
   otherUid: number
   lastMsgId: number | null
   lastMsgBody: unknown
+  unreadCount: number
   activeTime: string
 }
 
