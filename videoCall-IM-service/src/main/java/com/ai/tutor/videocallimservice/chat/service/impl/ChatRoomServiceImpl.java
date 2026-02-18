@@ -13,6 +13,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatRoomItemResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
@@ -183,7 +184,7 @@ public class ChatRoomServiceImpl implements ChatRoomService {
                     : teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
 
             Message lastMsg = room.getLastMsgId() == null ? null : messageMapper.getById(room.getLastMsgId());
-            Object lastBody = lastMsg == null ? null : lastMsg.getContent();
+            Object lastBody = lastMsg == null ? null : MessageAdapter.buildContactPreview(lastMsg);
 
             list.add(ChatRoomItemResp.builder()
                     .roomId(room.getId())

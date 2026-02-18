@@ -160,25 +160,11 @@ async function onSave() {
   }
 }
 
-const realnameStatusText = computed(() => {
-  if (realnameVerifyStatus.value === 2) return '已实名认证'
-  if (realnameVerifyStatus.value === 1) return '审核中'
-  if (realnameVerifyStatus.value === 3) return '未通过'
-  return '未认证'
-})
-
 const eduStatusText = computed(() => {
   if (eduVerifyStatus.value === 2) return '已完成学历认证'
   if (eduVerifyStatus.value === 1) return '审核中'
   if (eduVerifyStatus.value === 3) return '未通过'
   return '未认证'
-})
-
-const realnameStatusClass = computed(() => {
-  if (realnameVerifyStatus.value === 2) return 'ok'
-  if (realnameVerifyStatus.value === 1) return 'pending'
-  if (realnameVerifyStatus.value === 3) return 'error'
-  return 'plain'
 })
 
 const eduStatusClass = computed(() => {
@@ -187,16 +173,6 @@ const eduStatusClass = computed(() => {
   if (eduVerifyStatus.value === 3) return 'error'
   return 'plain'
 })
-
-function openRealnameVerify() {
-  if (realnameVerifyStatus.value === 1) return
-  realnameHint.value = null
-  realnameMethod.value = 'ID_PHOTO'
-  idFrontUrl.value = ''
-  idBackUrl.value = ''
-  realnameIdNo.value = ''
-  realnameModalOpen.value = true
-}
 
 function openEduVerify() {
   if (eduVerifyStatus.value === 1) return

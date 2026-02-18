@@ -16,5 +16,26 @@ public interface ImFacade {
      * @return roomId
      */
     Long getOrCreateRoomWithUser(Long uid, Long targetUid);
-}
 
+    /**
+     * 发送一条系统消息到指定会话房间。
+     *
+     * <p>说明：body 采用 Object 以便业务侧不依赖 IM 内部的消息 DTO；
+     * 在单体实现中会将 body 转换为 IM 模块对应的消息体结构。</p>
+     *
+     * @param uid    当前用户 id（作为发送者）
+     * @param roomId 会话房间 id
+     * @param body   消息体（建议为 Map 结构，便于序列化与版本演进）
+     * @return msgId
+     */
+    Long sendSystemMessage(Long uid, Long roomId, Object body);
+
+    /**
+     * 获取最近联系人（来自会话列表）。
+     *
+     * @param uid   当前用户 id
+     * @param limit 返回数量上限
+     * @return 对方用户 id 列表（按最近活跃排序）
+     */
+    java.util.List<Long> listRecentContactUids(Long uid, int limit);
+}

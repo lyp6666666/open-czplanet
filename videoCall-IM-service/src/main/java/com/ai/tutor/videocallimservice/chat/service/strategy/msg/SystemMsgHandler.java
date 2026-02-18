@@ -1,11 +1,12 @@
 package com.ai.tutor.videocallimservice.chat.service.strategy.msg;
 
+import cn.hutool.json.JSONUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.MessageTypeEnum;
-import com.ai.tutor.videocallimservice.chat.domain.vo.request.TextMsgReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
@@ -18,8 +19,13 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 系统消息处理器。
+ *
+ * <p>用于业务系统投递结构化消息（例如授课申请卡片）。</p>
+ */
 @Component
-public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
+public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
 
     @Resource
     private RoomMapper roomMapper;
@@ -35,11 +41,11 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
 
     @Override
     protected MessageTypeEnum getMsgTypeEnum() {
-        return MessageTypeEnum.TEXT;
+        return MessageTypeEnum.SYSTEM;
     }
 
     @Override
-    protected void checkMsg(TextMsgReq body, Long roomId, Long uid) {
+    protected void checkMsg(SystemMsgReq body, Long roomId, Long uid) {
         ThrowUtils.throwIf(roomId == null || uid == null, ErrorCode.PARAMS_ERROR);
         Room room = roomMapper.selectById(roomId);
         ThrowUtils.throwIf(room == null || room.getStatus() == null || room.getStatus() != 1, ErrorCode.NOT_FOUND_ERROR);
@@ -47,12 +53,11 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
         Long teacherUid = resolveUserId(1, room.getTeacherProfileId());
         Long studentUid = resolveUserId(2, room.getStudentProfileId());
         ThrowUtils.throwIf(teacherUid == null || studentUid == null, ErrorCode.NOT_FOUND_ERROR);
-
         ThrowUtils.throwIf(!uid.equals(teacherUid) && !uid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
     }
 
     @Override
-    protected void saveMsg(Message message, TextMsgReq body) {
+    protected void saveMsg(Message message, SystemMsgReq body) {
         Room room = roomMapper.selectById(message.getRoomId());
         ThrowUtils.throwIf(room == null || room.getStatus() == null || room.getStatus() != 1, ErrorCode.NOT_FOUND_ERROR);
 
@@ -66,17 +71,52 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
 
         Long toUid = fromUid.equals(teacherUid) ? studentUid : teacherUid;
         message.setToUid(toUid);
-        message.setContent(body.getContent());
-        message.setReplyMsgId(body.getReplyMsgId());
+
+        // content 用作会话列表预览；结构化内容放在 extra，便于后续演进与兼容。
+        message.setContent(buildPreview(body));
+        message.setExtra(JSONUtil.toJsonStr(body));
     }
 
     @Override
     public Object showMsg(Message msg) {
-        // 统一返回结构化消息体，前端可以按 type 扩展渲染；同时兼容旧逻辑（content 字段仍存在）。
-        Map<String, Object> body = new HashMap<>();
-        body.put("type", "text");
-        body.put("content", msg == null ? "" : msg.getContent());
-        return body;
+        // 优先使用 extra（结构化），content 仅作预览兜底。
+        if (msg == null || msg.getExtra() == null || msg.getExtra().isBlank()) {
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("type", "system");
+            fallback.put("content", msg == null ? "" : msg.getContent());
+            return fallback;
+        }
+
+        SystemMsgReq body = JSONUtil.toBean(msg.getExtra(), SystemMsgReq.class);
+        String bizType = body.getBizType() == null ? "" : body.getBizType().trim().toUpperCase();
+
+        Map<String, Object> out = new HashMap<>();
+        if ("LESSON_REQUEST".equals(bizType)) {
+            out.put("type", "lesson_request");
+            out.put("eventId", body.getEventId());
+            out.put("title", body.getTitle());
+            out.put("startAt", body.getStartAt());
+            out.put("endAt", body.getEndAt());
+            out.put("status", body.getStatus());
+            out.put("creatorUserId", body.getCreatorUserId());
+            return out;
+        }
+        if ("LESSON_STATUS".equals(bizType)) {
+            out.put("type", "lesson_status");
+            out.put("eventId", body.getEventId());
+            out.put("title", body.getTitle());
+            out.put("startAt", body.getStartAt());
+            out.put("endAt", body.getEndAt());
+            out.put("status", body.getStatus());
+            out.put("actorUserId", body.getActorUserId());
+            return out;
+        }
+
+        out.put("type", "system");
+        out.put("bizType", body.getBizType());
+        out.put("eventId", body.getEventId());
+        out.put("content", msg.getContent());
+        return out;
     }
 
     @Override
@@ -86,7 +126,23 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
 
     @Override
     public String showContactMsg(Message msg) {
-        return msg.getContent();
+        return msg == null ? "" : msg.getContent();
+    }
+
+    private static String buildPreview(SystemMsgReq body) {
+        if (body == null) {
+            return "系统消息";
+        }
+        String bizType = body.getBizType() == null ? "" : body.getBizType().trim().toUpperCase();
+        String title = body.getTitle() == null || body.getTitle().isBlank() ? "课程" : body.getTitle();
+        if ("LESSON_REQUEST".equals(bizType)) {
+            return "授课申请：" + title;
+        }
+        if ("LESSON_STATUS".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "课程状态：" + s + "（" + title + "）";
+        }
+        return "系统消息：" + title;
     }
 
     private Long resolveUserId(int userType, Long refId) {
@@ -114,3 +170,4 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
         return user.getId();
     }
 }
+

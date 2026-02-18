@@ -23,6 +23,11 @@ public class TutorAppointment {
 
     private Long tutorJobPostingId;
 
+    /**
+     * 课程名称/标题（用于日历与授课申请展示）。
+     */
+    private String title;
+
     private Long subjectId;
 
     private String classMode;
@@ -38,6 +43,11 @@ public class TutorAppointment {
     private Integer status;
 
     private Long createdBy;
+
+    /**
+     * 关联聊天会话 id（用于跳转到会话并展示授课申请卡片）。
+     */
+    private Long roomId;
 
     private LocalDateTime proposedStartTime;
 

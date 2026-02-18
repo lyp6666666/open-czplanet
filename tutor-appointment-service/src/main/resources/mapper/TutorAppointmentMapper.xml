@@ -9,6 +9,7 @@
         <result column="tutor_id" property="tutorId"/>
         <result column="parent_job_posting_id" property="parentJobPostingId"/>
         <result column="tutor_job_posting_id" property="tutorJobPostingId"/>
+        <result column="title" property="title"/>
         <result column="subject_id" property="subjectId"/>
         <result column="class_mode" property="classMode"/>
         <result column="city" property="city"/>
@@ -17,6 +18,7 @@
         <result column="duration_minutes" property="durationMinutes"/>
         <result column="status" property="status"/>
         <result column="created_by" property="createdBy"/>
+        <result column="room_id" property="roomId"/>
         <result column="proposed_start_time" property="proposedStartTime"/>
         <result column="proposed_by" property="proposedBy"/>
         <result column="cancel_by" property="cancelBy"/>
@@ -27,20 +29,22 @@
 
     <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.TutorAppointment" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tutor_appointment
-        (parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, subject_id, class_mode, city, address,
-         start_time, duration_minutes, status, created_by, proposed_start_time, proposed_by, cancel_by, remark)
+        (parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+         start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark)
         VALUES
-        (#{parentId}, #{tutorId}, #{parentJobPostingId}, #{tutorJobPostingId}, #{subjectId}, #{classMode}, #{city}, #{address},
-         #{startTime}, #{durationMinutes}, #{status}, #{createdBy}, #{proposedStartTime}, #{proposedBy}, #{cancelBy}, #{remark})
+        (#{parentId}, #{tutorId}, #{parentJobPostingId}, #{tutorJobPostingId}, #{title}, #{subjectId}, #{classMode}, #{city}, #{address},
+         #{startTime}, #{durationMinutes}, #{status}, #{createdBy}, #{roomId}, #{proposedStartTime}, #{proposedBy}, #{cancelBy}, #{remark})
     </insert>
 
     <update id="updateById" parameterType="com.ai.tutor.appointment.model.entity.TutorAppointment">
         UPDATE tutor_appointment
         <set>
+            <if test="title != null">title = #{title},</if>
             <if test="startTime != null">start_time = #{startTime},</if>
             <if test="durationMinutes != null">duration_minutes = #{durationMinutes},</if>
             <if test="status != null">status = #{status},</if>
             <if test="createdBy != null">created_by = #{createdBy},</if>
+            <if test="roomId != null">room_id = #{roomId},</if>
             <if test="proposedStartTime != null">proposed_start_time = #{proposedStartTime},</if>
             <if test="proposedBy != null">proposed_by = #{proposedBy},</if>
             <if test="cancelBy != null">cancel_by = #{cancelBy},</if>
@@ -52,8 +56,8 @@
 
     <select id="selectById" resultMap="TutorAppointmentMap">
         SELECT
-            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, subject_id, class_mode, city, address,
-            start_time, duration_minutes, status, created_by, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
+            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
         FROM tutor_appointment
         WHERE id = #{id}
         LIMIT 1
@@ -62,6 +66,14 @@
     <update id="acceptIfPending">
         UPDATE tutor_appointment
         SET status = 2,
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 1
+    </update>
+
+    <update id="rejectIfPending">
+        UPDATE tutor_appointment
+        SET status = 6,
             update_time = CURRENT_TIMESTAMP
         WHERE id = #{id}
           AND status = 1
@@ -79,8 +91,8 @@
 
     <select id="listByUser" resultMap="TutorAppointmentMap">
         SELECT
-            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, subject_id, class_mode, city, address,
-            start_time, duration_minutes, status, created_by, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
+            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
         FROM tutor_appointment
         WHERE (parent_id = #{uid} OR tutor_id = #{uid})
         <if test="status != null">
@@ -91,6 +103,43 @@
         </if>
         ORDER BY id DESC
         LIMIT #{pageSize}
+    </select>
+
+    <select id="listByUserAndTimeRange" resultMap="TutorAppointmentMap">
+        SELECT
+            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
+        FROM tutor_appointment
+        WHERE (parent_id = #{uid} OR tutor_id = #{uid})
+          AND start_time &lt; #{end}
+          AND DATE_ADD(start_time, INTERVAL duration_minutes MINUTE) &gt; #{start}
+          AND status IN
+          <choose>
+              <when test="includePending != null and includePending">
+                  (1, 2, 3, 5)
+              </when>
+              <otherwise>
+                  (2, 3, 5)
+              </otherwise>
+          </choose>
+        ORDER BY start_time ASC, id ASC
+    </select>
+
+    <select id="countAcceptedConflicts" resultType="int">
+        SELECT COUNT(1)
+        FROM tutor_appointment
+        WHERE status = 2
+          AND (parent_id IN
+              <foreach collection="uids" item="u" open="(" close=")" separator=",">
+                  #{u}
+              </foreach>
+              OR tutor_id IN
+              <foreach collection="uids" item="u" open="(" close=")" separator=",">
+                  #{u}
+              </foreach>
+          )
+          AND start_time &lt; #{end}
+          AND DATE_ADD(start_time, INTERVAL duration_minutes MINUTE) &gt; #{start}
     </select>
 
 </mapper>

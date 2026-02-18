@@ -19,15 +19,6 @@ const realName = ref('')
 const education = ref('')
 const educationOther = ref('')
 
-const defaultAvatars = [
-  '/avatars/avatar-1.svg',
-  '/avatars/avatar-2.svg',
-  '/avatars/avatar-3.svg',
-  '/avatars/avatar-4.svg',
-  '/avatars/avatar-5.svg',
-  '/avatars/avatar-6.svg',
-]
-
 const eduOptions = ['本科', '硕士', '博士', '专科', '海外', '其他']
 
 const finalEducation = computed(() => {
@@ -62,10 +53,6 @@ async function onSelectAvatarFile(e: Event) {
     avatarUploading.value = false
     if (input) input.value = ''
   }
-}
-
-function pickDefaultAvatar(url: string) {
-  avatar.value = url
 }
 
 async function submit() {
@@ -356,4 +343,3 @@ onMounted(async () => {
   }
 }
 </style>
-

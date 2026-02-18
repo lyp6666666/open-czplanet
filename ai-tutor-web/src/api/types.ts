@@ -280,6 +280,42 @@ export interface ChatMessageResp {
   message: { id: number; roomId: number; sendTime: string; body: unknown }
 }
 
+export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'UNKNOWN'
+
+export interface ScheduleEventVO {
+  id: number
+  title: string
+  description: string | null
+  startAt: number
+  endAt: number
+  status: ScheduleEventStatus
+  creatorUserId: number
+  participant: UserSimpleVO | null
+  chatRoomId: number | null
+}
+
+export type ChatMessageBody =
+  | { type: 'text'; content: string }
+  | {
+      type: 'lesson_request'
+      eventId: number
+      title: string
+      startAt: number
+      endAt: number
+      status: ScheduleEventStatus
+      creatorUserId: number
+    }
+  | {
+      type: 'lesson_status'
+      eventId: number
+      title: string
+      startAt: number
+      endAt: number
+      status: ScheduleEventStatus
+      actorUserId: number
+    }
+  | { type: 'system'; content?: string; [k: string]: unknown }
+
 export interface CursorPageBaseResp<T> {
   cursor: string | null
   isLast: boolean

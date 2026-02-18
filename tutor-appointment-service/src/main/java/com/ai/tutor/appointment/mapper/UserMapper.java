@@ -38,4 +38,9 @@ public interface UserMapper {
     int updateUserPhone(@Param("newPhone") String newPhone, @Param("id") Long id);
 
     List<User> selectByIds(@Param("ids") List<Long> ids);
+
+    /**
+     * 按关键词搜索用户（昵称/手机号），用于“授课对象”搜索选择。
+     */
+    List<User> searchByKeyword(@Param("keyword") String keyword, @Param("limit") Integer limit);
 }

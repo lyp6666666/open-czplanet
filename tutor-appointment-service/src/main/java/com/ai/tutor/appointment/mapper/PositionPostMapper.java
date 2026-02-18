@@ -14,4 +14,9 @@ public interface PositionPostMapper {
     List<PositionPost> searchEnabledByKeyword(@Param("keyword") String keyword, @Param("limit") Integer limit);
 
     List<PositionPost> selectByIds(@Param("ids") List<Long> ids);
+
+    /**
+     * 选择一个“可用叶子科目”（没有启用子节点的科目），用于兜底场景。
+     */
+    Long selectFirstEnabledLeafId();
 }

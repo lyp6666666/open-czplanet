@@ -67,4 +67,16 @@
         </foreach>
     </select>
 
+    <select id="selectFirstEnabledLeafId" resultType="long">
+        SELECT p.id
+        FROM position_post p
+        LEFT JOIN position_post c
+               ON c.parent_id = p.id
+              AND c.enable_status = 1
+        WHERE p.enable_status = 1
+          AND c.id IS NULL
+        ORDER BY p.sort ASC, p.id ASC
+        LIMIT 1
+    </select>
+
 </mapper>

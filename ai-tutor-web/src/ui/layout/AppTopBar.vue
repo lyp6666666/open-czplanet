@@ -112,6 +112,9 @@ function onLogout() {
             <button class="tab" :class="{ active: route.path.startsWith('/tutor/jobs') }" type="button" @click="go('/tutor/jobs')">
               需求
             </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
+              课程安排
+            </button>
           </template>
           <template v-else>
             <button class="tab" :class="{ active: route.path.startsWith('/student/post') }" type="button" @click="go('/student/post')">
@@ -119,6 +122,9 @@ function onLogout() {
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/student/jobs') }" type="button" @click="go('/student/jobs/mine')">
               我的需求
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
+              课程安排
             </button>
           </template>
         </nav>

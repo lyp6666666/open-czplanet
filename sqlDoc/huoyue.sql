@@ -269,14 +269,16 @@ CREATE TABLE `tutor_appointment` (
             `tutor_id` bigint(20) NOT NULL COMMENT '教师 user_id',
             `parent_job_posting_id` bigint(20) DEFAULT NULL COMMENT '家长需求贴id',
             `tutor_job_posting_id` bigint(20) DEFAULT NULL COMMENT '教师服务贴id',
+            `title` varchar(100) DEFAULT NULL COMMENT '课程名称/标题',
             `subject_id` bigint(20) NOT NULL COMMENT '科目id（position_post.id）',
             `class_mode` varchar(50) DEFAULT NULL COMMENT '授课方式：online/offline/both',
             `city` varchar(100) DEFAULT NULL COMMENT '城市（线下）',
             `address` varchar(255) DEFAULT NULL COMMENT '地址（线下）',
             `start_time` datetime(3) NOT NULL COMMENT '开始时间',
             `duration_minutes` int NOT NULL DEFAULT 60 COMMENT '时长（分钟）',
-            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态：1待确认 2已确认 3待改期确认 4已取消 5已完成',
+            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态：1待确认 2已确认 3待改期确认 4已取消 5已完成 6已拒绝',
             `created_by` bigint(20) NOT NULL COMMENT '发起人 user_id',
+            `room_id` bigint(20) DEFAULT NULL COMMENT '关联聊天会话id（用于快速跳转）',
             `proposed_start_time` datetime(3) DEFAULT NULL COMMENT '改期提议时间',
             `proposed_by` bigint(20) DEFAULT NULL COMMENT '改期发起人 user_id',
             `cancel_by` bigint(20) DEFAULT NULL COMMENT '取消人 user_id',
@@ -287,7 +289,8 @@ CREATE TABLE `tutor_appointment` (
             KEY `idx_parent_id` (`parent_id`),
             KEY `idx_tutor_id` (`tutor_id`),
             KEY `idx_status` (`status`),
-            KEY `idx_start_time` (`start_time`)
+            KEY `idx_start_time` (`start_time`),
+            KEY `idx_room_id` (`room_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约/邀约表';
 
 

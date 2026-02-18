@@ -3,9 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
+import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageResp, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,6 +45,54 @@ type StreamMsgEvent = {
 
 const streamAbort = ref<AbortController | null>(null)
 
+const lessonActionBusy = ref<Record<number, boolean>>({})
+const lessonActionError = ref<Record<number, string>>({})
+
+function normalizeBody(raw: unknown): ChatMessageBody {
+  if (!raw) return { type: 'text', content: '' }
+  if (typeof raw === 'string') return { type: 'text', content: raw }
+  if (typeof raw === 'object') {
+    const any = raw as Record<string, unknown>
+    if (typeof any.type === 'string') return any as ChatMessageBody
+    if (typeof any.content === 'string') return { type: 'text', content: any.content }
+  }
+  return { type: 'system', content: msgText(raw) }
+}
+
+function isLessonRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_request' }> {
+  return body.type === 'lesson_request'
+}
+
+function isLessonStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_status' }> {
+  return body.type === 'lesson_status'
+}
+
+async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
+  if (lessonActionBusy.value[eventId]) return
+  lessonActionBusy.value = { ...lessonActionBusy.value, [eventId]: true }
+  lessonActionError.value = { ...lessonActionError.value, [eventId]: '' }
+  try {
+    const updated = await scheduleApi.respond(eventId, action)
+    const next = messages.value.map((m) => {
+      if (m.message.id !== msgId) return m
+      const body = normalizeBody(m.message.body)
+      if (!isLessonRequestBody(body)) return m
+      return {
+        ...m,
+        message: {
+          ...m.message,
+          body: { ...body, status: updated.status },
+        },
+      }
+    })
+    messages.value = next
+  } catch (e) {
+    lessonActionError.value = { ...lessonActionError.value, [eventId]: e instanceof Error ? e.message : '操作失败' }
+  } finally {
+    lessonActionBusy.value = { ...lessonActionBusy.value, [eventId]: false }
+  }
+}
+
 function msgText(raw: unknown): string {
   if (!raw) return ''
   if (typeof raw === 'string') return raw
@@ -61,6 +111,15 @@ const sortedMessages = computed(() => {
   const list = messages.value.slice()
   list.sort((a, b) => (a.message?.id || 0) - (b.message?.id || 0))
   return list
+})
+
+type RenderMessage = ChatMessageResp & { body: ChatMessageBody }
+
+const renderMessages = computed<RenderMessage[]>(() => {
+  return sortedMessages.value.map((m) => ({
+    ...m,
+    body: normalizeBody(m.message?.body),
+  }))
 })
 
 async function loadOtherUser() {
@@ -225,8 +284,29 @@ watch(
       </div>
 
       <div class="msgs">
-        <div v-for="m in sortedMessages" :key="m.message.id" class="msg" :class="{ me: m.fromUser.uid === myUid }">
-          <div class="bubble">{{ msgText(m.message.body) }}</div>
+        <div v-for="m in renderMessages" :key="m.message.id" class="msg" :class="{ me: m.fromUser.uid === myUid }">
+          <div class="bubble">
+            <template v-if="isLessonRequestBody(m.body)">
+              <LessonRequestCard
+                :body="m.body"
+                :from-me="m.fromUser.uid === myUid"
+                :busy="lessonActionBusy[m.body.eventId]"
+                @accept="respondLesson(m.body.eventId, 'ACCEPT', m.message.id)"
+                @reject="respondLesson(m.body.eventId, 'REJECT', m.message.id)"
+              />
+              <div v-if="lessonActionError[m.body.eventId]" class="card-hint error">
+                {{ lessonActionError[m.body.eventId] }}
+              </div>
+            </template>
+            <template v-else-if="isLessonStatusBody(m.body)">
+              <div class="sys">
+                课程状态：{{ m.body.status }}（{{ m.body.title }}）
+              </div>
+            </template>
+            <template v-else>
+              {{ msgText(m.body) }}
+            </template>
+          </div>
         </div>
       </div>
 

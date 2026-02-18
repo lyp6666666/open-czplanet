@@ -11,6 +11,7 @@ const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
 const TutorOnboardingBasicPage = () => import('@/pages/tutor/TutorOnboardingBasicPage.vue')
 const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
+const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -97,6 +98,11 @@ export const router = createRouter({
         },
       ],
     },
+    {
+      path: '/schedule',
+      name: 'schedule',
+      component: SchedulePage,
+    },
   ],
 })
 
@@ -111,7 +117,11 @@ router.beforeEach((to) => {
   }
 
   const needAuth =
-    to.path === '/me' || to.path.startsWith('/student/') || to.path.startsWith('/tutor/') || to.path.startsWith('/chat')
+    to.path === '/me' ||
+    to.path === '/schedule' ||
+    to.path.startsWith('/student/') ||
+    to.path.startsWith('/tutor/') ||
+    to.path.startsWith('/chat')
 
   if (needAuth && !loggedIn) {
     if (to.path.startsWith('/tutor/')) return { path: '/auth/tutor' }

@@ -116,5 +116,15 @@
         </foreach>
     </select>
 
+    <select id="searchByKeyword" resultMap="BaseUserResultMap">
+        SELECT *
+        FROM user
+        WHERE (name LIKE CONCAT('%', #{keyword}, '%')
+               OR phone LIKE CONCAT('%', #{keyword}, '%'))
+          AND status = 0
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
 
 </mapper>

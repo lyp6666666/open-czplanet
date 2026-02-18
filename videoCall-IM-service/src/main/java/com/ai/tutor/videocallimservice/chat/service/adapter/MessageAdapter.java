@@ -3,6 +3,8 @@ package com.ai.tutor.videocallimservice.chat.service.adapter;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
+import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
+import com.ai.tutor.videocallimservice.chat.service.strategy.MsgHandlerFactory;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
@@ -58,16 +60,30 @@ public class MessageAdapter {
         msg.setId(message.getId());
         msg.setRoomId(message.getRoomId());
         msg.setSendTime(toDate(message.getCreateTime()));
-        msg.setBody(buildMessageBody(message));
+        msg.setBody(buildBody(message));
         return msg;
     }
 
     /**
-     * 构建消息内容（为后续多消息类型预留）
+     * 构建消息内容（按消息类型返回结构化消息体）。
      */
-    private static Object buildMessageBody(Message message) {
-        // 目前是文本消息，后续可以按 type 扩展
-        return message.getContent();
+    public static Object buildBody(Message message) {
+        if (message == null || message.getType() == null) {
+            return null;
+        }
+        AbstractMsgHandler<?> handler = MsgHandlerFactory.getStrategyNoNull(message.getType());
+        return handler.showMsg(message);
+    }
+
+    /**
+     * 会话列表预览消息（用于 lastMsgBody 等场景）。
+     */
+    public static String buildContactPreview(Message message) {
+        if (message == null || message.getType() == null) {
+            return "";
+        }
+        AbstractMsgHandler<?> handler = MsgHandlerFactory.getStrategyNoNull(message.getType());
+        return handler.showContactMsg(message);
     }
 
     /**
