@@ -45,6 +45,12 @@ public class StudentJobPosting {
     /** 上课具体地址 */
     private String address;
 
+    /**
+     * 授课频次（每周几次）。
+     * 用于列表/详情展示与筛选（BOSS 直聘式信息密度）。
+     */
+    private Integer frequencyPerWeek;
+
     /** 预算下限（每小时） */
     private BigDecimal budgetMin;
 
@@ -56,6 +62,12 @@ public class StudentJobPosting {
 
     /** 学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等 */
     private String educationRequirement;
+
+    /**
+     * 发布者身份：
+     * PARENT（学生家长） / STUDENT_SELF（学生本人）。
+     */
+    private String publisherIdentity;
 
     /** 期望上课时间，JSON 格式 */
     private String schedule;

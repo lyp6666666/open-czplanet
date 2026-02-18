@@ -38,6 +38,7 @@ public interface StudentJobPostingMapper {
                                                  @Param("city") String city,
                                                  @Param("classMode") String classMode,
                                                  @Param("stageCode") String stageCode,
+                                                 @Param("frequencyPerWeek") Integer frequencyPerWeek,
                                                  @Param("educationRequirement") String educationRequirement,
                                                  @Param("budgetMin") BigDecimal budgetMin,
                                                  @Param("budgetMax") BigDecimal budgetMax,

@@ -1,18 +1,20 @@
 import { http } from './http'
-import type { CursorPageResponse, StudentJobPosting } from './types'
+import type { CursorPageResponse, DemandViewVO, StudentJobPosting } from './types'
 
 export interface CreateStudentJobPostingRequest {
   subjectId: number
   title: string
-  description?: string
+  description: string
   childAge?: number
-  classMode?: string
+  classMode: string
   city?: string
   address?: string
+  frequencyPerWeek: number
   budgetMin?: number
   budgetMax?: number
-  stageCode?: string
-  educationRequirement?: string
+  stageCode: string
+  educationRequirement: string
+  publisherIdentity: string
   schedule?: string
 }
 
@@ -24,10 +26,12 @@ export interface UpdateStudentJobPostingRequest {
   classMode?: string
   city?: string
   address?: string
+  frequencyPerWeek?: number
   budgetMin?: number
   budgetMax?: number
   stageCode?: string
   educationRequirement?: string
+  publisherIdentity?: string
   schedule?: string
   status?: number
 }
@@ -45,6 +49,10 @@ export const jobsApi = {
     return http.get<unknown, StudentJobPosting>(`/api/v1/parent/jobs/${id}`)
   },
 
+  getDemandView(id: number) {
+    return http.get<unknown, DemandViewVO>(`/api/v1/parent/jobs/${id}/view`)
+  },
+
   mineDemands(params: { pageSize?: number; cursor?: number | null }) {
     return http.get<unknown, CursorPageResponse<StudentJobPosting>>('/api/v1/parent/jobs/mine', { params })
   },
@@ -54,6 +62,7 @@ export const jobsApi = {
     city?: string
     classMode?: string
     stageCode?: string
+    frequencyPerWeek?: number
     educationRequirement?: string
     budgetMin?: number
     budgetMax?: number

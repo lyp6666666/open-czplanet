@@ -3,6 +3,8 @@ package com.ai.tutor.appointment.model.dto.job;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -19,20 +21,32 @@ public class CreateStudentJobPostingRequest {
     @Schema(description = "标题", example = "小学三年级数学家教")
     private String title;
 
+    @NotBlank
     @Schema(description = "描述", example = "希望讲解应用题与计算，孩子基础一般")
     private String description;
 
     @Schema(description = "孩子年龄", example = "9")
     private Integer childAge;
 
+    @NotBlank
     @Schema(description = "授课方式：online/offline/both", example = "online")
     private String classMode;
 
     @Schema(description = "城市（线下时必填）", example = "北京")
     private String city;
 
-    @Schema(description = "详细地址（线下可选）")
+    @Schema(description = "详细地址（线下时必填）")
     private String address;
+
+    @NotNull
+    @Min(1)
+    @Max(7)
+    @Schema(description = "授课频次（每周几次，1~7）", example = "2")
+    private Integer frequencyPerWeek;
+
+    @NotBlank
+    @Schema(description = "发布者身份：PARENT/ STUDENT_SELF", example = "PARENT")
+    private String publisherIdentity;
 
     @Schema(description = "预算下限（每小时）", example = "80")
     private BigDecimal budgetMin;
@@ -40,9 +54,11 @@ public class CreateStudentJobPostingRequest {
     @Schema(description = "预算上限（每小时）", example = "120")
     private BigDecimal budgetMax;
 
+    @NotBlank
     @Schema(description = "授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER", example = "JUNIOR")
     private String stageCode;
 
+    @NotBlank
     @Schema(description = "学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50/UNLIMITED", example = "C985")
     private String educationRequirement;
 

@@ -222,14 +222,27 @@ export interface StudentJobPosting {
   classMode: string | null
   city: string | null
   address: string | null
+  frequencyPerWeek: number | null
   budgetMin: string | null
   budgetMax: string | null
   stageCode: string | null
   educationRequirement: string | null
+  publisherIdentity: string | null
   schedule: string | null
   status: number
   createTime: string
   updateTime: string
+}
+
+export interface DemandPublisherVO {
+  uid: number
+  displayName: string
+  avatar: string | null
+  identityLabel: string
+}
+
+export interface DemandViewVO extends StudentJobPosting {
+  publisher: DemandPublisherVO
 }
 
 export interface ChatRoomItemResp {

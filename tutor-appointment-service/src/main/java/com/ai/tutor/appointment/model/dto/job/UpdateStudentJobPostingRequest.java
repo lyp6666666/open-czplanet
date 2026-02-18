@@ -1,6 +1,8 @@
 package com.ai.tutor.appointment.model.dto.job;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -29,6 +31,14 @@ public class UpdateStudentJobPostingRequest {
 
     @Schema(description = "详细地址（线下可选）")
     private String address;
+
+    @Min(1)
+    @Max(7)
+    @Schema(description = "授课频次（每周几次，1~7）", example = "2")
+    private Integer frequencyPerWeek;
+
+    @Schema(description = "发布者身份：PARENT/ STUDENT_SELF", example = "PARENT")
+    private String publisherIdentity;
 
     @Schema(description = "预算下限（每小时）", example = "80")
     private BigDecimal budgetMin;

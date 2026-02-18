@@ -5,8 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { StudentJobPosting } from '@/api/types'
-import { formatClassMode } from '@/utils/present'
+import type { DemandViewVO, StudentJobPosting } from '@/api/types'
+import { formatClassMode, formatEducationRequirement } from '@/utils/present'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,6 +18,7 @@ const q = ref('')
 const classMode = ref<string>('')
 const stageCode = ref<string>('')
 const educationRequirement = ref<string>('')
+const frequencyPerWeek = ref<number | null>(null)
 
 const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
 watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
@@ -33,9 +34,9 @@ const isLast = ref(false)
 const selectedId = ref<number | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
-const detail = ref<StudentJobPosting | null>(null)
+const detail = ref<DemandViewVO | null>(null)
 
-const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu'>('')
+const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu' | 'freq'>('')
 
 const stageOptions = [
   { value: '', label: '不限' },
@@ -47,7 +48,7 @@ const stageOptions = [
 ]
 
 const eduOptions = [
-  { value: '', label: '不限' },
+  { value: 'UNLIMITED', label: '不限' },
   { value: 'TOP2', label: 'top2' },
   { value: 'C985', label: '985' },
   { value: 'C211', label: '211' },
@@ -71,6 +72,11 @@ const typeLabel = computed(() => {
 const stageLabel = computed(() => stageOptions.find((o) => o.value === stageCode.value)?.label ?? '不限')
 
 const eduLabel = computed(() => eduOptions.find((o) => o.value === educationRequirement.value)?.label ?? '不限')
+
+const freqLabel = computed(() => {
+  if (!frequencyPerWeek.value) return '不限'
+  return `每周${frequencyPerWeek.value}次`
+})
 
 const budgetLabel = computed(() => {
   if (budgetMin.value == null && budgetMax.value == null) return '不限'
@@ -103,6 +109,11 @@ function selectStage(v: string) {
 
 function selectEdu(v: string) {
   educationRequirement.value = v
+  closeMenus()
+}
+
+function selectFreq(v: number | null) {
+  frequencyPerWeek.value = v
   closeMenus()
 }
 
@@ -170,6 +181,7 @@ async function loadMore() {
       city: classMode.value && classMode.value !== 'online' ? city.value.trim() || undefined : undefined,
       stageCode: stageCode.value || undefined,
       educationRequirement: educationRequirement.value || undefined,
+      frequencyPerWeek: frequencyPerWeek.value ?? undefined,
       budgetMin: budgetMin.value ?? undefined,
       budgetMax: budgetMax.value ?? undefined,
       q: q.value.trim() || undefined,
@@ -220,6 +232,10 @@ watch([classMode, stageCode, educationRequirement], () => {
   void refresh()
 })
 
+watch([frequencyPerWeek], () => {
+  void refresh()
+})
+
 watch(
   () => selectedId.value,
   (id) => {
@@ -228,7 +244,7 @@ watch(
       detailLoading.value = true
       detailError.value = null
       try {
-        detail.value = await jobsApi.getDemand(id)
+        detail.value = await jobsApi.getDemandView(id)
       } catch (e) {
         detailError.value = e instanceof Error ? e.message : '加载详情失败'
         detail.value = null
@@ -239,6 +255,16 @@ watch(
   },
   { immediate: true },
 )
+
+function renderLocation(it: Pick<StudentJobPosting, 'classMode' | 'city'>): string {
+  const mode = (it.classMode || '').toLowerCase()
+  if (mode === 'online') return '线上'
+  return it.city || '线下'
+}
+
+function renderFrequency(it: Pick<StudentJobPosting, 'frequencyPerWeek'>): string {
+  return it.frequencyPerWeek ? `每周${it.frequencyPerWeek}次` : '每周-次'
+}
 
 onMounted(() => {
   const raw = route.query.q
@@ -311,6 +337,17 @@ onMounted(() => {
             </button>
           </div>
         </div>
+
+        <div class="tab-wrap">
+          <button class="tab" type="button" :class="{ active: !!frequencyPerWeek || openKey === 'freq' }" @click.stop="toggle('freq')">
+            <span>授课频次</span>
+            <span class="val">{{ freqLabel }}</span>
+          </button>
+          <div v-if="openKey === 'freq'" class="menu card">
+            <button class="menu-item" type="button" @click="selectFreq(null)">不限</button>
+            <button v-for="n in 7" :key="n" class="menu-item" type="button" @click="selectFreq(n)">每周 {{ n }} 次</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -332,13 +369,15 @@ onMounted(() => {
             :class="{ active: selectedId === it.id }"
             @click="openDetail(it)"
           >
-            <div class="t">{{ it.title }}</div>
+            <div class="line1">
+              <div class="t">{{ it.title }}</div>
+              <div v-if="it.budgetMin || it.budgetMax" class="pay">{{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时</div>
+            </div>
             <div class="meta">
-              <span v-if="it.city">{{ it.city }}</span>
-              <span v-if="it.classMode">{{ formatClassMode(it.classMode) }}</span>
-              <span v-if="it.stageCode">{{ stageOptions.find((o) => o.value === it.stageCode)?.label || it.stageCode }}</span>
-              <span v-if="it.educationRequirement">{{ eduOptions.find((o) => o.value === it.educationRequirement)?.label || it.educationRequirement }}</span>
-              <span v-if="it.budgetMin || it.budgetMax">{{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时</span>
+              <span>{{ renderLocation(it) }}</span>
+              <span>{{ formatClassMode(it.classMode) }}</span>
+              <span>{{ renderFrequency(it) }}</span>
+              <span>{{ formatEducationRequirement(it.educationRequirement) }}</span>
             </div>
             <div v-if="it.description" class="desc">{{ it.description }}</div>
           </button>
@@ -370,21 +409,36 @@ onMounted(() => {
           </div>
 
           <div class="detail-meta">
-            <span v-if="detail.city">{{ detail.city }}</span>
-            <span v-if="detail.classMode">{{ formatClassMode(detail.classMode) }}</span>
-            <span v-if="detail.stageCode">{{ stageOptions.find((o) => o.value === (detail?.stageCode ?? ''))?.label || detail.stageCode }}</span>
-            <span v-if="detail.educationRequirement">{{ eduOptions.find((o) => o.value === (detail?.educationRequirement ?? ''))?.label || detail.educationRequirement }}</span>
-            <span v-if="detail.budgetMin || detail.budgetMax">{{ detail.budgetMin || '-' }}-{{ detail.budgetMax || '-' }}/小时</span>
+            <span>{{ renderLocation(detail) }}</span>
+            <span>{{ formatClassMode(detail.classMode) }}</span>
+            <span>{{ renderFrequency(detail) }}</span>
+            <span>{{ formatEducationRequirement(detail.educationRequirement) }}</span>
           </div>
 
-          <div v-if="detail.description" class="detail-block">
+          <div class="detail-block">
             <div class="detail-label">需求描述</div>
-            <div class="detail-text">{{ detail.description }}</div>
+            <div class="detail-text">{{ detail.description || '—' }}</div>
           </div>
 
           <div v-if="detail.schedule" class="detail-block">
-            <div class="detail-label">期望时间</div>
+            <div class="detail-label">授课时间</div>
             <div class="detail-text">{{ detail.schedule }}</div>
+          </div>
+
+          <div v-if="detail.publisher" class="publisher">
+            <img v-if="detail.publisher.avatar" class="p-avatar" :src="detail.publisher.avatar" alt="avatar" />
+            <div v-else class="p-avatar fallback">{{ (detail.publisher.displayName || 'U').slice(0, 1) }}</div>
+            <div class="p-info">
+              <div class="p-name">{{ detail.publisher.displayName }}</div>
+              <div class="p-tags">
+                <span class="tag">{{ detail.publisher.identityLabel }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="detail.classMode !== 'online'" class="detail-block">
+            <div class="detail-label">工作地址</div>
+            <div class="detail-text">{{ [detail.city, detail.address].filter(Boolean).join(' · ') || '—' }}</div>
           </div>
         </div>
         <div v-else class="card detail empty-detail">
@@ -569,10 +623,26 @@ onMounted(() => {
   background: rgba(0, 190, 189, 0.06);
 }
 
+.line1 {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .t {
   font-weight: 900;
   font-size: 14px;
   line-height: 1.4;
+  flex: 1 1 auto;
+}
+
+.pay {
+  flex: 0 0 auto;
+  color: #ff4d4f;
+  font-weight: 900;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .meta {
@@ -652,6 +722,57 @@ onMounted(() => {
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.publisher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.p-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.p-avatar.fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: var(--text);
+  background: rgba(0, 190, 189, 0.08);
+}
+
+.p-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.p-name {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.p-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(31, 35, 41, 0.06);
 }
 
 .empty {

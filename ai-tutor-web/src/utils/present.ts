@@ -59,7 +59,7 @@ export function formatStageCode(raw: string | null | undefined): string {
 }
 
 export function formatEducationRequirement(raw: string | null | undefined): string {
-  if (!raw) return ''
+  if (!raw) return '不限'
   const v = raw.trim().toUpperCase()
   if (v === 'UNLIMITED') return '不限'
   if (v === 'TOP2') return 'top2'

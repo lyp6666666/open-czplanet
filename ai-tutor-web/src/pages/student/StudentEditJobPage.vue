@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
@@ -20,7 +20,6 @@ const subjects = ref<SubjectTreeNode[]>([])
 const form = ref<StudentJobPosting | null>(null)
 
 const stageOptions = [
-  { value: '', label: '不限' },
   { value: 'PRESCHOOL', label: '幼教育' },
   { value: 'PRIMARY', label: '小学' },
   { value: 'JUNIOR', label: '初中' },
@@ -29,7 +28,7 @@ const stageOptions = [
 ]
 
 const eduOptions = [
-  { value: '', label: '不限' },
+  { value: 'UNLIMITED', label: '不限' },
   { value: 'TOP2', label: 'top2' },
   { value: 'C985', label: '985' },
   { value: 'C211', label: '211' },
@@ -58,6 +57,13 @@ async function load() {
   try {
     const [d, tree] = await Promise.all([jobsApi.getDemand(id.value), homeGuestApi.getSubjectTree()])
     form.value = d
+    if (form.value) {
+      if (!form.value.stageCode) form.value.stageCode = 'PRIMARY'
+      if (!form.value.educationRequirement) form.value.educationRequirement = 'UNLIMITED'
+      if (!form.value.frequencyPerWeek) form.value.frequencyPerWeek = 2
+      if (!form.value.publisherIdentity) form.value.publisherIdentity = 'PARENT'
+      if (!form.value.classMode) form.value.classMode = 'online'
+    }
     subjects.value = tree
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
@@ -70,8 +76,51 @@ async function onSave() {
   if (!form.value) return
   error.value = null
   doneHint.value = null
+  // 编辑页保存同发布页强校验保持一致，确保数据可用于教师端筛选与展示
   if (!form.value.title?.trim()) {
     error.value = '请输入标题'
+    return
+  }
+  if (!String(form.value.description || '').trim()) {
+    error.value = '请输入需求描述'
+    return
+  }
+  if (!form.value.classMode) {
+    error.value = '请选择授课方式'
+    return
+  }
+  if (!form.value.stageCode) {
+    error.value = '请选择授课学段'
+    return
+  }
+  if (!form.value.educationRequirement) {
+    error.value = '请选择学历要求'
+    return
+  }
+  if (!form.value.frequencyPerWeek || form.value.frequencyPerWeek < 1 || form.value.frequencyPerWeek > 7) {
+    error.value = '请选择授课频次（每周 1~7 次）'
+    return
+  }
+  if (!form.value.publisherIdentity) {
+    error.value = '请选择发布者身份'
+    return
+  }
+  if ((form.value.classMode === 'offline' || form.value.classMode === 'both') && (!String(form.value.city || '').trim() || !String(form.value.address || '').trim())) {
+    error.value = '线下授课必须填写城市与授课地址'
+    return
+  }
+  const bmin = form.value.budgetMin != null ? Number(form.value.budgetMin) : null
+  const bmax = form.value.budgetMax != null ? Number(form.value.budgetMax) : null
+  if (bmin != null && bmin <= 0) {
+    error.value = '预算下限需大于 0'
+    return
+  }
+  if (bmax != null && bmax <= 0) {
+    error.value = '预算上限需大于 0'
+    return
+  }
+  if (bmin != null && bmax != null && bmin > bmax) {
+    error.value = '预算下限不能大于预算上限'
     return
   }
   saving.value = true
@@ -79,13 +128,15 @@ async function onSave() {
     await jobsApi.updateDemand(id.value, {
       subjectId: form.value.subjectId,
       title: form.value.title.trim(),
-      description: form.value.description || undefined,
+      description: String(form.value.description || '').trim(),
       childAge: form.value.childAge ?? undefined,
       classMode: form.value.classMode || undefined,
       city: form.value.classMode === 'online' ? undefined : form.value.city || undefined,
       address: form.value.classMode === 'online' ? undefined : form.value.address || undefined,
-      budgetMin: form.value.budgetMin != null ? Number(form.value.budgetMin) : undefined,
-      budgetMax: form.value.budgetMax != null ? Number(form.value.budgetMax) : undefined,
+      frequencyPerWeek: form.value.frequencyPerWeek ?? undefined,
+      publisherIdentity: form.value.publisherIdentity || undefined,
+      budgetMin: bmin ?? undefined,
+      budgetMax: bmax ?? undefined,
       stageCode: form.value.stageCode || undefined,
       educationRequirement: form.value.educationRequirement || undefined,
       schedule: form.value.schedule || undefined,
@@ -102,6 +153,17 @@ async function onSave() {
 onMounted(() => {
   void load()
 })
+
+watch(
+  () => form.value?.classMode,
+  (v) => {
+    if (!form.value) return
+    if (v === 'online') {
+      form.value.city = null
+      form.value.address = null
+    }
+  },
+)
 </script>
 
 <template>
@@ -163,6 +225,22 @@ onMounted(() => {
           <div class="label">学历要求</div>
           <select v-model="form.educationRequirement" class="input">
             <option v-for="o in eduOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <div class="label">授课频次</div>
+          <select v-model.number="form.frequencyPerWeek" class="input">
+            <option v-for="n in 7" :key="n" :value="n">每周 {{ n }} 次</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="label">发布者身份</div>
+          <select v-model="form.publisherIdentity" class="input">
+            <option value="PARENT">学生家长</option>
+            <option value="STUDENT_SELF">学生本人</option>
           </select>
         </label>
       </div>

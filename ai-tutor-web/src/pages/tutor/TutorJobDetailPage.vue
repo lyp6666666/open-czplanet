@@ -5,8 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { StudentJobPosting } from '@/api/types'
-import { formatClassMode, formatEducationRequirement, formatScheduleText, formatStageCode } from '@/utils/present'
+import type { DemandViewVO } from '@/api/types'
+import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,14 +15,14 @@ const id = computed(() => Number(route.params.id))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const data = ref<StudentJobPosting | null>(null)
+const data = ref<DemandViewVO | null>(null)
 const favorited = ref(false)
 
 async function load() {
   loading.value = true
   error.value = null
   try {
-    data.value = await jobsApi.getDemand(id.value)
+    data.value = await jobsApi.getDemandView(id.value)
     try {
       const fav = await favoritesApi.checkDemandFavorites([id.value])
       favorited.value = Array.isArray(fav) && fav.includes(id.value)
@@ -84,10 +84,10 @@ onMounted(() => {
     <div v-if="data" class="card detail">
       <div class="t">{{ data.title }}</div>
       <div class="meta">
-        <span v-if="data.city">{{ data.city }}</span>
-        <span v-if="data.classMode">{{ formatClassMode(data.classMode) }}</span>
-        <span v-if="data.stageCode">{{ formatStageCode(data.stageCode) }}</span>
-        <span v-if="data.educationRequirement">{{ formatEducationRequirement(data.educationRequirement) }}</span>
+        <span>{{ (data.classMode || '').toLowerCase() === 'online' ? '线上' : data.city || '线下' }}</span>
+        <span>{{ formatClassMode(data.classMode) }}</span>
+        <span>每周{{ data.frequencyPerWeek || '-' }}次</span>
+        <span>{{ formatEducationRequirement(data.educationRequirement) }}</span>
         <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
       </div>
 
@@ -96,18 +96,22 @@ onMounted(() => {
         <div class="sec-body">{{ data.description || '—' }}</div>
       </div>
 
-      <div class="sec">
-        <div class="sec-title">孩子年龄</div>
-        <div class="sec-body">{{ data.childAge ?? '—' }}</div>
+      <div v-if="data.publisher" class="sec publisher">
+        <img v-if="data.publisher.avatar" class="avatar" :src="data.publisher.avatar" alt="avatar" />
+        <div v-else class="avatar fallback">{{ (data.publisher.displayName || 'U').slice(0, 1) }}</div>
+        <div class="pub-info">
+          <div class="pub-name">{{ data.publisher.displayName }}</div>
+          <div class="pub-tag">{{ data.publisher.identityLabel }}</div>
+        </div>
       </div>
 
       <div class="sec" v-if="data.classMode !== 'online'">
-        <div class="sec-title">上课地址</div>
-        <div class="sec-body">{{ data.address || '—' }}</div>
+        <div class="sec-title">工作地址</div>
+        <div class="sec-body">{{ [data.city, data.address].filter(Boolean).join(' · ') || '—' }}</div>
       </div>
 
       <div class="sec">
-        <div class="sec-title">期望时间</div>
+        <div class="sec-title">授课时间</div>
         <div class="sec-body">{{ data.schedule ? formatScheduleText(data.schedule) : '—' }}</div>
       </div>
     </div>
@@ -163,6 +167,41 @@ onMounted(() => {
   gap: 6px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+.publisher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.avatar.fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  background: rgba(0, 190, 189, 0.08);
+}
+
+.pub-info {
+  display: grid;
+  gap: 4px;
+}
+
+.pub-name {
+  font-weight: 900;
+}
+
+.pub-tag {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .sec-title {

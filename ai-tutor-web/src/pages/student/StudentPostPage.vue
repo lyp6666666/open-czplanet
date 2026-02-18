@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
@@ -20,15 +20,16 @@ const description = ref('')
 const classMode = ref<'online' | 'offline' | 'both'>('online')
 const city = ref('北京')
 const address = ref('')
+const frequencyPerWeek = ref<number>(2)
+const publisherIdentity = ref<'PARENT' | 'STUDENT_SELF'>('PARENT')
 const childAge = ref<number | null>(null)
 const budgetMin = ref<number | null>(null)
 const budgetMax = ref<number | null>(null)
-const stageCode = ref('')
-const educationRequirement = ref('')
+const stageCode = ref<'PRESCHOOL' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'OTHER'>('PRIMARY')
+const educationRequirement = ref<string>('UNLIMITED')
 const schedule = ref('')
 
 const stageOptions = [
-  { value: '', label: '不限' },
   { value: 'PRESCHOOL', label: '幼教育' },
   { value: 'PRIMARY', label: '小学' },
   { value: 'JUNIOR', label: '初中' },
@@ -37,7 +38,7 @@ const stageOptions = [
 ]
 
 const eduOptions = [
-  { value: '', label: '不限' },
+  { value: 'UNLIMITED', label: '不限' },
   { value: 'TOP2', label: 'top2' },
   { value: 'C985', label: '985' },
   { value: 'C211', label: '211' },
@@ -70,6 +71,7 @@ async function loadSubjects() {
 async function onSubmit() {
   doneHint.value = null
   error.value = null
+  // 前端校验与后端保持一致，避免无效数据写入导致教师端筛选/展示异常
   if (!subjectId.value) {
     error.value = '请选择科目'
     return
@@ -78,20 +80,62 @@ async function onSubmit() {
     error.value = '请输入标题'
     return
   }
+  if (!description.value.trim()) {
+    error.value = '请输入需求描述'
+    return
+  }
+  if (!classMode.value) {
+    error.value = '请选择授课方式'
+    return
+  }
+  if (!stageCode.value) {
+    error.value = '请选择授课学段'
+    return
+  }
+  if (!educationRequirement.value) {
+    error.value = '请选择学历要求'
+    return
+  }
+  if (!frequencyPerWeek.value || frequencyPerWeek.value < 1 || frequencyPerWeek.value > 7) {
+    error.value = '请选择授课频次（每周 1~7 次）'
+    return
+  }
+  if (!publisherIdentity.value) {
+    error.value = '请选择发布者身份'
+    return
+  }
+  if ((classMode.value === 'offline' || classMode.value === 'both') && (!city.value.trim() || !address.value.trim())) {
+    error.value = '线下授课必须填写城市与授课地址'
+    return
+  }
+  if (budgetMin.value != null && budgetMin.value <= 0) {
+    error.value = '预算下限需大于 0'
+    return
+  }
+  if (budgetMax.value != null && budgetMax.value <= 0) {
+    error.value = '预算上限需大于 0'
+    return
+  }
+  if (budgetMin.value != null && budgetMax.value != null && budgetMin.value > budgetMax.value) {
+    error.value = '预算下限不能大于预算上限'
+    return
+  }
   loading.value = true
   try {
     const id = await jobsApi.createDemand({
       subjectId: subjectId.value,
       title: title.value.trim(),
-      description: description.value.trim() || undefined,
+      description: description.value.trim(),
       classMode: classMode.value,
       city: classMode.value === 'online' ? undefined : city.value.trim() || undefined,
       address: classMode.value === 'online' ? undefined : address.value.trim() || undefined,
+      frequencyPerWeek: frequencyPerWeek.value,
       childAge: childAge.value ?? undefined,
       budgetMin: budgetMin.value ?? undefined,
       budgetMax: budgetMax.value ?? undefined,
-      stageCode: stageCode.value || undefined,
-      educationRequirement: educationRequirement.value || undefined,
+      stageCode: stageCode.value,
+      educationRequirement: educationRequirement.value,
+      publisherIdentity: publisherIdentity.value,
       schedule: schedule.value.trim() || undefined,
     })
     doneHint.value = '发布成功'
@@ -108,6 +152,16 @@ onMounted(() => {
     error.value = e instanceof Error ? e.message : '加载科目失败'
   })
 })
+
+watch(
+  () => classMode.value,
+  (v) => {
+    if (v === 'online') {
+      city.value = '北京'
+      address.value = ''
+    }
+  },
+)
 </script>
 
 <template>
@@ -166,6 +220,22 @@ onMounted(() => {
           <div class="label">学历要求</div>
           <select v-model="educationRequirement" class="input">
             <option v-for="o in eduOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="field">
+          <div class="label">授课频次</div>
+          <select v-model.number="frequencyPerWeek" class="input">
+            <option v-for="n in 7" :key="n" :value="n">每周 {{ n }} 次</option>
+          </select>
+        </label>
+        <label class="field">
+          <div class="label">发布者身份</div>
+          <select v-model="publisherIdentity" class="input">
+            <option value="PARENT">学生家长</option>
+            <option value="STUDENT_SELF">学生本人</option>
           </select>
         </label>
       </div>

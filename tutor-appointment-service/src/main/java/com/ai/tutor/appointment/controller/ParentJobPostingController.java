@@ -5,6 +5,7 @@ import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
+import com.ai.tutor.appointment.model.vo.DemandViewVO;
 import com.ai.tutor.appointment.service.StudentJobPostingService;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
@@ -45,6 +46,12 @@ public class ParentJobPostingController {
         return ResultUtils.success(studentJobPostingService.getById(id));
     }
 
+    @GetMapping("/{id}/view")
+    @Operation(summary = "教师端需求贴详情视图（含发布者信息）")
+    public BaseResponse<DemandViewVO> view(@PathVariable("id") Long id) {
+        return ResultUtils.success(studentJobPostingService.getViewById(id));
+    }
+
     @GetMapping("/mine")
     @Operation(summary = "我的需求贴列表（游标分页）")
     public BaseResponse<CursorPageResponse<StudentJobPosting>> mine(@Valid CursorPageRequest request) {
@@ -57,12 +64,13 @@ public class ParentJobPostingController {
                                                                     @RequestParam(value = "city", required = false) String city,
                                                                     @RequestParam(value = "classMode", required = false) String classMode,
                                                                     @RequestParam(value = "stageCode", required = false) String stageCode,
+                                                                    @RequestParam(value = "frequencyPerWeek", required = false) Integer frequencyPerWeek,
                                                                     @RequestParam(value = "educationRequirement", required = false) String educationRequirement,
                                                                     @RequestParam(value = "budgetMin", required = false) BigDecimal budgetMin,
                                                                     @RequestParam(value = "budgetMax", required = false) BigDecimal budgetMax,
                                                                     @RequestParam(value = "q", required = false) String keyword,
                                                                     @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, educationRequirement, budgetMin, budgetMax, keyword, sort, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, frequencyPerWeek, educationRequirement, budgetMin, budgetMax, keyword, sort, request));
     }
 }
