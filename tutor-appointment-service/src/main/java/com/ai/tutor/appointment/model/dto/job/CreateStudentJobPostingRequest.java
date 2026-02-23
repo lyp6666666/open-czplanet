@@ -21,9 +21,23 @@ public class CreateStudentJobPostingRequest {
     @Schema(description = "标题", example = "小学三年级数学家教")
     private String title;
 
-    @NotBlank
     @Schema(description = "描述", example = "希望讲解应用题与计算，孩子基础一般")
     private String description;
+
+    @Schema(description = "学员性别：male/female", example = "female")
+    private String studentGender;
+
+    @Schema(description = "学生年级编码：PRESCHOOL/GRADE1~6/JUNIOR1~3/SENIOR1~3/SELF_EXAM/COLLEGE1~4/ADULT", example = "JUNIOR1")
+    private String gradeCode;
+
+    @Schema(description = "可上课时间（自由文本）", example = "例如:每周六下午2点到4点，2周一次")
+    private String availableTime;
+
+    @Schema(description = "教师性别偏好：male/female/both", example = "both")
+    private String teacherGenderPreference;
+
+    @Schema(description = "对教员的详细要求（自由文本）", example = "对教员的学历，教学经验，性格等要求")
+    private String teacherRequirementDetail;
 
     @Schema(description = "孩子年龄", example = "9")
     private Integer childAge;

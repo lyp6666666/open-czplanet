@@ -39,3 +39,12 @@ build/
 
 ### Trae IDE ###
 .trae/
+
+.openspace/
+
+.dbg/
+debug.md
+
+Dockerfile/mysql-data/
+Dockerfile/redis-data/
+Dockerfile/minio-data/

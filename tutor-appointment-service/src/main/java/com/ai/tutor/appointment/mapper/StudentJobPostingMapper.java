@@ -20,6 +20,8 @@ public interface StudentJobPostingMapper {
                                           @Param("cursor") Long cursor,
                                           @Param("pageSize") Integer pageSize);
 
+    StudentJobPosting selectLatestPublishedByParentId(@Param("parentId") Long parentId);
+
     List<StudentJobPosting> listPublished(@Param("subjectId") Long subjectId,
                                           @Param("city") String city,
                                           @Param("classMode") String classMode,
@@ -40,6 +42,7 @@ public interface StudentJobPostingMapper {
                                                  @Param("stageCode") String stageCode,
                                                  @Param("frequencyPerWeek") Integer frequencyPerWeek,
                                                  @Param("educationRequirement") String educationRequirement,
+                                                 @Param("teacherGenderPreference") String teacherGenderPreference,
                                                  @Param("budgetMin") BigDecimal budgetMin,
                                                  @Param("budgetMax") BigDecimal budgetMax,
                                                  @Param("keyword") String keyword,

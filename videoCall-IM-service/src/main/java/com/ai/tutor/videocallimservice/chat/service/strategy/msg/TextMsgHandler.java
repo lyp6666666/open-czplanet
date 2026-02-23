@@ -7,6 +7,7 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.MessageTypeEnum;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.TextMsgReq;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.service.util.ImMessageMasking;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
@@ -67,15 +68,18 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
         Long toUid = fromUid.equals(teacherUid) ? studentUid : teacherUid;
         message.setToUid(toUid);
         message.setContent(body.getContent());
+        message.setIsMasked(ImMessageMasking.mask(body.getContent()).masked ? 1 : 0);
         message.setReplyMsgId(body.getReplyMsgId());
     }
 
     @Override
     public Object showMsg(Message msg) {
-        // 统一返回结构化消息体，前端可以按 type 扩展渲染；同时兼容旧逻辑（content 字段仍存在）。
+        ImMessageMasking.MaskResult r = ImMessageMasking.mask(msg == null ? "" : msg.getContent());
+        boolean masked = r.masked || (msg != null && msg.getIsMasked() != null && msg.getIsMasked() == 1);
         Map<String, Object> body = new HashMap<>();
         body.put("type", "text");
-        body.put("content", msg == null ? "" : msg.getContent());
+        body.put("content", r.maskedText);
+        body.put("masked", masked);
         return body;
     }
 
@@ -86,7 +90,7 @@ public class TextMsgHandler extends AbstractMsgHandler<TextMsgReq> {
 
     @Override
     public String showContactMsg(Message msg) {
-        return msg.getContent();
+        return ImMessageMasking.mask(msg == null ? "" : msg.getContent()).maskedText;
     }
 
     private Long resolveUserId(int userType, Long refId) {

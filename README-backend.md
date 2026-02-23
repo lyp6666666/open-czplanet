@@ -105,6 +105,28 @@ CREATE TABLE IF NOT EXISTS tutor_favorite_demand (
   KEY idx_tutor_id (tutor_id),
   KEY idx_demand_id (demand_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE message
+  ADD COLUMN is_masked tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否命中屏蔽规则 0否 1是';
+
+CREATE TABLE IF NOT EXISTS collaboration_proposal (
+  id bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '合作提案id',
+  room_id bigint(20) NOT NULL COMMENT '会话id',
+  from_uid bigint(20) NOT NULL COMMENT '发起人 user_id',
+  to_uid bigint(20) NOT NULL COMMENT '接收人 user_id',
+  price_per_hour varchar(64) NOT NULL COMMENT '收费标准（每小时）',
+  class_time varchar(255) NOT NULL COMMENT '上课时间（自由文本）',
+  frequency_per_week int NOT NULL COMMENT '上课频次（每周次数）',
+  status varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/ACCEPTED/REJECTED',
+  actor_uid bigint(20) DEFAULT NULL COMMENT '操作人 user_id（同意/拒绝）',
+  action_time datetime(3) DEFAULT NULL COMMENT '操作时间',
+  create_time datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  update_time datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  KEY idx_room_id (room_id),
+  KEY idx_to_uid_status (to_uid, status),
+  KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天合作提案表';
 ```
 
 ## 3. 配置说明（按需修改）

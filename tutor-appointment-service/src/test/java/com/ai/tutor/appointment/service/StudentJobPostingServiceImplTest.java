@@ -42,6 +42,7 @@ class StudentJobPostingServiceImplTest {
         req.setSubjectId(201L);
         req.setTitle("初中数学一对一");
         req.setDescription("描述");
+        req.setGradeCode("JUNIOR1");
         req.setClassMode("offline");
         req.setCity("北京");
         req.setAddress(null);
@@ -61,6 +62,7 @@ class StudentJobPostingServiceImplTest {
         req.setSubjectId(201L);
         req.setTitle("初中数学一对一");
         req.setDescription("描述");
+        req.setGradeCode("JUNIOR1");
         req.setClassMode("online");
         req.setFrequencyPerWeek(2);
         req.setStageCode("JUNIOR");
@@ -93,7 +95,7 @@ class StudentJobPostingServiceImplTest {
         page.setPageSize(10);
 
         when(studentJobPostingMapper.listPublishedFiltered(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(java.util.List.of());
 
         service.listPublished(
@@ -103,6 +105,7 @@ class StudentJobPostingServiceImplTest {
                 "JUNIOR",
                 2,
                 "UNLIMITED",
+                null,
                 null,
                 null,
                 null,
@@ -120,11 +123,13 @@ class StudentJobPostingServiceImplTest {
                 isNull(),
                 isNull(),
                 isNull(),
+                isNull(),
                 eq("latest"),
                 isNull(),
                 eq(10)
         );
     }
+
 
     @Test
     void getViewByIdShouldIncludePublisherSummary() {
@@ -157,4 +162,3 @@ class StudentJobPostingServiceImplTest {
         assertThat(vo.getPublisher().getIdentityLabel()).isEqualTo("学生本人");
     }
 }
-

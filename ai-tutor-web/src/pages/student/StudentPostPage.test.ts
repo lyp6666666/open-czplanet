@@ -46,16 +46,15 @@ describe('StudentPostPage', () => {
     })
     await flushPromises()
 
-    await wrapper.find('input[placeholder="例如：小学三年级数学家教"]').setValue('初中数学一对一')
-    await wrapper.find('textarea').setValue('希望老师能带着建立解题框架。')
+    await wrapper.find('select').setValue('male')
+    await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
 
-    const selects = wrapper.findAll('select')
-    await selects[1]!.setValue('offline')
+    await wrapper.findAll('select')[2]!.setValue('offline')
 
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('线下授课必须填写城市与授课地址')
+    expect(wrapper.text()).toContain('上门辅导必须填写城市与上课地址')
     expect(mocks.createDemand).not.toHaveBeenCalled()
   })
 
@@ -72,7 +71,8 @@ describe('StudentPostPage', () => {
     })
     await flushPromises()
 
-    await wrapper.find('input[placeholder="例如：小学三年级数学家教"]').setValue('初中数学一对一')
+    await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
+    await wrapper.findAll('select')[2]!.setValue('online')
     await wrapper.find('textarea').setValue('希望老师重点讲解函数与几何。')
 
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
@@ -81,14 +81,13 @@ describe('StudentPostPage', () => {
     expect(mocks.createDemand).toHaveBeenCalledTimes(1)
     const payload = mocks.createDemand.mock.calls[0]![0] as Record<string, unknown>
     expect(payload).toMatchObject({
-      subjectId: 200,
-      title: '初中数学一对一',
+      subjectId: 201,
+      title: '初中 / 初中数学',
       description: '希望老师重点讲解函数与几何。',
       classMode: 'online',
-      frequencyPerWeek: 2,
-      stageCode: 'PRIMARY',
-      educationRequirement: 'UNLIMITED',
-      publisherIdentity: 'PARENT',
+      gradeCode: 'JUNIOR1',
+      stageCode: 'JUNIOR',
+      teacherGenderPreference: 'both',
     })
   })
 })

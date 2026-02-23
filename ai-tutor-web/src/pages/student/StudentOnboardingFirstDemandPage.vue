@@ -1,0 +1,581 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+import { assetsApi } from '@/api/assets'
+import { homeGuestApi } from '@/api/homeGuest'
+import { jobsApi } from '@/api/jobs'
+import type { SubjectTreeNode } from '@/api/types'
+import { userApi } from '@/api/user'
+import { useAuthStore } from '@/stores/auth'
+
+const STORAGE_STUDENT_FIRST_DEMAND_COMPLETED_KEY_PREFIX = 'ai_tutor_student_first_demand_completed:'
+
+function buildStudentFirstDemandCompletedKey(uid: number) {
+  return `${STORAGE_STUDENT_FIRST_DEMAND_COMPLETED_KEY_PREFIX}${uid}`
+}
+
+const router = useRouter()
+const auth = useAuthStore()
+
+const step = ref<1 | 2 | 3>(1)
+const loading = ref(false)
+const error = ref<string | null>(null)
+const uid = ref<number | null>(null)
+
+const avatar = ref('')
+const avatarUploading = ref(false)
+const name = ref('')
+
+const subjects = ref<SubjectTreeNode[]>([])
+const subjectId = ref<number | null>(null)
+const subjectText = ref('')
+
+const gradeCode = ref('')
+const studentGender = ref<'' | 'male' | 'female'>('')
+const classMode = ref<'online' | 'offline' | 'both'>('both')
+const teacherGenderPreference = ref<'male' | 'female' | 'both'>('both')
+const availableTime = ref('')
+const description = ref('')
+const city = ref('北京')
+const address = ref('')
+
+const teacherRequirementDetail = ref('')
+
+const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'OTHER' }> = [
+  { value: 'PRESCHOOL', label: '幼儿', stageCode: 'PRESCHOOL' },
+  { value: 'GRADE1', label: '一年级', stageCode: 'PRIMARY' },
+  { value: 'GRADE2', label: '二年级', stageCode: 'PRIMARY' },
+  { value: 'GRADE3', label: '三年级', stageCode: 'PRIMARY' },
+  { value: 'GRADE4', label: '四年级', stageCode: 'PRIMARY' },
+  { value: 'GRADE5', label: '五年级', stageCode: 'PRIMARY' },
+  { value: 'GRADE6', label: '六年级', stageCode: 'PRIMARY' },
+  { value: 'JUNIOR1', label: '初一', stageCode: 'JUNIOR' },
+  { value: 'JUNIOR2', label: '初二', stageCode: 'JUNIOR' },
+  { value: 'JUNIOR3', label: '初三', stageCode: 'JUNIOR' },
+  { value: 'SENIOR1', label: '高一', stageCode: 'SENIOR' },
+  { value: 'SENIOR2', label: '高二', stageCode: 'SENIOR' },
+  { value: 'SENIOR3', label: '高三', stageCode: 'SENIOR' },
+  { value: 'SELF_EXAM', label: '自考生', stageCode: 'OTHER' },
+  { value: 'COLLEGE1', label: '大一', stageCode: 'OTHER' },
+  { value: 'COLLEGE2', label: '大二', stageCode: 'OTHER' },
+  { value: 'COLLEGE3', label: '大三', stageCode: 'OTHER' },
+  { value: 'COLLEGE4', label: '大四', stageCode: 'OTHER' },
+  { value: 'ADULT', label: '成人', stageCode: 'OTHER' },
+]
+
+const stageCode = computed(() => gradeOptions.find((o) => o.value === gradeCode.value)?.stageCode ?? null)
+
+const subjectOptions = computed(() => {
+  const out: Array<{ id: number; label: string }> = []
+  function walk(node: SubjectTreeNode, prefix: string) {
+    const label = prefix ? `${prefix} / ${node.name}` : node.name
+    out.push({ id: node.id, label })
+    node.children?.forEach((c) => walk(c, label))
+  }
+  subjects.value.forEach((n) => walk(n, ''))
+  return out
+})
+
+function resolveSubjectIdByInput(raw: string): number | null {
+  const input = raw.trim()
+  if (!input) return null
+  const exact = subjectOptions.value.find((o) => o.label === input)
+  if (exact) return exact.id
+  const leafMatches = subjectOptions.value.filter((o) => o.label.split(' / ').pop() === input)
+  if (leafMatches.length === 1) return leafMatches[0]!.id
+  return null
+}
+
+const canNextStep1 = computed(() => !!(name.value.trim() && avatar.value.trim()))
+
+async function onSelectAvatarFile(e: Event) {
+  error.value = null
+  const input = e.target as HTMLInputElement | null
+  const f = input?.files?.[0]
+  if (!f) return
+  if (!f.type || !f.type.startsWith('image/')) {
+    error.value = '请选择图片文件'
+    return
+  }
+  if (f.size > 2 * 1024 * 1024) {
+    error.value = '头像文件不能超过 2MB'
+    return
+  }
+  avatarUploading.value = true
+  try {
+    const r = await assetsApi.uploadImage(f, 'avatar')
+    avatar.value = r.url
+  } catch (e2) {
+    error.value = e2 instanceof Error ? e2.message : '头像上传失败'
+  } finally {
+    avatarUploading.value = false
+    if (input) input.value = ''
+  }
+}
+
+async function loadSubjects() {
+  subjects.value = await homeGuestApi.getSubjectTree()
+  if (subjectId.value == null && subjectOptions.value.length > 0) {
+    const first = subjectOptions.value.find((o) => o.label.includes(' / ')) ?? subjectOptions.value[0]
+    if (first) {
+      subjectId.value = first.id
+      subjectText.value = first.label
+    }
+  }
+}
+
+async function nextStep1() {
+  if (!canNextStep1.value) return
+  loading.value = true
+  error.value = null
+  try {
+    await userApi.updateUserInfo({ baseUserInfo: { name: name.value.trim(), avatar: avatar.value.trim() } })
+    await auth.refreshMe()
+    step.value = 2
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '保存失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+function validateStudentDemandBasics(): string | null {
+  const resolvedSubjectId = resolveSubjectIdByInput(subjectText.value) ?? subjectId.value
+  if (!resolvedSubjectId) return '请填写教学科目（从下拉建议中选择）'
+  if (!gradeCode.value) return '请选择学生年级'
+  if ((classMode.value === 'offline' || classMode.value === 'both') && (!city.value.trim() || !address.value.trim())) return '上门辅导必须填写城市与上课地址'
+  return null
+}
+
+function nextStep2() {
+  error.value = null
+  const err = validateStudentDemandBasics()
+  if (err) {
+    error.value = err
+    return
+  }
+  step.value = 3
+}
+
+async function skipDemand() {
+  if (!uid.value) return
+  localStorage.setItem(buildStudentFirstDemandCompletedKey(uid.value), '1')
+  await router.replace('/')
+}
+
+async function submitDemand() {
+  error.value = null
+  const err = validateStudentDemandBasics()
+  if (err) {
+    error.value = err
+    return
+  }
+  const resolvedSubjectId = resolveSubjectIdByInput(subjectText.value) ?? subjectId.value
+  if (!resolvedSubjectId) return
+
+  loading.value = true
+  try {
+    const id = await jobsApi.createDemand({
+      subjectId: resolvedSubjectId,
+      title: subjectText.value.trim(),
+      description: description.value.trim(),
+      studentGender: studentGender.value || undefined,
+      gradeCode: gradeCode.value,
+      teacherGenderPreference: teacherGenderPreference.value,
+      availableTime: availableTime.value.trim() || undefined,
+      teacherRequirementDetail: teacherRequirementDetail.value.trim() || undefined,
+      classMode: classMode.value,
+      city: classMode.value === 'online' ? undefined : city.value.trim() || undefined,
+      address: classMode.value === 'online' ? undefined : address.value.trim() || undefined,
+      frequencyPerWeek: 2,
+      stageCode: stageCode.value as string,
+      educationRequirement: 'UNLIMITED',
+      publisherIdentity: 'PARENT',
+    })
+    if (uid.value) {
+      localStorage.setItem(buildStudentFirstDemandCompletedKey(uid.value), '1')
+    }
+    await router.replace({ name: 'studentMineJobs', query: { highlight: String(id) } })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '发布失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
+  if (!auth.isLoggedIn) {
+    await router.replace('/auth/student')
+    return
+  }
+  const me = await auth.refreshMe()
+  if (me?.userType !== 2) {
+    await router.replace('/tutor/jobs')
+    return
+  }
+  uid.value = me.id
+  if (localStorage.getItem(buildStudentFirstDemandCompletedKey(me.id)) === '1') {
+    await router.replace('/student/post')
+    return
+  }
+  if (me?.avatar) avatar.value = me.avatar
+  if (me?.name) name.value = me.name
+  await loadSubjects()
+})
+
+watch(
+  () => classMode.value,
+  (v) => {
+    if (v === 'online') {
+      city.value = '北京'
+      address.value = ''
+    }
+  },
+)
+</script>
+
+<template>
+  <div class="page">
+    <div class="shell">
+      <div class="card board">
+        <aside class="left">
+          <div class="brand">
+            <div class="logo">Hi，欢迎来找家教</div>
+            <div class="slogan">为您更快匹配老师，仅需3步</div>
+          </div>
+          <div class="illustration" />
+        </aside>
+
+        <section class="right">
+          <div class="right-head">
+            <div class="r-title">
+              <span v-if="step === 1">创建学生名片</span>
+              <span v-else-if="step === 2">发布您的第一个需求</span>
+              <span v-else>填写您对教师的要求</span>
+            </div>
+            <div class="r-desc">第 {{ step }}/3 步</div>
+          </div>
+
+          <div v-if="error" class="hint error">{{ error }}</div>
+
+          <div v-if="step === 1" class="form">
+            <div class="field">
+              <div class="label">头像</div>
+              <div class="avatar-row">
+                <img v-if="avatar" class="avatar-img" :src="avatar" alt="avatar" />
+                <div v-else class="avatar-img fallback">S</div>
+                <input class="avatar-file" type="file" accept="image/*" :disabled="avatarUploading || loading" @change="onSelectAvatarFile" />
+              </div>
+            </div>
+
+            <label class="field">
+              <div class="label">姓名</div>
+              <input v-model="name" class="input" placeholder="请输入姓名" :disabled="loading" />
+            </label>
+
+            <div class="actions">
+              <button class="btn btn-primary" type="button" :disabled="loading || avatarUploading || !canNextStep1" @click="nextStep1">
+                下一步
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="step === 2" class="form">
+            <div class="section">
+              <div class="section-title">请填写学生的基本信息</div>
+
+              <div class="row">
+                <label class="field">
+                  <div class="label">学员性别</div>
+                  <select v-model="studentGender" class="input" :disabled="loading">
+                    <option value="">请选择</option>
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <div class="label">学生年级</div>
+                  <select v-model="gradeCode" class="input" :disabled="loading">
+                    <option value="">请选择</option>
+                    <option v-for="o in gradeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="field">
+                <div class="label">教学科目</div>
+                <input v-model="subjectText" class="input" list="subjectList" placeholder="例如：初中数学" :disabled="loading" />
+                <datalist id="subjectList">
+                  <option v-for="o in subjectOptions" :key="o.id" :value="o.label" />
+                </datalist>
+              </label>
+
+              <label class="field">
+                <div class="label">授课方式</div>
+                <select v-model="classMode" class="input" :disabled="loading">
+                  <option value="offline">上门辅导</option>
+                  <option value="online">网络辅导</option>
+                  <option value="both">均可</option>
+                </select>
+              </label>
+
+              <div class="row" v-if="classMode !== 'online'">
+                <label class="field">
+                  <div class="label">城市</div>
+                  <input v-model="city" class="input" placeholder="例如：北京" :disabled="loading" />
+                </label>
+                <label class="field">
+                  <div class="label">上课地址</div>
+                  <input v-model="address" class="input" placeholder="例如：朝阳·望京" :disabled="loading" />
+                </label>
+              </div>
+
+              <label class="field">
+                <div class="label">可上课时间</div>
+                <input v-model="availableTime" class="input" placeholder="例如:每周六下午2点到4点，2周一次" :disabled="loading" />
+              </label>
+
+              <label class="field">
+                <div class="label">学生情况描述</div>
+                <textarea
+                  v-model="description"
+                  class="textarea"
+                  rows="4"
+                  placeholder="请详细说明学员基础、学习状况、性格等便于有针对性地安排合适的教员"
+                  :disabled="loading"
+                />
+              </label>
+            </div>
+
+            <div class="actions split">
+              <button class="btn" type="button" :disabled="loading" @click="skipDemand">跳过</button>
+              <div class="right-actions">
+                <button class="btn" type="button" :disabled="loading" @click="step = 1">上一步</button>
+                <button class="btn btn-primary" type="button" :disabled="loading" @click="nextStep2">下一步</button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="form">
+            <div class="section">
+              <div class="section-title">请填写您对教师的要求</div>
+              <label class="field">
+                <div class="label">教师性别</div>
+                <select v-model="teacherGenderPreference" class="input" :disabled="loading">
+                  <option value="male">男</option>
+                  <option value="female">女</option>
+                  <option value="both">均可</option>
+                </select>
+              </label>
+              <label class="field">
+                <div class="label">对教员的详细要求</div>
+                <textarea
+                  v-model="teacherRequirementDetail"
+                  class="textarea"
+                  rows="5"
+                  placeholder="对教员的学历，教学经验，性格等要求"
+                  :disabled="loading"
+                />
+              </label>
+            </div>
+
+            <div class="actions split">
+              <button class="btn" type="button" :disabled="loading" @click="step = 2">上一步</button>
+              <button class="btn btn-primary" type="button" :disabled="loading" @click="submitDemand">发布需求</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #12b4ab;
+  padding: 24px;
+}
+
+.shell {
+  width: min(980px, 100%);
+}
+
+.card.board {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.16);
+}
+
+.left {
+  background: #e7fbfa;
+  padding: 34px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0b2f2d;
+}
+
+.slogan {
+  margin-top: 10px;
+  font-size: 14px;
+  color: rgba(11, 47, 45, 0.7);
+}
+
+.illustration {
+  flex: 1;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 25% 35%, rgba(18, 180, 171, 0.22), transparent 55%),
+    radial-gradient(circle at 70% 55%, rgba(18, 180, 171, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(18, 180, 171, 0.12), rgba(18, 180, 171, 0.04));
+}
+
+.right {
+  padding: 34px 34px 26px;
+}
+
+.right-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.r-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0b2f2d;
+}
+
+.r-desc {
+  font-size: 12px;
+  color: rgba(11, 47, 45, 0.55);
+}
+
+.hint {
+  margin: 10px 0 16px;
+  font-size: 13px;
+}
+
+.hint.error {
+  color: #d03050;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.label {
+  font-size: 12px;
+  color: rgba(11, 47, 45, 0.7);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.textarea {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+}
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.avatar-img.fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: rgba(11, 47, 45, 0.7);
+  background: rgba(18, 180, 171, 0.12);
+}
+
+.avatar-file {
+  flex: 1;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0b2f2d;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.actions.split {
+  justify-content: space-between;
+}
+
+.right-actions {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 860px) {
+  .card.board {
+    grid-template-columns: 1fr;
+  }
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

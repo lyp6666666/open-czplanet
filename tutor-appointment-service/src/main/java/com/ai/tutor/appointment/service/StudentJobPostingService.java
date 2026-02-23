@@ -30,6 +30,7 @@ public interface StudentJobPostingService {
                                                        String stageCode,
                                                        Integer frequencyPerWeek,
                                                        String educationRequirement,
+                                                       String teacherGenderPreference,
                                                        BigDecimal budgetMin,
                                                        BigDecimal budgetMax,
                                                        String keyword,

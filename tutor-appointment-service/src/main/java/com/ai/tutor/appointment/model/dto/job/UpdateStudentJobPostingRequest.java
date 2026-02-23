@@ -20,6 +20,21 @@ public class UpdateStudentJobPostingRequest {
     @Schema(description = "描述")
     private String description;
 
+    @Schema(description = "学员性别：male/female", example = "female")
+    private String studentGender;
+
+    @Schema(description = "学生年级编码：PRESCHOOL/GRADE1~6/JUNIOR1~3/SENIOR1~3/SELF_EXAM/COLLEGE1~4/ADULT", example = "JUNIOR1")
+    private String gradeCode;
+
+    @Schema(description = "可上课时间（自由文本）")
+    private String availableTime;
+
+    @Schema(description = "教师性别偏好：male/female/both", example = "both")
+    private String teacherGenderPreference;
+
+    @Schema(description = "对教员的详细要求（自由文本）")
+    private String teacherRequirementDetail;
+
     @Schema(description = "孩子年龄", example = "9")
     private Integer childAge;
 

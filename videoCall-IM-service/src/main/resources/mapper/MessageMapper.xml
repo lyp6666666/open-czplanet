@@ -10,6 +10,7 @@
         <result column="from_uid" property="fromUid"/>
         <result column="to_uid" property="toUid"/>
         <result column="content" property="content"/>
+        <result column="is_masked" property="isMasked"/>
         <result column="reply_msg_id" property="replyMsgId"/>
         <result column="status" property="status"/>
         <result column="gap_count" property="gapCount"/>
@@ -29,6 +30,7 @@
         from_uid,
         to_uid,
         content,
+        is_masked,
         reply_msg_id,
         status,
         gap_count,
@@ -75,6 +77,7 @@
             from_uid,
             to_uid,
             content,
+            is_masked,
             reply_msg_id,
             status,
             gap_count,
@@ -89,6 +92,7 @@
                 #{fromUid},
                 #{toUid},
                 #{content},
+                #{isMasked},
                 #{replyMsgId},
                 #{status},
                 #{gapCount},

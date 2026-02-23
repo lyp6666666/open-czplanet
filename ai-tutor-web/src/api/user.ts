@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { LoginUserVO, UserMeVO, UserRoleEnum, UserSimpleVO } from './types'
+import type { LoginUserVO, UserCardVO, UserMeVO, UserRoleEnum, UserSimpleVO } from './types'
 
 export interface SendCodeRequest {
   phone: string
@@ -50,6 +50,10 @@ export const userApi = {
 
   batch(ids: number[]) {
     return http.get<unknown, UserSimpleVO[]>('/user/batch', { params: { ids: ids.join(',') } })
+  },
+
+  card(uid: number) {
+    return http.get<unknown, UserCardVO>('/user/card', { params: { uid } })
   },
 
   updateUserInfo(request: UserUpdateRequest) {

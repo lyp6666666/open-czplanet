@@ -4,7 +4,12 @@ import type { CursorPageResponse, DemandViewVO, StudentJobPosting } from './type
 export interface CreateStudentJobPostingRequest {
   subjectId: number
   title: string
-  description: string
+  description?: string
+  studentGender?: string
+  gradeCode?: string
+  teacherGenderPreference?: string
+  availableTime?: string
+  teacherRequirementDetail?: string
   childAge?: number
   classMode: string
   city?: string
@@ -22,6 +27,11 @@ export interface UpdateStudentJobPostingRequest {
   subjectId?: number
   title?: string
   description?: string
+  studentGender?: string
+  gradeCode?: string
+  teacherGenderPreference?: string
+  availableTime?: string
+  teacherRequirementDetail?: string
   childAge?: number
   classMode?: string
   city?: string
@@ -64,6 +74,7 @@ export const jobsApi = {
     stageCode?: string
     frequencyPerWeek?: number
     educationRequirement?: string
+    teacherGenderPreference?: string
     budgetMin?: number
     budgetMax?: number
     pageSize?: number

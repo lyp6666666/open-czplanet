@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper">
+
+    <resultMap id="baseMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal">
+        <id column="id" property="id"/>
+        <result column="room_id" property="roomId"/>
+        <result column="from_uid" property="fromUid"/>
+        <result column="to_uid" property="toUid"/>
+        <result column="price_per_hour" property="pricePerHour"/>
+        <result column="class_time" property="classTime"/>
+        <result column="frequency_per_week" property="frequencyPerWeek"/>
+        <result column="status" property="status"/>
+        <result column="actor_uid" property="actorUid"/>
+        <result column="action_time" property="actionTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO collaboration_proposal
+        (
+            room_id,
+            from_uid,
+            to_uid,
+            price_per_hour,
+            class_time,
+            frequency_per_week,
+            status,
+            actor_uid,
+            action_time,
+            create_time,
+            update_time
+        )
+        VALUES
+        (
+            #{roomId},
+            #{fromUid},
+            #{toUid},
+            #{pricePerHour},
+            #{classTime},
+            #{frequencyPerWeek},
+            #{status},
+            #{actorUid},
+            #{actionTime},
+            #{createTime},
+            #{updateTime}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="baseMap">
+        SELECT
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, status, actor_uid, action_time, create_time, update_time
+        FROM collaboration_proposal
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestByRoomId" resultMap="baseMap">
+        SELECT
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, status, actor_uid, action_time, create_time, update_time
+        FROM collaboration_proposal
+        WHERE room_id = #{roomId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updateStatus">
+        UPDATE collaboration_proposal
+        SET
+            status = #{status},
+            actor_uid = #{actorUid},
+            action_time = #{actionTime},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = 'PENDING'
+    </update>
+</mapper>

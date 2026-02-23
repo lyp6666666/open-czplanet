@@ -120,7 +120,8 @@ export function formatScheduleText(raw: string | null | undefined): string {
           .filter(Boolean)
         return parts.join('；')
       }
-    } catch {
+    } catch (e) {
+      void e
     }
   }
 

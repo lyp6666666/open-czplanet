@@ -163,6 +163,7 @@ export interface LoginUserVO {
   sex: number | null
   userType: number
   token: string
+  isNew?: boolean
 }
 
 export interface TeacherProfile {
@@ -227,12 +228,24 @@ export interface UserSimpleVO {
   userType: number
 }
 
+export interface UserCardVO {
+  user: UserSimpleVO
+  teacherProfile: TeacherProfile | null
+  studentProfile: StudentProfile | null
+  jobPosting: StudentJobPosting | null
+}
+
 export interface StudentJobPosting {
   id: number
   parentId: number
   subjectId: number
   title: string
   description: string | null
+  studentGender: string | null
+  gradeCode: string | null
+  availableTime: string | null
+  teacherGenderPreference: string | null
+  teacherRequirementDetail: string | null
   childAge: number | null
   classMode: string | null
   city: string | null
@@ -281,6 +294,7 @@ export interface ChatMessageResp {
 }
 
 export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'UNKNOWN'
+export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNKNOWN'
 
 export interface ScheduleEventVO {
   id: number
@@ -312,6 +326,21 @@ export type ChatMessageBody =
       startAt: number
       endAt: number
       status: ScheduleEventStatus
+      actorUserId: number
+    }
+  | {
+      type: 'collaboration_proposal'
+      proposalId: number
+      pricePerHour: string
+      classTime: string
+      frequencyPerWeek: number
+      status: CollaborationProposalStatus
+      creatorUserId: number
+    }
+  | {
+      type: 'collaboration_status'
+      proposalId: number
+      status: CollaborationProposalStatus
       actorUserId: number
     }
   | { type: 'system'; content?: string; [k: string]: unknown }

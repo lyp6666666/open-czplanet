@@ -43,5 +43,13 @@ public class SystemMsgReq {
 
     @Schema(description = "操作者用户 id（LESSON_STATUS 用）", example = "10002")
     private Long actorUserId;
-}
 
+    @Schema(description = "收费标准（每小时）")
+    private String pricePerHour;
+
+    @Schema(description = "上课时间（自由文本）")
+    private String classTime;
+
+    @Schema(description = "上课频次（每周次数）")
+    private Integer frequencyPerWeek;
+}

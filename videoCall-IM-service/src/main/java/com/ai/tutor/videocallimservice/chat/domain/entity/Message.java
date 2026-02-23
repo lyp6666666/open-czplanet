@@ -32,6 +32,9 @@ public class Message {
     /** 消息内容 */
     private String content;
 
+    /** 是否命中屏蔽规则 0否 1是 */
+    private Integer isMasked;
+
     /** 被回复的消息id */
     private Long replyMsgId;
 

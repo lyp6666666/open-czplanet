@@ -111,6 +111,23 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("actorUserId", body.getActorUserId());
             return out;
         }
+        if ("COLLAB_PROPOSAL".equals(bizType)) {
+            out.put("type", "collaboration_proposal");
+            out.put("proposalId", body.getEventId());
+            out.put("pricePerHour", body.getPricePerHour());
+            out.put("classTime", body.getClassTime());
+            out.put("frequencyPerWeek", body.getFrequencyPerWeek());
+            out.put("status", body.getStatus());
+            out.put("creatorUserId", body.getCreatorUserId());
+            return out;
+        }
+        if ("COLLAB_PROPOSAL_STATUS".equals(bizType)) {
+            out.put("type", "collaboration_status");
+            out.put("proposalId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("actorUserId", body.getActorUserId());
+            return out;
+        }
 
         out.put("type", "system");
         out.put("bizType", body.getBizType());
@@ -142,6 +159,13 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             String s = body.getStatus() == null ? "" : body.getStatus();
             return "课程状态：" + s + "（" + title + "）";
         }
+        if ("COLLAB_PROPOSAL".equals(bizType)) {
+            return "合作提案";
+        }
+        if ("COLLAB_PROPOSAL_STATUS".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "合作提案：" + s;
+        }
         return "系统消息：" + title;
     }
 
@@ -170,4 +194,3 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
         return user.getId();
     }
 }
-

@@ -103,6 +103,7 @@ class UserServiceImplTest {
         assertThat(vo.getId()).isEqualTo(1001L);
         assertThat(vo.getToken()).isEqualTo("token");
         assertThat(vo.getUserType()).isEqualTo(UserRoleEnum.TEACHER.getValue());
+        assertThat(vo.getIsNew()).isFalse();
 
         verify(userMapper, never()).insert(any());
         verify(teacherProfileMapper, times(1)).insert(any(TeacherProfile.class));
@@ -127,6 +128,7 @@ class UserServiceImplTest {
         LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT);
         assertThat(vo.getId()).isEqualTo(2002L);
         assertThat(vo.getUserType()).isEqualTo(UserRoleEnum.STUDENT.getValue());
+        assertThat(vo.getIsNew()).isTrue();
 
         ArgumentCaptor<User> inserted = ArgumentCaptor.forClass(User.class);
         verify(userMapper, times(1)).insert(inserted.capture());
@@ -155,6 +157,7 @@ class UserServiceImplTest {
         LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT);
         assertThat(vo.getId()).isEqualTo(3003L);
         assertThat(vo.getToken()).isEqualTo("token3");
+        assertThat(vo.getIsNew()).isTrue();
 
         verify(studentProfileMapper, times(1)).insert(any(StudentProfile.class));
     }

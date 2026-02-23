@@ -1,6 +1,7 @@
 package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
@@ -44,6 +45,8 @@ class UserControllerMeTest {
     private TeacherProfileMapper teacherProfileMapper;
     @MockBean
     private StudentProfileMapper studentProfileMapper;
+    @MockBean
+    private StudentJobPostingMapper studentJobPostingMapper;
 
     @Test
     void meShouldReturnDefaultGreetingForTeacher() throws Exception {
@@ -76,4 +79,3 @@ class UserControllerMeTest {
     static class TestConfig {
     }
 }
-

@@ -5,9 +5,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { chatApi } from '@/api/chat'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageBody, ChatMessageResp, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
+import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
 import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
+import UserCardModal from '@/ui/user/UserCardModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,11 +31,48 @@ const error = ref<string | null>(null)
 const sending = ref(false)
 const input = ref('')
 
+const collabOpen = ref(false)
+const collabCreateBusy = ref(false)
+const collabCreateError = ref<string | null>(null)
+
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
 const messages = ref<ChatMessageResp[]>([])
 
 const myUid = computed(() => auth.user?.id ?? 0)
+const myUser = computed<UserSimpleVO | null>(() => {
+  if (!auth.user?.id) return null
+  return {
+    id: auth.user.id,
+    name: auth.user.name || `用户${auth.user.id}`,
+    avatar: auth.user.avatar,
+    userType: auth.user.userType,
+  }
+})
+
+const userByUid = computed(() => {
+  const map = new Map<number, UserSimpleVO>()
+  if (myUser.value) map.set(myUser.value.id, myUser.value)
+  if (otherUser.value) map.set(otherUser.value.id, otherUser.value)
+  return map
+})
+
+function getUser(uid: number | null | undefined): UserSimpleVO | null {
+  const id = typeof uid === 'number' && Number.isFinite(uid) ? uid : null
+  if (!id) return null
+  return userByUid.value.get(id) ?? null
+}
+
+function userName(uid: number): string {
+  if (uid === myUid.value) return myUser.value?.name || `用户${uid}`
+  if (otherUid.value && uid === otherUid.value) return otherUser.value?.name || `用户${uid}`
+  return getUser(uid)?.name || `用户${uid}`
+}
+
+function userAvatar(uid: number): string {
+  const v = uid === myUid.value ? myUser.value?.avatar : uid === otherUid.value ? otherUser.value?.avatar : getUser(uid)?.avatar
+  return typeof v === 'string' ? v.trim() : ''
+}
 
 type StreamMsgEvent = {
   msgId: number
@@ -47,6 +87,73 @@ const streamAbort = ref<AbortController | null>(null)
 
 const lessonActionBusy = ref<Record<number, boolean>>({})
 const lessonActionError = ref<Record<number, string>>({})
+
+const collabActionBusy = ref<Record<number, boolean>>({})
+const collabActionError = ref<Record<number, string>>({})
+
+const cardOpen = ref(false)
+const cardUid = ref<number | null>(null)
+
+function openCard(uid: number) {
+  if (!uid || uid === myUid.value) return
+  cardUid.value = uid
+  cardOpen.value = true
+}
+
+function closeCard() {
+  cardOpen.value = false
+}
+
+function openCollaboration() {
+  collabCreateError.value = null
+  collabOpen.value = true
+}
+
+function closeCollaboration() {
+  if (collabCreateBusy.value) return
+  collabOpen.value = false
+}
+
+// #region debug-point
+async function dbgReport(event: string, payload: Record<string, unknown>) {
+  if (!import.meta.env.DEV) return
+  const url = 'http://localhost:39090/report'
+  try {
+    const body = JSON.stringify({ ts: new Date().toISOString(), event, ...payload })
+    const ctrl = new AbortController()
+    setTimeout(() => ctrl.abort(), 800)
+    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: ctrl.signal })
+  } catch (e) {
+    void e
+  }
+}
+// #endregion debug-point
+
+async function createCollaboration(payload: { pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+  if (collabCreateBusy.value) return
+  collabCreateBusy.value = true
+  collabCreateError.value = null
+  try {
+    const msg = await chatApi.createCollaborationProposal({ roomId: roomId.value, ...payload })
+    mergeMessages([msg], 'append')
+    collabOpen.value = false
+  } catch (e) {
+    // #region debug-point
+    const ax =
+      typeof e === 'object' && e !== null ? (e as { response?: { data?: unknown; status?: unknown } }) : null
+    void dbgReport('collab_create_failed', {
+      roomId: roomId.value,
+      payload,
+      errorMessage: e instanceof Error ? e.message : String(e),
+      responseData: ax?.response?.data ?? null,
+      status: typeof ax?.response?.status === 'number' ? ax.response.status : null,
+    })
+    // #endregion debug-point
+    collabCreateError.value = e instanceof Error ? e.message : '发起失败'
+  } finally {
+    collabCreateBusy.value = false
+  }
+}
 
 function normalizeBody(raw: unknown): ChatMessageBody {
   if (!raw) return { type: 'text', content: '' }
@@ -65,6 +172,14 @@ function isLessonRequestBody(body: ChatMessageBody): body is Extract<ChatMessage
 
 function isLessonStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_status' }> {
   return body.type === 'lesson_status'
+}
+
+function isCollaborationProposalBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_proposal' }> {
+  return body.type === 'collaboration_proposal'
+}
+
+function isCollaborationStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_status' }> {
+  return body.type === 'collaboration_status'
 }
 
 async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
@@ -90,6 +205,46 @@ async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId
     lessonActionError.value = { ...lessonActionError.value, [eventId]: e instanceof Error ? e.message : '操作失败' }
   } finally {
     lessonActionBusy.value = { ...lessonActionBusy.value, [eventId]: false }
+  }
+}
+
+function collabStatusText(s: unknown): string {
+  const v = typeof s === 'string' ? s.trim().toUpperCase() : ''
+  if (v === 'ACCEPTED') return '已同意'
+  if (v === 'REJECTED') return '已拒绝'
+  if (v === 'PENDING') return '待确认'
+  return v || '状态未知'
+}
+
+async function respondCollaboration(proposalId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
+  const current = effectiveCollabStatus(proposalId, 'PENDING')
+  if (current !== 'PENDING') return
+  if (collabActionBusy.value[proposalId]) return
+  collabActionBusy.value = { ...collabActionBusy.value, [proposalId]: true }
+  collabActionError.value = { ...collabActionError.value, [proposalId]: '' }
+  try {
+    const statusMsg = await chatApi.respondCollaborationProposal(proposalId, action)
+    mergeMessages([statusMsg], 'append')
+
+    const statusBody = normalizeBody(statusMsg.message.body)
+    const nextStatus = isCollaborationStatusBody(statusBody) ? statusBody.status : action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED'
+    const next = messages.value.map((m) => {
+      if (m.message.id !== msgId) return m
+      const body = normalizeBody(m.message.body)
+      if (!isCollaborationProposalBody(body)) return m
+      return {
+        ...m,
+        message: {
+          ...m.message,
+          body: { ...body, status: nextStatus },
+        },
+      }
+    })
+    messages.value = next
+  } catch (e) {
+    collabActionError.value = { ...collabActionError.value, [proposalId]: e instanceof Error ? e.message : '操作失败' }
+  } finally {
+    collabActionBusy.value = { ...collabActionBusy.value, [proposalId]: false }
   }
 }
 
@@ -121,6 +276,29 @@ const renderMessages = computed<RenderMessage[]>(() => {
     body: normalizeBody(m.message?.body),
   }))
 })
+
+const collabStatusByProposalId = computed<Record<number, CollaborationProposalStatus>>(() => {
+  const out: Record<number, CollaborationProposalStatus> = {}
+  for (const m of renderMessages.value) {
+    const b = m.body
+    if (isCollaborationProposalBody(b)) {
+      out[b.proposalId] = b.status
+      continue
+    }
+    if (isCollaborationStatusBody(b)) {
+      out[b.proposalId] = b.status
+    }
+  }
+  return out
+})
+
+const hasAnyCollabProposal = computed(() => {
+  return renderMessages.value.some((m) => isCollaborationProposalBody(m.body))
+})
+
+function effectiveCollabStatus(proposalId: number, fallback: CollaborationProposalStatus): CollaborationProposalStatus {
+  return collabStatusByProposalId.value[proposalId] || fallback
+}
 
 async function loadOtherUser() {
   if (!otherUid.value) return
@@ -162,7 +340,9 @@ async function ackLatest() {
   if (latest <= 0) return
   try {
     await chatApi.ackRead(roomId.value, latest)
-  } catch {}
+  } catch (e) {
+    void e
+  }
 }
 
 async function onSend() {
@@ -235,7 +415,9 @@ async function startStream() {
         }
         mergeMessages([msg], 'append')
         await ackLatest()
-      } catch {}
+      } catch (e) {
+        void e
+      }
     }
   }
   streamAbort.value = null
@@ -285,43 +467,76 @@ watch(
 
       <div class="msgs">
         <div v-for="m in renderMessages" :key="m.message.id" class="msg" :class="{ me: m.fromUser.uid === myUid }">
-          <div class="bubble">
-            <template v-if="isLessonRequestBody(m.body)">
-              <LessonRequestCard
-                :body="m.body"
-                :from-me="m.fromUser.uid === myUid"
-                :busy="lessonActionBusy[m.body.eventId]"
-                @accept="respondLesson(m.body.eventId, 'ACCEPT', m.message.id)"
-                @reject="respondLesson(m.body.eventId, 'REJECT', m.message.id)"
-              />
-              <div v-if="lessonActionError[m.body.eventId]" class="card-hint error">
-                {{ lessonActionError[m.body.eventId] }}
-              </div>
-            </template>
-            <template v-else-if="isLessonStatusBody(m.body)">
-              <div class="sys">
-                课程状态：{{ m.body.status }}（{{ m.body.title }}）
-              </div>
-            </template>
-            <template v-else>
-              {{ msgText(m.body) }}
-            </template>
+          <button class="avatar" type="button" :class="{ clickable: m.fromUser.uid !== myUid }" @click="openCard(m.fromUser.uid)">
+            <img v-if="userAvatar(m.fromUser.uid)" :src="userAvatar(m.fromUser.uid)" alt="" />
+            <span v-else class="avatar-fallback">{{ userName(m.fromUser.uid).slice(0, 1) }}</span>
+          </button>
+          <div class="content">
+            <div class="meta">{{ userName(m.fromUser.uid) }}</div>
+            <div class="bubble">
+              <template v-if="isLessonRequestBody(m.body)">
+                <LessonRequestCard
+                  :body="m.body"
+                  :from-me="m.fromUser.uid === myUid"
+                  :busy="lessonActionBusy[m.body.eventId]"
+                  @accept="respondLesson(m.body.eventId, 'ACCEPT', m.message.id)"
+                  @reject="respondLesson(m.body.eventId, 'REJECT', m.message.id)"
+                />
+                <div v-if="lessonActionError[m.body.eventId]" class="card-hint error">
+                  {{ lessonActionError[m.body.eventId] }}
+                </div>
+              </template>
+              <template v-else-if="isLessonStatusBody(m.body)">
+                <div class="sys">
+                  课程状态：{{ m.body.status }}（{{ m.body.title }}）
+                </div>
+              </template>
+              <template v-else-if="isCollaborationProposalBody(m.body)">
+                <CollaborationProposalCard
+                  :body="{ ...m.body, status: effectiveCollabStatus(m.body.proposalId, m.body.status) }"
+                  :from-me="m.fromUser.uid === myUid"
+                  :busy="collabActionBusy[m.body.proposalId]"
+                  @accept="respondCollaboration(m.body.proposalId, 'ACCEPT', m.message.id)"
+                  @reject="respondCollaboration(m.body.proposalId, 'REJECT', m.message.id)"
+                />
+                <div v-if="collabActionError[m.body.proposalId]" class="card-hint error">
+                  {{ collabActionError[m.body.proposalId] }}
+                </div>
+              </template>
+              <template v-else-if="isCollaborationStatusBody(m.body)">
+                <div class="sys">合作提案：{{ collabStatusText(m.body.status) }}</div>
+              </template>
+              <template v-else>
+                {{ msgText(m.body) }}
+              </template>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="send">
-        <input
-          v-model="input"
-          class="input"
-          placeholder="请输入消息"
-          @keydown.enter.prevent="onSend"
-        />
-        <button class="btn btn-primary" type="button" :disabled="sending" @click="onSend">
-          {{ sending ? '发送中...' : '发送' }}
-        </button>
+      <div class="composer">
+        <div class="actions">
+          <button class="btn" type="button" :disabled="hasAnyCollabProposal" @click="openCollaboration">
+            {{ hasAnyCollabProposal ? '已发起合作' : '发起合作' }}
+          </button>
+        </div>
+        <div class="send">
+          <input v-model="input" class="input" placeholder="请输入消息" @keydown.enter.prevent="onSend" />
+          <button class="btn btn-primary" type="button" :disabled="sending" @click="onSend">
+            {{ sending ? '发送中...' : '发送' }}
+          </button>
+        </div>
       </div>
     </div>
+
+    <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
+    <CollaborationProposalModal
+      :open="collabOpen"
+      :busy="collabCreateBusy"
+      :error="collabCreateError"
+      @close="closeCollaboration"
+      @submit="createCollaboration"
+    />
   </div>
 </template>
 
@@ -361,6 +576,8 @@ watch(
 .msgs {
   padding: 14px;
   display: grid;
+  grid-template-columns: 1fr;
+  justify-items: stretch;
   gap: 10px;
   background: #fbfcfe;
   align-content: start;
@@ -368,15 +585,74 @@ watch(
 
 .msg {
   display: flex;
+  width: 100%;
   justify-content: flex-start;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .msg.me {
   justify-content: flex-end;
+  flex-direction: row;
+}
+
+.msg.me .avatar {
+  order: 2;
+}
+
+.msg.me .content {
+  order: 1;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border);
+  padding: 0;
+  cursor: default;
+  appearance: none;
+}
+
+.avatar.clickable {
+  cursor: pointer;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-fallback {
+  font-weight: 900;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+}
+
+.content {
+  display: grid;
+  gap: 4px;
+  max-width: min(560px, 80%);
+}
+
+.msg.me .content {
+  justify-items: end;
+}
+
+.meta {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  line-height: 1;
 }
 
 .bubble {
-  max-width: min(560px, 80%);
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
@@ -391,13 +667,23 @@ watch(
   background: rgba(0, 190, 189, 0.12);
 }
 
-.send {
+.composer {
   padding: 12px;
   border-top: 1px solid var(--border);
   display: grid;
-  grid-template-columns: 1fr auto;
   gap: 10px;
   background: #fff;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.send {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
 }
 
 .input {

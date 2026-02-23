@@ -22,6 +22,14 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body: { content } })
   },
 
+  createCollaborationProposal(params: { roomId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+    return http.post<unknown, ChatMessageResp>('/chat/collaboration/proposal', params)
+  },
+
+  respondCollaborationProposal(proposalId: number, action: 'ACCEPT' | 'REJECT') {
+    return http.post<unknown, ChatMessageResp>(`/chat/collaboration/proposal/${proposalId}/response`, { action })
+  },
+
   ackRead(roomId: number, lastReadMsgId: number) {
     return http.post<unknown, boolean>('/chat/read/ack', { roomId, lastReadMsgId })
   },

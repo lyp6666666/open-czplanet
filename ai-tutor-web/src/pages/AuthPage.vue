@@ -131,13 +131,17 @@ async function doSubmit() {
 
   busy.value = true
   try {
-    await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''))
+    const u = await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''))
     if (props.role === 'TEACHER') {
       const me = await auth.refreshMe()
       const need = !(me?.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())
       await router.replace(need ? '/tutor/onboarding/basic' : '/tutor/jobs')
     } else {
-      await router.replace('/student/post')
+      if (u.isNew) {
+        await router.replace('/student/onboarding/first-demand')
+      } else {
+        await router.replace('/student/post')
+      }
     }
   } catch (e) {
     hint.value = e instanceof Error ? e.message : '登录失败'

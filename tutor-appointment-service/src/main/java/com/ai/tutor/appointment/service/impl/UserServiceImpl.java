@@ -72,6 +72,7 @@ public class UserServiceImpl implements UserService {
 
         //2. 查询手机号是否已存在账号（登录/注册同入口：存在则直接登录）
         User user = userMapper.selectByPhone(phone);
+        boolean isNew = user == null;
 
         if (user == null) {
             User created = transactionTemplate.execute(status -> {
@@ -147,6 +148,7 @@ public class UserServiceImpl implements UserService {
                 .avatar(user.getAvatar())
                 .sex(user.getSex())
                 .userType(user.getUserType())
+                .isNew(isNew)
                 .token(token)
                 .build();
     }

@@ -49,6 +49,7 @@ public abstract class AbstractMsgHandler<Req> {
         checkMsg(body, request.getRoomId(), uid);
         Message insert = MessageAdapter.buildMsgSave(request, uid);
         insert.setStatus(0);
+        insert.setIsMasked(0);
         insert.setCreateTime(LocalDateTime.now());
         insert.setUpdateTime(LocalDateTime.now());
         //子类扩展保存（填充 toUid/content/extra 等必要字段）

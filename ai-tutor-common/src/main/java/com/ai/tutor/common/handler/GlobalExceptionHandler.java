@@ -34,6 +34,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public BaseResponse<?> handleBusinessException(BusinessException e) {
         log.warn("BusinessException: code={}, msg={}", e.getCode(), e.getMessage());
+        // #region debug-point
+        String dbgUrl = System.getProperty("TRAE_DEBUG_URL");
+        if (dbgUrl != null && !dbgUrl.isBlank()) {
+            try {
+                String code = String.valueOf(e.getCode());
+                String msg = e.getMessage() == null ? "" : e.getMessage();
+                String body = "{\"ts\":\"" + Instant.now() + "\",\"event\":\"business_exception\""
+                        + ",\"code\":\"" + escapeJson(code) + "\""
+                        + ",\"msg\":\"" + escapeJson(msg) + "\"}";
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(dbgUrl.trim()))
+                        .timeout(java.time.Duration.ofSeconds(2))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                        .build();
+                HttpClient.newHttpClient().sendAsync(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception ignored) {
+            }
+        }
+        // #endregion debug-point
         return ResultUtils.error(e.getCode(), e.getMessage());
     }
 

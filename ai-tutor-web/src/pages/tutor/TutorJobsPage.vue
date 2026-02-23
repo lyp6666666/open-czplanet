@@ -21,6 +21,7 @@ const classMode = ref<string>('')
 const stageCode = ref<string>('')
 const educationRequirement = ref<string>('')
 const frequencyPerWeek = ref<number | null>(null)
+const teacherGenderPreference = ref<string>('')
 
 const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
 watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
@@ -38,7 +39,7 @@ const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
 
-const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu' | 'freq'>('')
+const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
 
 const stageOptions = [
   { value: '', label: '不限' },
@@ -74,6 +75,13 @@ const typeLabel = computed(() => {
 const stageLabel = computed(() => stageOptions.find((o) => o.value === stageCode.value)?.label ?? '不限')
 
 const eduLabel = computed(() => eduOptions.find((o) => o.value === educationRequirement.value)?.label ?? '不限')
+
+const teacherGenderLabel = computed(() => {
+  if (!teacherGenderPreference.value) return '不限'
+  if (teacherGenderPreference.value === 'male') return '男'
+  if (teacherGenderPreference.value === 'female') return '女'
+  return '均可'
+})
 
 const freqLabel = computed(() => {
   if (!frequencyPerWeek.value) return '不限'
@@ -111,6 +119,11 @@ function selectStage(v: string) {
 
 function selectEdu(v: string) {
   educationRequirement.value = v
+  closeMenus()
+}
+
+function selectTeacherGender(v: string) {
+  teacherGenderPreference.value = v
   closeMenus()
 }
 
@@ -156,7 +169,9 @@ async function syncFavorites(ids: number[]) {
       next[id] = true
     })
     favoriteMap.value = next
-  } catch {}
+  } catch (e) {
+    void e
+  }
 }
 
 async function refresh() {
@@ -184,6 +199,7 @@ async function loadMore() {
       stageCode: stageCode.value || undefined,
       educationRequirement: educationRequirement.value || undefined,
       frequencyPerWeek: frequencyPerWeek.value ?? undefined,
+      teacherGenderPreference: teacherGenderPreference.value || undefined,
       budgetMin: budgetMin.value ?? undefined,
       budgetMax: budgetMax.value ?? undefined,
       q: q.value.trim() || undefined,
@@ -234,7 +250,7 @@ async function onToggleFavorite(it: StudentJobPosting) {
   }
 }
 
-watch([classMode, stageCode, educationRequirement], () => {
+watch([classMode, stageCode, educationRequirement, teacherGenderPreference], () => {
   void refresh()
 })
 
@@ -333,6 +349,24 @@ onMounted(() => {
         </div>
 
         <div class="tab-wrap">
+          <button
+            class="tab"
+            type="button"
+            :class="{ active: !!teacherGenderPreference || openKey === 'tGender' }"
+            @click.stop="toggle('tGender')"
+          >
+            <span>教师性别</span>
+            <span class="val">{{ teacherGenderLabel }}</span>
+          </button>
+          <div v-if="openKey === 'tGender'" class="menu card">
+            <button class="menu-item" type="button" @click="selectTeacherGender('')">不限</button>
+            <button class="menu-item" type="button" @click="selectTeacherGender('male')">男</button>
+            <button class="menu-item" type="button" @click="selectTeacherGender('female')">女</button>
+            <button class="menu-item" type="button" @click="selectTeacherGender('both')">均可</button>
+          </div>
+        </div>
+
+        <div class="tab-wrap">
           <button class="tab" type="button" :class="{ active: !!educationRequirement || openKey === 'edu' }" @click.stop="toggle('edu')">
             <span>学历要求</span>
             <span class="val">{{ eduLabel }}</span>
@@ -426,9 +460,14 @@ onMounted(() => {
             <div class="detail-text">{{ detail.description || '—' }}</div>
           </div>
 
-          <div v-if="detail.schedule" class="detail-block">
-            <div class="detail-label">授课时间</div>
-            <div class="detail-text">{{ detail.schedule }}</div>
+          <div v-if="detail.availableTime || detail.schedule" class="detail-block">
+            <div class="detail-label">可上课时间</div>
+            <div class="detail-text">{{ detail.availableTime || detail.schedule }}</div>
+          </div>
+
+          <div v-if="detail.teacherRequirementDetail" class="detail-block">
+            <div class="detail-label">对教员的详细要求</div>
+            <div class="detail-text">{{ detail.teacherRequirementDetail }}</div>
           </div>
 
           <div v-if="detail.publisher" class="publisher">

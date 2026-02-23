@@ -15,4 +15,3 @@ export const assetsApi = {
     return http.post<unknown, UploadResult>('/api/v1/assets/upload', form)
   },
 }
-

@@ -66,11 +66,12 @@ public class ParentJobPostingController {
                                                                     @RequestParam(value = "stageCode", required = false) String stageCode,
                                                                     @RequestParam(value = "frequencyPerWeek", required = false) Integer frequencyPerWeek,
                                                                     @RequestParam(value = "educationRequirement", required = false) String educationRequirement,
+                                                                    @RequestParam(value = "teacherGenderPreference", required = false) String teacherGenderPreference,
                                                                     @RequestParam(value = "budgetMin", required = false) BigDecimal budgetMin,
                                                                     @RequestParam(value = "budgetMax", required = false) BigDecimal budgetMax,
                                                                     @RequestParam(value = "q", required = false) String keyword,
                                                                     @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, frequencyPerWeek, educationRequirement, budgetMin, budgetMax, keyword, sort, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, frequencyPerWeek, educationRequirement, teacherGenderPreference, budgetMin, budgetMax, keyword, sort, request));
     }
 }

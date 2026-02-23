@@ -49,6 +49,11 @@ CREATE TABLE `student_job_posting`  (
   `subject_id` bigint(20) NOT NULL COMMENT '需求科目ID（position_post.id）',
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求标题，如：小学三年级数学家教',
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '课程/需求详情描述',
+  `student_gender` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学员性别：male/female',
+  `grade_code` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学生年级编码：PRESCHOOL/GRADE1~6/JUNIOR1~3/SENIOR1~3/SELF_EXAM/COLLEGE1~4/ADULT',
+  `available_time` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '可上课时间（自由文本）',
+  `teacher_gender_preference` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT 'both' COMMENT '教师性别偏好：male/female/both',
+  `teacher_requirement_detail` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '对教员的详细要求（自由文本）',
   `child_age` int(11) NULL DEFAULT NULL COMMENT '孩子年龄',
   `class_mode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT 'online' COMMENT '授课方式：online/offline/both',
   `city` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '线下授课所在城市（offline 时必填）',
@@ -234,6 +239,7 @@ CREATE TABLE `message` (
             `from_uid` bigint(20) NOT NULL COMMENT '发送者 user_id',
             `to_uid` bigint(20) NOT NULL COMMENT '接收者 user_id',
             `content` varchar(1024) DEFAULT NULL COMMENT '消息内容',
+            `is_masked` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否命中屏蔽规则 0否 1是',
             `reply_msg_id` bigint(20) DEFAULT NULL COMMENT '被回复的消息id',
             `status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '状态 0正常 1删除',
             `gap_count` int DEFAULT NULL COMMENT '与被回复消息的间隔数',
@@ -246,6 +252,26 @@ CREATE TABLE `message` (
             KEY `idx_from_uid` (`from_uid`),
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
+
+DROP TABLE IF EXISTS `collaboration_proposal`;
+CREATE TABLE `collaboration_proposal` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '合作提案id',
+            `room_id` bigint(20) NOT NULL COMMENT '会话id',
+            `from_uid` bigint(20) NOT NULL COMMENT '发起人 user_id',
+            `to_uid` bigint(20) NOT NULL COMMENT '接收人 user_id',
+            `price_per_hour` varchar(64) NOT NULL COMMENT '收费标准（每小时）',
+            `class_time` varchar(255) NOT NULL COMMENT '上课时间（自由文本）',
+            `frequency_per_week` int NOT NULL COMMENT '上课频次（每周次数）',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/ACCEPTED/REJECTED',
+            `actor_uid` bigint(20) DEFAULT NULL COMMENT '操作人 user_id（同意/拒绝）',
+            `action_time` datetime(3) DEFAULT NULL COMMENT '操作时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_room_id` (`room_id`),
+            KEY `idx_to_uid_status` (`to_uid`, `status`),
+            KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天合作提案表';
 
 DROP TABLE IF EXISTS `room_read_state`;
 CREATE TABLE `room_read_state` (

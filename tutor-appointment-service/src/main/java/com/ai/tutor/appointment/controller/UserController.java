@@ -8,10 +8,12 @@ import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
+import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
+import com.ai.tutor.appointment.model.vo.UserCardVO;
 import com.ai.tutor.appointment.model.vo.UserMeVO;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.UserService;
@@ -47,6 +49,8 @@ public class UserController {
     private TeacherProfileMapper teacherProfileMapper;
     @Resource
     private StudentProfileMapper studentProfileMapper;
+    @Resource
+    private StudentJobPostingMapper studentJobPostingMapper;
 
     /**
      *  获取验证码
@@ -146,6 +150,35 @@ public class UserController {
                         .build())
                 .collect(Collectors.toList());
         return ResultUtils.success(result);
+    }
+
+    @GetMapping("/card")
+    @Operation(summary = "获取用户名片信息", description = "用于聊天等场景查看对方基础信息（不包含手机号等敏感字段）")
+    public BaseResponse<UserCardVO> card(@RequestParam("uid") Long uid, HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
+
+        User user = userMapper.selectById(uid);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        UserCardVO.UserCardVOBuilder builder = UserCardVO.builder()
+                .user(UserSimpleVO.builder()
+                        .id(user.getId())
+                        .name(user.getName())
+                        .avatar(user.getAvatar())
+                        .userType(user.getUserType())
+                        .build());
+
+        if (role == UserRoleEnum.TEACHER) {
+            builder.teacherProfile(teacherProfileMapper.selectByUserId(uid));
+        } else if (role == UserRoleEnum.STUDENT) {
+            builder.studentProfile(studentProfileMapper.selectByUserId(uid));
+            builder.jobPosting(studentJobPostingMapper.selectLatestPublishedByParentId(uid));
+        }
+
+        return ResultUtils.success(builder.build());
     }
 
     @PostMapping("/updateUserPhone")

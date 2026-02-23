@@ -4,6 +4,7 @@ const HomePage = () => import('@/pages/HomePage.vue')
 const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
+const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
 const StudentEditJobPage = () => import('@/pages/student/StudentEditJobPage.vue')
 const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
@@ -60,6 +61,11 @@ export const router = createRouter({
       path: '/student/post',
       name: 'studentPost',
       component: StudentPostPage,
+    },
+    {
+      path: '/student/onboarding/first-demand',
+      name: 'studentOnboardingFirstDemand',
+      component: StudentOnboardingFirstDemandPage,
     },
     {
       path: '/student/jobs/mine',
