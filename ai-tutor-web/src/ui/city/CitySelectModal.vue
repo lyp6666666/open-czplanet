@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { CITY_ENTRIES, DEFAULT_HOT_CITIES, type CityEntry } from './cities'
 
 const props = defineProps<{
