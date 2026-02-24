@@ -61,6 +61,8 @@ public class ParentJobPostingController {
     @GetMapping("/feed")
     @Operation(summary = "需求贴广场列表（游标分页）")
     public BaseResponse<CursorPageResponse<StudentJobPosting>> feed(@RequestParam(value = "subjectId", required = false) Long subjectId,
+                                                                    @RequestParam(value = "subject", required = false) String subjectName,
+                                                                    @RequestParam(value = "subjectOther", required = false) Boolean subjectOther,
                                                                     @RequestParam(value = "city", required = false) String city,
                                                                     @RequestParam(value = "classMode", required = false) String classMode,
                                                                     @RequestParam(value = "stageCode", required = false) String stageCode,
@@ -72,6 +74,6 @@ public class ParentJobPostingController {
                                                                     @RequestParam(value = "q", required = false) String keyword,
                                                                     @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, city, classMode, stageCode, frequencyPerWeek, educationRequirement, teacherGenderPreference, budgetMin, budgetMax, keyword, sort, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, subjectName, subjectOther, city, classMode, stageCode, frequencyPerWeek, educationRequirement, teacherGenderPreference, budgetMin, budgetMax, keyword, sort, request));
     }
 }

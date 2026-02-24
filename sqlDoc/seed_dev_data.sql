@@ -67,19 +67,32 @@ status=VALUES(status),
 update_time=VALUES(update_time);
 
 INSERT INTO `student_job_posting`
-(id, parent_id, subject_id, title, description, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time)
+(id, parent_id, subject_id, subject_name, student_gender, title, description, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time)
 VALUES
-(3001, 101, 201, '初中数学一对一提分（函数/几何）', '孩子初二，基础还可以但做题不稳。希望老师能带着建立解题框架，每次课后有作业并讲评。', 14, 'offline', '北京', '海淀区中关村附近，地铁可达', 2, 180.00, 240.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Tue 19-21","Sat 10-12"]', 1, NOW(3), NOW(3)),
-(3002, 102, 202, '初中英语阅读理解+语法巩固', '想系统梳理时态/从句，提升阅读速度与准确率。最好能每周固定两次，课后给词汇计划。', 14, 'online', NULL, NULL, 2, 160.00, 220.00, 'JUNIOR', 'C211', 'PARENT', '["Wed 20-21","Sun 10-11"]', 1, NOW(3), NOW(3)),
-(3003, 103, 205, '小学语文阅读写作提升', '三年级，作文不知道怎么写。希望老师能带着做阅读积累和写作结构训练。', 10, 'offline', '杭州', '西湖区文三路附近', 3, 120.00, 180.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Mon 19-20","Thu 19-20","Sat 9-10"]', 1, NOW(3), NOW(3)),
-(3004, 104, 303, '高二物理电磁学补基础+刷题', '我自己是学生，高二电磁学听不太懂，想从基础概念到典型题系统补。', 17, 'offline', '广州', '天河区体育西路附近', 2, 220.00, 320.00, 'SENIOR', 'C985', 'STUDENT_SELF', '["Tue 20-22","Sat 14-16"]', 1, NOW(3), NOW(3)),
-(3005, 105, 301, '高一数学函数与导数（重点突破）', '高一，函数与导数概念不清，题目一变就不会。希望老师讲清思路并配套练习。', 16, 'both', '深圳', '南山区科技园附近，可线上/线下', 3, 240.00, 360.00, 'SENIOR', 'DOUBLE_FIRST_CLASS', 'STUDENT_SELF', '["Mon 20-21","Wed 20-21","Sun 10-12"]', 1, NOW(3), NOW(3)),
-(3006, 106, 204, '初中化学启蒙（提前预习）', '孩子初一，想提前预习化学建立兴趣，课堂以实验现象和概念理解为主。', 13, 'online', NULL, NULL, 1, 160.00, 220.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Sat 10-12"]', 1, NOW(3), NOW(3)),
-(3007, 107, 103, '小学英语自然拼读+口语陪练', '四年级，单词记不住。希望老师有体系地带着练自然拼读，兼顾口语表达。', 9, 'offline', '上海', '杨浦区五角场附近', 2, 120.00, 180.00, 'PRIMARY', 'UNLIMITED', 'PARENT', '["Wed 19-20","Sun 19-20"]', 1, NOW(3), NOW(3)),
-(3008, 108, 201, '初三数学冲刺（压轴题专项）', '初三，想重点突破几何与函数压轴题。希望老师能按题型拆解训练。', 15, 'offline', '杭州', '滨江区江陵路附近', 5, 220.00, 320.00, 'JUNIOR', 'C985', 'PARENT', '["Mon 19-21","Tue 19-21","Thu 19-21","Sat 9-12","Sun 9-12"]', 1, NOW(3), NOW(3)),
-(3009, 109, 103, '小学英语词汇+听力习惯养成', '五年级，听力跟不上，词汇量也少。希望老师带着制定学习计划，逐步提升。', 12, 'online', NULL, NULL, 2, 100.00, 160.00, 'PRIMARY', 'BACHELOR', 'STUDENT_SELF', '["Tue 20-21","Thu 20-21"]', 1, NOW(3), NOW(3)),
-(3010, 110, 101, '小学数学奥数启蒙（思维训练）', '四年级，想做奥数启蒙。希望老师有趣、能引导孩子思考，不刷题为主。', 11, 'offline', '深圳', '福田区会展中心附近', 2, 180.00, 260.00, 'PRIMARY', 'OVERSEAS', 'PARENT', '["Sat 10-12","Sun 10-12"]', 1, NOW(3), NOW(3))
+(3001, 101, 201, '初中数学', 'male', '初中数学一对一提分（函数/几何）', '孩子初二，基础还可以但做题不稳。希望老师能带着建立解题框架，每次课后有作业并讲评。', 14, 'offline', '北京', '海淀区中关村附近，地铁可达', 2, 180.00, 240.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Tue 19-21","Sat 10-12"]', 1, NOW(3), NOW(3)),
+(3002, 102, 202, '初中英语', 'female', '初中英语阅读理解+语法巩固', '想系统梳理时态/从句，提升阅读速度与准确率。最好能每周固定两次，课后给词汇计划。', 14, 'online', '全国', NULL, 2, 160.00, 220.00, 'JUNIOR', 'C211', 'PARENT', '["Wed 20-21","Sun 10-11"]', 1, NOW(3), NOW(3)),
+(3003, 103, 102, '小学语文', 'male', '小学语文阅读写作提升', '三年级，作文不知道怎么写。希望老师能带着做阅读积累和写作结构训练。', 10, 'offline', '杭州', '西湖区文三路附近', 3, 120.00, 180.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Mon 19-20","Thu 19-20","Sat 9-10"]', 1, NOW(3), NOW(3)),
+(3004, 104, 303, '高中物理', 'female', '高二物理电磁学补基础+刷题', '我自己是学生，高二电磁学听不太懂，想从基础概念到典型题系统补。', 17, 'offline', '广州', '天河区体育西路附近', 2, 220.00, 320.00, 'SENIOR', 'C985', 'STUDENT_SELF', '["Tue 20-22","Sat 14-16"]', 1, NOW(3), NOW(3)),
+(3005, 105, 301, '高中数学', 'male', '高一数学函数与导数（重点突破）', '高一，函数与导数概念不清，题目一变就不会。希望老师讲清思路并配套练习。', 16, 'both', '深圳', '南山区科技园附近，可线上/线下', 3, 240.00, 360.00, 'SENIOR', 'DOUBLE_FIRST_CLASS', 'STUDENT_SELF', '["Mon 20-21","Wed 20-21","Sun 10-12"]', 1, NOW(3), NOW(3)),
+(3006, 106, 204, '初中化学', 'female', '初中化学启蒙（提前预习）', '孩子初一，想提前预习化学建立兴趣，课堂以实验现象和概念理解为主。', 13, 'online', '全国', NULL, 1, 160.00, 220.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Sat 10-12"]', 1, NOW(3), NOW(3)),
+(3007, 107, 103, '小学英语', 'male', '小学英语自然拼读+口语陪练', '四年级，单词记不住。希望老师有体系地带着练自然拼读，兼顾口语表达。', 9, 'offline', '上海', '杨浦区五角场附近', 2, 120.00, 180.00, 'PRIMARY', 'UNLIMITED', 'PARENT', '["Wed 19-20","Sun 19-20"]', 1, NOW(3), NOW(3)),
+(3008, 108, 201, '初中数学', 'female', '初三数学冲刺（压轴题专项）', '初三，想重点突破几何与函数压轴题。希望老师能按题型拆解训练。', 15, 'offline', '杭州', '滨江区江陵路附近', 5, 220.00, 320.00, 'JUNIOR', 'C985', 'PARENT', '["Mon 19-21","Tue 19-21","Thu 19-21","Sat 9-12","Sun 9-12"]', 1, NOW(3), NOW(3)),
+(3009, 109, 103, '小学英语', 'male', '小学英语词汇+听力习惯养成', '五年级，听力跟不上，词汇量也少。希望老师带着制定学习计划，逐步提升。', 12, 'online', '全国', NULL, 2, 100.00, 160.00, 'PRIMARY', 'BACHELOR', 'STUDENT_SELF', '["Tue 20-21","Thu 20-21"]', 1, NOW(3), NOW(3)),
+(3010, 110, 101, '小学数学', 'female', '小学数学奥数启蒙（思维训练）', '四年级，想做奥数启蒙。希望老师有趣、能引导孩子思考，不刷题为主。', 11, 'offline', '深圳', '福田区会展中心附近', 2, 180.00, 260.00, 'PRIMARY', 'OVERSEAS', 'PARENT', '["Sat 10-12","Sun 10-12"]', 1, NOW(3), NOW(3)),
+
+(3011, 101, 201, '初中数学', 'male', '成都初二数学补弱（函数基础）', '孩子初二，函数题型不熟练，想从基础到专项训练。', 14, 'offline', '成都', '锦江区春熙路附近', 2, 160.00, 240.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Tue 19-21","Sat 10-12"]', 1, NOW(3), NOW(3)),
+(3012, 102, 202, '初中英语', 'female', '西安初中英语口语+听力', '想提升口语表达与听力理解，课堂多互动。', 13, 'both', '西安', '雁塔区小寨附近', 2, 140.00, 220.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Wed 20-21","Sun 10-11"]', 1, NOW(3), NOW(3)),
+(3013, 103, 102, '小学语文', 'male', '南京小学语文阅读积累', '提升阅读理解，培养写作素材积累习惯。', 10, 'offline', '南京', '鼓楼区新街口附近', 2, 120.00, 180.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Mon 19-20","Thu 19-20"]', 1, NOW(3), NOW(3)),
+(3014, 104, 303, '高中物理', 'female', '武汉高二物理力学系统复习', '从受力分析到能量守恒，配套习题讲解。', 17, 'offline', '武汉', '洪山区光谷附近', 2, 220.00, 320.00, 'SENIOR', 'C211', 'STUDENT_SELF', '["Tue 20-22","Sat 14-16"]', 1, NOW(3), NOW(3)),
+(3015, 105, 301, '高中数学', 'male', '苏州高一数学补基础（必修）', '希望梳理知识点，提升做题稳定性。', 16, 'offline', '苏州', '工业园区湖东附近', 2, 220.00, 320.00, 'SENIOR', 'BACHELOR', 'STUDENT_SELF', '["Mon 20-21","Wed 20-21"]', 1, NOW(3), NOW(3)),
+(3016, 106, 204, '初中化学', 'female', '郑州初中化学预习（线上）', '提前预习初中化学，建立概念与兴趣。', 13, 'online', '全国', NULL, 1, 140.00, 220.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Sat 10-12"]', 1, NOW(3), NOW(3)),
+(3017, 107, 103, '小学英语', 'male', '青岛小学英语自然拼读', '提升自然拼读与朗读能力，建立语感。', 9, 'offline', '青岛', '市南区五四广场附近', 2, 120.00, 180.00, 'PRIMARY', 'UNLIMITED', 'PARENT', '["Wed 19-20","Sun 19-20"]', 1, NOW(3), NOW(3)),
+(3018, 108, 201, '初中数学', 'female', '济南初三数学冲刺（函数压轴）', '冲刺阶段希望专项突破函数压轴题。', 15, 'both', '济南', '历下区泉城广场附近', 3, 220.00, 320.00, 'JUNIOR', 'C985', 'PARENT', '["Thu 19-21","Sat 9-12","Sun 9-12"]', 1, NOW(3), NOW(3)),
+(3019, 109, 103, '小学英语', 'male', '福州小学英语词汇听力提升（线上）', '制定学习计划，坚持打卡与复盘。', 12, 'online', '全国', NULL, 2, 100.00, 160.00, 'PRIMARY', 'BACHELOR', 'STUDENT_SELF', '["Tue 20-21","Thu 20-21"]', 1, NOW(3), NOW(3)),
+(3020, 110, 101, '小学数学', 'female', '广州小学奥数启蒙', '培养思维与兴趣，注重过程与方法。', 11, 'offline', '广州', '天河区体育西附近', 2, 160.00, 240.00, 'PRIMARY', 'OVERSEAS', 'PARENT', '["Sat 10-12","Sun 10-12"]', 1, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
+subject_name=VALUES(subject_name),
+student_gender=VALUES(student_gender),
 title=VALUES(title),
 description=VALUES(description),
 child_age=VALUES(child_age),
@@ -97,4 +110,3 @@ status=VALUES(status),
 update_time=VALUES(update_time);
 
 SET FOREIGN_KEY_CHECKS = 1;
-

@@ -7,6 +7,7 @@ import com.ai.tutor.appointment.model.dto.job.UpdateTeacherJobPostingRequest;
 import com.ai.tutor.appointment.model.entity.TeacherJobPosting;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
 import com.ai.tutor.appointment.service.TeacherJobPostingService;
+import com.ai.tutor.appointment.utils.CityCatalog;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
@@ -24,6 +25,7 @@ public class TeacherJobPostingServiceImpl implements TeacherJobPostingService {
     public Long create(CreateTeacherJobPostingRequest request, Long uid) {
         ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
 
+        String normalizedCity = CityCatalog.normalizeCityForStorage(request.getMode(), request.getCity());
         TeacherJobPosting posting = TeacherJobPosting.builder()
                 .tutorId(uid)
                 .subjectId(request.getSubjectId())
@@ -31,7 +33,7 @@ public class TeacherJobPostingServiceImpl implements TeacherJobPostingService {
                 .description(request.getDescription())
                 .pricePerHour(request.getPricePerHour())
                 .mode(request.getMode())
-                .city(request.getCity())
+                .city(normalizedCity)
                 .availableTime(request.getAvailableTime())
                 .maxStudents(request.getMaxStudents())
                 .status(1)
@@ -50,6 +52,10 @@ public class TeacherJobPostingServiceImpl implements TeacherJobPostingService {
         ThrowUtils.throwIf(db == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(db.getTutorId()), ErrorCode.NO_AUTH_ERROR);
 
+        String effectiveMode = request.getMode() == null ? db.getMode() : request.getMode();
+        String effectiveCity = request.getCity() == null ? db.getCity() : request.getCity();
+        String normalizedCity = CityCatalog.normalizeCityForStorage(effectiveMode, effectiveCity);
+
         TeacherJobPosting toUpdate = TeacherJobPosting.builder()
                 .id(id)
                 .subjectId(request.getSubjectId())
@@ -57,7 +63,7 @@ public class TeacherJobPostingServiceImpl implements TeacherJobPostingService {
                 .description(request.getDescription())
                 .pricePerHour(request.getPricePerHour())
                 .mode(request.getMode())
-                .city(request.getCity())
+                .city(request.getCity() == null ? null : normalizedCity)
                 .availableTime(request.getAvailableTime())
                 .maxStudents(request.getMaxStudents())
                 .status(request.getStatus())
@@ -88,7 +94,8 @@ public class TeacherJobPostingServiceImpl implements TeacherJobPostingService {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         Integer pageSize = request.getPageSize();
 
-        List<TeacherJobPosting> list = teacherJobPostingMapper.listPublished(subjectId, city, mode, request.getCursor(), pageSize);
+        String effectiveCity = CityCatalog.normalizeCityForFilter(city);
+        List<TeacherJobPosting> list = teacherJobPostingMapper.listPublished(subjectId, effectiveCity, mode, request.getCursor(), pageSize);
         return buildCursorResponse(list, pageSize);
     }
 

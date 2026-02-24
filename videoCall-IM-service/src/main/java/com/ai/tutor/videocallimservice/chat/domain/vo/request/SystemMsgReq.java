@@ -52,4 +52,13 @@ public class SystemMsgReq {
 
     @Schema(description = "上课频次（每周次数）")
     private Integer frequencyPerWeek;
+
+    @Schema(description = "合作提案id（部分系统消息使用）")
+    private Long proposalId;
+
+    @Schema(description = "中介费订单id（部分系统消息使用）")
+    private Long orderId;
+
+    @Schema(description = "金额（分）（部分系统消息使用）")
+    private Long amountFen;
 }

@@ -238,7 +238,9 @@ export interface UserCardVO {
 export interface StudentJobPosting {
   id: number
   parentId: number
-  subjectId: number
+  subjectId: number | null
+  subjectName: string | null
+  subjectIsOther: number | null
   title: string
   description: string | null
   studentGender: string | null
@@ -342,6 +344,20 @@ export type ChatMessageBody =
       proposalId: number
       status: CollaborationProposalStatus
       actorUserId: number
+    }
+  | {
+      type: 'brokerage_required'
+      orderId: number
+      proposalId: number | null
+      amountFen: number | null
+      status: string | null
+      payerUserId: number | null
+    }
+  | {
+      type: 'contact_unlocked'
+      proposalId: number | null
+      orderId: number | null
+      status: string | null
     }
   | { type: 'system'; content?: string; [k: string]: unknown }
 

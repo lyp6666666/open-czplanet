@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +28,7 @@ const userInitial = computed(() => {
 })
 
 const menuOpen = ref(false)
+const cityModalOpen = ref(false)
 const switchModalOpen = ref(false)
 const greetingModalOpen = ref(false)
 const greetingText = ref('')
@@ -100,17 +102,33 @@ function onLogout() {
       <div class="left">
         <button class="logo" type="button" @click="go('/')">家教直聘</button>
 
-        <label v-if="isLoggedIn" class="city">
-          <select v-model="city" class="city-select">
-            <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
-          </select>
-        </label>
+        <div v-if="isLoggedIn" class="city">
+          <button class="city-trigger" type="button" @click.stop="cityModalOpen = true">
+            <svg class="city-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2c3.9 0 7 3.1 7 7 0 5-7 13-7 13S5 14 5 9c0-3.9 3.1-7 7-7Zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+              />
+            </svg>
+            <span class="city-name">{{ city }}</span>
+            <span class="city-switch">[切换]</span>
+          </button>
+          <CitySelectModal :open="cityModalOpen" v-model="city" :hot-cities="cities" @close="cityModalOpen = false" />
+        </div>
 
         <nav v-if="isLoggedIn" class="tabs">
           <button class="tab" :class="{ active: route.path === '/' }" type="button" @click="go('/')">首页</button>
           <template v-if="isTeacher">
             <button class="tab" :class="{ active: route.path.startsWith('/tutor/jobs') }" type="button" @click="go('/tutor/jobs')">
               需求
+            </button>
+            <button
+              class="tab"
+              :class="{ active: route.path.startsWith('/tutor/favorites') }"
+              type="button"
+              @click="go('/tutor/favorites')"
+            >
+              收藏
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
@@ -122,6 +140,14 @@ function onLogout() {
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/student/jobs') }" type="button" @click="go('/student/jobs/mine')">
               我的需求
+            </button>
+            <button
+              class="tab"
+              :class="{ active: route.path.startsWith('/student/favorites') }"
+              type="button"
+              @click="go('/student/favorites')"
+            >
+              收藏
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
@@ -218,15 +244,44 @@ function onLogout() {
   padding: 0;
 }
 
-.city-select {
+.city {
+  display: flex;
+  align-items: center;
+}
+
+.city-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 34px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
   padding: 0 10px;
-  background: #fff;
-  outline: none;
-  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 900;
   color: var(--text);
+}
+
+.city-trigger:hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.city-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+}
+
+.city-name {
+  white-space: nowrap;
+}
+
+.city-switch {
+  color: var(--muted);
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .tabs {

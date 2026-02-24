@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
+import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import { userApi } from '@/api/user'
 import type { UserCardVO } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   open: boolean
@@ -17,6 +19,8 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const card = ref<UserCardVO | null>(null)
 
+const auth = useAuthStore()
+
 const title = computed(() => {
   const user = card.value?.user
   if (!user) return ''
@@ -29,6 +33,10 @@ const identityLabel = computed(() => {
   if (t === 2) return '学生'
   return ''
 })
+
+const canFavoriteTutor = computed(() => auth.user?.userType === 2 && card.value?.user?.userType === 1)
+const favorited = ref(false)
+const favoriteBusy = ref(false)
 
 function close() {
   emit('close')
@@ -55,8 +63,13 @@ watch(
     if (!open || !uid) return
     loading.value = true
     error.value = null
+    favorited.value = false
     try {
       card.value = await userApi.card(uid)
+      if (auth.user?.userType === 2 && card.value?.user?.userType === 1) {
+        const ids = await favoritesTutorsApi.checkTutorFavorites([uid])
+        favorited.value = Array.isArray(ids) && ids.includes(uid)
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载失败'
       card.value = null
@@ -66,6 +79,25 @@ watch(
   },
   { immediate: true },
 )
+
+async function onToggleFavoriteTutor() {
+  const uid = props.uid
+  if (!uid || !canFavoriteTutor.value || favoriteBusy.value) return
+  favoriteBusy.value = true
+  error.value = null
+  try {
+    if (favorited.value) {
+      await favoritesTutorsApi.unfavoriteTutor(uid)
+    } else {
+      await favoritesTutorsApi.favoriteTutor(uid)
+    }
+    favorited.value = !favorited.value
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '操作失败'
+  } finally {
+    favoriteBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -83,7 +115,12 @@ watch(
             <div v-if="card?.user?.id" class="u-sub">UID：{{ card.user.id }}</div>
           </div>
         </div>
-        <button class="icon-btn" type="button" @click="close">×</button>
+        <div class="head-ops">
+          <button v-if="canFavoriteTutor" class="btn" type="button" :disabled="favoriteBusy" @click="onToggleFavoriteTutor">
+            {{ favorited ? '已收藏' : '收藏' }}
+          </button>
+          <button class="icon-btn" type="button" @click="close">×</button>
+        </div>
       </div>
 
       <div v-if="loading" class="hint">加载中...</div>
@@ -161,6 +198,12 @@ watch(
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.head-ops {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .icon-btn {

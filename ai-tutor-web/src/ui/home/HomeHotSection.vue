@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { HotDemandCardVO, HotServiceCardVO, HotTabsVO, HotTutorCardVO } from '@/api/types'
 import { chatApi } from '@/api/chat'
+import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import type { PageState } from '@/stores/home'
 import { useAuthStore } from '@/stores/auth'
 import { formatBudgetUnit, formatClassMode, formatScheduleText } from '@/utils/present'
@@ -28,11 +29,10 @@ const emit = defineEmits<{
   (e: 'load-more-services'): void
   (e: 'load-more-demands'): void
   (e: 'load-more-tutors'): void
-  (e: 'refresh'): void
+  (e: 'shuffle-services'): void
+  (e: 'shuffle-demands'): void
+  (e: 'shuffle-tutors'): void
 }>()
-
-const serviceTabs = computed(() => props.hotTabsService?.tabs || [])
-const demandTabs = computed(() => props.hotTabsDemand?.tabs || [])
 const showServices = computed(() => props.showServices !== false)
 const showDemands = computed(() => props.showDemands !== false)
 const showTutors = computed(() => props.showTutors !== false)
@@ -40,6 +40,29 @@ const showTutors = computed(() => props.showTutors !== false)
 const router = useRouter()
 const auth = useAuthStore()
 const canChat = computed(() => auth.isLoggedIn && auth.user?.userType === 1)
+const canFavoriteTutor = computed(() => auth.isLoggedIn && auth.user?.userType === 2)
+
+const checkedFavoriteTutorIds = new Set<number>()
+const favoriteTutorMap = ref<Record<number, boolean>>({})
+
+async function syncTutorFavorites(ids: number[]) {
+  const need = ids.filter((id) => !checkedFavoriteTutorIds.has(id))
+  if (!need.length) return
+  need.forEach((id) => checkedFavoriteTutorIds.add(id))
+  try {
+    const favoritedIds = await favoritesTutorsApi.checkTutorFavorites(need)
+    const next = { ...favoriteTutorMap.value }
+    need.forEach((id) => {
+      next[id] = false
+    })
+    favoritedIds.forEach((id) => {
+      next[id] = true
+    })
+    favoriteTutorMap.value = next
+  } catch (e) {
+    void e
+  }
+}
 
 function range(n: number) {
   return Array.from({ length: n }, (_, i) => i)
@@ -48,16 +71,6 @@ function range(n: number) {
 const servicePlaceholders = computed(() => range(6))
 const demandPlaceholders = computed(() => range(6))
 const tutorPlaceholders = computed(() => range(4))
-
-function selectServiceTab(tabId: string) {
-  emit('update:serviceTabId', tabId)
-  emit('refresh')
-}
-
-function selectDemandTab(tabId: string) {
-  emit('update:demandTabId', tabId)
-  emit('refresh')
-}
 
 async function onChatDemand(it: HotDemandCardVO) {
   if (!canChat.value) return
@@ -68,6 +81,38 @@ async function onChatDemand(it: HotDemandCardVO) {
   const roomId = await chatApi.startRoom(it.parent.userId, greeting)
   await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parent.userId) } })
 }
+
+async function onOpenDemand(it: HotDemandCardVO) {
+  await router.push({ name: 'tutorJobs', query: { demandId: String(it.demandId) } })
+}
+
+async function onToggleFavoriteTutor(uid: number) {
+  if (!canFavoriteTutor.value) return
+  const current = !!favoriteTutorMap.value[uid]
+  try {
+    if (current) {
+      await favoritesTutorsApi.unfavoriteTutor(uid)
+    } else {
+      await favoritesTutorsApi.favoriteTutor(uid)
+    }
+    favoriteTutorMap.value = { ...favoriteTutorMap.value, [uid]: !current }
+  } catch (e) {
+    void e
+  }
+}
+
+watch(
+  () => [canFavoriteTutor.value, props.hotTutors.list.map((it) => it.userId)] as const,
+  ([canFav, ids]) => {
+    if (!canFav) {
+      checkedFavoriteTutorIds.clear()
+      favoriteTutorMap.value = {}
+      return
+    }
+    void syncTutorFavorites(ids)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -75,27 +120,12 @@ async function onChatDemand(it: HotDemandCardVO) {
     <div class="head">
       <div class="title">热门推荐</div>
       <div class="meta">{{ city }}</div>
-      <button class="btn" type="button" @click="emit('refresh')">换一批</button>
     </div>
 
     <div v-if="showServices" class="block card">
       <div class="block-head">
-        <div class="block-title">热门服务</div>
-        <div class="tabs">
-          <template v-if="serviceTabs.length">
-            <button
-              v-for="t in serviceTabs"
-              :key="t.tabId"
-              class="tab"
-              :class="{ active: t.tabId === serviceTabId }"
-              type="button"
-              @click="selectServiceTab(t.tabId)"
-            >
-              {{ t.name }}
-            </button>
-          </template>
-          <button v-else class="tab active" type="button" @click="emit('refresh')">推荐</button>
-        </div>
+        <div class="block-title">推荐需求</div>
+        <button class="btn" type="button" @click="emit('shuffle-services')">换一批</button>
       </div>
 
       <div v-if="hotServices.error" class="hint">{{ hotServices.error }}</div>
@@ -148,7 +178,7 @@ async function onChatDemand(it: HotDemandCardVO) {
 
         <template v-else>
           <article v-for="i in servicePlaceholders" :key="i" class="item empty-item">
-            <div class="empty-title">暂无推荐服务</div>
+            <div class="empty-title">暂无推荐需求</div>
             <div class="empty-sub">稍后再来看看</div>
           </article>
         </template>
@@ -166,21 +196,7 @@ async function onChatDemand(it: HotDemandCardVO) {
     <div v-if="showDemands" class="block card">
       <div class="block-head">
         <div class="block-title">热门需求</div>
-        <div class="tabs">
-          <template v-if="demandTabs.length">
-            <button
-              v-for="t in demandTabs"
-              :key="t.tabId"
-              class="tab"
-              :class="{ active: t.tabId === demandTabId }"
-              type="button"
-              @click="selectDemandTab(t.tabId)"
-            >
-              {{ t.name }}
-            </button>
-          </template>
-          <button v-else class="tab active" type="button" @click="emit('refresh')">推荐</button>
-        </div>
+        <button class="btn" type="button" @click="emit('shuffle-demands')">换一批</button>
       </div>
 
       <div v-if="hotDemands.error" class="hint">{{ hotDemands.error }}</div>
@@ -211,7 +227,7 @@ async function onChatDemand(it: HotDemandCardVO) {
         </template>
 
         <template v-else-if="hotDemands.list.length">
-          <article v-for="it in hotDemands.list" :key="it.demandId" class="item">
+          <article v-for="it in hotDemands.list" :key="it.demandId" class="item clickable" @click="onOpenDemand(it)">
             <div class="item-title">{{ it.title }}</div>
             <div class="line">
               <span class="pill">{{ it.subject.name }}</span>
@@ -231,7 +247,7 @@ async function onChatDemand(it: HotDemandCardVO) {
               <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
             </div>
             <div v-if="canChat" class="ops">
-              <button class="btn btn-primary" type="button" @click="onChatDemand(it)">立即沟通</button>
+              <button class="btn btn-primary" type="button" @click.stop="onChatDemand(it)">立即沟通</button>
             </div>
           </article>
         </template>
@@ -256,6 +272,7 @@ async function onChatDemand(it: HotDemandCardVO) {
     <div v-if="showTutors" class="block card">
       <div class="block-head">
         <div class="block-title">推荐老师</div>
+        <button class="btn" type="button" @click="emit('shuffle-tutors')">换一批</button>
       </div>
 
       <div v-if="hotTutors.error" class="hint">{{ hotTutors.error }}</div>
@@ -297,6 +314,11 @@ async function onChatDemand(it: HotDemandCardVO) {
             </div>
             <div class="highlights">
               <span v-for="h in it.highlights" :key="h" class="hl">{{ h }}</span>
+            </div>
+            <div v-if="canFavoriteTutor" class="ops">
+              <button class="btn" type="button" @click="onToggleFavoriteTutor(it.userId)">
+                {{ favoriteTutorMap[it.userId] ? '已收藏' : '收藏' }}
+              </button>
             </div>
           </article>
         </template>
@@ -399,6 +421,10 @@ async function onChatDemand(it: HotDemandCardVO) {
   border-radius: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.9);
+}
+
+.item.clickable {
+  cursor: pointer;
 }
 
 .empty-item {

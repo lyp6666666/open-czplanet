@@ -3,13 +3,17 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
+import { contactApi } from '@/api/contact'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
+import ContactUnlockedCard from '@/ui/chat/ContactUnlockedCard.vue'
 import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
+import UnlockedContactModal from '@/ui/chat/UnlockedContactModal.vue'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
 
 const route = useRoute()
@@ -104,6 +108,39 @@ function closeCard() {
   cardOpen.value = false
 }
 
+const unlockOpen = ref(false)
+const unlockUid = ref<number | null>(null)
+const unlockPhone = ref('')
+const unlockLoading = ref(false)
+const unlockError = ref<string | null>(null)
+
+function closeUnlock() {
+  unlockOpen.value = false
+}
+
+async function viewUnlockedContact() {
+  if (unlockLoading.value) return
+  if (!otherUid.value) return
+  unlockOpen.value = true
+  unlockUid.value = otherUid.value
+  unlockPhone.value = ''
+  unlockError.value = null
+  unlockLoading.value = true
+  try {
+    const contact = await contactApi.unlock(roomId.value, otherUid.value)
+    unlockUid.value = contact.uid
+    unlockPhone.value = contact.phone || ''
+  } catch (e) {
+    unlockError.value = e instanceof Error ? e.message : '加载失败'
+  } finally {
+    unlockLoading.value = false
+  }
+}
+
+function goPay(orderId: number) {
+  router.push({ name: 'brokeragePay', query: { orderId: String(orderId) } })
+}
+
 function openCollaboration() {
   collabCreateError.value = null
   collabOpen.value = true
@@ -180,6 +217,14 @@ function isCollaborationProposalBody(body: ChatMessageBody): body is Extract<Cha
 
 function isCollaborationStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_status' }> {
   return body.type === 'collaboration_status'
+}
+
+function isBrokerageRequiredBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'brokerage_required' }> {
+  return body.type === 'brokerage_required'
+}
+
+function isContactUnlockedBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'contact_unlocked' }> {
+  return body.type === 'contact_unlocked'
 }
 
 async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
@@ -506,6 +551,16 @@ watch(
               <template v-else-if="isCollaborationStatusBody(m.body)">
                 <div class="sys">合作提案：{{ collabStatusText(m.body.status) }}</div>
               </template>
+              <template v-else-if="isBrokerageRequiredBody(m.body)">
+                <BrokerageRequiredCard
+                  :body="m.body"
+                  :can-pay="auth.user?.userType === 1 && (!m.body.payerUserId || m.body.payerUserId === myUid)"
+                  @pay="goPay(m.body.orderId)"
+                />
+              </template>
+              <template v-else-if="isContactUnlockedBody(m.body)">
+                <ContactUnlockedCard :body="m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
+              </template>
               <template v-else>
                 {{ msgText(m.body) }}
               </template>
@@ -530,6 +585,14 @@ watch(
     </div>
 
     <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
+    <UnlockedContactModal
+      :open="unlockOpen"
+      :uid="unlockUid"
+      :phone="unlockPhone"
+      :loading="unlockLoading"
+      :error="unlockError"
+      @close="closeUnlock"
+    />
     <CollaborationProposalModal
       :open="collabOpen"
       :busy="collabCreateBusy"

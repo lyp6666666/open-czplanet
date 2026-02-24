@@ -7,12 +7,15 @@ const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
 const StudentEditJobPage = () => import('@/pages/student/StudentEditJobPage.vue')
+const StudentFavoritesPage = () => import('@/pages/student/StudentFavoritesPage.vue')
 const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
 const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
+const TutorFavoritesPage = () => import('@/pages/tutor/TutorFavoritesPage.vue')
 const TutorOnboardingBasicPage = () => import('@/pages/tutor/TutorOnboardingBasicPage.vue')
 const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
+const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -78,6 +81,11 @@ export const router = createRouter({
       component: StudentEditJobPage,
     },
     {
+      path: '/student/favorites',
+      name: 'studentFavorites',
+      component: StudentFavoritesPage,
+    },
+    {
       path: '/tutor/jobs',
       name: 'tutorJobs',
       component: TutorJobsPage,
@@ -91,6 +99,11 @@ export const router = createRouter({
       path: '/tutor/jobs/:id',
       name: 'tutorJobDetail',
       component: TutorJobDetailPage,
+    },
+    {
+      path: '/tutor/favorites',
+      name: 'tutorFavorites',
+      component: TutorFavoritesPage,
     },
     {
       path: '/chat',
@@ -109,6 +122,11 @@ export const router = createRouter({
       name: 'schedule',
       component: SchedulePage,
     },
+    {
+      path: '/pay/brokerage',
+      name: 'brokeragePay',
+      component: BrokeragePayPage,
+    },
   ],
 })
 
@@ -125,6 +143,7 @@ router.beforeEach((to) => {
   const needAuth =
     to.path === '/me' ||
     to.path === '/schedule' ||
+    to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||
     to.path.startsWith('/tutor/') ||
     to.path.startsWith('/chat')

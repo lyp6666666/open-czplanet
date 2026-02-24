@@ -14,6 +14,12 @@ public class UpdateStudentJobPostingRequest {
     @Schema(description = "科目ID", example = "1")
     private Long subjectId;
 
+    @Schema(description = "科目名称（不区分年级，可选）", example = "数学")
+    private String subjectName;
+
+    @Schema(description = "是否为其他自定义科目", example = "false")
+    private Boolean subjectOther;
+
     @Schema(description = "标题", example = "小学三年级数学家教")
     private String title;
 

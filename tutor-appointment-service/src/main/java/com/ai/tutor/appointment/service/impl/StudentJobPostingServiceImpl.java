@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.service.impl;
 
+import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.enums.PublisherIdentityEnum;
@@ -8,15 +9,18 @@ import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.model.entity.PositionPost;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
 import com.ai.tutor.appointment.model.vo.DemandViewVO;
 import com.ai.tutor.appointment.service.StudentJobPostingService;
+import com.ai.tutor.appointment.utils.CityCatalog;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -29,6 +33,9 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     @Resource
     private UserMapper userMapper;
 
+    @Resource
+    private PositionPostMapper positionPostMapper;
+
     @Override
     public Long create(CreateStudentJobPostingRequest request, Long uid) {
         ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -40,9 +47,23 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         }
         String stageCode = firstNonBlank(request.getStageCode(), deriveStageCodeFromGradeCode(gradeCode));
 
+        Long subjectId = request.getSubjectId();
+        String subjectName = trimToNull(request.getSubjectName());
+        boolean subjectOther = Boolean.TRUE.equals(request.getSubjectOther());
+        if (subjectName == null && subjectId != null) {
+            List<PositionPost> posts = positionPostMapper.selectByIds(Collections.singletonList(subjectId));
+            if (posts != null && !posts.isEmpty()) {
+                subjectName = trimToNull(posts.get(0).getName());
+            }
+        }
+
+        String normalizedCity = CityCatalog.normalizeCityForStorage(request.getClassMode(), request.getCity());
+
         StudentJobPosting posting = StudentJobPosting.builder()
                 .parentId(uid)
-                .subjectId(request.getSubjectId())
+                .subjectId(subjectId)
+                .subjectName(subjectName)
+                .subjectIsOther(subjectOther ? 1 : 0)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .studentGender(normalizeStudentGenderForStorage(request.getStudentGender()))
@@ -52,7 +73,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .teacherRequirementDetail(trimToNull(request.getTeacherRequirementDetail()))
                 .childAge(request.getChildAge())
                 .classMode(request.getClassMode())
-                .city(request.getCity())
+                .city(normalizedCity)
                 .address(request.getAddress())
                 .frequencyPerWeek(request.getFrequencyPerWeek())
                 .budgetMin(request.getBudgetMin())
@@ -87,9 +108,44 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
             stageCode = deriveStageCodeFromGradeCode(gradeCode);
         }
 
+        String effectiveClassMode = firstNonBlank(request.getClassMode(), db.getClassMode());
+        String city = request.getCity() == null ? db.getCity() : request.getCity();
+        String normalizedCity = CityCatalog.normalizeCityForStorage(effectiveClassMode, city);
+
+        boolean touchSubject = request.getSubjectId() != null || request.getSubjectName() != null || request.getSubjectOther() != null;
+        Long subjectId = request.getSubjectId();
+        String subjectName = request.getSubjectName();
+        boolean subjectOther = request.getSubjectOther() != null ? request.getSubjectOther() : (db.getSubjectIsOther() != null && db.getSubjectIsOther() == 1);
+        if (!touchSubject) {
+            subjectId = null;
+            subjectName = null;
+        } else {
+            boolean clearSubject = request.getSubjectOther() != null && !request.getSubjectOther() && request.getSubjectName() == null;
+            if (clearSubject) {
+                subjectId = null;
+                subjectName = null;
+                subjectOther = false;
+            }
+            if (subjectName == null) {
+                subjectName = db.getSubjectName();
+            }
+            subjectName = trimToNull(subjectName);
+            if (subjectId == null && !clearSubject) {
+                subjectId = db.getSubjectId();
+            }
+            if (subjectName == null && subjectId != null) {
+                List<PositionPost> posts = positionPostMapper.selectByIds(Collections.singletonList(subjectId));
+                if (posts != null && !posts.isEmpty()) {
+                    subjectName = trimToNull(posts.get(0).getName());
+                }
+            }
+        }
+
         StudentJobPosting toUpdate = StudentJobPosting.builder()
                 .id(id)
-                .subjectId(request.getSubjectId())
+                .subjectId(subjectId)
+                .subjectName(subjectName)
+                .subjectIsOther(touchSubject ? (subjectOther ? 1 : 0) : null)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .studentGender(request.getStudentGender() == null ? null : normalizeStudentGenderForStorage(request.getStudentGender()))
@@ -99,7 +155,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .teacherRequirementDetail(request.getTeacherRequirementDetail() == null ? null : trimToNull(request.getTeacherRequirementDetail()))
                 .childAge(request.getChildAge())
                 .classMode(request.getClassMode())
-                .city(request.getCity())
+                .city(request.getCity() == null ? null : normalizedCity)
                 .address(request.getAddress())
                 .frequencyPerWeek(request.getFrequencyPerWeek())
                 .budgetMin(request.getBudgetMin())
@@ -109,6 +165,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .publisherIdentity(request.getPublisherIdentity() == null ? null : normalizePublisherIdentity(request.getPublisherIdentity()))
                 .schedule(request.getSchedule())
                 .status(request.getStatus())
+                .subjectTouched(touchSubject)
                 .build();
         int updated = studentJobPostingMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
@@ -137,6 +194,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .id(posting.getId())
                 .parentId(posting.getParentId())
                 .subjectId(posting.getSubjectId())
+                .subjectName(posting.getSubjectName())
+                .subjectIsOther(posting.getSubjectIsOther())
                 .title(posting.getTitle())
                 .description(posting.getDescription())
                 .studentGender(posting.getStudentGender())
@@ -173,6 +232,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
 
     @Override
     public CursorPageResponse<StudentJobPosting> listPublished(Long subjectId,
+                                                              String subjectName,
+                                                              Boolean subjectOther,
                                                               String city,
                                                               String classMode,
                                                               String stageCode,
@@ -189,9 +250,12 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
 
         String edu = normalizeEducationRequirementForFilter(educationRequirement);
         String teacherGender = normalizeTeacherGenderPreferenceForFilter(teacherGenderPreference);
+        String effectiveCity = CityCatalog.normalizeCityForFilter(city);
         List<StudentJobPosting> list = studentJobPostingMapper.listPublishedFiltered(
                 subjectId,
-                city,
+                trimToNull(subjectName),
+                subjectOther,
+                effectiveCity,
                 classMode,
                 stageCode,
                 frequencyPerWeek,
@@ -211,8 +275,12 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     private static final Set<String> GENDER_CODES = Set.of("male", "female", "both");
 
     private static void validateCreate(CreateStudentJobPostingRequest request) {
-        ThrowUtils.throwIf(request.getSubjectId() == null, ErrorCode.PARAMS_ERROR, "科目不能为空");
+        String subjectName = request.getSubjectName();
+        boolean subjectOther = Boolean.TRUE.equals(request.getSubjectOther());
+        ThrowUtils.throwIf(isBlank(subjectName), ErrorCode.PARAMS_ERROR, "教学科目不能为空");
+        ThrowUtils.throwIf(subjectOther && isBlank(subjectName), ErrorCode.PARAMS_ERROR, "请选择其他时需填写科目");
         ThrowUtils.throwIf(isBlank(request.getTitle()), ErrorCode.PARAMS_ERROR, "标题不能为空");
+        ThrowUtils.throwIf(isBlank(request.getStudentGender()), ErrorCode.PARAMS_ERROR, "学员性别不能为空");
         ThrowUtils.throwIf(isBlank(request.getClassMode()), ErrorCode.PARAMS_ERROR, "授课方式不能为空");
         ThrowUtils.throwIf(!CLASS_MODES.contains(request.getClassMode().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "授课方式不合法");
         ThrowUtils.throwIf(request.getFrequencyPerWeek() == null, ErrorCode.PARAMS_ERROR, "授课频次不能为空");
@@ -230,9 +298,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         if (!isBlank(request.getTeacherGenderPreference())) {
             ThrowUtils.throwIf(!GENDER_CODES.contains(request.getTeacherGenderPreference().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "教师性别偏好不合法");
         }
-        if (!isBlank(request.getStudentGender())) {
-            ThrowUtils.throwIf(!Set.of("male", "female").contains(request.getStudentGender().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
-        }
+        ThrowUtils.throwIf(!Set.of("male", "female").contains(request.getStudentGender().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
 
         validateModeAddress(request.getClassMode(), request.getCity(), request.getAddress());
         validateBudgetRange(request.getBudgetMin(), request.getBudgetMax());
@@ -241,7 +307,9 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     private static void validateUpdate(UpdateStudentJobPostingRequest request, StudentJobPosting db) {
         String classMode = firstNonBlank(request.getClassMode(), db.getClassMode());
         String title = firstNonBlank(request.getTitle(), db.getTitle());
-        Long subjectId = request.getSubjectId() == null ? db.getSubjectId() : request.getSubjectId();
+        Boolean subjectOther = request.getSubjectOther() == null ? (db.getSubjectIsOther() != null && db.getSubjectIsOther() == 1) : request.getSubjectOther();
+        String subjectName = request.getSubjectName() == null ? db.getSubjectName() : request.getSubjectName();
+        String studentGender = firstNonBlank(request.getStudentGender(), db.getStudentGender());
         Integer freq = request.getFrequencyPerWeek() == null ? db.getFrequencyPerWeek() : request.getFrequencyPerWeek();
         String gradeCode = firstNonBlank(request.getGradeCode(), db.getGradeCode());
         if (isBlank(gradeCode)) {
@@ -258,8 +326,10 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         BigDecimal budgetMin = request.getBudgetMin() == null ? db.getBudgetMin() : request.getBudgetMin();
         BigDecimal budgetMax = request.getBudgetMax() == null ? db.getBudgetMax() : request.getBudgetMax();
 
-        ThrowUtils.throwIf(subjectId == null, ErrorCode.PARAMS_ERROR, "科目不能为空");
+        ThrowUtils.throwIf(isBlank(subjectName), ErrorCode.PARAMS_ERROR, "教学科目不能为空");
+        ThrowUtils.throwIf(Boolean.TRUE.equals(subjectOther) && isBlank(subjectName), ErrorCode.PARAMS_ERROR, "请选择其他时需填写科目");
         ThrowUtils.throwIf(isBlank(title), ErrorCode.PARAMS_ERROR, "标题不能为空");
+        ThrowUtils.throwIf(isBlank(studentGender), ErrorCode.PARAMS_ERROR, "学员性别不能为空");
         ThrowUtils.throwIf(isBlank(classMode), ErrorCode.PARAMS_ERROR, "授课方式不能为空");
         ThrowUtils.throwIf(!CLASS_MODES.contains(classMode.trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "授课方式不合法");
         ThrowUtils.throwIf(freq == null || freq < 1 || freq > 7, ErrorCode.PARAMS_ERROR, "授课频次需在 1~7 之间");
@@ -271,9 +341,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         if (!isBlank(request.getTeacherGenderPreference())) {
             ThrowUtils.throwIf(!GENDER_CODES.contains(request.getTeacherGenderPreference().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "教师性别偏好不合法");
         }
-        if (!isBlank(request.getStudentGender())) {
-            ThrowUtils.throwIf(!Set.of("male", "female").contains(request.getStudentGender().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
-        }
+        ThrowUtils.throwIf(!Set.of("male", "female").contains(studentGender.trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
 
         validateModeAddress(classMode, city, address);
         validateBudgetRange(budgetMin, budgetMax);

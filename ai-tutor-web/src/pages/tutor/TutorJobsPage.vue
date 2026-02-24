@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -8,6 +8,7 @@ import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO, StudentJobPosting } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { formatClassMode, formatEducationRequirement } from '@/utils/present'
+import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,13 +18,14 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const q = ref('')
+const subject = ref<string>('')
 const classMode = ref<string>('')
 const stageCode = ref<string>('')
 const educationRequirement = ref<string>('')
 const frequencyPerWeek = ref<number | null>(null)
 const teacherGenderPreference = ref<string>('')
 
-const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
+const city = ref(localStorage.getItem('ai_tutor_city') || '全国')
 watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
 
 const budgetMin = ref<number | null>(null)
@@ -38,8 +40,9 @@ const selectedId = ref<number | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
+const pendingHighlightId = ref<number | null>(null)
 
-const openKey = ref<'' | 'type' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
+const openKey = ref<'' | 'type' | 'subject' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
 
 const stageOptions = [
   { value: '', label: '不限' },
@@ -70,6 +73,12 @@ const typeLabel = computed(() => {
   if (classMode.value === 'online') return '线上'
   if (classMode.value === 'offline') return '线下'
   return classMode.value
+})
+
+const subjectLabel = computed(() => {
+  if (!subject.value) return '不限'
+  if (subject.value === SUBJECT_OTHER_VALUE) return '其他'
+  return subject.value
 })
 
 const stageLabel = computed(() => stageOptions.find((o) => o.value === stageCode.value)?.label ?? '不限')
@@ -109,6 +118,11 @@ function closeMenus() {
 
 function selectType(v: string) {
   classMode.value = v
+  closeMenus()
+}
+
+function selectSubject(v: string) {
+  subject.value = v
   closeMenus()
 }
 
@@ -184,6 +198,26 @@ async function refresh() {
   detail.value = null
   detailError.value = null
   await loadMore()
+  await tryHighlight()
+}
+
+async function tryHighlight() {
+  const id = pendingHighlightId.value
+  if (id == null) return
+  let guard = 0
+  while (!list.value.some((it) => it.id === id) && !isLast.value && guard < 6) {
+    await loadMore()
+    guard += 1
+  }
+  if (list.value.some((it) => it.id === id)) {
+    selectedId.value = id
+    await nextTick()
+    const el = document.getElementById(`demand-item-${id}`)
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+  }
+  pendingHighlightId.value = null
 }
 
 async function loadMore() {
@@ -191,11 +225,14 @@ async function loadMore() {
   loading.value = true
   error.value = null
   try {
+    const cityFilter = city.value.trim()
     const page = await jobsApi.feedDemands({
       pageSize: 10,
       cursor: cursor.value,
+      subject: subject.value && subject.value !== SUBJECT_OTHER_VALUE ? subject.value : undefined,
+      subjectOther: subject.value === SUBJECT_OTHER_VALUE ? true : undefined,
       classMode: classMode.value || undefined,
-      city: classMode.value && classMode.value !== 'online' ? city.value.trim() || undefined : undefined,
+      city: classMode.value && classMode.value !== 'online' && cityFilter && cityFilter !== '全国' ? cityFilter : undefined,
       stageCode: stageCode.value || undefined,
       educationRequirement: educationRequirement.value || undefined,
       frequencyPerWeek: frequencyPerWeek.value ?? undefined,
@@ -250,7 +287,7 @@ async function onToggleFavorite(it: StudentJobPosting) {
   }
 }
 
-watch([classMode, stageCode, educationRequirement, teacherGenderPreference], () => {
+watch([subject, classMode, stageCode, educationRequirement, teacherGenderPreference], () => {
   void refresh()
 })
 
@@ -293,6 +330,13 @@ onMounted(() => {
   if (typeof raw === 'string' && raw.trim()) {
     q.value = raw.trim()
   }
+  const demandId = route.query.demandId
+  if (typeof demandId === 'string') {
+    const n = Number(demandId)
+    if (Number.isFinite(n)) {
+      pendingHighlightId.value = n
+    }
+  }
   void refresh()
 })
 </script>
@@ -315,6 +359,20 @@ onMounted(() => {
             <button class="menu-item" type="button" @click="selectType('')">不限</button>
             <button class="menu-item" type="button" @click="selectType('online')">线上</button>
             <button class="menu-item" type="button" @click="selectType('offline')">线下</button>
+          </div>
+        </div>
+
+        <div class="tab-wrap">
+          <button class="tab" type="button" :class="{ active: !!subject || openKey === 'subject' }" @click.stop="toggle('subject')">
+            <span>教学科目</span>
+            <span class="val">{{ subjectLabel }}</span>
+          </button>
+          <div v-if="openKey === 'subject'" class="menu card">
+            <button class="menu-item" type="button" @click="selectSubject('')">不限</button>
+            <button v-for="s in SUBJECT_PRESETS" :key="s" class="menu-item" type="button" @click="selectSubject(s)">
+              {{ s }}
+            </button>
+            <button class="menu-item" type="button" @click="selectSubject(SUBJECT_OTHER_VALUE)">其他</button>
           </div>
         </div>
 
@@ -406,6 +464,7 @@ onMounted(() => {
             :key="it.id"
             class="item"
             type="button"
+            :id="`demand-item-${it.id}`"
             :class="{ active: selectedId === it.id }"
             @click="openDetail(it)"
           >

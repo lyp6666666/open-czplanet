@@ -27,6 +27,12 @@ public class DemandViewVO implements Serializable {
     @Schema(description = "科目ID")
     private Long subjectId;
 
+    @Schema(description = "科目名称（不区分年级，可选）")
+    private String subjectName;
+
+    @Schema(description = "是否为其他自定义科目：1是 0否")
+    private Integer subjectIsOther;
+
     @Schema(description = "标题")
     private String title;
 

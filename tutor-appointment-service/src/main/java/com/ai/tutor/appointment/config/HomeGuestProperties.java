@@ -23,7 +23,7 @@ public class HomeGuestProperties {
     /**
      * 默认城市（当无法定位、或客户端未传 city 时使用）。
      */
-    private String defaultCity = "北京";
+    private String defaultCity = "全国";
 
     /**
      * 是否允许切换城市（决定前端是否展示城市选择器入口）。

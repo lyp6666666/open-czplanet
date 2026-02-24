@@ -13,6 +13,7 @@ import com.ai.tutor.appointment.model.vo.SubjectTreeNodeVO;
 import com.ai.tutor.appointment.model.vo.home.HomeGuestVOs;
 import com.ai.tutor.appointment.service.HomeGuestService;
 import com.ai.tutor.appointment.service.SubjectQueryService;
+import com.ai.tutor.appointment.utils.CityCatalog;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
@@ -221,18 +222,62 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                                                                             CursorPageRequest pageRequest) {
         CursorPageRequest req = ensurePageRequest(pageRequest);
         String effectiveSort = normalizeServiceSort(sort);
+        String effectiveCity = CityCatalog.normalizeCityForFilter(city);
+        boolean allowOnlineFallback = mode == null || mode.trim().isEmpty() || "both".equalsIgnoreCase(mode.trim());
 
-        List<TeacherJobPosting> postings = safeGet(
-                () -> teacherJobPostingMapper.listPublishedSorted(
-                        subjectId,
-                        city,
-                        mode,
-                        effectiveSort,
-                        req.getCursor(),
-                        req.getPageSize()
-                ),
-                List.of()
-        );
+        List<TeacherJobPosting> postings;
+        if (req.getCursor() == null && effectiveCity != null) {
+            postings = safeGet(
+                    () -> teacherJobPostingMapper.listPublishedSorted(
+                            subjectId,
+                            effectiveCity,
+                            mode,
+                            effectiveSort,
+                            null,
+                            req.getPageSize()
+                    ),
+                    List.of()
+            );
+            if (allowOnlineFallback && postings.size() < req.getPageSize()) {
+                int need = req.getPageSize() - postings.size();
+                List<TeacherJobPosting> fallback = safeGet(
+                        () -> teacherJobPostingMapper.listPublishedSorted(
+                                subjectId,
+                                null,
+                                "online",
+                                effectiveSort,
+                                null,
+                                Math.max(req.getPageSize() * 2, need)
+                        ),
+                        List.of()
+                );
+                Set<Long> seen = postings.stream().map(TeacherJobPosting::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+                List<TeacherJobPosting> merged = new ArrayList<>(postings);
+                for (TeacherJobPosting it : fallback) {
+                    if (it == null || it.getId() == null || seen.contains(it.getId())) {
+                        continue;
+                    }
+                    merged.add(it);
+                    seen.add(it.getId());
+                    if (merged.size() >= req.getPageSize()) {
+                        break;
+                    }
+                }
+                postings = merged;
+            }
+        } else {
+            postings = safeGet(
+                    () -> teacherJobPostingMapper.listPublishedSorted(
+                            subjectId,
+                            effectiveCity,
+                            mode,
+                            effectiveSort,
+                            req.getCursor(),
+                            req.getPageSize()
+                    ),
+                    List.of()
+            );
+        }
 
         if (CollectionUtil.isEmpty(postings)) {
             return new CursorPageResponse<>(null, true, List.of());
@@ -294,19 +339,65 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                                                                           CursorPageRequest pageRequest) {
         CursorPageRequest req = ensurePageRequest(pageRequest);
         String effectiveSort = normalizeDemandSort(sort);
+        String effectiveCity = CityCatalog.normalizeCityForFilter(city);
+        boolean allowOnlineFallback = classMode == null || classMode.trim().isEmpty() || "both".equalsIgnoreCase(classMode.trim());
 
-        List<StudentJobPosting> postings = safeGet(
-                () -> studentJobPostingMapper.listPublishedSorted(
-                        subjectId,
-                        city,
-                        classMode,
-                        null,
-                        effectiveSort,
-                        req.getCursor(),
-                        req.getPageSize()
-                ),
-                List.of()
-        );
+        List<StudentJobPosting> postings;
+        if (req.getCursor() == null && effectiveCity != null) {
+            postings = safeGet(
+                    () -> studentJobPostingMapper.listPublishedSorted(
+                            subjectId,
+                            effectiveCity,
+                            classMode,
+                            null,
+                            effectiveSort,
+                            null,
+                            req.getPageSize()
+                    ),
+                    List.of()
+            );
+            if (allowOnlineFallback && postings.size() < req.getPageSize()) {
+                int need = req.getPageSize() - postings.size();
+                List<StudentJobPosting> fallback = safeGet(
+                        () -> studentJobPostingMapper.listPublishedSorted(
+                                subjectId,
+                                null,
+                                "online",
+                                null,
+                                effectiveSort,
+                                null,
+                                Math.max(req.getPageSize() * 2, need)
+                        ),
+                        List.of()
+                );
+                Set<Long> seen = postings.stream().map(StudentJobPosting::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+                List<StudentJobPosting> merged = new ArrayList<>(postings);
+                for (StudentJobPosting it : fallback) {
+                    if (it == null || it.getId() == null || seen.contains(it.getId())) {
+                        continue;
+                    }
+                    merged.add(it);
+                    seen.add(it.getId());
+                    if (merged.size() >= req.getPageSize()) {
+                        break;
+                    }
+                }
+                postings = merged;
+            }
+        } else {
+            postings = safeGet(
+                    () -> studentJobPostingMapper.listPublishedSorted(
+                            subjectId,
+                            effectiveCity,
+                            classMode,
+                            null,
+                            effectiveSort,
+                            req.getCursor(),
+                            req.getPageSize()
+                    ),
+                    List.of()
+            );
+        }
 
         if (CollectionUtil.isEmpty(postings)) {
             return new CursorPageResponse<>(null, true, List.of());
@@ -371,11 +462,41 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                                                                         CursorPageRequest pageRequest) {
         CursorPageRequest req = ensurePageRequest(pageRequest);
         String effectiveSort = defaultIfBlank(sort, "recommend");
+        String effectiveCity = CityCatalog.normalizeCityForFilter(city);
+        boolean allowOnlineFallback = mode == null || mode.trim().isEmpty() || "both".equalsIgnoreCase(mode.trim());
 
-        List<HomeHotTutorAggRow> rows = safeGet(
-                () -> teacherJobPostingMapper.listHotTutors(subjectId, city, mode, req.getCursor(), req.getPageSize()),
-                List.of()
-        );
+        List<HomeHotTutorAggRow> rows;
+        if (req.getCursor() == null && effectiveCity != null) {
+            rows = safeGet(
+                    () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, null, req.getPageSize()),
+                    List.of()
+            );
+            if (allowOnlineFallback && rows.size() < req.getPageSize()) {
+                int need = req.getPageSize() - rows.size();
+                List<HomeHotTutorAggRow> fallback = safeGet(
+                        () -> teacherJobPostingMapper.listHotTutors(subjectId, null, "online", null, Math.max(req.getPageSize() * 2, need)),
+                        List.of()
+                );
+                Set<Long> seen = rows.stream().map(HomeHotTutorAggRow::getTutorId).filter(Objects::nonNull).collect(Collectors.toSet());
+                List<HomeHotTutorAggRow> merged = new ArrayList<>(rows);
+                for (HomeHotTutorAggRow it : fallback) {
+                    if (it == null || it.getTutorId() == null || seen.contains(it.getTutorId())) {
+                        continue;
+                    }
+                    merged.add(it);
+                    seen.add(it.getTutorId());
+                    if (merged.size() >= req.getPageSize()) {
+                        break;
+                    }
+                }
+                rows = merged;
+            }
+        } else {
+            rows = safeGet(
+                    () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, req.getCursor(), req.getPageSize()),
+                    List.of()
+            );
+        }
         if (CollectionUtil.isEmpty(rows)) {
             return new CursorPageResponse<>(null, true, List.of());
         }
@@ -420,7 +541,7 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                     tutorId,
                     buildTutorDisplayName(profile, user),
                     user == null ? null : user.getAvatar(),
-                    city,
+                    effectiveCity == null ? CityCatalog.national() : effectiveCity,
                     profile == null ? null : profile.getEducation(),
                     profile == null ? null : profile.getExperienceYears(),
                     profile == null ? null : profile.getRatePerHour(),
@@ -544,6 +665,9 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         }
         if (city == null) {
             return false;
+        }
+        if (CityCatalog.national().equals(city)) {
+            return true;
         }
         return cities.stream().anyMatch(c -> city.equalsIgnoreCase(c));
     }

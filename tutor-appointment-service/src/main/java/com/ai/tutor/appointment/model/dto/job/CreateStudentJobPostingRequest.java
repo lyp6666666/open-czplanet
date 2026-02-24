@@ -13,9 +13,15 @@ import java.math.BigDecimal;
 @Schema(name = "CreateStudentJobPostingRequest", description = "家长发布需求贴请求")
 public class CreateStudentJobPostingRequest {
 
-    @NotNull
     @Schema(description = "科目ID", example = "1")
     private Long subjectId;
+
+    @Schema(description = "科目名称（不区分年级，可选）", example = "数学")
+    @NotBlank
+    private String subjectName;
+
+    @Schema(description = "是否为其他自定义科目", example = "false")
+    private Boolean subjectOther;
 
     @NotBlank
     @Schema(description = "标题", example = "小学三年级数学家教")
@@ -25,6 +31,7 @@ public class CreateStudentJobPostingRequest {
     private String description;
 
     @Schema(description = "学员性别：male/female", example = "female")
+    @NotBlank
     private String studentGender;
 
     @Schema(description = "学生年级编码：PRESCHOOL/GRADE1~6/JUNIOR1~3/SENIOR1~3/SELF_EXAM/COLLEGE1~4/ADULT", example = "JUNIOR1")

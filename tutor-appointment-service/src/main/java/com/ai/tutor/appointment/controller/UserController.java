@@ -62,7 +62,7 @@ public class UserController {
     @FrequencyControl(
             prefixKey = "sms:send:",   // Redis key 前缀
             target = FrequencyControl.Target.EL,  // 通过 EL 取手机号
-            spEl = "#phone",           // 取入参 phone 参数
+            spEl = "#p0?.phone",           // 取入参 phone 参数
             time = 1,                  // 时间范围（1 分钟）
             unit = TimeUnit.MINUTES,   // 时间单位：分钟
             count = 1                  // 限制 1 次

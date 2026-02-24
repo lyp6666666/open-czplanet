@@ -54,9 +54,11 @@ CREATE TABLE student_job_posting (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   parent_id BIGINT NOT NULL,
   subject_id BIGINT,
+  subject_name VARCHAR(100) NOT NULL,
+  subject_is_other TINYINT NOT NULL DEFAULT 0,
   title VARCHAR(255) NOT NULL,
   description VARCHAR(2000),
-  student_gender VARCHAR(8),
+  student_gender VARCHAR(8) NOT NULL,
   grade_code VARCHAR(16),
   available_time VARCHAR(2000),
   teacher_gender_preference VARCHAR(8) DEFAULT 'both',
@@ -81,6 +83,13 @@ CREATE TABLE tutor_favorite_demand (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   tutor_id BIGINT NOT NULL,
   demand_id BIGINT NOT NULL,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE parent_favorite_tutor (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT NOT NULL,
+  tutor_id BIGINT NOT NULL,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

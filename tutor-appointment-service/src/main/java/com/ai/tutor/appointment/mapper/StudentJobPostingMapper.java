@@ -37,6 +37,8 @@ public interface StudentJobPostingMapper {
                                                @Param("pageSize") Integer pageSize);
 
     List<StudentJobPosting> listPublishedFiltered(@Param("subjectId") Long subjectId,
+                                                 @Param("subjectName") String subjectName,
+                                                 @Param("subjectOther") Boolean subjectOther,
                                                  @Param("city") String city,
                                                  @Param("classMode") String classMode,
                                                  @Param("stageCode") String stageCode,

@@ -128,6 +128,22 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("actorUserId", body.getActorUserId());
             return out;
         }
+        if ("BROKERAGE_REQUIRED".equals(bizType)) {
+            out.put("type", "brokerage_required");
+            out.put("orderId", body.getEventId());
+            out.put("proposalId", body.getProposalId());
+            out.put("amountFen", body.getAmountFen());
+            out.put("status", body.getStatus());
+            out.put("payerUserId", body.getCreatorUserId());
+            return out;
+        }
+        if ("CONTACT_UNLOCKED".equals(bizType)) {
+            out.put("type", "contact_unlocked");
+            out.put("proposalId", body.getProposalId() == null ? body.getEventId() : body.getProposalId());
+            out.put("orderId", body.getOrderId());
+            out.put("status", body.getStatus());
+            return out;
+        }
 
         out.put("type", "system");
         out.put("bizType", body.getBizType());
@@ -165,6 +181,12 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
         if ("COLLAB_PROPOSAL_STATUS".equals(bizType)) {
             String s = body.getStatus() == null ? "" : body.getStatus();
             return "合作提案：" + s;
+        }
+        if ("BROKERAGE_REQUIRED".equals(bizType)) {
+            return "中介费支付";
+        }
+        if ("CONTACT_UNLOCKED".equals(bizType)) {
+            return "联系方式已解锁";
         }
         return "系统消息：" + title;
     }

@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   uploadImage: vi.fn(),
   updateUserInfo: vi.fn(),
   me: vi.fn(),
-  getSubjectTree: vi.fn(),
   createDemand: vi.fn(),
 }))
 
@@ -24,12 +23,6 @@ vi.mock('@/api/user', () => ({
   userApi: {
     updateUserInfo: mocks.updateUserInfo,
     me: mocks.me,
-  },
-}))
-
-vi.mock('@/api/homeGuest', () => ({
-  homeGuestApi: {
-    getSubjectTree: mocks.getSubjectTree,
   },
 }))
 
@@ -67,11 +60,9 @@ describe('StudentOnboardingFirstDemandPage', () => {
     mocks.uploadImage.mockReset()
     mocks.updateUserInfo.mockReset()
     mocks.me.mockReset()
-    mocks.getSubjectTree.mockReset()
     mocks.createDemand.mockReset()
 
     mocks.me.mockResolvedValue({ id: 1002, userType: 2, name: '', avatar: null })
-    mocks.getSubjectTree.mockResolvedValue([{ id: 200, name: '初中', children: [{ id: 201, name: '初中数学', children: [] }] }])
 
     const router = createTestRouter()
     await router.push('/student/onboarding/first-demand')
@@ -90,11 +81,9 @@ describe('StudentOnboardingFirstDemandPage', () => {
     mocks.uploadImage.mockReset()
     mocks.updateUserInfo.mockReset()
     mocks.me.mockReset()
-    mocks.getSubjectTree.mockReset()
     mocks.createDemand.mockReset()
 
     mocks.me.mockResolvedValue({ id: 1002, userType: 2, name: '', avatar: null })
-    mocks.getSubjectTree.mockResolvedValue([{ id: 200, name: '初中', children: [{ id: 201, name: '初中数学', children: [] }] }])
     mocks.uploadImage.mockResolvedValue({ objectKey: 'k', url: 'https://assets/1.png', contentType: 'image/png', size: 1 })
     mocks.updateUserInfo.mockResolvedValue('OK')
 
@@ -132,11 +121,9 @@ describe('StudentOnboardingFirstDemandPage', () => {
     mocks.uploadImage.mockReset()
     mocks.updateUserInfo.mockReset()
     mocks.me.mockReset()
-    mocks.getSubjectTree.mockReset()
     mocks.createDemand.mockReset()
 
     mocks.me.mockResolvedValue({ id: 1002, userType: 2, name: '', avatar: null })
-    mocks.getSubjectTree.mockResolvedValue([{ id: 200, name: '初中', children: [{ id: 201, name: '初中数学', children: [] }] }])
     mocks.uploadImage.mockResolvedValue({ objectKey: 'k', url: 'https://assets/1.png', contentType: 'image/png', size: 1 })
     mocks.updateUserInfo.mockResolvedValue('OK')
     mocks.createDemand.mockResolvedValue(3001)
@@ -160,8 +147,10 @@ describe('StudentOnboardingFirstDemandPage', () => {
     await wrapper.find('button.btn-primary').trigger('click')
     await flushPromises()
 
+    await wrapper.findAll('select')[0]!.setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('online')
+    await wrapper.findAll('select')[2]!.setValue('数学')
+    await wrapper.findAll('select')[3]!.setValue('online')
     await wrapper.find('textarea').setValue('学生情况')
     await wrapper.findAll('button').find((b) => b.text().trim() === '下一步')!.trigger('click')
     await flushPromises()
@@ -175,10 +164,13 @@ describe('StudentOnboardingFirstDemandPage', () => {
     expect(mocks.createDemand).toHaveBeenCalledTimes(1)
     const payload = mocks.createDemand.mock.calls[0]![0] as Record<string, unknown>
     expect(payload).toMatchObject({
-      subjectId: 201,
+      title: '初一数学家教',
+      subjectName: '数学',
+      subjectOther: false,
       gradeCode: 'JUNIOR1',
       stageCode: 'JUNIOR',
       classMode: 'online',
+      studentGender: 'male',
       teacherGenderPreference: 'female',
       teacherRequirementDetail: '对教员要求',
     })

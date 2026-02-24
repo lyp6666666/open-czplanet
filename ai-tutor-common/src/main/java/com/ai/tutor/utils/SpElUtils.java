@@ -22,8 +22,16 @@ public class SpElUtils {
     public static String parseSpEl(Method method, Object[] args, String spEl) {
         String[] params = Optional.ofNullable(parameterNameDiscoverer.getParameterNames(method)).orElse(new String[]{});//解析参数名
         EvaluationContext context = new StandardEvaluationContext();//el解析需要的上下文对象
-        for (int i = 0; i < params.length; i++) {
-            context.setVariable(params[i], args[i]);//所有参数都作为原材料扔进去
+        if (args != null) {
+            for (int i = 0; i < args.length; i++) {
+                Object arg = args[i];
+                context.setVariable("p" + i, arg);
+                context.setVariable("a" + i, arg);
+                context.setVariable("arg" + i, arg);
+                if (i < params.length) {
+                    context.setVariable(params[i], arg);//所有参数都作为原材料扔进去
+                }
+            }
         }
         Expression expression = parser.parseExpression(spEl);
         return expression.getValue(context, String.class);

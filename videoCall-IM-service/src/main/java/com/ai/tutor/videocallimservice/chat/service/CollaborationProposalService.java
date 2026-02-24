@@ -9,6 +9,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.CreateCollaborationProposalReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.RespondCollaborationProposalReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
@@ -41,6 +42,8 @@ public class CollaborationProposalService {
     private StudentProfileLiteMapper studentProfileLiteMapper;
     @Resource
     private ChatService chatService;
+    @Resource
+    private BrokerageOrderService brokerageOrderService;
 
     public Long createAndSend(CreateCollaborationProposalReq req, Long uid) {
         ThrowUtils.throwIf(req == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -195,7 +198,12 @@ public class CollaborationProposalService {
                 .msgType(8)
                 .body(body)
                 .build();
-        return chatService.sendMsg(msgReq, uid);
+        Long statusMsgId = chatService.sendMsg(msgReq, uid);
+        if (CollaborationProposalStatus.ACCEPTED.equals(next)) {
+            BrokerageOrderVO order = brokerageOrderService.getOrCreateByProposal(proposalId, uid);
+            brokerageOrderService.sendBrokerageRequired(proposal.getRoomId(), proposalId, order, uid);
+        }
+        return statusMsgId;
     }
 
     private Long resolveUserId(int userType, Long refId) {

@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,10 @@ public class StudentJobPosting {
 
     /** 需求科目ID（逻辑外键，对应 position_post.id） */
     private Long subjectId;
+
+    private String subjectName;
+
+    private Integer subjectIsOther;
 
     /** 岗位标题，如：小学数学辅导 */
     private String title;
@@ -95,4 +100,7 @@ public class StudentJobPosting {
 
     /** 更新时间 */
     private LocalDateTime updateTime;
+
+    @JsonIgnore
+    private Boolean subjectTouched;
 }

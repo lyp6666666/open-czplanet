@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.ParentFavoriteTutorMapper">
+
+    <resultMap id="ParentFavoriteTutorMap" type="com.ai.tutor.appointment.model.entity.ParentFavoriteTutor">
+        <id column="id" property="id"/>
+        <result column="parent_id" property="parentId"/>
+        <result column="tutor_id" property="tutorId"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO parent_favorite_tutor (parent_id, tutor_id, create_time)
+        VALUES (#{parentId}, #{tutorId}, NOW())
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM parent_favorite_tutor
+        WHERE parent_id = #{parentId}
+          AND tutor_id = #{tutorId}
+    </delete>
+
+    <select id="exists" resultType="int">
+        SELECT 1
+        FROM parent_favorite_tutor
+        WHERE parent_id = #{parentId}
+          AND tutor_id = #{tutorId}
+        LIMIT 1
+    </select>
+
+    <select id="listFavoritedTutorIds" resultType="long">
+        SELECT tutor_id
+        FROM parent_favorite_tutor
+        WHERE parent_id = #{parentId}
+          AND tutor_id IN
+        <foreach collection="tutorIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="listByParent" resultMap="ParentFavoriteTutorMap">
+        SELECT id, parent_id, tutor_id, create_time
+        FROM parent_favorite_tutor
+        WHERE parent_id = #{parentId}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+</mapper>
+

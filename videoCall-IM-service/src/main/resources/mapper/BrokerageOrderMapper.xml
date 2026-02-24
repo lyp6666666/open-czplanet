@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper">
+
+    <resultMap id="baseMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder">
+        <id column="id" property="id"/>
+        <result column="proposal_id" property="proposalId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="payer_uid" property="payerUid"/>
+        <result column="amount_fen" property="amountFen"/>
+        <result column="pay_method" property="payMethod"/>
+        <result column="status" property="status"/>
+        <result column="proof_url" property="proofUrl"/>
+        <result column="proof_note" property="proofNote"/>
+        <result column="paid_at" property="paidAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO brokerage_order
+        (
+            proposal_id,
+            room_id,
+            payer_uid,
+            amount_fen,
+            pay_method,
+            status,
+            proof_url,
+            proof_note,
+            paid_at,
+            create_time,
+            update_time
+        )
+        VALUES
+        (
+            #{proposalId},
+            #{roomId},
+            #{payerUid},
+            #{amountFen},
+            #{payMethod},
+            #{status},
+            #{proofUrl},
+            #{proofNote},
+            #{paidAt},
+            #{createTime},
+            #{updateTime}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="baseMap">
+        SELECT
+            id, proposal_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+        FROM brokerage_order
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByProposalId" resultMap="baseMap">
+        SELECT
+            id, proposal_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+        FROM brokerage_order
+        WHERE proposal_id = #{proposalId}
+        LIMIT 1
+    </select>
+
+    <update id="submitProof">
+        UPDATE brokerage_order
+        SET
+            pay_method = #{payMethod},
+            proof_url = #{proofUrl},
+            proof_note = #{proofNote},
+            status = 'PROOF_SUBMITTED',
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = 'PENDING'
+    </update>
+
+    <update id="markPaid">
+        UPDATE brokerage_order
+        SET
+            status = 'PAID',
+            paid_at = #{paidAt},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status IN ('PENDING', 'PROOF_SUBMITTED')
+    </update>
+
+</mapper>

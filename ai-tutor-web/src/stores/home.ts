@@ -35,7 +35,7 @@ function createEmptyPage<T>(): PageState<T> {
 
 export const useHomeStore = defineStore('home', {
   state: () => ({
-    city: '北京',
+    city: '全国',
     config: null as HomeConfigVO | null,
     geo: null as GeoLocateVO | null,
     hotWords: null as HotWordsVO | null,
@@ -56,6 +56,12 @@ export const useHomeStore = defineStore('home', {
     error: null as string | null,
   }),
   actions: {
+    cityForApi() {
+      const v = (this.city || '').trim()
+      if (!v || v === '全国') return undefined
+      return v
+    },
+
     async initHome() {
       this.loading = true
       this.error = null
@@ -66,11 +72,11 @@ export const useHomeStore = defineStore('home', {
         this.city = geo?.city || config?.defaultCity || this.city
 
         const [hotWords, subjectTree, banners, hotTabsService, hotTabsDemand, footerLinks] = await Promise.all([
-          homeGuestApi.getHotWords({ city: this.city, limit: 10 }),
+          homeGuestApi.getHotWords({ city: this.cityForApi(), limit: 10 }),
           homeGuestApi.getSubjectTree(),
-          homeGuestApi.getBanners({ city: this.city, scene: 'home' }),
-          homeGuestApi.getHotTabs({ type: 'service', city: this.city, limit: 12 }),
-          homeGuestApi.getHotTabs({ type: 'demand', city: this.city, limit: 12 }),
+          homeGuestApi.getBanners({ city: this.cityForApi(), scene: 'home' }),
+          homeGuestApi.getHotTabs({ type: 'service', city: this.cityForApi(), limit: 12 }),
+          homeGuestApi.getHotTabs({ type: 'demand', city: this.cityForApi(), limit: 12 }),
           homeGuestApi.getFooterLinks(),
         ])
 
@@ -96,10 +102,10 @@ export const useHomeStore = defineStore('home', {
 
     async refreshCityMeta() {
       const [hotWords, banners, hotTabsService, hotTabsDemand] = await Promise.all([
-        homeGuestApi.getHotWords({ city: this.city, limit: 10 }),
-        homeGuestApi.getBanners({ city: this.city, scene: 'home' }),
-        homeGuestApi.getHotTabs({ type: 'service', city: this.city, limit: 12 }),
-        homeGuestApi.getHotTabs({ type: 'demand', city: this.city, limit: 12 }),
+        homeGuestApi.getHotWords({ city: this.cityForApi(), limit: 10 }),
+        homeGuestApi.getBanners({ city: this.cityForApi(), scene: 'home' }),
+        homeGuestApi.getHotTabs({ type: 'service', city: this.cityForApi(), limit: 12 }),
+        homeGuestApi.getHotTabs({ type: 'demand', city: this.cityForApi(), limit: 12 }),
       ])
 
       this.hotWords = hotWords
@@ -139,7 +145,7 @@ export const useHomeStore = defineStore('home', {
       this.hotServices.error = null
       try {
         const page = await homeGuestApi.getHotServices(
-          { tabId: this.selectedServiceTabId, city: this.city, sort: 'latest' },
+          { tabId: this.selectedServiceTabId, city: this.cityForApi(), sort: 'latest' },
           { pageSize: 12, cursor: this.hotServices.nextCursor },
         )
         this.mergePage(this.hotServices, page)
@@ -161,7 +167,7 @@ export const useHomeStore = defineStore('home', {
       this.hotDemands.error = null
       try {
         const page = await homeGuestApi.getHotDemands(
-          { tabId: this.selectedDemandTabId, city: this.city, sort: 'latest' },
+          { tabId: this.selectedDemandTabId, city: this.cityForApi(), sort: 'latest' },
           { pageSize: 12, cursor: this.hotDemands.nextCursor },
         )
         this.mergePage(this.hotDemands, page)
@@ -183,7 +189,7 @@ export const useHomeStore = defineStore('home', {
       this.hotTutors.error = null
       try {
         const page = await homeGuestApi.getHotTutors(
-          { city: this.city, sort: 'recommend' },
+          { city: this.cityForApi(), sort: 'recommend' },
           { pageSize: 12, cursor: this.hotTutors.nextCursor },
         )
         this.mergePage(this.hotTutors, page)
@@ -199,6 +205,30 @@ export const useHomeStore = defineStore('home', {
       state.list = [...state.list, ...list]
       state.nextCursor = page.nextCursor ?? null
       state.isLast = !!page.isLast
+    },
+
+    async shuffleHotServices() {
+      if (this.hotServices.loading) return
+      const next = this.hotServices.isLast ? null : this.hotServices.nextCursor
+      this.hotServices = createEmptyPage()
+      this.hotServices.nextCursor = next
+      await this.loadMoreHotServices()
+    },
+
+    async shuffleHotDemands() {
+      if (this.hotDemands.loading) return
+      const next = this.hotDemands.isLast ? null : this.hotDemands.nextCursor
+      this.hotDemands = createEmptyPage()
+      this.hotDemands.nextCursor = next
+      await this.loadMoreHotDemands()
+    },
+
+    async shuffleHotTutors() {
+      if (this.hotTutors.loading) return
+      const next = this.hotTutors.isLast ? null : this.hotTutors.nextCursor
+      this.hotTutors = createEmptyPage()
+      this.hotTutors.nextCursor = next
+      await this.loadMoreHotTutors()
     },
   },
 })

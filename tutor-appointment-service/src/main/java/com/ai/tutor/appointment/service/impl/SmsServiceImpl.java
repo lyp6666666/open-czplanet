@@ -18,6 +18,7 @@ public class SmsServiceImpl implements SmsService {
     private RedisTemplate<String, Object> redisTemplate;
 
     private static final ConcurrentHashMap<String, CodeEntry> LOCAL_CODES = new ConcurrentHashMap<>();
+    private static final long CODE_TTL_SECONDS = 5 * 60L;
 
     private static class CodeEntry {
         private final String code;
@@ -29,14 +30,15 @@ public class SmsServiceImpl implements SmsService {
         }
     }
 
-    public String sendCode(String phone,String prefix) {
+    public String sendCode(String phone, String prefix) {
         String code = String.format("%04d", new Random().nextInt(10000));
         // 构造Key
         String key = prefix + phone;
-        // 存入Redis，设置过期时间 60 秒
-        LOCAL_CODES.put(key, new CodeEntry(code, System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(60)));
+        // 存入Redis，设置过期时间 5 分钟
+        LOCAL_CODES.put(key, new CodeEntry(code, System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(CODE_TTL_SECONDS)));
         try {
-            redisTemplate.opsForValue().set(key, code, 60, TimeUnit.SECONDS);
+            redisTemplate.delete(key);
+            redisTemplate.opsForValue().set(key, code, CODE_TTL_SECONDS, TimeUnit.SECONDS);
         } catch (Exception ignored) {
         }
         //todo 这里应该调用云服务进行短信发送

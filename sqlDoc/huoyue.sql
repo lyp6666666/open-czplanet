@@ -46,10 +46,12 @@ DROP TABLE IF EXISTS `student_job_posting`;
 CREATE TABLE `student_job_posting`  (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '岗位需求ID',
   `parent_id` bigint(20) NOT NULL COMMENT '家长ID（对应 parent_profile.user_id 或 user 表）',
-  `subject_id` bigint(20) NOT NULL COMMENT '需求科目ID（position_post.id）',
+  `subject_id` bigint(20) NULL DEFAULT NULL COMMENT '需求科目ID（position_post.id）',
+  `subject_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '科目名称（不区分年级）',
+  `subject_is_other` tinyint(4) NOT NULL DEFAULT 0 COMMENT '是否为其他自定义科目：1是 0否',
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需求标题，如：小学三年级数学家教',
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '课程/需求详情描述',
-  `student_gender` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学员性别：male/female',
+  `student_gender` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '学员性别：male/female',
   `grade_code` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学生年级编码：PRESCHOOL/GRADE1~6/JUNIOR1~3/SENIOR1~3/SELF_EXAM/COLLEGE1~4/ADULT',
   `available_time` varchar(2000) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '可上课时间（自由文本）',
   `teacher_gender_preference` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT 'both' COMMENT '教师性别偏好：male/female/both',
@@ -92,6 +94,21 @@ CREATE TABLE `tutor_favorite_demand`  (
   INDEX `idx_tutor_id`(`tutor_id`) USING BTREE,
   INDEX `idx_demand_id`(`demand_id`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '教师收藏需求贴表' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Table structure for parent_favorite_tutor
+-- ----------------------------
+DROP TABLE IF EXISTS `parent_favorite_tutor`;
+CREATE TABLE `parent_favorite_tutor`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '收藏ID',
+  `parent_id` bigint(20) NOT NULL COMMENT '家长用户ID（user.id）',
+  `tutor_id` bigint(20) NOT NULL COMMENT '教师用户ID（user.id）',
+  `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_parent_tutor`(`parent_id`, `tutor_id`) USING BTREE,
+  INDEX `idx_parent_id`(`parent_id`) USING BTREE,
+  INDEX `idx_tutor_id`(`tutor_id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '家长收藏教师表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Table structure for student_profile
@@ -520,28 +537,30 @@ update_time=VALUES(update_time);
 -- 4) 家长需求贴（student_job_posting） status=1 发布中
 -- =========================
 INSERT INTO student_job_posting
-(id, parent_id, subject_id, title, description, child_age, class_mode, city, address, budget_min, budget_max, schedule, status, create_time, update_time)
+(id, parent_id, subject_id, subject_name, student_gender, title, description, child_age, class_mode, city, address, budget_min, budget_max, schedule, status, create_time, update_time)
 VALUES
-(80001, 20001, 101, '小学三年级数学家教（补基础）', '主要是计算和应用题，想把错误率降下来。', 10, 'online',  '北京', '北京市海淀区', 120.00, 160.00, '["Tue 19-21","Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW()),
-(80002, 20002, 202, '初二英语词汇语法提升', '阅读理解做题慢，词汇量不够，希望系统补齐。', 13, 'online', '北京', '北京市朝阳区', 160.00, 220.00, '["Mon 19-21","Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(80003, 20003, 203, '初三物理电学专项冲刺', '电路题总丢分，希望针对题型训练。', 15, 'online', '北京', '北京市西城区', 180.00, 260.00, '["Wed 19-21","Sun 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 7 DAY), NOW()),
-(80004, 20004, 102, '小学语文阅读理解与作文', '阅读理解抓不住重点，作文结构混乱。', 8, 'online',  '北京', '北京市丰台区', 120.00, 180.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(80005, 20005, 201, '初一数学几何补弱', '几何证明题无从下手，需要方法。', 12, 'online',  '北京', '北京市昌平区', 160.00, 220.00, '["Tue 20-22"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
-(80006, 20006, 401, '钢琴考级辅导（每周固定）', '准备考级，希望老师能制定练琴计划。', 9, 'offline', '北京', '北京市通州区', 240.00, 360.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
-(80007, 20007, 204, '初中化学基础夯实', '方程式和计算题薄弱，需要系统练习。', 14, 'online', '北京', '北京市海淀区', 160.00, 240.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(80008, 20008, 301, '高二数学专题突破（导数/数列）', '冲刺高分，希望做专题体系化训练。', 16, 'online', '北京', '北京市朝阳区', 220.00, 320.00, '["Sat 19-21","Sun 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(80009, 20009, 403, 'Python入门（兴趣+项目）', '希望做小项目培养兴趣，最好能有作业反馈。', 11, 'online', '北京', '北京市石景山区', 140.00, 220.00, '["Wed 19-21","Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-(80010, 20010, 404, '硬笔书法纠正（字形结构）', '握笔姿势不对，写字不工整，需要纠正。', 10, 'both', '北京', '北京市东城区', 160.00, 240.00, '["Fri 19-20","Sun 10-11"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
+(80001, 20001, 101, '小学数学', 'male', '小学三年级数学家教（补基础）', '主要是计算和应用题，想把错误率降下来。', 10, 'online',  '北京', '北京市海淀区', 120.00, 160.00, '["Tue 19-21","Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW()),
+(80002, 20002, 202, '初中英语', 'female', '初二英语词汇语法提升', '阅读理解做题慢，词汇量不够，希望系统补齐。', 13, 'online', '北京', '北京市朝阳区', 160.00, 220.00, '["Mon 19-21","Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
+(80003, 20003, 203, '初中物理', 'male', '初三物理电学专项冲刺', '电路题总丢分，希望针对题型训练。', 15, 'online', '北京', '北京市西城区', 180.00, 260.00, '["Wed 19-21","Sun 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 7 DAY), NOW()),
+(80004, 20004, 102, '小学语文', 'female', '小学语文阅读理解与作文', '阅读理解抓不住重点，作文结构混乱。', 8, 'online',  '北京', '北京市丰台区', 120.00, 180.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
+(80005, 20005, 201, '初中数学', 'male', '初一数学几何补弱', '几何证明题无从下手，需要方法。', 12, 'online',  '北京', '北京市昌平区', 160.00, 220.00, '["Tue 20-22"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
+(80006, 20006, 401, '钢琴', 'female', '钢琴考级辅导（每周固定）', '准备考级，希望老师能制定练琴计划。', 9, 'offline', '北京', '北京市通州区', 240.00, 360.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
+(80007, 20007, 204, '初中化学', 'male', '初中化学基础夯实', '方程式和计算题薄弱，需要系统练习。', 14, 'online', '北京', '北京市海淀区', 160.00, 240.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
+(80008, 20008, 301, '高中数学', 'female', '高二数学专题突破（导数/数列）', '冲刺高分，希望做专题体系化训练。', 16, 'online', '北京', '北京市朝阳区', 220.00, 320.00, '["Sat 19-21","Sun 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
+(80009, 20009, 403, '编程(Python)', 'male', 'Python入门（兴趣+项目）', '希望做小项目培养兴趣，最好能有作业反馈。', 11, 'online', '北京', '北京市石景山区', 140.00, 220.00, '["Wed 19-21","Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
+(80010, 20010, 404, '书法', 'female', '硬笔书法纠正（字形结构）', '握笔姿势不对，写字不工整，需要纠正。', 10, 'both', '北京', '北京市东城区', 160.00, 240.00, '["Fri 19-20","Sun 10-11"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
 
 -- 再补一些需求贴
-(80011, 20001, 103, '小学英语口语提升', '不敢开口，希望多对话练习。', 10, 'online', '北京', '北京市海淀区', 120.00, 180.00, '["Mon 18-19","Thu 18-19"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80012, 20002, 205, '初中语文阅读理解提高', '答题不规范，希望掌握方法。', 13, 'online', '北京', '北京市朝阳区', 150.00, 220.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80013, 20003, 304, '高中化学有机专项', '有机反应路线记不住，需要梳理。', 15, 'online', '北京', '北京市西城区', 200.00, 280.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80014, 20008, 302, '高中英语写作提分', '写作得分低，希望系统提升。', 16, 'online', '北京', '北京市朝阳区', 200.00, 300.00, '["Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW()),
-(80015, 20009, 405, '美术素描基础训练', '想系统学素描，提升造型能力。', 11, 'offline', '北京', '北京市石景山区', 160.00, 240.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW())
+(80011, 20001, 103, '小学英语', 'male', '小学英语口语提升', '不敢开口，希望多对话练习。', 10, 'online', '北京', '北京市海淀区', 120.00, 180.00, '["Mon 18-19","Thu 18-19"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
+(80012, 20002, 205, '初中语文', 'female', '初中语文阅读理解提高', '答题不规范，希望掌握方法。', 13, 'online', '北京', '北京市朝阳区', 150.00, 220.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
+(80013, 20003, 304, '高中化学', 'male', '高中化学有机专项', '有机反应路线记不住，需要梳理。', 15, 'online', '北京', '北京市西城区', 200.00, 280.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
+(80014, 20008, 302, '高中英语', 'female', '高中英语写作提分', '写作得分低，希望系统提升。', 16, 'online', '北京', '北京市朝阳区', 200.00, 300.00, '["Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW()),
+(80015, 20009, 405, '美术', 'male', '美术素描基础训练', '想系统学素描，提升造型能力。', 11, 'offline', '北京', '北京市石景山区', 160.00, 240.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW())
 ON DUPLICATE KEY UPDATE
 parent_id=VALUES(parent_id),
 subject_id=VALUES(subject_id),
+subject_name=VALUES(subject_name),
+student_gender=VALUES(student_gender),
 title=VALUES(title),
 description=VALUES(description),
 child_age=VALUES(child_age),

@@ -36,3 +36,6 @@ mybatis:
 rocketmq:
   name-server: 127.0.0.1:9876
 
+brokerage:
+  amount-fen: 19900
+  admin-token: ""

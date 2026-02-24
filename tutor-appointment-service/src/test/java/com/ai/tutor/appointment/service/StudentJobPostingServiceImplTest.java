@@ -1,9 +1,11 @@
 package com.ai.tutor.appointment.service;
 
+import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
+import com.ai.tutor.appointment.model.entity.PositionPost;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.DemandViewVO;
@@ -23,25 +25,30 @@ import static org.mockito.Mockito.*;
 
 class StudentJobPostingServiceImplTest {
 
+    private PositionPostMapper positionPostMapper;
     private StudentJobPostingMapper studentJobPostingMapper;
     private UserMapper userMapper;
     private StudentJobPostingServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        positionPostMapper = mock(PositionPostMapper.class);
         studentJobPostingMapper = mock(StudentJobPostingMapper.class);
         userMapper = mock(UserMapper.class);
         service = new StudentJobPostingServiceImpl();
         ReflectionTestUtils.setField(service, "studentJobPostingMapper", studentJobPostingMapper);
         ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "positionPostMapper", positionPostMapper);
     }
 
     @Test
     void createShouldRejectOfflineWithoutAddress() {
         CreateStudentJobPostingRequest req = new CreateStudentJobPostingRequest();
         req.setSubjectId(201L);
+        req.setSubjectName("数学");
         req.setTitle("初中数学一对一");
         req.setDescription("描述");
+        req.setStudentGender("male");
         req.setGradeCode("JUNIOR1");
         req.setClassMode("offline");
         req.setCity("北京");
@@ -50,6 +57,11 @@ class StudentJobPostingServiceImplTest {
         req.setStageCode("JUNIOR");
         req.setEducationRequirement("BACHELOR");
         req.setPublisherIdentity("PARENT");
+
+        PositionPost post = new PositionPost();
+        post.setId(201L);
+        post.setName("数学");
+        when(positionPostMapper.selectByIds(anyList())).thenReturn(java.util.List.of(post));
 
         assertThatThrownBy(() -> service.create(req, 101L))
                 .isInstanceOf(BusinessException.class)
@@ -60,8 +72,10 @@ class StudentJobPostingServiceImplTest {
     void createShouldNormalizeEducationAndPublisherIdentityForStorage() {
         CreateStudentJobPostingRequest req = new CreateStudentJobPostingRequest();
         req.setSubjectId(201L);
+        req.setSubjectName("数学");
         req.setTitle("初中数学一对一");
         req.setDescription("描述");
+        req.setStudentGender("female");
         req.setGradeCode("JUNIOR1");
         req.setClassMode("online");
         req.setFrequencyPerWeek(2);
@@ -70,6 +84,11 @@ class StudentJobPostingServiceImplTest {
         req.setPublisherIdentity("parent");
         req.setBudgetMin(new BigDecimal("100"));
         req.setBudgetMax(new BigDecimal("200"));
+
+        PositionPost post = new PositionPost();
+        post.setId(201L);
+        post.setName("数学");
+        when(positionPostMapper.selectByIds(anyList())).thenReturn(java.util.List.of(post));
 
         doAnswer(inv -> {
             StudentJobPosting p = inv.getArgument(0);
@@ -95,10 +114,12 @@ class StudentJobPostingServiceImplTest {
         page.setPageSize(10);
 
         when(studentJobPostingMapper.listPublishedFiltered(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
         )).thenReturn(java.util.List.of());
 
         service.listPublished(
+                null,
+                null,
                 null,
                 "北京",
                 "offline",
@@ -114,6 +135,8 @@ class StudentJobPostingServiceImplTest {
         );
 
         verify(studentJobPostingMapper, times(1)).listPublishedFiltered(
+                isNull(),
+                isNull(),
                 isNull(),
                 eq("北京"),
                 eq("offline"),

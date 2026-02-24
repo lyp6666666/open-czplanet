@@ -21,14 +21,6 @@ const showHotServices = computed(() => !auth.isLoggedIn || !isTeacher.value)
 const showHotDemands = computed(() => !auth.isLoggedIn || isTeacher.value)
 const showHotTutors = computed(() => !auth.isLoggedIn || !isTeacher.value)
 
-async function refreshAll() {
-  const tasks: Array<Promise<unknown>> = []
-  if (showHotServices.value) tasks.push(home.refreshHotServices())
-  if (showHotDemands.value) tasks.push(home.refreshHotDemands())
-  if (showHotTutors.value) tasks.push(home.refreshHotTutors())
-  await Promise.all(tasks)
-}
-
 async function onSearch() {
   const q = keyword.value.trim()
   if (!q) return
@@ -88,7 +80,9 @@ onMounted(() => {
           @load-more-services="home.loadMoreHotServices"
           @load-more-demands="home.loadMoreHotDemands"
           @load-more-tutors="home.loadMoreHotTutors"
-          @refresh="refreshAll"
+          @shuffle-services="home.shuffleHotServices"
+          @shuffle-demands="home.shuffleHotDemands"
+          @shuffle-tutors="home.shuffleHotTutors"
         />
 
         <div class="debug" v-if="showDebug">

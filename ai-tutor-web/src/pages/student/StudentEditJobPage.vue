@@ -3,8 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
-import { homeGuestApi } from '@/api/homeGuest'
-import type { StudentJobPosting, SubjectTreeNode } from '@/api/types'
+import type { StudentJobPosting } from '@/api/types'
+import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,9 +16,9 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const doneHint = ref<string | null>(null)
 
-const subjects = ref<SubjectTreeNode[]>([])
 const form = ref<StudentJobPosting | null>(null)
-const subjectText = ref('')
+const subjectPreset = ref<string>('')
+const subjectOtherName = ref('')
 
 const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'OTHER' }> = [
   { value: 'PRESCHOOL', label: '幼儿', stageCode: 'PRESCHOOL' },
@@ -42,30 +42,50 @@ const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL'
   { value: 'ADULT', label: '成人', stageCode: 'OTHER' },
 ]
 
-const subjectOptions = computed(() => {
-  const out: Array<{ id: number; label: string }> = []
-  function walk(node: SubjectTreeNode, prefix: string) {
-    const label = prefix ? `${prefix} / ${node.name}` : node.name
-    out.push({ id: node.id, label })
-    node.children?.forEach((c) => walk(c, label))
-  }
-  subjects.value.forEach((n) => walk(n, ''))
-  return out
-})
-
-function resolveSubjectIdByInput(raw: string): number | null {
-  const input = raw.trim()
-  if (!input) return null
-  const exact = subjectOptions.value.find((o) => o.label === input)
-  if (exact) return exact.id
-  const leafMatches = subjectOptions.value.filter((o) => o.label.split(' / ').pop() === input)
-  if (leafMatches.length === 1) return leafMatches[0]!.id
-  return null
-}
-
 function resolveStageCodeByGradeCode(raw: string | null | undefined): StudentJobPosting['stageCode'] {
   if (!raw) return null
   return gradeOptions.find((o) => o.value === raw)?.stageCode ?? null
+}
+
+const gradeLabel = computed(() => gradeOptions.find((o) => o.value === (form.value?.gradeCode || ''))?.label ?? '')
+
+const subjectName = computed(() => {
+  if (!subjectPreset.value) return null
+  if (subjectPreset.value === SUBJECT_OTHER_VALUE) return subjectOtherName.value.trim() || null
+  return subjectPreset.value
+})
+
+const subjectOther = computed(() => subjectPreset.value === SUBJECT_OTHER_VALUE)
+
+function buildTitle() {
+  const g = gradeLabel.value
+  const s = subjectName.value
+  if (g && s) return `${g}${s}家教`
+  if (g) return `${g}家教需求`
+  if (s) return `${s}家教`
+  return '家教需求'
+}
+
+function hydrateSubjectFromDemand(d: StudentJobPosting) {
+  const name = (d.subjectName || '').trim()
+  const isOther = d.subjectIsOther === 1
+  if (!name) {
+    subjectPreset.value = ''
+    subjectOtherName.value = ''
+    return
+  }
+  if (isOther) {
+    subjectPreset.value = SUBJECT_OTHER_VALUE
+    subjectOtherName.value = name
+    return
+  }
+  if ((SUBJECT_PRESETS as readonly string[]).includes(name)) {
+    subjectPreset.value = name
+    subjectOtherName.value = ''
+    return
+  }
+  subjectPreset.value = SUBJECT_OTHER_VALUE
+  subjectOtherName.value = name
 }
 
 async function load() {
@@ -73,7 +93,7 @@ async function load() {
   error.value = null
   doneHint.value = null
   try {
-    const [d, tree] = await Promise.all([jobsApi.getDemand(id.value), homeGuestApi.getSubjectTree()])
+    const d = await jobsApi.getDemand(id.value)
     form.value = d
     if (form.value) {
       if (!form.value.classMode) form.value.classMode = 'online'
@@ -82,9 +102,8 @@ async function load() {
       if (!form.value.studentGender) form.value.studentGender = ''
       if (!form.value.availableTime) form.value.availableTime = ''
       if (!form.value.teacherRequirementDetail) form.value.teacherRequirementDetail = ''
-      subjectText.value = form.value.title || ''
+      hydrateSubjectFromDemand(form.value)
     }
-    subjects.value = tree
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -96,9 +115,16 @@ async function onSave() {
   if (!form.value) return
   error.value = null
   doneHint.value = null
-  const resolvedSubjectId = resolveSubjectIdByInput(subjectText.value) ?? form.value.subjectId
-  if (!resolvedSubjectId) {
-    error.value = '请填写教学科目（从下拉建议中选择）'
+  if (!String(form.value.studentGender || '').trim()) {
+    error.value = '请选择学员性别'
+    return
+  }
+  if (!subjectPreset.value) {
+    error.value = '请选择教学科目'
+    return
+  }
+  if (subjectOther.value && !subjectOtherName.value.trim()) {
+    error.value = '请输入其他科目'
     return
   }
   if (!String(form.value.gradeCode || '').trim()) {
@@ -117,10 +143,11 @@ async function onSave() {
   try {
     const stage = resolveStageCodeByGradeCode(form.value.gradeCode)
     await jobsApi.updateDemand(id.value, {
-      subjectId: resolvedSubjectId,
-      title: subjectText.value.trim(),
+      title: buildTitle(),
+      subjectName: subjectName.value as string,
+      subjectOther: subjectOther.value,
       description: String(form.value.description || '').trim() || undefined,
-      studentGender: form.value.studentGender || undefined,
+      studentGender: form.value.studentGender as string,
       gradeCode: form.value.gradeCode || undefined,
       teacherGenderPreference: form.value.teacherGenderPreference || undefined,
       availableTime: String(form.value.availableTime || '').trim() || undefined,
@@ -176,7 +203,7 @@ watch(
 
         <div class="row">
           <label class="field">
-            <div class="label">学员性别</div>
+            <div class="label"><span class="req">*</span>学员性别</div>
             <select v-model="form.studentGender" class="input">
               <option value="">请选择</option>
               <option value="male">男</option>
@@ -185,7 +212,7 @@ watch(
           </label>
 
           <label class="field">
-            <div class="label">学生年级</div>
+            <div class="label"><span class="req">*</span>学生年级</div>
             <select v-model="form.gradeCode" class="input">
               <option value="">请选择</option>
               <option v-for="o in gradeOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -194,27 +221,26 @@ watch(
         </div>
 
         <label class="field">
-          <div class="label">教学科目</div>
-          <input v-model="subjectText" class="input" list="subjectList" placeholder="例如：初中数学" />
-          <datalist id="subjectList">
-            <option v-for="o in subjectOptions" :key="o.id" :value="o.label" />
-          </datalist>
+          <div class="label"><span class="req">*</span>教学科目</div>
+          <select v-model="subjectPreset" class="input">
+            <option value="">请选择</option>
+            <option v-for="s in SUBJECT_PRESETS" :key="s" :value="s">{{ s }}</option>
+            <option :value="SUBJECT_OTHER_VALUE">其他</option>
+          </select>
+          <input
+            v-if="subjectPreset === SUBJECT_OTHER_VALUE"
+            v-model="subjectOtherName"
+            class="input"
+            placeholder="请输入科目"
+          />
         </label>
 
         <div class="row">
           <label class="field">
-            <div class="label">授课方式</div>
+            <div class="label"><span class="req">*</span>授课方式</div>
             <select v-model="form.classMode" class="input">
               <option value="offline">上门辅导</option>
               <option value="online">网络辅导</option>
-              <option value="both">均可</option>
-            </select>
-          </label>
-          <label class="field">
-            <div class="label">教师性别</div>
-            <select v-model="form.teacherGenderPreference" class="input">
-              <option value="male">男</option>
-              <option value="female">女</option>
               <option value="both">均可</option>
             </select>
           </label>
@@ -222,11 +248,11 @@ watch(
 
         <div class="row" v-if="form.classMode !== 'online'">
           <label class="field">
-            <div class="label">城市</div>
+            <div class="label"><span class="req">*</span>城市</div>
             <input v-model="form.city" class="input" placeholder="例如：北京" />
           </label>
           <label class="field">
-            <div class="label">上课地址</div>
+            <div class="label"><span class="req">*</span>上课地址</div>
             <input v-model="form.address" class="input" placeholder="例如：朝阳·望京" />
           </label>
         </div>
@@ -249,6 +275,14 @@ watch(
 
       <div class="section">
         <div class="section-title">请填写您对教师的要求</div>
+        <label class="field">
+          <div class="label"><span class="req">*</span>教师性别</div>
+          <select v-model="form.teacherGenderPreference" class="input">
+            <option value="male">男</option>
+            <option value="female">女</option>
+            <option value="both">均可</option>
+          </select>
+        </label>
         <label class="field">
           <div class="label">对教员的详细要求</div>
           <textarea
@@ -317,6 +351,11 @@ watch(
 .label {
   font-size: 12px;
   color: var(--muted);
+}
+
+.req {
+  color: #ff3b30;
+  margin-right: 4px;
 }
 
 .input {

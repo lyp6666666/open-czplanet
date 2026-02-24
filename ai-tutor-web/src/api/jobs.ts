@@ -2,10 +2,12 @@ import { http } from './http'
 import type { CursorPageResponse, DemandViewVO, StudentJobPosting } from './types'
 
 export interface CreateStudentJobPostingRequest {
-  subjectId: number
+  subjectId?: number
+  subjectName: string
+  subjectOther: boolean
   title: string
   description?: string
-  studentGender?: string
+  studentGender: string
   gradeCode?: string
   teacherGenderPreference?: string
   availableTime?: string
@@ -25,6 +27,8 @@ export interface CreateStudentJobPostingRequest {
 
 export interface UpdateStudentJobPostingRequest {
   subjectId?: number
+  subjectName?: string | null
+  subjectOther?: boolean
   title?: string
   description?: string
   studentGender?: string
@@ -69,6 +73,8 @@ export const jobsApi = {
 
   feedDemands(params: {
     subjectId?: number
+    subject?: string
+    subjectOther?: boolean
     city?: string
     classMode?: string
     stageCode?: string

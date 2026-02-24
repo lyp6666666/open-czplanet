@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { homeGuestApi } from '@/api/homeGuest'
 import type { HomeConfigVO, HotWordsVO, SearchSuggestVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import { debounce } from '@/utils/debounce'
 
 const props = defineProps<{
@@ -20,10 +21,21 @@ const emit = defineEmits<{
 const router = useRouter()
 const auth = useAuthStore()
 const userMenuOpen = ref(false)
+const cityModalOpen = ref(false)
 
 const cities = computed(() => {
   const base = [props.city, '北京', '上海', '广州', '深圳', '杭州']
   return Array.from(new Set(base.filter(Boolean)))
+})
+
+const cityModel = computed({
+  get: () => props.city,
+  set: (v: string) => {
+    const next = String(v || '').trim()
+    if (!next) return
+    localStorage.setItem('ai_tutor_city', next)
+    emit('city-change', next)
+  },
 })
 
 const keyword = ref('')
@@ -99,11 +111,19 @@ const userInitial = computed(() => {
       <div class="left">
         <div class="logo">家教直聘</div>
 
-        <label class="city">
-          <select class="city-select" :value="city" @change="emit('city-change', ($event.target as HTMLSelectElement).value)">
-            <option v-for="c in cities" :key="c" :value="c">{{ c }}</option>
-          </select>
-        </label>
+        <div class="city">
+          <button class="city-trigger" type="button" @click="cityModalOpen = true">
+            <svg class="city-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 2c3.9 0 7 3.1 7 7 0 5-7 13-7 13S5 14 5 9c0-3.9 3.1-7 7-7Zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
+              />
+            </svg>
+            <span class="city-name">{{ city }}</span>
+            <span class="city-switch">[切换]</span>
+          </button>
+          <CitySelectModal :open="cityModalOpen" v-model="cityModel" :hot-cities="cities" @close="cityModalOpen = false" />
+        </div>
       </div>
 
       <div class="search">
@@ -193,13 +213,44 @@ const userInitial = computed(() => {
   color: var(--text);
 }
 
-.city-select {
+.city {
+  display: flex;
+  align-items: center;
+}
+
+.city-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
   padding: 0 10px;
-  background: #fff;
-  outline: none;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.city-trigger:hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.city-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+}
+
+.city-name {
+  white-space: nowrap;
+}
+
+.city-switch {
+  color: var(--muted);
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .search {

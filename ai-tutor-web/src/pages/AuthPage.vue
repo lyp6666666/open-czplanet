@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { UserRoleEnum } from '@/api/types'
@@ -21,11 +21,17 @@ const hint = ref<string | null>(null)
 const sendBusy = ref(false)
 const remainSec = ref(0)
 let timer: number | null = null
+const RESEND_SECONDS = 60
+const STORAGE_KEY = 'auth_send_code_next_at_map'
+const nextAtMap = ref<Record<string, number>>({})
 
 const isTutor = computed(() => props.role === 'TEACHER')
 const title = computed(() => (isTutor.value ? '验证码登录/注册（家教端）' : '验证码登录/注册（找家教）'))
-const primaryAction = computed(() => (isTutor.value ? '我要当家教' : '我要找家教'))
-const secondaryAction = computed(() => (isTutor.value ? '我要找家教' : '我要当家教'))
+const studentAuthPath = '/auth/student'
+const tutorAuthPath = '/auth/tutor'
+const leftActionLabel = '我要找家教'
+const rightActionLabel = '我要当家教'
+const currentActionLabel = computed(() => (isTutor.value ? rightActionLabel : leftActionLabel))
 
 const needSwitchRole = computed(() => auth.isLoggedIn && auth.role != null && auth.role !== props.role)
 const switchModalOpen = ref(false)
@@ -54,8 +60,6 @@ const leftBullets = computed(() => {
   ]
 })
 
-const otherRolePath = computed(() => (isTutor.value ? '/auth/student' : '/auth/tutor'))
-
 function normalizePhone(raw: string) {
   return raw.replace(/\s+/g, '')
 }
@@ -74,21 +78,80 @@ function validateCode(v: string): string | null {
   return null
 }
 
-function startCountdown(seconds: number) {
-  remainSec.value = seconds
+function persistNextAtMap() {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAtMap.value))
+  } catch {
+  }
+}
+
+function cleanupExpired() {
+  const now = Date.now()
+  const map = nextAtMap.value
+  let changed = false
+  for (const k of Object.keys(map)) {
+    if (typeof map[k] !== 'number' || map[k] <= now) {
+      delete map[k]
+      changed = true
+    }
+  }
+  if (changed) persistNextAtMap()
+}
+
+function refreshRemainSec() {
+  cleanupExpired()
+  const p = normalizePhone(phone.value)
+  if (!p) {
+    remainSec.value = 0
+    return
+  }
+  const nextAt = nextAtMap.value[p]
+  if (!nextAt) {
+    remainSec.value = 0
+    return
+  }
+  remainSec.value = Math.max(0, Math.ceil((nextAt - Date.now()) / 1000))
+}
+
+onBeforeUnmount(() => {
   if (timer != null) window.clearInterval(timer)
+})
+
+onMounted(() => {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    nextAtMap.value = raw ? (JSON.parse(raw) as Record<string, number>) : {}
+  } catch {
+    nextAtMap.value = {}
+  }
+  refreshRemainSec()
+  if (Object.keys(nextAtMap.value).length > 0) ensureTimer()
+})
+
+watch(
+  () => normalizePhone(phone.value),
+  () => {
+    refreshRemainSec()
+  },
+)
+
+function ensureTimer() {
+  if (timer != null) return
   timer = window.setInterval(() => {
-    remainSec.value -= 1
-    if (remainSec.value <= 0 && timer != null) {
+    refreshRemainSec()
+    if (Object.keys(nextAtMap.value).length === 0 && timer != null) {
       window.clearInterval(timer)
       timer = null
     }
   }, 1000)
 }
 
-onBeforeUnmount(() => {
-  if (timer != null) window.clearInterval(timer)
-})
+function startCountdownForPhone(p: string, seconds: number) {
+  nextAtMap.value[p] = Date.now() + seconds * 1000
+  persistNextAtMap()
+  ensureTimer()
+  refreshRemainSec()
+}
 
 async function onSendCode() {
   hint.value = null
@@ -105,9 +168,10 @@ async function onSendCode() {
 
   sendBusy.value = true
   try {
-    await auth.sendCode(normalizePhone(phone.value))
+    const p = normalizePhone(phone.value)
+    await auth.sendCode(p)
     hint.value = '验证码已发送（开发环境可在后端控制台查看模拟验证码）'
-    startCountdown(60)
+    startCountdownForPhone(p, RESEND_SECONDS)
   } catch (e) {
     hint.value = e instanceof Error ? e.message : '发送失败'
   } finally {
@@ -171,7 +235,7 @@ async function confirmSwitch() {
         <aside class="left">
           <div class="brand">
             <div class="logo">家教直聘</div>
-            <div class="slogan">{{ primaryAction }}</div>
+            <div class="slogan">{{ currentActionLabel }}</div>
           </div>
 
           <div class="bullets">
@@ -189,8 +253,12 @@ async function confirmSwitch() {
           </div>
 
           <div class="toggle">
-            <button class="toggle-btn active" type="button">{{ primaryAction }}</button>
-            <button class="toggle-btn" type="button" @click="router.push(otherRolePath)">{{ secondaryAction }}</button>
+            <button class="toggle-btn" :class="{ active: !isTutor }" type="button" @click="router.push(studentAuthPath)">
+              {{ leftActionLabel }}
+            </button>
+            <button class="toggle-btn" :class="{ active: isTutor }" type="button" @click="router.push(tutorAuthPath)">
+              {{ rightActionLabel }}
+            </button>
           </div>
 
           <form class="form" @submit.prevent="onSubmit">
