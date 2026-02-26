@@ -2,11 +2,13 @@ package com.ai.tutor.appointment.utils;
 
 import com.ai.tutor.appointment.config.JwtProperties;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
 
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.jackson.io.JacksonSerializer;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,9 @@ public class JwtUtil {
 
     @Resource
     private JwtProperties jwtProperties;
+
+    @Resource
+    private ObjectMapper objectMapper;
 
     /**
      * JWT Claims Key：用户id
@@ -60,6 +65,7 @@ public class JwtUtil {
                 .setIssuedAt(new Date())
                 .setIssuer(jwtProperties.getIssuer())
                 .setExpiration(new Date(System.currentTimeMillis() + expirationMillis))
+                .serializeToJsonWith(new JacksonSerializer<>(objectMapper))
                 .signWith(getSigningKey(secrets.get(0)), SignatureAlgorithm.HS256)
                 .compact();
     }
