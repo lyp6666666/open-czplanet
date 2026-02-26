@@ -39,3 +39,6 @@ rocketmq:
 brokerage:
   amount-fen: 19900
   admin-token: ""
+
+tutor-application:
+  skip-payment-check: true

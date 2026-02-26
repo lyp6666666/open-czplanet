@@ -24,6 +24,9 @@ export interface UserUpdateRequest {
     experienceYears?: number
     ratePerHour?: number
     introduction?: string
+    city?: string
+    highestEduSchool?: string
+    teachingMode?: string
     defaultGreeting?: string
   }
   studentExtInfo?: {
@@ -58,6 +61,18 @@ export const userApi = {
 
   updateUserInfo(request: UserUpdateRequest) {
     return http.post<unknown, string>('/user/updateUserInfo', request)
+  },
+
+  sendUpdateUserPhoneCode() {
+    return http.get<unknown, string>('/user/sendUpdateUserPhoneCode')
+  },
+
+  sendUpdateUserNewPhoneCode(newPhone: string) {
+    return http.get<unknown, string>('/user/sendUpdateUserNewPhoneCode', { params: { newPhone } })
+  },
+
+  updateUserPhoneV2(request: { newPhone: string; oldCode: string; newCode: string }) {
+    return http.post<unknown, string>('/user/updateUserPhoneV2', request)
   },
 
   settings() {

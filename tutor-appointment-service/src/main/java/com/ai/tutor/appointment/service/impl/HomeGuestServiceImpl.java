@@ -466,31 +466,12 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         boolean allowOnlineFallback = mode == null || mode.trim().isEmpty() || "both".equalsIgnoreCase(mode.trim());
 
         List<HomeHotTutorAggRow> rows;
-        if (req.getCursor() == null && effectiveCity != null) {
+        boolean cityHybrid = effectiveCity != null && allowOnlineFallback;
+        if (cityHybrid) {
             rows = safeGet(
-                    () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, null, req.getPageSize()),
+                    () -> teacherJobPostingMapper.listHotTutorsCityHybrid(subjectId, effectiveCity, req.getCursor(), req.getPageSize()),
                     List.of()
             );
-            if (allowOnlineFallback && rows.size() < req.getPageSize()) {
-                int need = req.getPageSize() - rows.size();
-                List<HomeHotTutorAggRow> fallback = safeGet(
-                        () -> teacherJobPostingMapper.listHotTutors(subjectId, null, "online", null, Math.max(req.getPageSize() * 2, need)),
-                        List.of()
-                );
-                Set<Long> seen = rows.stream().map(HomeHotTutorAggRow::getTutorId).filter(Objects::nonNull).collect(Collectors.toSet());
-                List<HomeHotTutorAggRow> merged = new ArrayList<>(rows);
-                for (HomeHotTutorAggRow it : fallback) {
-                    if (it == null || it.getTutorId() == null || seen.contains(it.getTutorId())) {
-                        continue;
-                    }
-                    merged.add(it);
-                    seen.add(it.getTutorId());
-                    if (merged.size() >= req.getPageSize()) {
-                        break;
-                    }
-                }
-                rows = merged;
-            }
         } else {
             rows = safeGet(
                     () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, req.getCursor(), req.getPageSize()),
@@ -537,11 +518,27 @@ public class HomeGuestServiceImpl implements HomeGuestService {
             }
             highlights.add("响应快");
 
+            String displayCity = null;
+            if (profile != null && profile.getCity() != null && !profile.getCity().trim().isEmpty()) {
+                displayCity = profile.getCity().trim();
+            }
+            if (displayCity == null || displayCity.isBlank()) {
+                for (TeacherJobPosting s : tutorToServices.getOrDefault(tutorId, List.of())) {
+                    if (s != null && s.getCity() != null && !s.getCity().trim().isEmpty()) {
+                        displayCity = s.getCity().trim();
+                        break;
+                    }
+                }
+            }
+            if (displayCity == null || displayCity.isBlank()) {
+                displayCity = CityCatalog.national();
+            }
+
             list.add(new HomeGuestVOs.HotTutorCardVO(
                     tutorId,
                     buildTutorDisplayName(profile, user),
                     user == null ? null : user.getAvatar(),
-                    effectiveCity == null ? CityCatalog.national() : effectiveCity,
+                    displayCity,
                     profile == null ? null : profile.getEducation(),
                     profile == null ? null : profile.getExperienceYears(),
                     profile == null ? null : profile.getRatePerHour(),

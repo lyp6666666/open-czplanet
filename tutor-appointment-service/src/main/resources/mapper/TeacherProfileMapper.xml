@@ -15,6 +15,10 @@
         <result column="default_greeting" property="defaultGreeting"/>
         <result column="certificate_urls" property="certificateUrls"/>
         <result column="basic_completed" property="basicCompleted"/>
+        <result column="resume_completed" property="resumeCompleted"/>
+        <result column="city" property="city"/>
+        <result column="highest_edu_school" property="highestEduSchool"/>
+        <result column="teaching_mode" property="teachingMode"/>
         <result column="realname_verify_status" property="realnameVerifyStatus"/>
         <result column="realname_verify_method" property="realnameVerifyMethod"/>
         <result column="realname_verify_id_front_url" property="realnameVerifyIdFrontUrl"/>
@@ -66,6 +70,15 @@
             </if>
             <if test="teacherExtInfo.introduction != null">
                 introduction = #{teacherExtInfo.introduction},
+            </if>
+            <if test="teacherExtInfo.city != null">
+                city = #{teacherExtInfo.city},
+            </if>
+            <if test="teacherExtInfo.highestEduSchool != null">
+                highest_edu_school = #{teacherExtInfo.highestEduSchool},
+            </if>
+            <if test="teacherExtInfo.teachingMode != null">
+                teaching_mode = #{teacherExtInfo.teachingMode},
             </if>
             <if test="teacherExtInfo.defaultGreeting != null">
                 default_greeting = #{teacherExtInfo.defaultGreeting},
@@ -183,6 +196,14 @@
             update_time = now()
         where user_id = #{userId}
           and basic_completed = 0
+    </update>
+
+    <update id="markResumeCompleted">
+        update teacher_profile
+        set resume_completed = 1,
+            update_time = now()
+        where user_id = #{userId}
+          and resume_completed = 0
     </update>
 
 </mapper>

@@ -137,16 +137,8 @@ async function enterChat() {
   enterError.value = null
   try {
     const res = await applicationApi.enterChat(applicationId.value)
-    if (res.paymentRequired) {
-      enterError.value = '需要先支付中介费'
-      return
-    }
-    if (res.waitingForTeacherPayment) {
-      enterError.value = '请等待教师完成中介费支付'
-      return
-    }
     if (res.roomId) {
-      await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
+      await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) }, query: { unlockChat: '1' } })
       return
     }
     enterError.value = '暂无法进入聊天'
@@ -233,7 +225,7 @@ onMounted(() => {
           <div v-if="devError" class="hint error">{{ devError }}</div>
         </div>
 
-        <div v-if="order.status === 'PAID' && applicationId" class="after">
+        <div v-if="applicationId" class="after">
           <button class="btn" type="button" @click="backToChat">返回消息</button>
           <button class="btn btn-primary" type="button" :disabled="enterBusy" @click="enterChat">
             {{ enterBusy ? '进入中...' : '进入聊天' }}

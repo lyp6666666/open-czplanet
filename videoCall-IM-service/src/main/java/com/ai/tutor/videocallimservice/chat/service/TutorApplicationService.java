@@ -60,6 +60,9 @@ public class TutorApplicationService {
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
 
+    @Value("${tutor-application.skip-payment-check:true}")
+    private boolean skipPaymentCheck;
+
     public TutorApplicationVO create(CreateTutorApplicationReq req, Long uid) {
         ThrowUtils.throwIf(req == null || uid == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(req.getReceiverUid() == null || uid.equals(req.getReceiverUid()), ErrorCode.PARAMS_ERROR);
@@ -285,7 +288,7 @@ public class TutorApplicationService {
 
         Long orderId = resolveOrderId(applicationId);
         String access = application.getChatAccessStatus();
-        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access)) {
+        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access) && !skipPaymentCheck) {
             Long teacherUid = resolveTeacherUid(application);
             if (uid.equals(teacherUid)) {
                 return TutorApplicationEnterResp.builder()
@@ -301,6 +304,9 @@ public class TutorApplicationService {
                     .orderId(orderId)
                     .roomId(null)
                     .build();
+        }
+        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access) && skipPaymentCheck) {
+            access = TutorApplicationChatAccessStatus.CHAT_ENABLED.name();
         }
 
         ThrowUtils.throwIf(!TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access), ErrorCode.OPERATION_ERROR);
@@ -320,6 +326,9 @@ public class TutorApplicationService {
 
     public void assertNotBlockedByApplication(Long uid, Long targetUid) {
         if (uid == null || targetUid == null || uid.equals(targetUid)) {
+            return;
+        }
+        if (skipPaymentCheck) {
             return;
         }
         TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(uid, targetUid);

@@ -37,13 +37,19 @@ function upsertRoomFromEvent(ev: StreamMsgEvent) {
   if (!myUid) return
   const otherUid = ev.fromUid === myUid ? ev.toUid : ev.fromUid
   const prevUnread = chatRealtime.roomUnread[ev.roomId] || 0
+  const sendTimeMs =
+    typeof ev.sendTime === 'number'
+      ? ev.sendTime
+      : typeof ev.sendTime === 'string'
+          ? Number(ev.sendTime)
+          : Number.NaN
   const updated: ChatRoomItemResp = {
     roomId: ev.roomId,
     otherUid,
     lastMsgId: ev.msgId,
     lastMsgBody: ev.body,
     unreadCount: prevUnread,
-    activeTime: new Date().toISOString(),
+    activeTime: Number.isFinite(sendTimeMs) ? new Date(sendTimeMs).toISOString() : new Date().toISOString(),
   }
   const idx = rooms.value.findIndex((r) => r.roomId === ev.roomId)
   if (idx >= 0) {
@@ -66,6 +72,8 @@ function lastMsgText(raw: unknown): string {
   if (typeof raw === 'string') return raw
   if (typeof raw === 'object') {
     const any = raw as Record<string, unknown>
+    const t = typeof any.type === 'string' ? any.type.trim() : ''
+    if (t === 'brokerage_refund_request' || t === 'brokerage_refund_status') return '[退款申请]'
     if (typeof any.content === 'string') return any.content
   }
   try {
@@ -73,6 +81,11 @@ function lastMsgText(raw: unknown): string {
   } catch {
     return String(raw)
   }
+}
+
+function avatarOf(uid: number): string {
+  const v = userMap.value[uid]?.avatar
+  return typeof v === 'string' ? v.trim() : ''
 }
 
 async function enrichUsers(list: ChatRoomItemResp[]) {
@@ -105,6 +118,10 @@ async function loadMore() {
 }
 
 function openRoom(roomId: number, otherUid: number) {
+  const room = rooms.value.find((r) => r.roomId === roomId)
+  if (room?.lastMsgId) {
+    void chatRealtime.ackRoomRead(roomId, room.lastMsgId)
+  }
   chatRealtime.setActiveRoom(roomId)
   void router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(otherUid) } })
 }
@@ -170,7 +187,10 @@ watch(
           <span v-if="effectiveUnread(r.roomId, r.unreadCount) > 0" class="unread-badge">{{
             effectiveUnread(r.roomId, r.unreadCount) > 99 ? '99+' : effectiveUnread(r.roomId, r.unreadCount)
           }}</span>
-          <div class="avatar">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</div>
+          <div class="avatar">
+            <img v-if="avatarOf(r.otherUid)" :src="avatarOf(r.otherUid)" alt="" />
+            <span v-else class="avatar-fallback">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</span>
+          </div>
           <div class="main">
             <div class="row1">
               <div class="name">{{ userMap[r.otherUid]?.name || `用户${r.otherUid}` }}</div>
@@ -295,6 +315,18 @@ watch(
   place-items: center;
   font-weight: 900;
   color: var(--text);
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-fallback {
+  font-weight: 900;
 }
 
 .row1 {

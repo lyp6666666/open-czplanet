@@ -70,6 +70,9 @@ public class ChatRoomServiceImpl implements ChatRoomService {
     @Value("${tutor-application.gating-enabled:true}")
     private boolean tutorApplicationGatingEnabled;
 
+    @Value("${tutor-application.skip-payment-check:true}")
+    private boolean skipPaymentCheck;
+
     @Override
     public Long getOrCreateRoomWithUser(Long targetUid, Long uid) {
         ThrowUtils.throwIf(uid == null || targetUid == null, ErrorCode.PARAMS_ERROR);
@@ -181,7 +184,6 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         }
         Map<Long, Long> unreadMap = new HashMap<>();
         if (!roomIds.isEmpty()) {
-            tryInitRoomReadStateTable();
             try {
                 messageMapper.listUnreadCounts(roomIds, uid).forEach(it -> unreadMap.put(it.getRoomId(), it.getUnreadCount()));
             } catch (Exception ignored) {
@@ -243,29 +245,11 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         return Date.from(time.atZone(ZoneId.systemDefault()).toInstant());
     }
 
-    private void tryInitRoomReadStateTable() {
-        try {
-            jdbcTemplate.execute(
-                    "CREATE TABLE IF NOT EXISTS `room_read_state` ("
-                            + " `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '已读状态id',"
-                            + " `room_id` bigint(20) NOT NULL COMMENT '会话id',"
-                            + " `uid` bigint(20) NOT NULL COMMENT '用户id',"
-                            + " `last_read_msg_id` bigint(20) DEFAULT NULL COMMENT '最后已读消息id',"
-                            + " `last_read_time` datetime(3) DEFAULT NULL COMMENT '最后已读时间',"
-                            + " `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),"
-                            + " `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),"
-                            + " PRIMARY KEY (`id`),"
-                            + " UNIQUE KEY `uniq_room_uid` (`room_id`, `uid`),"
-                            + " KEY `idx_uid` (`uid`),"
-                            + " KEY `idx_room_id` (`room_id`)"
-                            + " ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话已读状态表'"
-            );
-        } catch (Exception ignored) {
-        }
-    }
-
     private void assertNotBlockedByApplication(Long uid, Long targetUid) {
         if (!tutorApplicationGatingEnabled) {
+            return;
+        }
+        if (skipPaymentCheck) {
             return;
         }
         TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(uid, targetUid);

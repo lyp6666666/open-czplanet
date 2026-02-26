@@ -159,6 +159,27 @@
         LIMIT #{pageSize}
     </select>
 
+    <select id="listHotTutorsCityHybrid" resultMap="HomeHotTutorAggRowMap">
+        SELECT
+            tutor_id,
+            MAX(id) AS cursor_key
+        FROM teacher_job_posting
+        WHERE status = 1
+        <if test="subjectId != null">
+            AND subject_id = #{subjectId}
+        </if>
+        AND (
+            (city = #{city} AND mode IN ('offline', 'both'))
+            OR (mode = 'online')
+        )
+        GROUP BY tutor_id
+        <if test="cursor != null">
+            HAVING MAX(id) &lt; #{cursor}
+        </if>
+        ORDER BY cursor_key DESC
+        LIMIT #{pageSize}
+    </select>
+
     <select id="listTopNByTutorIds" resultMap="TeacherJobPostingMap">
         SELECT
             id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time,

@@ -6,6 +6,7 @@ import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdateUserSettingsRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
+import com.ai.tutor.appointment.model.dto.user.UpdatePhoneV2Request;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
@@ -36,6 +37,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/user")
@@ -56,6 +58,8 @@ public class UserController {
     private StudentJobPostingMapper studentJobPostingMapper;
     @Resource
     private UserSettingsService userSettingsService;
+
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^1\\d{10}$");
 
     /**
      *  获取验证码
@@ -193,6 +197,13 @@ public class UserController {
         return ResultUtils.success("更新成功 请重新登录");
     }
 
+    @PostMapping("/updateUserPhoneV2")
+    @Operation(summary = "更新用户手机号（两段验证码）", description = "先验证旧手机号验证码，再验证新手机号验证码，最后更新绑定手机号")
+    public BaseResponse<String> updateUserPhoneV2(@RequestBody UpdatePhoneV2Request requestDto, HttpServletRequest request) {
+        userService.updateUserPhoneV2(requestDto, request);
+        return ResultUtils.success("更新成功 请重新登录");
+    }
+
     @GetMapping("/settings")
     @Operation(summary = "获取用户设置", description = "返回当前登录用户的设置（不存在会创建默认设置）")
     public BaseResponse<UserSettingsVO> settings(HttpServletRequest request) {
@@ -213,6 +224,20 @@ public class UserController {
 
     @GetMapping("/sendUpdateUserPhoneCode")
     @Operation(summary = "发送更新用户手机号验证码", description = "发送更新用户手机号验证码")
+    @FrequencyControl(
+            prefixKey = "sms:update_phone:uid:",
+            target = FrequencyControl.Target.UID,
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 1
+    )
+    @FrequencyControl(
+            prefixKey = "sms:update_phone:ip:",
+            target = FrequencyControl.Target.IP,
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 5
+    )
     public BaseResponse<String> sendUpdateUserPhoneCode(HttpServletRequest request) {
         String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
         ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
@@ -220,6 +245,46 @@ public class UserController {
         User user = userMapper.selectById(userId);
         ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
         String code = smsService.sendCode(user.getPhone(), RedisKeyPrefix.USER_PHONE.getPrefix());
+        return ResultUtils.success(code);
+    }
+
+    @GetMapping("/sendUpdateUserNewPhoneCode")
+    @Operation(summary = "发送更新用户新手机号验证码", description = "发送更新用户新手机号验证码")
+    @FrequencyControl(
+            prefixKey = "sms:update_phone:uid:",
+            target = FrequencyControl.Target.UID,
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 1
+    )
+    @FrequencyControl(
+            prefixKey = "sms:update_phone:ip:",
+            target = FrequencyControl.Target.IP,
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 5
+    )
+    @FrequencyControl(
+            prefixKey = "sms:update_phone:new_phone:",
+            target = FrequencyControl.Target.EL,
+            spEl = "#p0",
+            time = 1,
+            unit = TimeUnit.MINUTES,
+            count = 1
+    )
+    public BaseResponse<String> sendUpdateUserNewPhoneCode(@RequestParam("newPhone") String newPhone, HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+
+        ThrowUtils.throwIf(newPhone == null, ErrorCode.PARAMS_ERROR);
+        String v = newPhone.trim();
+        ThrowUtils.throwIf(v.isEmpty() || !PHONE_PATTERN.matcher(v).matches(), ErrorCode.PARAMS_ERROR, "手机号格式不合法");
+
+        User occupied = userMapper.selectByPhone(v);
+        ThrowUtils.throwIf(occupied != null && !occupied.getId().equals(userId), ErrorCode.OPERATION_ERROR, "手机号已被占用");
+
+        String code = smsService.sendCode(v, RedisKeyPrefix.USER_PHONE.getPrefix());
         return ResultUtils.success(code);
     }
 

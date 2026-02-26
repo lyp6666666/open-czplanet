@@ -33,7 +33,6 @@ const cityModel = computed({
   set: (v: string) => {
     const next = String(v || '').trim()
     if (!next) return
-    localStorage.setItem('ai_tutor_city', next)
     emit('city-change', next)
   },
 })

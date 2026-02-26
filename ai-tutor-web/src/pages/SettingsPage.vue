@@ -1,17 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const settings = useSettingsStore()
+const auth = useAuthStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const saved = ref<string | null>(null)
 
 const greeting = ref(DEFAULT_APPLICATION_GREETING)
+
+const phoneMasked = computed(() => {
+  const p = auth.user?.phone || ''
+  const s = String(p)
+  if (s.length < 7) return s
+  return `${s.slice(0, 3)}****${s.slice(-4)}`
+})
 
 async function load() {
   loading.value = true
@@ -51,6 +60,10 @@ function back() {
   router.back()
 }
 
+function goUpdatePhone() {
+  router.push({ name: 'updatePhone' })
+}
+
 onMounted(() => {
   void load()
 })
@@ -71,6 +84,12 @@ onMounted(() => {
     <div v-else-if="saved" class="hint ok">{{ saved }}</div>
 
     <div class="card form">
+      <div class="sec">
+        <div class="sec-title">账号</div>
+        <div class="sec-desc">当前手机号：{{ phoneMasked }}</div>
+        <button class="btn" type="button" @click="goUpdatePhone">修改手机号</button>
+      </div>
+      <div class="sep" />
       <div class="sec">
         <div class="sec-title">默认申请问候语</div>
         <div class="sec-desc">发起申请时会自动填充，可在发送前临时修改。</div>
@@ -114,6 +133,11 @@ onMounted(() => {
   gap: 8px;
 }
 
+.sep {
+  height: 1px;
+  background: var(--border);
+}
+
 .sec-title {
   font-weight: 900;
 }
@@ -133,4 +157,3 @@ onMounted(() => {
   line-height: 1.4;
 }
 </style>
-

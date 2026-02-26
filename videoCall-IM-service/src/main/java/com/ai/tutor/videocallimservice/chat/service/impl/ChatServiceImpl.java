@@ -30,6 +30,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -61,6 +62,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Autowired
     private StudentProfileLiteMapper studentProfileLiteMapper;
+
+    @Value("${tutor-application.skip-payment-check:true}")
+    private boolean skipPaymentCheck;
 
     @Override
     public CursorPageBaseResp<ChatMessageResp> getMsgPage(ChatMessagePageReq request, Long receiveUid) {
@@ -133,7 +137,11 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
         if (application == null) {
             return false;
         }
-        return TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(application.getChatAccessStatus());
+        String access = application.getChatAccessStatus();
+        if (skipPaymentCheck && TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access)) {
+            return true;
+        }
+        return TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access);
     }
 
     private static String extractBizType(Object body) {

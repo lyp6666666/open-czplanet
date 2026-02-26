@@ -50,6 +50,14 @@ public class TeacherProfile {
 
     private Integer basicCompleted;
 
+    private Integer resumeCompleted;
+
+    private String city;
+
+    private String highestEduSchool;
+
+    private String teachingMode;
+
     private Integer realnameVerifyStatus;
 
     private String realnameVerifyMethod;

@@ -47,4 +47,6 @@ public interface TeacherProfileMapper {
                               @Param("verifyTime") LocalDateTime verifyTime);
 
     int markBasicCompleted(@Param("userId") Long userId);
+
+    int markResumeCompleted(@Param("userId") Long userId);
 }

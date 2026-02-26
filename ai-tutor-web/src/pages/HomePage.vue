@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useHomeStore } from '@/stores/home'
 import { useAuthStore } from '@/stores/auth'
+import { useCityStore } from '@/stores/city'
 import HomeFooter from '@/ui/home/HomeFooter.vue'
 import HomeHeader from '@/ui/home/HomeHeader.vue'
 import HomeHero from '@/ui/home/HomeHero.vue'
@@ -12,6 +13,7 @@ import HomeHotSection from '@/ui/home/HomeHotSection.vue'
 const router = useRouter()
 const home = useHomeStore()
 const auth = useAuthStore()
+const cityStore = useCityStore()
 const showDebug = ref(false)
 const keyword = ref('')
 
@@ -31,10 +33,21 @@ async function onSearch() {
   await router.push({ name: 'studentPost' })
 }
 
+function onCityChange(v: string) {
+  cityStore.setCity(v)
+  void home.setCity(v)
+}
+
+watch(
+  () => cityStore.city,
+  (v) => {
+    if (v && v !== home.city) void home.setCity(v)
+  },
+)
+
 onMounted(() => {
-  const storedCity = localStorage.getItem('ai_tutor_city')
-  if (storedCity && storedCity.trim()) {
-    home.setCity(storedCity.trim())
+  if (cityStore.city && cityStore.city !== home.city) {
+    home.city = cityStore.city
   }
   void home.initHome()
 })
@@ -42,7 +55,7 @@ onMounted(() => {
 
 <template>
   <div>
-    <HomeHeader v-if="!auth.isLoggedIn" :city="home.city" :config="home.config" :hot-words="home.hotWords" @city-change="home.setCity" />
+    <HomeHeader v-if="!auth.isLoggedIn" :city="home.city" :config="home.config" :hot-words="home.hotWords" @city-change="onCityChange" />
 
     <main class="page">
       <div class="container">

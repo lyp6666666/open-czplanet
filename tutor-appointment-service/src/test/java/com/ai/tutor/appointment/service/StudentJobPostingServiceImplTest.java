@@ -47,16 +47,19 @@ class StudentJobPostingServiceImplTest {
         req.setSubjectId(201L);
         req.setSubjectName("数学");
         req.setTitle("初中数学一对一");
-        req.setDescription("描述");
+        req.setDescription("学生基础一般，需要巩固提升。");
         req.setStudentGender("male");
         req.setGradeCode("JUNIOR1");
         req.setClassMode("offline");
         req.setCity("北京");
         req.setAddress(null);
         req.setFrequencyPerWeek(2);
+        req.setTeacherRequirementDetail("希望老师有耐心，经验丰富。");
         req.setStageCode("JUNIOR");
         req.setEducationRequirement("BACHELOR");
         req.setPublisherIdentity("PARENT");
+        req.setBudgetMin(new BigDecimal("100"));
+        req.setBudgetMax(new BigDecimal("100"));
 
         PositionPost post = new PositionPost();
         post.setId(201L);
@@ -74,11 +77,12 @@ class StudentJobPostingServiceImplTest {
         req.setSubjectId(201L);
         req.setSubjectName("数学");
         req.setTitle("初中数学一对一");
-        req.setDescription("描述");
+        req.setDescription("学生基础一般，需要巩固提升。");
         req.setStudentGender("female");
         req.setGradeCode("JUNIOR1");
         req.setClassMode("online");
         req.setFrequencyPerWeek(2);
+        req.setTeacherRequirementDetail("希望老师有耐心，经验丰富。");
         req.setStageCode("JUNIOR");
         req.setEducationRequirement("unlimited");
         req.setPublisherIdentity("parent");

@@ -8,6 +8,7 @@ import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.service.UserService;
+import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,8 @@ class UserControllerMeTest {
     private StudentProfileMapper studentProfileMapper;
     @MockBean
     private StudentJobPostingMapper studentJobPostingMapper;
+    @MockBean
+    private UserSettingsService userSettingsService;
 
     @Test
     void meShouldReturnDefaultGreetingForTeacher() throws Exception {

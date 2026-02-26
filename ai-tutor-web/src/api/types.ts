@@ -175,9 +175,13 @@ export interface TeacherProfile {
   experienceYears: number | null
   ratePerHour: string | null
   introduction: string | null
+  city?: string | null
+  highestEduSchool?: string | null
+  teachingMode?: string | null
   defaultGreeting?: string | null
   certificateUrls: string | null
   basicCompleted?: number | null
+  resumeCompleted?: number | null
   realnameVerifyStatus?: number | null
   realnameVerifyMethod?: string | null
   realnameVerifyIdFrontUrl?: string | null
@@ -406,6 +410,18 @@ export type ChatMessageBody =
       proposalId: number | null
       orderId: number | null
       status: string | null
+    }
+  | {
+      type: 'brokerage_refund_request'
+      requestId: number | null
+      status: string | null
+      creatorUserId: number | null
+    }
+  | {
+      type: 'brokerage_refund_status'
+      requestId: number | null
+      status: string | null
+      actorUserId: number | null
     }
   | { type: 'system'; content?: string; [k: string]: unknown }
 

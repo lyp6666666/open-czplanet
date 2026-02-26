@@ -3,16 +3,19 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
+import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { DemandViewVO, StudentJobPosting } from '@/api/types'
+import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting } from '@/api/types'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { useCityStore } from '@/stores/city'
 import { formatClassMode, formatEducationRequirement } from '@/utils/present'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const route = useRoute()
 const settings = useSettingsStore()
+const cityStore = useCityStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -25,8 +28,7 @@ const educationRequirement = ref<string>('')
 const frequencyPerWeek = ref<number | null>(null)
 const teacherGenderPreference = ref<string>('')
 
-const city = ref(localStorage.getItem('ai_tutor_city') || '全国')
-watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
+const city = computed(() => cityStore.city)
 
 const budgetMin = ref<number | null>(null)
 const budgetMax = ref<number | null>(null)
@@ -271,11 +273,63 @@ function genClientRequestId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function normalizeMsgBody(raw: unknown): { type: string; content?: string } {
+  if (!raw) return { type: 'text', content: '' }
+  if (typeof raw === 'string') return { type: 'text', content: raw }
+  if (typeof raw === 'object') {
+    const any = raw as Record<string, unknown>
+    if (typeof any.type === 'string') return any as { type: string; content?: string }
+    if (typeof any.content === 'string') return { type: 'text', content: any.content }
+  }
+  return { type: 'system' }
+}
+
+function isChatUnlockedByMessages(list: ChatMessageResp[]) {
+  return list.some((m) => {
+    const b = normalizeMsgBody(m.message?.body)
+    if (b.type === 'contact_unlocked' || b.type === 'brokerage_required') return true
+    if (b.type === 'text' && typeof b.content === 'string' && b.content.trim().length > 0) return true
+    return false
+  })
+}
+
+async function findRoomByOtherUid(otherUid: number): Promise<ChatRoomItemResp | null> {
+  let cursor: number | null = null
+  for (let i = 0; i < 10; i++) {
+    const page = await chatApi.listRooms({ pageSize: 50, cursor })
+    const list = page.list || []
+    const found = list.find((r) => r.otherUid === otherUid) || null
+    if (found) return found
+    cursor = page.cursor ?? null
+    if (page.isLast || list.length === 0) break
+  }
+  return null
+}
+
+async function shouldReuseExistingChat(otherUid: number): Promise<{ roomId: number } | null> {
+  const found = await findRoomByOtherUid(otherUid)
+  if (!found?.roomId) return null
+  const page = await chatApi.listMessages({ roomId: found.roomId, pageSize: 20, cursor: null })
+  const list = page.list || []
+  if (!isChatUnlockedByMessages(list)) return null
+  return { roomId: found.roomId }
+}
+
 async function openApply(it: StudentJobPosting) {
   if (applyBusy.value) return
   applyError.value = null
   applyBusy.value = true
   try {
+    try {
+      const reuse = await shouldReuseExistingChat(it.parentId)
+      if (reuse?.roomId) {
+        await router.push({ name: 'chatRoom', params: { roomId: String(reuse.roomId) }, query: { otherUid: String(it.parentId) } })
+        return
+      }
+    } catch {
+      void 0
+    }
+
     if (!settings.loaded) {
       try {
         await settings.load()
@@ -368,6 +422,13 @@ onMounted(() => {
   }
   void refresh()
 })
+
+watch(
+  () => cityStore.city,
+  () => {
+    void refresh()
+  },
+)
 </script>
 
 <template>

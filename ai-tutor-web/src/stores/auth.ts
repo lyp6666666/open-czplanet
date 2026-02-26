@@ -72,7 +72,7 @@ export const useAuthStore = defineStore('auth', {
         persistAuth(merged)
       }
       if (me?.userType === 1) {
-        const completed = !!(me.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())
+        const completed = !!(me.avatar && me.teacherProfile?.realName?.trim())
         localStorage.setItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY, completed ? '1' : '0')
       }
       return me

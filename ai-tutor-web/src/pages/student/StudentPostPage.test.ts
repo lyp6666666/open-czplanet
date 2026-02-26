@@ -44,6 +44,8 @@ describe('StudentPostPage', () => {
     await wrapper.findAll('select')[3]!.setValue('offline')
     await wrapper.findAll('select')[3]!.setValue('offline')
 
+    await wrapper.findAll('textarea')[0]!.setValue('孩子基础一般，希望补习巩固。')
+
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
 
@@ -68,7 +70,9 @@ describe('StudentPostPage', () => {
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
     await wrapper.findAll('select')[2]!.setValue('数学')
     await wrapper.findAll('select')[3]!.setValue('online')
-    await wrapper.find('textarea').setValue('希望老师重点讲解函数与几何。')
+    await wrapper.findAll('textarea')[0]!.setValue('希望老师重点讲解函数与几何。')
+    await wrapper.findAll('textarea')[1]!.setValue('希望老师有耐心，教学经验丰富。')
+    await wrapper.find('input[type="number"]').setValue('100')
 
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
@@ -85,6 +89,9 @@ describe('StudentPostPage', () => {
       gradeCode: 'JUNIOR1',
       stageCode: 'JUNIOR',
       teacherGenderPreference: 'both',
+      frequencyPerWeek: 2,
+      budgetMin: 100,
+      budgetMax: 100,
     })
   })
 })

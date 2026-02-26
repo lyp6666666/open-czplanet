@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
+import { notifyAuthInvalid } from '@/api/http'
 import { userApi } from '@/api/user'
 import type { CursorPageResp, TutorApplicationVO, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
@@ -50,6 +51,11 @@ async function startStream() {
     headers: { Authorization: `Bearer ${auth.token}` },
     signal: controller.signal,
   })
+  if (res.status === 401 || res.status === 403) {
+    notifyAuthInvalid(`sse_http_${res.status}`)
+    streamAbort.value = null
+    return
+  }
   if (!res.ok || !res.body) {
     streamAbort.value = null
     return

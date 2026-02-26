@@ -265,4 +265,97 @@ class UserServiceImplTest {
         verify(teacherProfileMapper, times(1)).updateTeacherProfile(captor.capture(), eq(1001L));
         assertThat(captor.getValue().getDefaultGreeting()).isEqualTo("你好");
     }
+
+    @Test
+    void updateUserInfoShouldMarkBasicCompletedWhenAvatarAndRealNamePresent() {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute("uid")).thenReturn("1001");
+
+        User user = new User();
+        user.setId(1001L);
+        user.setPhone("13800006909");
+        user.setUserType(UserRoleEnum.TEACHER.getValue());
+        User latestUser = new User();
+        latestUser.setId(1001L);
+        latestUser.setPhone("13800006909");
+        latestUser.setUserType(UserRoleEnum.TEACHER.getValue());
+        latestUser.setAvatar("/avatars/avatar-1.svg");
+        when(userMapper.selectById(1001L)).thenReturn(user, latestUser);
+        when(userMapper.updateUserBaseInfo(any(), anyLong())).thenReturn(1);
+
+        TeacherProfile profile = new TeacherProfile();
+        profile.setUserId(1001L);
+        profile.setRealName("张老师");
+        profile.setStatus(1);
+        when(teacherProfileMapper.selectByUserId(1001L)).thenReturn(profile, profile);
+        when(teacherProfileMapper.updateTeacherProfile(any(), anyLong())).thenReturn(1);
+
+        BaseUserInfo base = new BaseUserInfo();
+        base.setAvatar("/avatars/avatar-1.svg");
+        TeacherExtInfo ext = new TeacherExtInfo();
+        ext.setRealName("张老师");
+
+        UserUpdateRequest dto = new UserUpdateRequest();
+        dto.setBaseUserInfo(base);
+        dto.setTeacherExtInfo(ext);
+
+        userService.updateUserInfo(dto, req);
+
+        verify(teacherProfileMapper, times(1)).markBasicCompleted(1001L);
+    }
+
+    @Test
+    void updateUserInfoShouldMarkResumeCompletedWhenAllResumeFieldsPresent() {
+        HttpServletRequest req = mock(HttpServletRequest.class);
+        when(req.getAttribute("uid")).thenReturn("1001");
+
+        User user = new User();
+        user.setId(1001L);
+        user.setPhone("13800006909");
+        user.setUserType(UserRoleEnum.TEACHER.getValue());
+        User latestUser = new User();
+        latestUser.setId(1001L);
+        latestUser.setPhone("13800006909");
+        latestUser.setUserType(UserRoleEnum.TEACHER.getValue());
+        latestUser.setAvatar("/avatars/avatar-1.svg");
+        when(userMapper.selectById(1001L)).thenReturn(user, latestUser);
+        when(userMapper.updateUserBaseInfo(any(), anyLong())).thenReturn(1);
+
+        TeacherProfile existing = new TeacherProfile();
+        existing.setUserId(1001L);
+        existing.setStatus(1);
+        TeacherProfile latest = new TeacherProfile();
+        latest.setUserId(1001L);
+        latest.setStatus(1);
+        latest.setRealName("张老师");
+        latest.setEducation("本科");
+        latest.setCity("北京");
+        latest.setHighestEduSchool("北京大学");
+        latest.setIntroduction("自我介绍");
+        latest.setSubject("数学,英语");
+        latest.setTeachingMode("ONLINE");
+
+        when(teacherProfileMapper.selectByUserId(1001L)).thenReturn(existing, latest);
+        when(teacherProfileMapper.updateTeacherProfile(any(), anyLong())).thenReturn(1);
+
+        BaseUserInfo base = new BaseUserInfo();
+        base.setAvatar("/avatars/avatar-1.svg");
+        TeacherExtInfo ext = new TeacherExtInfo();
+        ext.setRealName("张老师");
+        ext.setEducation("本科");
+        ext.setCity("北京");
+        ext.setHighestEduSchool("北京大学");
+        ext.setIntroduction("自我介绍");
+        ext.setSubject("数学,英语");
+        ext.setTeachingMode("ONLINE");
+
+        UserUpdateRequest dto = new UserUpdateRequest();
+        dto.setBaseUserInfo(base);
+        dto.setTeacherExtInfo(ext);
+
+        userService.updateUserInfo(dto, req);
+
+        verify(teacherProfileMapper, times(1)).markBasicCompleted(1001L);
+        verify(teacherProfileMapper, times(1)).markResumeCompleted(1001L);
+    }
 }

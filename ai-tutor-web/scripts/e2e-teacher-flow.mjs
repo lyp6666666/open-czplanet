@@ -98,35 +98,106 @@ async function main() {
   console.log('[4/7] register/login teacher:', teacherPhone)
   const teacherToken = await login('TEACHER', teacherPhone)
 
-  console.log('[5/7] complete teacher basic profile')
+  console.log('[5/10] complete teacher step1 profile')
   await api('/user/updateUserInfo', {
     method: 'POST',
     token: teacherToken,
     body: {
       baseUserInfo: { avatar: '/avatars/avatar-1.svg' },
-      teacherExtInfo: { realName: '张老师', education: '本科', defaultGreeting: '您好，我是张老师，方便聊下孩子情况吗？' },
+      teacherExtInfo: { realName: '张老师', defaultGreeting: '您好，我是张老师，方便聊下孩子情况吗？' },
     },
   })
 
-  console.log('[6/7] teacher view demand detail')
+  console.log('[6/10] complete teacher step2 resume')
+  await api('/user/updateUserInfo', {
+    method: 'POST',
+    token: teacherToken,
+    body: {
+      teacherExtInfo: {
+        education: '本科',
+        city: '北京',
+        highestEduSchool: '北京大学',
+        introduction: '擅长提分与错题体系化。',
+        subject: '数学,英语',
+        teachingMode: 'ONLINE',
+      },
+    },
+  })
+
+  console.log('[7/10] teacher view demand detail')
   const demandView = await api(`/api/v1/parent/jobs/${demandId}/view`, { token: teacherToken })
   const targetUid = demandView?.publisher?.uid ?? demandView?.parentId ?? null
   if (!targetUid) throw new Error('Cannot find target uid in demand view response')
 
-  console.log('[7/7] start chat + send message')
+  console.log('[8/10] student open stream')
+  const streamAbort = new AbortController()
+  const streamPromise = (async () => {
+    const res = await fetch(`${baseUrl}/chat/stream`, { headers: { Authorization: `Bearer ${studentToken}` }, signal: streamAbort.signal })
+    if (!res.ok || !res.body) throw new Error('stream_failed')
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        const lines = part.split('\n').map((l) => l.trimEnd())
+        let event = 'message'
+        const dataLines = []
+        for (const line of lines) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+        }
+        const raw = dataLines.join('\n')
+        if (!raw || event !== 'message') continue
+        try {
+          const ev = JSON.parse(raw)
+          if (ev && typeof ev.msgId === 'number') return ev
+        } catch {
+          void 0
+        }
+      }
+    }
+    return null
+  })()
+
+  console.log('[9/10] start chat + send message')
   const roomId = await api('/chat/room', {
     method: 'POST',
     token: teacherToken,
     body: { targetUid },
   })
-  await api('/chat/msg', {
+  const sent = await api('/chat/msg', {
     method: 'POST',
     token: teacherToken,
     body: { roomId, msgType: 1, body: { content: '我可以先免费试听一节课，您看周末是否方便？' } },
   })
-  const page = await api('/chat/public/msg/page', { token: teacherToken, query: { roomId, pageSize: 10 } })
-  const count = Array.isArray(page?.list) ? page.list.length : 0
-  console.log('ok:', { demandId, targetUid, roomId, messages: count })
+
+  const ev = await Promise.race([streamPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('stream_timeout')), 8000))])
+  streamAbort.abort()
+
+  console.log('[10/10] unread -> ack -> unread=0')
+  const studentRooms1 = await api('/chat/room/page', { token: studentToken, query: { pageSize: 50 } })
+  const roomItem1 = (studentRooms1?.list || []).find((r) => r.roomId === roomId)
+  if (!roomItem1) throw new Error('student room not found')
+  if (!(roomItem1.unreadCount > 0)) throw new Error(`expected unreadCount>0, got ${roomItem1.unreadCount}`)
+
+  const lastMsgId = sent?.message?.id ?? roomItem1.lastMsgId
+  await api('/chat/read/ack', { method: 'POST', token: studentToken, body: { roomId, lastReadMsgId: lastMsgId } })
+  const studentRooms2 = await api('/chat/room/page', { token: studentToken, query: { pageSize: 50 } })
+  const roomItem2 = (studentRooms2?.list || []).find((r) => r.roomId === roomId)
+  if (!roomItem2) throw new Error('student room not found after ack')
+  if (roomItem2.unreadCount !== 0) throw new Error(`expected unreadCount=0 after ack, got ${roomItem2.unreadCount}`)
+
+  const newPhone = randPhone('189')
+  const oldCode = await api('/user/sendUpdateUserPhoneCode', { token: teacherToken })
+  const newCode = await api('/user/sendUpdateUserNewPhoneCode', { token: teacherToken, query: { newPhone } })
+  await api('/user/updateUserPhoneV2', { method: 'POST', token: teacherToken, body: { newPhone, oldCode, newCode } })
+
+  console.log('ok:', { demandId, targetUid, roomId, streamMsgId: ev?.msgId })
 }
 
 main().catch((e) => {

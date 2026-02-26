@@ -6,19 +6,19 @@ export interface CreateStudentJobPostingRequest {
   subjectName: string
   subjectOther: boolean
   title: string
-  description?: string
+  description: string
   studentGender: string
   gradeCode?: string
   teacherGenderPreference?: string
   availableTime?: string
-  teacherRequirementDetail?: string
+  teacherRequirementDetail: string
   childAge?: number
   classMode: string
   city?: string
   address?: string
   frequencyPerWeek: number
-  budgetMin?: number
-  budgetMax?: number
+  budgetMin: number
+  budgetMax: number
   stageCode: string
   educationRequirement: string
   publisherIdentity: string

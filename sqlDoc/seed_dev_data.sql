@@ -200,20 +200,20 @@ ref_id=VALUES(ref_id),
 update_time=VALUES(update_time);
 
 INSERT INTO teacher_profile
-(id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, certificate_urls, status, create_time, update_time)
+(id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, city, highest_edu_school, teaching_mode, resume_completed, certificate_urls, status, create_time, update_time)
 VALUES
-(50001, 10001, '张晨', '北大 本科', '初中数学,高中数学', 4, 180.00, '擅长提分与错题体系化，注重解题思路与复盘。', '["https://example.com/cert/teacher/50001-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 30 DAY), NOW()),
-(50002, 10002, '李薇', '师范 硕士', '初中英语,高中英语', 6, 220.00, '阅读写作双线提升，强调词汇与语法在语境中掌握。', '["https://example.com/cert/teacher/50002-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 18 DAY), NOW()),
-(50003, 10003, '王磊', '985 本科', '初中物理,高中物理', 5, 240.00, '物理模型化讲解，善于把复杂题拆解成步骤。', '["https://example.com/cert/teacher/50003-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 12 DAY), NOW()),
-(50004, 10004, '赵婷', '师范 本科', '初中化学,高中化学', 3, 200.00, '化学方程式与题型训练结合，重视基础与规范书写。', '["https://example.com/cert/teacher/50004-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 25 DAY), NOW()),
-(50005, 10005, '陈浩', '北邮 本科', '编程(Python)', 2, 160.00, '从零到一做小项目，培养算法思维与代码习惯。', '["https://example.com/cert/teacher/50005-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(50006, 10006, '刘敏', '央音 本科', '钢琴', 7, 260.00, '钢琴启蒙与考级，强调节奏与手型基本功。', '["https://example.com/cert/teacher/50006-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 16 DAY), NOW()),
-(50007, 10007, '周航', '师范 本科', '小学数学,初中数学', 4, 150.00, '耐心细致，善于帮助孩子建立自信与学习习惯。', '["https://example.com/cert/teacher/50007-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 20 DAY), NOW()),
-(50008, 10008, '吴楠', '外语 硕士', '小学英语,初中英语', 5, 190.00, '自然拼读+分级阅读，口语表达循序渐进。', '["https://example.com/cert/teacher/50008-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(50009, 10009, '郑凯', '美院 本科', '美术', 3, 180.00, '素描造型基础训练，兼顾创意与观察力。', '["https://example.com/cert/teacher/50009-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NOW()),
-(50010, 10010, '孙颖', '师范 本科', '小学语文,初中语文', 6, 210.00, '阅读理解与作文专项，积累素材与表达结构。', '["https://example.com/cert/teacher/50010-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 28 DAY), NOW()),
-(50011, 10011, '马超', '理工 本科', '高中数学', 5, 260.00, '高考数学提分，擅长压轴题思路梳理。', '["https://example.com/cert/teacher/50011-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 14 DAY), NOW()),
-(50012, 10012, '胡静', '书法协会', '书法', 8, 200.00, '硬笔规范与软笔入门，结构与章法训练。', '["https://example.com/cert/teacher/50012-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW())
+(50001, 10001, '张晨', '北大 本科', '初中数学,高中数学', 4, 180.00, '擅长提分与错题体系化，注重解题思路与复盘。', '北京', '北京大学', 'ONLINE', 1, '["https://example.com/cert/teacher/50001-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 30 DAY), NOW()),
+(50002, 10002, '李薇', '师范 硕士', '初中英语,高中英语', 6, 220.00, '阅读写作双线提升，强调词汇与语法在语境中掌握。', '北京', '北京师范大学', 'ONLINE', 1, '["https://example.com/cert/teacher/50002-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 18 DAY), NOW()),
+(50003, 10003, '王磊', '985 本科', '初中物理,高中物理', 5, 240.00, '物理模型化讲解，善于把复杂题拆解成步骤。', '北京', '北京大学', 'OFFLINE', 1, '["https://example.com/cert/teacher/50003-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 12 DAY), NOW()),
+(50004, 10004, '赵婷', '师范 本科', '初中化学,高中化学', 3, 200.00, '化学方程式与题型训练结合，重视基础与规范书写。', '北京', '华东师范大学', 'BOTH', 1, '["https://example.com/cert/teacher/50004-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 25 DAY), NOW()),
+(50005, 10005, '陈浩', '北邮 本科', '编程(Python)', 2, 160.00, '从零到一做小项目，培养算法思维与代码习惯。', '北京', '北京邮电大学', 'ONLINE', 1, '["https://example.com/cert/teacher/50005-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
+(50006, 10006, '刘敏', '央音 本科', '钢琴', 7, 260.00, '钢琴启蒙与考级，强调节奏与手型基本功。', '北京', '中央音乐学院', 'OFFLINE', 1, '["https://example.com/cert/teacher/50006-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 16 DAY), NOW()),
+(50007, 10007, '周航', '师范 本科', '小学数学,初中数学', 4, 150.00, '耐心细致，善于帮助孩子建立自信与学习习惯。', '北京', '北京师范大学', 'BOTH', 1, '["https://example.com/cert/teacher/50007-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 20 DAY), NOW()),
+(50008, 10008, '吴楠', '外语 硕士', '小学英语,初中英语', 5, 190.00, '自然拼读+分级阅读，口语表达循序渐进。', '北京', '北京外国语大学', 'ONLINE', 1, '["https://example.com/cert/teacher/50008-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
+(50009, 10009, '郑凯', '美院 本科', '美术', 3, 180.00, '素描造型基础训练，兼顾创意与观察力。', '北京', '中央美术学院', 'OFFLINE', 1, '["https://example.com/cert/teacher/50009-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NOW()),
+(50010, 10010, '孙颖', '师范 本科', '小学语文,初中语文', 6, 210.00, '阅读理解与作文专项，积累素材与表达结构。', '北京', '北京师范大学', 'BOTH', 1, '["https://example.com/cert/teacher/50010-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 28 DAY), NOW()),
+(50011, 10011, '马超', '理工 本科', '高中数学', 5, 260.00, '高考数学提分，擅长压轴题思路梳理。', '北京', '北京大学', 'ONLINE', 1, '["https://example.com/cert/teacher/50011-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 14 DAY), NOW()),
+(50012, 10012, '胡静', '书法协会', '书法', 8, 200.00, '硬笔规范与软笔入门，结构与章法训练。', '北京', '中国书法家协会', 'OFFLINE', 1, '["https://example.com/cert/teacher/50012-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW())
 ON DUPLICATE KEY UPDATE
 real_name=VALUES(real_name),
 education=VALUES(education),
@@ -221,6 +221,10 @@ subject=VALUES(subject),
 experience_years=VALUES(experience_years),
 rate_per_hour=VALUES(rate_per_hour),
 introduction=VALUES(introduction),
+city=VALUES(city),
+highest_edu_school=VALUES(highest_edu_school),
+teaching_mode=VALUES(teaching_mode),
+resume_completed=VALUES(resume_completed),
 certificate_urls=VALUES(certificate_urls),
 status=VALUES(status),
 update_time=VALUES(update_time);

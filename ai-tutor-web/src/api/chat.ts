@@ -22,6 +22,18 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body: { content } })
   },
 
+  sendBody(roomId: number, body: unknown) {
+    return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body })
+  },
+
+  requestBrokerageRefund(roomId: number) {
+    return http.post<unknown, ChatMessageResp>('/chat/msg', {
+      roomId,
+      msgType: 1,
+      body: { type: 'brokerage_refund_request', status: 'PENDING_REVIEW' },
+    })
+  },
+
   createCollaborationProposal(params: { roomId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
     return http.post<unknown, ChatMessageResp>('/chat/collaboration/proposal', params)
   },

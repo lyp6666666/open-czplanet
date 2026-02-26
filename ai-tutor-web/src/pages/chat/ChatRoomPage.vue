@@ -24,6 +24,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const chatRealtime = useChatRealtimeStore()
 
+const isTeacher = computed(() => auth.user?.userType === 1)
+
 const roomId = computed(() => Number(route.params.roomId))
 const otherUid = computed(() => {
   const raw = route.query.otherUid
@@ -38,6 +40,10 @@ const error = ref<string | null>(null)
 
 const sending = ref(false)
 const input = ref('')
+
+const refundOpen = ref(false)
+const refundBusy = ref(false)
+const refundError = ref<string | null>(null)
 
 const appActionBusy = ref<Record<number, boolean>>({})
 const appActionError = ref<Record<number, string>>({})
@@ -84,17 +90,6 @@ function userAvatar(uid: number): string {
   const v = uid === myUid.value ? myUser.value?.avatar : uid === otherUid.value ? otherUser.value?.avatar : getUser(uid)?.avatar
   return typeof v === 'string' ? v.trim() : ''
 }
-
-type StreamMsgEvent = {
-  msgId: number
-  roomId: number
-  fromUid: number
-  toUid: number
-  sendTime: unknown
-  body: unknown
-}
-
-const streamAbort = ref<AbortController | null>(null)
 
 const lessonActionBusy = ref<Record<number, boolean>>({})
 const lessonActionError = ref<Record<number, string>>({})
@@ -152,6 +147,10 @@ function goPay(orderId: number, applicationId?: number | null) {
 }
 
 function openCollaboration() {
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
+    return
+  }
   collabCreateError.value = null
   collabOpen.value = true
 }
@@ -159,6 +158,36 @@ function openCollaboration() {
 function closeCollaboration() {
   if (collabCreateBusy.value) return
   collabOpen.value = false
+}
+
+function openRefund() {
+  if (!canRequestRefund.value) {
+    error.value = composerLockedHint.value
+    return
+  }
+  refundError.value = null
+  refundOpen.value = true
+}
+
+function closeRefund() {
+  if (refundBusy.value) return
+  refundOpen.value = false
+}
+
+async function submitRefund() {
+  if (!canRequestRefund.value) return
+  if (refundBusy.value) return
+  refundBusy.value = true
+  refundError.value = null
+  try {
+    const msg = await chatApi.requestBrokerageRefund(roomId.value)
+    mergeMessages([msg], 'append')
+    refundOpen.value = false
+  } catch (e) {
+    refundError.value = e instanceof Error ? e.message : '发起失败'
+  } finally {
+    refundBusy.value = false
+  }
 }
 
 // #region debug-point
@@ -245,10 +274,19 @@ function isTutorApplicationStatusBody(body: ChatMessageBody): body is Extract<Ch
   return body.type === 'tutor_application_status'
 }
 
+function isRefundRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'brokerage_refund_request' }> {
+  return body.type === 'brokerage_refund_request'
+}
+
+function isRefundStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'brokerage_refund_status' }> {
+  return body.type === 'brokerage_refund_status'
+}
+
 const chatUnlocked = computed(() => {
+  if (route.query.unlockChat === '1') return true
   return messages.value.some((m) => {
     const b = normalizeBody(m.message.body)
-    return b.type === 'contact_unlocked' || (b.type === 'text' && b.content.trim().length > 0)
+    return b.type === 'contact_unlocked' || b.type === 'brokerage_required' || (b.type === 'text' && b.content.trim().length > 0)
   })
 })
 
@@ -409,11 +447,51 @@ const sortedMessages = computed(() => {
 
 type RenderMessage = ChatMessageResp & { body: ChatMessageBody }
 
+const refundStatusByRequestId = computed<Record<number, string>>(() => {
+  const out: Record<number, string> = {}
+  for (const m of sortedMessages.value) {
+    const b = normalizeBody(m.message?.body)
+    if (isRefundRequestBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
+      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
+      continue
+    }
+    if (isRefundStatusBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
+      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
+    }
+  }
+  return out
+})
+
+const latestRefundStatusFallback = computed(() => {
+  let best: { msgId: number; status: string } | null = null
+  for (const m of sortedMessages.value) {
+    const b = normalizeBody(m.message?.body)
+    if (!isRefundStatusBody(b)) continue
+    const msgId = m.message?.id || 0
+    const s = typeof b.status === 'string' ? b.status.trim() : ''
+    if (!s) continue
+    if (!best || msgId > best.msgId) best = { msgId, status: s }
+  }
+  return best?.status || ''
+})
+
 const renderMessages = computed<RenderMessage[]>(() => {
-  return sortedMessages.value.map((m) => ({
-    ...m,
-    body: normalizeBody(m.message?.body),
-  }))
+  const list: RenderMessage[] = []
+  for (const m of sortedMessages.value) {
+    const body = normalizeBody(m.message?.body)
+    if (isRefundStatusBody(body)) continue
+    if (isRefundRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
+      const effective = refundStatusByRequestId.value[body.requestId]
+      list.push({ ...m, body: { ...body, status: effective || body.status } })
+      continue
+    }
+    if (isRefundRequestBody(body)) {
+      list.push({ ...m, body: { ...body, status: latestRefundStatusFallback.value || body.status } })
+      continue
+    }
+    list.push({ ...m, body })
+  }
+  return list
 })
 
 type RenderItem = { kind: 'time'; key: string; text: string } | { kind: 'msg'; key: string; m: RenderMessage }
@@ -500,6 +578,33 @@ function effectiveCollabStatus(proposalId: number, fallback: CollaborationPropos
   return collabStatusByProposalId.value[proposalId] || fallback
 }
 
+const hasAnyRefundRequest = computed(() => {
+  return renderMessages.value.some((m) => isRefundRequestBody(m.body))
+})
+
+const composerEnabled = computed(() => {
+  return chatUnlocked.value && !hasAnyRefundRequest.value
+})
+
+const composerLockedHint = computed(() => {
+  if (hasAnyRefundRequest.value) {
+    return isTeacher.value ? '已发起退款申请，聊天已关闭' : '对方已经申请退还中介费，聊天功能关闭'
+  }
+  return chatLockedHint.value
+})
+
+const canRequestRefund = computed(() => {
+  return isTeacher.value && chatUnlocked.value && !hasAnyRefundRequest.value
+})
+
+function refundStatusText(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+  if (s === 'REFUNDED' || s === 'SUCCESS' || s === 'DONE') {
+    return '已经退还支付宝/微信账户（到账可能有延迟），若有疑问请咨询后台电话'
+  }
+  return '已经发起，等待管理员审核中，平均审核时长约30分钟，超出8小时直接退回'
+}
+
 async function loadOtherUser() {
   if (!otherUid.value) return
   const users = await userApi.batch([otherUid.value])
@@ -538,18 +643,14 @@ async function loadMore() {
 async function ackLatest() {
   const latest = messages.value.reduce((max, m) => Math.max(max, m.message?.id || 0), 0)
   if (latest <= 0) return
-  try {
-    await chatApi.ackRead(roomId.value, latest)
-  } catch (e) {
-    void e
-  }
+  void chatRealtime.ackRoomRead(roomId.value, latest)
 }
 
 async function onSend() {
   const text = input.value.trim()
   if (!text) return
-  if (!chatUnlocked.value) {
-    error.value = chatLockedHint.value
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
     return
   }
   if (sending.value) return
@@ -566,90 +667,57 @@ async function onSend() {
   }
 }
 
-function normalizeBaseUrl(raw: unknown) {
-  const s = typeof raw === 'string' ? raw.trim() : ''
-  return s.length > 0 ? s : ''
-}
-
-async function startStream() {
-  if (!auth.isLoggedIn || !auth.token) return
-  if (streamAbort.value) return
-  const controller = new AbortController()
-  streamAbort.value = controller
-
-  const baseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
-  const url = `${baseUrl}/chat/stream`
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${auth.token}` },
-    signal: controller.signal,
-  })
-  if (!res.ok || !res.body) {
-    streamAbort.value = null
-    return
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop() || ''
-    for (const part of parts) {
-      const lines = part.split('\n').map((l) => l.trimEnd())
-      let event = 'message'
-      const dataLines: string[] = []
-      for (const line of lines) {
-        if (line.startsWith('event:')) event = line.slice(6).trim()
-        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+async function ackFromRoomList() {
+  if (!auth.isLoggedIn) return
+  let cursor: number | null = null
+  for (let i = 0; i < 10; i++) {
+    try {
+      const page = await chatApi.listRooms({ pageSize: 50, cursor })
+      const list = page.list || []
+      const found = list.find((r) => r.roomId === roomId.value)
+      if (found?.lastMsgId) {
+        void chatRealtime.ackRoomRead(roomId.value, found.lastMsgId)
+        return
       }
-      const dataRaw = dataLines.join('\n')
-      if (!dataRaw) continue
-      if (event !== 'message') continue
-      try {
-        const ev = JSON.parse(dataRaw) as StreamMsgEvent
-        if (!ev || ev.roomId !== roomId.value) continue
-        const msg: ChatMessageResp = {
-          fromUser: { uid: ev.fromUid },
-          message: { id: ev.msgId, roomId: ev.roomId, sendTime: ev.sendTime == null ? '' : String(ev.sendTime), body: ev.body },
-        }
-        mergeMessages([msg], 'append')
-        await ackLatest()
-      } catch (e) {
-        void e
-      }
+      cursor = page.cursor ?? null
+      if (page.isLast || list.length === 0) return
+    } catch {
+      return
     }
   }
-  streamAbort.value = null
-}
-
-function stopStream() {
-  streamAbort.value?.abort()
-  streamAbort.value = null
 }
 
 onMounted(() => {
   void loadOtherUser()
+  void ackFromRoomList()
   void loadMore().then(() => ackLatest())
-  void startStream()
   chatRealtime.setActiveRoom(roomId.value)
 })
 
 onBeforeUnmount(() => {
-  stopStream()
   chatRealtime.setActiveRoom(null)
 })
 
 watch(
   () => roomId.value,
   () => {
-    stopStream()
-    void startStream()
     chatRealtime.setActiveRoom(roomId.value)
+  },
+)
+
+watch(
+  () => chatRealtime.lastEvent,
+  (ev) => {
+    if (!ev) return
+    if (ev.roomId !== roomId.value) return
+    const exists = messages.value.some((m) => m.message?.id === ev.msgId)
+    if (exists) return
+    const msg: ChatMessageResp = {
+      fromUser: { uid: ev.fromUid },
+      message: { id: ev.msgId, roomId: ev.roomId, sendTime: ev.sendTime == null ? '' : String(ev.sendTime), body: ev.body },
+    }
+    mergeMessages([msg], 'append')
+    void chatRealtime.ackRoomRead(roomId.value, ev.msgId)
   },
 )
 </script>
@@ -740,6 +808,13 @@ watch(
               <template v-else-if="isContactUnlockedBody(it.m.body)">
                 <ContactUnlockedCard :body="it.m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
               </template>
+              <template v-else-if="isRefundRequestBody(it.m.body)">
+                <div class="refund-card">
+                  <div class="h1">退款申请</div>
+                  <div class="hint">{{ isTeacher ? '你已发起退还中介费申请，聊天已关闭。' : '对方已经申请退还中介费，聊天功能关闭。' }}</div>
+                  <div v-if="isTeacher" class="status">{{ refundStatusText(it.m.body.status) }}</div>
+                </div>
+              </template>
               <template v-else>
                 {{ msgText(it.m.body) }}
               </template>
@@ -754,13 +829,20 @@ watch(
           <button v-if="!chatUnlocked && canSendTutorApplication" class="btn btn-primary" type="button" @click="sendTutorApplicationAgain">
             重新发送家教申请
           </button>
-          <button v-else class="btn" type="button" :disabled="hasAnyCollabProposal || !chatUnlocked" @click="openCollaboration">
-            {{ hasAnyCollabProposal ? '已发起合作' : '发起合作' }}
-          </button>
+          <template v-else>
+            <div class="action-row">
+              <button class="btn" type="button" :disabled="hasAnyCollabProposal || !composerEnabled" @click="openCollaboration">
+                {{ hasAnyCollabProposal ? '已发起合作' : '发起合作' }}
+              </button>
+              <button v-if="isTeacher && chatUnlocked && !hasAnyRefundRequest" class="btn" type="button" :disabled="!composerEnabled" @click="openRefund">
+                发起退款
+              </button>
+            </div>
+          </template>
         </div>
         <div class="send">
-          <input v-model="input" class="input" :disabled="!chatUnlocked" :placeholder="chatUnlocked ? '请输入消息' : chatLockedHint" @keydown.enter.prevent="onSend" />
-          <button class="btn btn-primary" type="button" :disabled="sending || !chatUnlocked" @click="onSend">
+          <input v-model="input" class="input" :disabled="!composerEnabled" :placeholder="composerEnabled ? '请输入消息' : composerLockedHint" @keydown.enter.prevent="onSend" />
+          <button class="btn btn-primary" type="button" :disabled="sending || !composerEnabled" @click="onSend">
             {{ sending ? '发送中...' : '发送' }}
           </button>
         </div>
@@ -783,6 +865,20 @@ watch(
       @close="closeCollaboration"
       @submit="createCollaboration"
     />
+
+    <div v-if="refundOpen" class="mask" @click.self="closeRefund">
+      <div class="modal card">
+        <div class="m-title">发起退款申请</div>
+        <div class="m-desc">发起后双方将无法继续发送消息</div>
+        <div v-if="refundError" class="m-error">{{ refundError }}</div>
+        <div class="m-ops">
+          <button class="btn" type="button" :disabled="refundBusy" @click="closeRefund">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="refundBusy" @click="submitRefund">
+            {{ refundBusy ? '提交中...' : '确认发起' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -940,6 +1036,80 @@ watch(
 .actions {
   display: flex;
   justify-content: flex-start;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.refund-card {
+  min-width: 260px;
+  max-width: 360px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 10px 10px 12px;
+  background: rgba(255, 149, 0, 0.08);
+}
+
+.refund-card .h1 {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.refund-card .hint {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.refund-card .status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(92vw, 420px);
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.m-title {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.m-desc {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.m-error {
+  font-size: 12px;
+  color: rgba(255, 0, 0, 0.8);
+  font-weight: 800;
+}
+
+.m-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .send {

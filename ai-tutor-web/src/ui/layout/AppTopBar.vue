@@ -5,20 +5,24 @@ import { useRoute, useRouter } from 'vue-router'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { useCityStore } from '@/stores/city'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const chatRealtime = useChatRealtimeStore()
+const cityStore = useCityStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const displayName = computed(() => auth.me?.teacherProfile?.realName || auth.user?.name || '未登录')
 const unread = computed(() => chatRealtime.totalUnread)
 
-const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
-watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
+const city = computed({
+  get: () => cityStore.city,
+  set: (v: string) => cityStore.setCity(v),
+})
 
 const cities = computed(() => {
   const base = [city.value, '北京', '上海', '广州', '深圳', '杭州']

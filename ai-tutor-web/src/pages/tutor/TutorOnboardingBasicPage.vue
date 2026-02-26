@@ -16,18 +16,9 @@ const avatar = ref('')
 const avatarUploading = ref(false)
 
 const realName = ref('')
-const education = ref('')
-const educationOther = ref('')
-
-const eduOptions = ['本科', '硕士', '博士', '专科', '海外', '其他']
-
-const finalEducation = computed(() => {
-  if (education.value !== '其他') return education.value.trim()
-  return educationOther.value.trim()
-})
 
 const canSubmit = computed(() => {
-  return !!(avatar.value.trim() && realName.value.trim() && finalEducation.value)
+  return !!(avatar.value.trim() && realName.value.trim())
 })
 
 async function onSelectAvatarFile(e: Event) {
@@ -62,10 +53,10 @@ async function submit() {
   try {
     await userApi.updateUserInfo({
       baseUserInfo: { avatar: avatar.value.trim() },
-      teacherExtInfo: { realName: realName.value.trim(), education: finalEducation.value },
+      teacherExtInfo: { realName: realName.value.trim() },
     })
     await auth.refreshMe()
-    await router.replace('/tutor/jobs')
+    await router.replace('/tutor/onboarding/profile')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '保存失败'
   } finally {
@@ -85,8 +76,8 @@ onMounted(async () => {
   }
   if (me?.avatar) avatar.value = me.avatar
 
-  if (me?.teacherProfile?.education) education.value = me.teacherProfile.education
-  const completed = !!(me?.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())
+  if (me?.teacherProfile?.realName) realName.value = me.teacherProfile.realName
+  const completed = !!(me?.avatar && me.teacherProfile?.realName?.trim())
   if (completed) {
     await router.replace('/tutor/jobs')
   }
@@ -127,19 +118,6 @@ onMounted(async () => {
             <label class="field">
               <div class="label">姓名</div>
               <input v-model="realName" class="input" placeholder="请输入姓名" :disabled="loading" />
-            </label>
-
-            <label class="field">
-              <div class="label">学历</div>
-              <select v-model="education" class="input" :disabled="loading">
-                <option value="" disabled>请选择学历</option>
-                <option v-for="o in eduOptions" :key="o" :value="o">{{ o }}</option>
-              </select>
-            </label>
-
-            <label v-if="education === '其他'" class="field">
-              <div class="label">补充学历</div>
-              <input v-model="educationOther" class="input" placeholder="例如：双一流/211/985/海外院校" :disabled="loading" />
             </label>
 
             <div class="actions">

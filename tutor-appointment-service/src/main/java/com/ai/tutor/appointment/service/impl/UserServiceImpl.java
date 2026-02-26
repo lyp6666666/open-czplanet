@@ -28,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
 
@@ -233,16 +234,31 @@ public class UserServiceImpl implements UserService {
                 if (userRoleEnum == UserRoleEnum.TEACHER) {
                     User latestUser = userMapper.selectById(user.getId());
                     TeacherProfile latestProfile = teacherProfileMapper.selectByUserId(user.getId());
-                    boolean completed = latestUser != null
+                    boolean basicCompleted = latestUser != null
                             && latestUser.getAvatar() != null
                             && !latestUser.getAvatar().trim().isEmpty()
                             && latestProfile != null
                             && latestProfile.getRealName() != null
-                            && !latestProfile.getRealName().trim().isEmpty()
-                            && latestProfile.getEducation() != null
-                            && !latestProfile.getEducation().trim().isEmpty();
-                    if (completed) {
+                            && !latestProfile.getRealName().trim().isEmpty();
+                    if (basicCompleted) {
                         teacherProfileMapper.markBasicCompleted(user.getId());
+                    }
+
+                    boolean resumeCompleted = basicCompleted
+                            && latestProfile.getEducation() != null
+                            && !latestProfile.getEducation().trim().isEmpty()
+                            && latestProfile.getCity() != null
+                            && !latestProfile.getCity().trim().isEmpty()
+                            && latestProfile.getHighestEduSchool() != null
+                            && !latestProfile.getHighestEduSchool().trim().isEmpty()
+                            && latestProfile.getIntroduction() != null
+                            && !latestProfile.getIntroduction().trim().isEmpty()
+                            && latestProfile.getSubject() != null
+                            && !latestProfile.getSubject().trim().isEmpty()
+                            && latestProfile.getTeachingMode() != null
+                            && !latestProfile.getTeachingMode().trim().isEmpty();
+                    if (resumeCompleted) {
+                        teacherProfileMapper.markResumeCompleted(user.getId());
                     }
                 }
 
@@ -255,7 +271,15 @@ public class UserServiceImpl implements UserService {
                     throw (BusinessException) e;
                 }
                 status.setRollbackOnly();
-                log.info("更新用户信息失败");
+                log.error("更新用户信息失败", e);
+                Throwable root = e;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
+                }
+                String rootMsg = root.getMessage() == null ? "" : root.getMessage();
+                if (rootMsg.contains("Unknown column") || rootMsg.contains("doesn't exist") || rootMsg.contains("does not exist")) {
+                    ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "服务端数据库未升级，请执行 sqlDoc/huoyue.sql 或对应迁移脚本后重试");
+                }
                 ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
             }
             return false;
@@ -288,11 +312,19 @@ public class UserServiceImpl implements UserService {
         ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "头像地址不合法");
     }
 
+    private static final Pattern PHONE_PATTERN = Pattern.compile("^1\\d{10}$");
+
+    private void validatePhone(String phone) {
+        ThrowUtils.throwIf(phone == null, ErrorCode.PARAMS_ERROR);
+        String v = phone.trim();
+        ThrowUtils.throwIf(v.isEmpty() || !PHONE_PATTERN.matcher(v).matches(), ErrorCode.PARAMS_ERROR, "手机号格式不合法");
+    }
+
     @Override
     public void updateUserPhone(UpdatePhoneRequest requestDto, HttpServletRequest request) {
         String newPhone = requestDto.getNewPhone();
         String code = requestDto.getCode();
-        ThrowUtils.throwIf(newPhone == null, ErrorCode.PARAMS_ERROR);
+        validatePhone(newPhone);
         ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
         String uidStr = (String) request.getAttribute(ATTRIBUTE_UID);
         ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
@@ -300,6 +332,9 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectById(userId);
         ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
         String oldPhone = user.getPhone();
+
+        User occupied = userMapper.selectByPhone(newPhone.trim());
+        ThrowUtils.throwIf(occupied != null && !occupied.getId().equals(userId), ErrorCode.OPERATION_ERROR, "手机号已被占用");
 
         boolean isValid = smsService.verifyCode(oldPhone, code,RedisKeyPrefix.USER_PHONE.getPrefix());
         ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
@@ -309,6 +344,40 @@ public class UserServiceImpl implements UserService {
         redisTemplate.delete(RedisKeyPrefix.USER_TOKEN.getPrefix() + oldPhone);
         log.info("更新手机号成功");
 
+    }
+
+    @Override
+    public void updateUserPhoneV2(UpdatePhoneV2Request requestDto, HttpServletRequest request) {
+        ThrowUtils.throwIf(requestDto == null, ErrorCode.PARAMS_ERROR);
+        validatePhone(requestDto.getNewPhone());
+        ThrowUtils.throwIf(requestDto.getOldCode() == null || requestDto.getOldCode().trim().isEmpty(), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(requestDto.getNewCode() == null || requestDto.getNewCode().trim().isEmpty(), ErrorCode.PARAMS_ERROR);
+
+        String uidStr = (String) request.getAttribute(ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        User user = userMapper.selectById(userId);
+        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
+
+        String oldPhone = user.getPhone();
+        String newPhone = requestDto.getNewPhone().trim();
+        ThrowUtils.throwIf(oldPhone != null && oldPhone.trim().equals(newPhone), ErrorCode.PARAMS_ERROR, "新手机号不能与旧手机号相同");
+
+        User occupied = userMapper.selectByPhone(newPhone);
+        ThrowUtils.throwIf(occupied != null && !occupied.getId().equals(userId), ErrorCode.OPERATION_ERROR, "手机号已被占用");
+
+        boolean oldOk = smsService.verifyCode(oldPhone, requestDto.getOldCode().trim(), RedisKeyPrefix.USER_PHONE.getPrefix());
+        ThrowUtils.throwIf(!oldOk, ErrorCode.INCORRECT_VERIFICATION_CODE, "旧手机号验证码错误或已过期");
+        boolean newOk = smsService.verifyCode(newPhone, requestDto.getNewCode().trim(), RedisKeyPrefix.USER_PHONE.getPrefix());
+        ThrowUtils.throwIf(!newOk, ErrorCode.INCORRECT_VERIFICATION_CODE, "新手机号验证码错误或已过期");
+
+        int count = userMapper.updateUserPhone(newPhone, userId);
+        ThrowUtils.throwIf(count <= 0, ErrorCode.OPERATION_ERROR);
+
+        redisTemplate.delete(RedisKeyPrefix.USER_PHONE.getPrefix() + oldPhone);
+        redisTemplate.delete(RedisKeyPrefix.USER_PHONE.getPrefix() + newPhone);
+        redisTemplate.delete(RedisKeyPrefix.USER_TOKEN.getPrefix() + oldPhone);
+        log.info("更新手机号成功");
     }
 
     private int updateStudentProfile(StudentExtInfo studentExtInfo,Long userId) {

@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { jobsApi } from '@/api/jobs'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 import type { StudentJobPosting } from '@/api/types'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const route = useRoute()
@@ -18,6 +19,17 @@ const error = ref<string | null>(null)
 const doneHint = ref<string | null>(null)
 
 const form = ref<StudentJobPosting | null>(null)
+const cityModalOpen = ref(false)
+const cities = computed(() => {
+  const base = [form.value?.city || '', localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
+  return Array.from(new Set(base.map((x) => String(x || '').trim()).filter(Boolean)))
+})
+
+const budgetMode = ref<'single' | 'range'>('single')
+const budgetSingle = ref<string | number>('')
+const budgetMin = ref<string | number>('')
+const budgetMax = ref<string | number>('')
+
 const subjectPreset = ref<string>('')
 const subjectOtherName = ref('')
 
@@ -89,6 +101,31 @@ function hydrateSubjectFromDemand(d: StudentJobPosting) {
   subjectOtherName.value = name
 }
 
+function hydrateBudgetFromDemand(d: StudentJobPosting) {
+  const rawMin = d.budgetMin == null ? '' : String(d.budgetMin).trim()
+  const rawMax = d.budgetMax == null ? '' : String(d.budgetMax).trim()
+  const minNum = rawMin ? Number(rawMin) : NaN
+  const maxNum = rawMax ? Number(rawMax) : NaN
+  if (Number.isFinite(minNum) && Number.isFinite(maxNum)) {
+    if (minNum === maxNum) {
+      budgetMode.value = 'single'
+      budgetSingle.value = minNum
+      budgetMin.value = ''
+      budgetMax.value = ''
+      return
+    }
+    budgetMode.value = 'range'
+    budgetSingle.value = ''
+    budgetMin.value = minNum
+    budgetMax.value = maxNum
+    return
+  }
+  budgetMode.value = 'single'
+  budgetSingle.value = ''
+  budgetMin.value = ''
+  budgetMax.value = ''
+}
+
 async function load() {
   loading.value = true
   error.value = null
@@ -104,6 +141,7 @@ async function load() {
       if (!form.value.availableTime) form.value.availableTime = ''
       if (!form.value.teacherRequirementDetail) form.value.teacherRequirementDetail = ''
       hydrateSubjectFromDemand(form.value)
+      hydrateBudgetFromDemand(form.value)
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
@@ -136,6 +174,63 @@ async function onSave() {
     error.value = '请选择授课方式'
     return
   }
+  const desc = String(form.value.description || '').trim()
+  if (!desc) {
+    error.value = '请填写学生情况描述'
+    return
+  }
+  if (desc.length < 10) {
+    error.value = '学生情况描述至少10个字'
+    return
+  }
+  const reqDetail = String(form.value.teacherRequirementDetail || '').trim()
+  if (!reqDetail) {
+    error.value = '请填写对教员的详细要求'
+    return
+  }
+  if (reqDetail.length < 10) {
+    error.value = '对教员的详细要求至少10个字'
+    return
+  }
+  let budgetMinNum: number
+  let budgetMaxNum: number
+  if (budgetMode.value === 'single') {
+    const raw = String(budgetSingle.value ?? '').trim()
+    if (!raw) {
+      error.value = '请填写预算'
+      return
+    }
+    const v = Number(raw)
+    if (!Number.isFinite(v) || v <= 0) {
+      error.value = '预算需为大于 0 的数字'
+      return
+    }
+    budgetMinNum = v
+    budgetMaxNum = v
+  } else {
+    const rawMin = String(budgetMin.value ?? '').trim()
+    const rawMax = String(budgetMax.value ?? '').trim()
+    if (!rawMin || !rawMax) {
+      error.value = '请填写预算上下限'
+      return
+    }
+    const vMin = Number(rawMin)
+    const vMax = Number(rawMax)
+    if (!Number.isFinite(vMin) || vMin <= 0) {
+      error.value = '预算下限需为大于 0 的数字'
+      return
+    }
+    if (!Number.isFinite(vMax) || vMax <= 0) {
+      error.value = '预算上限需为大于 0 的数字'
+      return
+    }
+    if (vMin > vMax) {
+      error.value = '预算下限不能大于预算上限'
+      return
+    }
+    budgetMinNum = vMin
+    budgetMaxNum = vMax
+  }
   if ((form.value.classMode === 'offline' || form.value.classMode === 'both') && (!String(form.value.city || '').trim() || !String(form.value.address || '').trim())) {
     error.value = '上门辅导必须填写城市与上课地址'
     return
@@ -147,15 +242,17 @@ async function onSave() {
       title: buildTitle(),
       subjectName: subjectName.value as string,
       subjectOther: subjectOther.value,
-      description: String(form.value.description || '').trim() || undefined,
+      description: desc,
       studentGender: form.value.studentGender as string,
       gradeCode: form.value.gradeCode || undefined,
       teacherGenderPreference: form.value.teacherGenderPreference || undefined,
       availableTime: String(form.value.availableTime || '').trim() || undefined,
-      teacherRequirementDetail: String(form.value.teacherRequirementDetail || '').trim() || undefined,
+      teacherRequirementDetail: reqDetail,
       classMode: form.value.classMode || undefined,
       city: form.value.classMode === 'online' ? undefined : form.value.city || undefined,
       address: form.value.classMode === 'online' ? undefined : form.value.address || undefined,
+      budgetMin: budgetMinNum,
+      budgetMax: budgetMaxNum,
       stageCode: stage || undefined,
       status: form.value.status ?? undefined,
     })
@@ -165,6 +262,19 @@ async function onSave() {
   } finally {
     saving.value = false
   }
+}
+
+function onSelectCity(v: string) {
+  if (!form.value) return
+  if (form.value.classMode === 'offline' || form.value.classMode === 'both') {
+    if (String(v || '').trim() === '全国') {
+      error.value = '上门辅导请选择具体城市'
+      return
+    }
+  }
+  const raw = String(v || '').trim()
+  if (raw) localStorage.setItem('ai_tutor_city', raw)
+  form.value.city = raw
 }
 
 onMounted(() => {
@@ -178,6 +288,11 @@ watch(
     if (v === 'online') {
       form.value.city = null
       form.value.address = null
+      return
+    }
+    if (!String(form.value.city || '').trim() || String(form.value.city || '').trim() === '全国') {
+      const stored = String(localStorage.getItem('ai_tutor_city') || '').trim()
+      form.value.city = stored && stored !== '全国' ? stored : form.value.city
     }
   },
 )
@@ -250,11 +365,19 @@ watch(
         <div class="row" v-if="form.classMode !== 'online'">
           <label class="field">
             <div class="label"><span class="req">*</span>城市</div>
-            <input v-model="form.city" class="input" placeholder="例如：北京" />
+            <button class="input" type="button" @click="cityModalOpen = true">{{ String(form.city || '').trim() || '请选择城市' }}</button>
+            <CitySelectModal
+              :open="cityModalOpen"
+              :model-value="String(form.city || '').trim()"
+              :hot-cities="cities"
+              :allow-national="false"
+              @update:model-value="onSelectCity"
+              @close="cityModalOpen = false"
+            />
           </label>
           <label class="field">
             <div class="label"><span class="req">*</span>上课地址</div>
-            <input v-model="form.address" class="input" placeholder="例如：朝阳·望京" />
+            <input v-model="form.address" class="input" placeholder="例如：朝阳区望京街道望京花园小区3号楼2单元1203" />
           </label>
         </div>
 
@@ -264,12 +387,12 @@ watch(
         </label>
 
         <label class="field">
-          <div class="label">学生情况描述</div>
+          <div class="label"><span class="req">*</span>学生情况描述</div>
           <AutoTextarea
             v-model="form.description"
             class="textarea"
             :rows="4"
-            placeholder="请详细说明学员基础、学习状况、性格等便于有针对性地安排合适的教员"
+            placeholder="请至少填写10个字，例如：孩子基础、学习情况、性格等"
           />
         </label>
       </div>
@@ -284,13 +407,36 @@ watch(
             <option value="both">均可</option>
           </select>
         </label>
+        <div class="field">
+          <div class="label"><span class="req">*</span>预算（每小时）</div>
+          <select v-model="budgetMode" class="input">
+            <option value="single">填写一个数</option>
+            <option value="range">填写上下限</option>
+          </select>
+          <div class="row" v-if="budgetMode === 'single'">
+            <div class="field">
+              <div class="label">预算</div>
+              <input v-model="budgetSingle" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：100" />
+            </div>
+          </div>
+          <div class="row" v-else>
+            <div class="field">
+              <div class="label">预算下限</div>
+              <input v-model="budgetMin" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：80" />
+            </div>
+            <div class="field">
+              <div class="label">预算上限</div>
+              <input v-model="budgetMax" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：120" />
+            </div>
+          </div>
+        </div>
         <label class="field">
-          <div class="label">对教员的详细要求</div>
+          <div class="label"><span class="req">*</span>对教员的详细要求</div>
           <AutoTextarea
             v-model="form.teacherRequirementDetail"
             class="textarea"
             :rows="4"
-            placeholder="对教员的学历，教学经验，性格等要求"
+            placeholder="请至少填写10个字，例如：学历、经验、性格等"
           />
         </label>
       </div>

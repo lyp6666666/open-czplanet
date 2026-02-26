@@ -4,6 +4,7 @@ const HomePage = () => import('@/pages/HomePage.vue')
 const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
 const SettingsPage = () => import('@/pages/SettingsPage.vue')
+const UpdatePhonePage = () => import('@/pages/UpdatePhonePage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
@@ -13,6 +14,7 @@ const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
 const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
 const TutorFavoritesPage = () => import('@/pages/tutor/TutorFavoritesPage.vue')
 const TutorOnboardingBasicPage = () => import('@/pages/tutor/TutorOnboardingBasicPage.vue')
+const TutorOnboardingProfilePage = () => import('@/pages/tutor/TutorOnboardingProfilePage.vue')
 const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
@@ -67,6 +69,11 @@ export const router = createRouter({
       component: SettingsPage,
     },
     {
+      path: '/settings/phone',
+      name: 'updatePhone',
+      component: UpdatePhonePage,
+    },
+    {
       path: '/student/post',
       name: 'studentPost',
       component: StudentPostPage,
@@ -100,6 +107,11 @@ export const router = createRouter({
       path: '/tutor/onboarding/basic',
       name: 'tutorOnboardingBasic',
       component: TutorOnboardingBasicPage,
+    },
+    {
+      path: '/tutor/onboarding/profile',
+      name: 'tutorOnboardingProfile',
+      component: TutorOnboardingProfilePage,
     },
     {
       path: '/tutor/jobs/:id',
@@ -148,7 +160,7 @@ router.beforeEach((to) => {
 
   const needAuth =
     to.path === '/me' ||
-    to.path === '/settings' ||
+    to.path.startsWith('/settings') ||
     to.path === '/schedule' ||
     to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||
@@ -168,7 +180,8 @@ router.beforeEach((to) => {
   if (loggedIn && userType === 1 && to.path.startsWith('/tutor/')) {
     const completed = localStorage.getItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY)
     if (to.path.startsWith('/tutor/onboarding')) {
-      if (completed === '1') return { path: '/tutor/jobs' }
+      if (to.path.startsWith('/tutor/onboarding/basic') && completed === '1') return { path: '/tutor/jobs' }
+      if (to.path.startsWith('/tutor/onboarding/profile') && completed === '0') return { path: '/tutor/onboarding/basic' }
     } else {
       if (completed === '0') return { path: '/tutor/onboarding/basic' }
     }

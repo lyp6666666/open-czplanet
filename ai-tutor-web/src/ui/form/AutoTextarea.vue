@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch, type StyleValue } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -35,11 +35,11 @@ const normalizedMaxHeight = computed(() => {
 })
 
 const forwardedAttrs = computed(() => {
-  const { style, ...rest } = attrs as Record<string, unknown>
+  const { style: _style, ...rest } = attrs as Record<string, unknown>
   return rest
 })
 
-const forwardedStyle = computed(() => (attrs as Record<string, any>).style as any)
+const forwardedStyle = computed<StyleValue | undefined>(() => attrs.style as StyleValue | undefined)
 
 const baseStyle = computed(() => {
   return {
@@ -48,7 +48,7 @@ const baseStyle = computed(() => {
   }
 })
 
-const mergedStyle = computed<any>(() => [forwardedStyle.value, baseStyle.value])
+const mergedStyle = computed<StyleValue>(() => [forwardedStyle.value, baseStyle.value] as StyleValue)
 
 function applyMinHeight() {
   const ta = el.value

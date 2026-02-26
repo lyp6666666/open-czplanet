@@ -65,7 +65,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .subjectName(subjectName)
                 .subjectIsOther(subjectOther ? 1 : 0)
                 .title(request.getTitle())
-                .description(request.getDescription())
+                .description(trimToNull(request.getDescription()))
                 .studentGender(normalizeStudentGenderForStorage(request.getStudentGender()))
                 .gradeCode(gradeCode)
                 .availableTime(trimToNull(request.getAvailableTime()))
@@ -280,6 +280,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(isBlank(subjectName), ErrorCode.PARAMS_ERROR, "教学科目不能为空");
         ThrowUtils.throwIf(subjectOther && isBlank(subjectName), ErrorCode.PARAMS_ERROR, "请选择其他时需填写科目");
         ThrowUtils.throwIf(isBlank(request.getTitle()), ErrorCode.PARAMS_ERROR, "标题不能为空");
+        ThrowUtils.throwIf(isBlank(request.getDescription()), ErrorCode.PARAMS_ERROR, "学生情况描述不能为空");
+        ThrowUtils.throwIf(request.getDescription() != null && request.getDescription().trim().length() < 10, ErrorCode.PARAMS_ERROR, "学生情况描述至少10个字");
         ThrowUtils.throwIf(isBlank(request.getStudentGender()), ErrorCode.PARAMS_ERROR, "学员性别不能为空");
         ThrowUtils.throwIf(isBlank(request.getClassMode()), ErrorCode.PARAMS_ERROR, "授课方式不能为空");
         ThrowUtils.throwIf(!CLASS_MODES.contains(request.getClassMode().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "授课方式不合法");
@@ -295,10 +297,13 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(isBlank(request.getEducationRequirement()), ErrorCode.PARAMS_ERROR, "学历要求不能为空");
         ThrowUtils.throwIf(isBlank(request.getPublisherIdentity()), ErrorCode.PARAMS_ERROR, "发布者身份不能为空");
         ThrowUtils.throwIf(PublisherIdentityEnum.fromCode(request.getPublisherIdentity()) == null, ErrorCode.PARAMS_ERROR, "发布者身份不合法");
+        ThrowUtils.throwIf(isBlank(request.getTeacherRequirementDetail()), ErrorCode.PARAMS_ERROR, "对教员的详细要求不能为空");
+        ThrowUtils.throwIf(request.getTeacherRequirementDetail() != null && request.getTeacherRequirementDetail().trim().length() < 10, ErrorCode.PARAMS_ERROR, "对教员的详细要求至少10个字");
         if (!isBlank(request.getTeacherGenderPreference())) {
             ThrowUtils.throwIf(!GENDER_CODES.contains(request.getTeacherGenderPreference().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "教师性别偏好不合法");
         }
         ThrowUtils.throwIf(!Set.of("male", "female").contains(request.getStudentGender().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
+        ThrowUtils.throwIf(request.getBudgetMin() == null || request.getBudgetMax() == null, ErrorCode.PARAMS_ERROR, "预算不能为空");
 
         validateModeAddress(request.getClassMode(), request.getCity(), request.getAddress());
         validateBudgetRange(request.getBudgetMin(), request.getBudgetMax());
@@ -307,6 +312,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     private static void validateUpdate(UpdateStudentJobPostingRequest request, StudentJobPosting db) {
         String classMode = firstNonBlank(request.getClassMode(), db.getClassMode());
         String title = firstNonBlank(request.getTitle(), db.getTitle());
+        String description = firstNonBlank(request.getDescription(), db.getDescription());
+        String teacherRequirementDetail = firstNonBlank(request.getTeacherRequirementDetail(), db.getTeacherRequirementDetail());
         Boolean subjectOther = request.getSubjectOther() == null ? (db.getSubjectIsOther() != null && db.getSubjectIsOther() == 1) : request.getSubjectOther();
         String subjectName = request.getSubjectName() == null ? db.getSubjectName() : request.getSubjectName();
         String studentGender = firstNonBlank(request.getStudentGender(), db.getStudentGender());
@@ -329,6 +336,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(isBlank(subjectName), ErrorCode.PARAMS_ERROR, "教学科目不能为空");
         ThrowUtils.throwIf(Boolean.TRUE.equals(subjectOther) && isBlank(subjectName), ErrorCode.PARAMS_ERROR, "请选择其他时需填写科目");
         ThrowUtils.throwIf(isBlank(title), ErrorCode.PARAMS_ERROR, "标题不能为空");
+        ThrowUtils.throwIf(isBlank(description), ErrorCode.PARAMS_ERROR, "学生情况描述不能为空");
+        ThrowUtils.throwIf(description != null && description.trim().length() < 10, ErrorCode.PARAMS_ERROR, "学生情况描述至少10个字");
         ThrowUtils.throwIf(isBlank(studentGender), ErrorCode.PARAMS_ERROR, "学员性别不能为空");
         ThrowUtils.throwIf(isBlank(classMode), ErrorCode.PARAMS_ERROR, "授课方式不能为空");
         ThrowUtils.throwIf(!CLASS_MODES.contains(classMode.trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "授课方式不合法");
@@ -338,10 +347,13 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(isBlank(edu), ErrorCode.PARAMS_ERROR, "学历要求不能为空");
         ThrowUtils.throwIf(isBlank(pubId), ErrorCode.PARAMS_ERROR, "发布者身份不能为空");
         ThrowUtils.throwIf(PublisherIdentityEnum.fromCode(pubId) == null, ErrorCode.PARAMS_ERROR, "发布者身份不合法");
+        ThrowUtils.throwIf(isBlank(teacherRequirementDetail), ErrorCode.PARAMS_ERROR, "对教员的详细要求不能为空");
+        ThrowUtils.throwIf(teacherRequirementDetail != null && teacherRequirementDetail.trim().length() < 10, ErrorCode.PARAMS_ERROR, "对教员的详细要求至少10个字");
         if (!isBlank(request.getTeacherGenderPreference())) {
             ThrowUtils.throwIf(!GENDER_CODES.contains(request.getTeacherGenderPreference().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "教师性别偏好不合法");
         }
         ThrowUtils.throwIf(!Set.of("male", "female").contains(studentGender.trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
+        ThrowUtils.throwIf(budgetMin == null || budgetMax == null, ErrorCode.PARAMS_ERROR, "预算不能为空");
 
         validateModeAddress(classMode, city, address);
         validateBudgetRange(budgetMin, budgetMax);

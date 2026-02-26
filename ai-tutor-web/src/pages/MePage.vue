@@ -29,6 +29,9 @@ const teacherSubject = ref('')
 const teacherExperienceYears = ref<number | null>(null)
 const teacherRatePerHour = ref<number | null>(null)
 const teacherIntroduction = ref('')
+const teacherCity = ref('')
+const teacherHighestEduSchool = ref('')
+const teacherTeachingMode = ref<string>('')
 
 const realnameVerifyStatus = ref<number>(0)
 const realnameVerifyRejectReason = ref('')
@@ -80,6 +83,9 @@ async function load() {
     teacherExperienceYears.value = tp?.experienceYears ?? null
     teacherRatePerHour.value = tp?.ratePerHour != null ? Number(tp.ratePerHour) : null
     teacherIntroduction.value = tp?.introduction || ''
+    teacherCity.value = tp?.city || ''
+    teacherHighestEduSchool.value = tp?.highestEduSchool || ''
+    teacherTeachingMode.value = tp?.teachingMode || ''
     realnameVerifyStatus.value = tp?.realnameVerifyStatus ?? 0
     realnameVerifyRejectReason.value = tp?.realnameVerifyRejectReason || ''
     realnameIdnoMasked.value = tp?.realnameVerifyIdnoMasked || ''
@@ -142,6 +148,9 @@ async function onSave() {
             experienceYears: teacherExperienceYears.value ?? undefined,
             ratePerHour: teacherRatePerHour.value ?? undefined,
             introduction: teacherIntroduction.value.trim() || undefined,
+            city: teacherCity.value.trim() || undefined,
+            highestEduSchool: teacherHighestEduSchool.value.trim() || undefined,
+            teachingMode: teacherTeachingMode.value.trim() || undefined,
           }
         : undefined,
       studentExtInfo: !isTeacher.value
@@ -404,8 +413,25 @@ onMounted(() => {
             <div v-if="eduVerifyStatus === 3 && eduVerifyRejectReason" class="mini-hint error">驳回原因：{{ eduVerifyRejectReason }}</div>
           </label>
           <label class="field">
+            <div class="label">所在城市</div>
+            <input v-model="teacherCity" class="input" placeholder="例如：北京" />
+          </label>
+          <label class="field">
+            <div class="label">最高学历学校</div>
+            <input v-model="teacherHighestEduSchool" class="input" placeholder="例如：北京大学" />
+          </label>
+          <label class="field">
             <div class="label">教授科目</div>
             <input v-model="teacherSubject" class="input" placeholder="例如：数学/英语" />
+          </label>
+          <label class="field">
+            <div class="label">教学方式</div>
+            <select v-model="teacherTeachingMode" class="input">
+              <option value="">不设置</option>
+              <option value="ONLINE">线上教学</option>
+              <option value="OFFLINE">线下教学</option>
+              <option value="BOTH">均可</option>
+            </select>
           </label>
           <label class="field">
             <div class="label">教学经验（年）</div>
