@@ -144,6 +144,23 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("status", body.getStatus());
             return out;
         }
+        if ("TUTOR_APPLICATION".equals(bizType)) {
+            out.put("type", "tutor_application");
+            out.put("applicationId", body.getEventId());
+            out.put("content", body.getContent());
+            out.put("status", body.getStatus());
+            out.put("creatorUserId", body.getCreatorUserId());
+            out.put("contextType", body.getContextType());
+            out.put("contextId", body.getContextId());
+            return out;
+        }
+        if ("TUTOR_APPLICATION_STATUS".equals(bizType)) {
+            out.put("type", "tutor_application_status");
+            out.put("applicationId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("actorUserId", body.getActorUserId());
+            return out;
+        }
 
         out.put("type", "system");
         out.put("bizType", body.getBizType());
@@ -187,6 +204,13 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
         }
         if ("CONTACT_UNLOCKED".equals(bizType)) {
             return "联系方式已解锁";
+        }
+        if ("TUTOR_APPLICATION".equals(bizType)) {
+            return "家教申请";
+        }
+        if ("TUTOR_APPLICATION_STATUS".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "家教申请：" + s;
         }
         return "系统消息：" + title;
     }

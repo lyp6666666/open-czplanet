@@ -3,6 +3,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 const HomePage = () => import('@/pages/HomePage.vue')
 const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
+const SettingsPage = () => import('@/pages/SettingsPage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
@@ -59,6 +60,11 @@ export const router = createRouter({
       path: '/me',
       name: 'me',
       component: MePage,
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsPage,
     },
     {
       path: '/student/post',
@@ -142,6 +148,7 @@ router.beforeEach((to) => {
 
   const needAuth =
     to.path === '/me' ||
+    to.path === '/settings' ||
     to.path === '/schedule' ||
     to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||

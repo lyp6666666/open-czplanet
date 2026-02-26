@@ -6,6 +6,7 @@
     <resultMap id="baseMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder">
         <id column="id" property="id"/>
         <result column="proposal_id" property="proposalId"/>
+        <result column="application_id" property="applicationId"/>
         <result column="room_id" property="roomId"/>
         <result column="payer_uid" property="payerUid"/>
         <result column="amount_fen" property="amountFen"/>
@@ -22,6 +23,7 @@
         INSERT INTO brokerage_order
         (
             proposal_id,
+            application_id,
             room_id,
             payer_uid,
             amount_fen,
@@ -36,6 +38,7 @@
         VALUES
         (
             #{proposalId},
+            #{applicationId},
             #{roomId},
             #{payerUid},
             #{amountFen},
@@ -51,7 +54,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, proposal_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
         FROM brokerage_order
         WHERE id = #{id}
         LIMIT 1
@@ -59,9 +62,17 @@
 
     <select id="selectByProposalId" resultMap="baseMap">
         SELECT
-            id, proposal_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
         FROM brokerage_order
         WHERE proposal_id = #{proposalId}
+        LIMIT 1
+    </select>
+
+    <select id="selectByApplicationId" resultMap="baseMap">
+        SELECT
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+        FROM brokerage_order
+        WHERE application_id = #{applicationId}
         LIMIT 1
     </select>
 

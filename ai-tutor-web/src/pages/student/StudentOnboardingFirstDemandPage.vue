@@ -6,6 +6,7 @@ import { assetsApi } from '@/api/assets'
 import { jobsApi } from '@/api/jobs'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const STORAGE_STUDENT_FIRST_DEMAND_COMPLETED_KEY_PREFIX = 'ai_tutor_student_first_demand_completed:'
@@ -329,10 +330,10 @@ watch(
 
               <label class="field">
                 <div class="label">学生情况描述</div>
-                <textarea
+                <AutoTextarea
                   v-model="description"
                   class="textarea"
-                  rows="4"
+                  :rows="4"
                   placeholder="请详细说明学员基础、学习状况、性格等便于有针对性地安排合适的教员"
                   :disabled="loading"
                 />
@@ -361,10 +362,10 @@ watch(
               </label>
               <label class="field">
                 <div class="label">对教员的详细要求</div>
-                <textarea
+                <AutoTextarea
                   v-model="teacherRequirementDetail"
                   class="textarea"
-                  rows="5"
+                  :rows="5"
                   placeholder="对教员的学历，教学经验，性格等要求"
                   :disabled="loading"
                 />

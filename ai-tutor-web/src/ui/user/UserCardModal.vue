@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+import { applicationApi } from '@/api/application'
 import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import { userApi } from '@/api/user'
 import type { UserCardVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   open: boolean
@@ -20,6 +23,8 @@ const error = ref<string | null>(null)
 const card = ref<UserCardVO | null>(null)
 
 const auth = useAuthStore()
+const router = useRouter()
+const settings = useSettingsStore()
 
 const title = computed(() => {
   const user = card.value?.user
@@ -37,6 +42,9 @@ const identityLabel = computed(() => {
 const canFavoriteTutor = computed(() => auth.user?.userType === 2 && card.value?.user?.userType === 1)
 const favorited = ref(false)
 const favoriteBusy = ref(false)
+
+const applyBusy = ref(false)
+const applyError = ref<string | null>(null)
 
 function close() {
   emit('close')
@@ -96,6 +104,44 @@ async function onToggleFavoriteTutor() {
     error.value = e instanceof Error ? e.message : '操作失败'
   } finally {
     favoriteBusy.value = false
+  }
+}
+
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function startTutorApplication() {
+  if (!canFavoriteTutor.value || applyBusy.value) return
+  const targetUid = card.value?.user?.id
+  const tutorId = card.value?.teacherProfile?.id
+  if (!targetUid || !tutorId) return
+  applyBusy.value = true
+  applyError.value = null
+  try {
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
+    }
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    const msg = await applicationApi.startChat({
+      receiverUid: targetUid,
+      contextType: 'TUTOR',
+      contextId: tutorId,
+      content,
+      clientRequestId: genClientRequestId(),
+    })
+    emit('close')
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(targetUid) } })
+  } catch (e) {
+    applyError.value = e instanceof Error ? e.message : '发送申请失败'
+  } finally {
+    applyBusy.value = false
   }
 }
 </script>
@@ -167,6 +213,17 @@ async function onToggleFavoriteTutor() {
           </div>
           <div v-if="fmt(card.jobPosting.description)" class="desc">{{ fmt(card.jobPosting.description) }}</div>
         </div>
+
+        <div v-if="canFavoriteTutor" class="sec">
+          <div class="sec-title">发起申请</div>
+          <div v-if="applyError" class="hint error">{{ applyError }}</div>
+          <div class="apply-actions">
+            <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="startTutorApplication">
+              {{ applyBusy ? '发送中...' : '发起家教申请' }}
+            </button>
+            <button class="btn" type="button" :disabled="applyBusy" @click="router.push({ name: 'settings' })">设置问候语</button>
+          </div>
+        </div>
       </template>
     </div>
   </div>
@@ -191,6 +248,31 @@ async function onToggleFavoriteTutor() {
   gap: 12px;
   max-height: min(78vh, 720px);
   overflow: auto;
+}
+
+.apply {
+  display: grid;
+  gap: 10px;
+}
+
+.apply-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.txt {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.apply-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .m-head {

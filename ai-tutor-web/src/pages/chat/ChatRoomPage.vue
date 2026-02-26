@@ -4,21 +4,25 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
 import { contactApi } from '@/api/contact'
+import { applicationApi } from '@/api/application'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
 import ContactUnlockedCard from '@/ui/chat/ContactUnlockedCard.vue'
 import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
+import TutorApplicationCard from '@/ui/chat/TutorApplicationCard.vue'
 import UnlockedContactModal from '@/ui/chat/UnlockedContactModal.vue'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const chatRealtime = useChatRealtimeStore()
 
 const roomId = computed(() => Number(route.params.roomId))
 const otherUid = computed(() => {
@@ -34,6 +38,9 @@ const error = ref<string | null>(null)
 
 const sending = ref(false)
 const input = ref('')
+
+const appActionBusy = ref<Record<number, boolean>>({})
+const appActionError = ref<Record<number, string>>({})
 
 const collabOpen = ref(false)
 const collabCreateBusy = ref(false)
@@ -137,8 +144,11 @@ async function viewUnlockedContact() {
   }
 }
 
-function goPay(orderId: number) {
-  router.push({ name: 'brokeragePay', query: { orderId: String(orderId) } })
+function goPay(orderId: number, applicationId?: number | null) {
+  router.push({
+    name: 'brokeragePay',
+    query: { orderId: String(orderId), ...(applicationId ? { applicationId: String(applicationId) } : {}) },
+  })
 }
 
 function openCollaboration() {
@@ -227,6 +237,60 @@ function isContactUnlockedBody(body: ChatMessageBody): body is Extract<ChatMessa
   return body.type === 'contact_unlocked'
 }
 
+function isTutorApplicationBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'tutor_application' }> {
+  return body.type === 'tutor_application'
+}
+
+function isTutorApplicationStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'tutor_application_status' }> {
+  return body.type === 'tutor_application_status'
+}
+
+const chatUnlocked = computed(() => {
+  return messages.value.some((m) => {
+    const b = normalizeBody(m.message.body)
+    return b.type === 'contact_unlocked' || (b.type === 'text' && b.content.trim().length > 0)
+  })
+})
+
+const chatLockedHint = computed(() => '当前仅可发送家教申请，申请通过并完成支付后再聊天')
+
+const latestTutorApplication = computed(() => {
+  let best: { msgId: number; body: Extract<ChatMessageBody, { type: 'tutor_application' }>; fromMe: boolean } | null = null
+  for (const m of messages.value) {
+    const b = normalizeBody(m.message.body)
+    if (!isTutorApplicationBody(b)) continue
+    const msgId = m.message.id
+    if (!best || msgId > best.msgId) {
+      best = { msgId, body: b, fromMe: m.fromUser.uid === myUid.value }
+    }
+  }
+  return best
+})
+
+const canSendTutorApplication = computed(() => {
+  if (chatUnlocked.value) return false
+  const latest = latestTutorApplication.value
+  if (!latest) return false
+  return latest.body.status === 'REJECTED'
+})
+
+async function sendTutorApplicationAgain() {
+  const latest = latestTutorApplication.value
+  if (!latest || !otherUid.value) return
+  try {
+    const msg = await applicationApi.startChat({
+      receiverUid: otherUid.value,
+      contextType: latest.body.contextType,
+      contextId: latest.body.contextId,
+      content: latest.body.content,
+      clientRequestId: `reapply-${Date.now()}`,
+    })
+    mergeMessages([msg], 'append')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '发送失败'
+  }
+}
+
 async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
   if (lessonActionBusy.value[eventId]) return
   lessonActionBusy.value = { ...lessonActionBusy.value, [eventId]: true }
@@ -293,6 +357,36 @@ async function respondCollaboration(proposalId: number, action: 'ACCEPT' | 'REJE
   }
 }
 
+function appStatusText(s: unknown): TutorApplicationCardStatus {
+  const v = typeof s === 'string' ? s.trim().toUpperCase() : ''
+  if (v === 'ACCEPTED') return 'ACCEPTED'
+  if (v === 'REJECTED') return 'REJECTED'
+  return 'PENDING'
+}
+
+async function respondTutorApplication(applicationId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
+  if (appActionBusy.value[applicationId]) return
+  appActionBusy.value = { ...appActionBusy.value, [applicationId]: true }
+  appActionError.value = { ...appActionError.value, [applicationId]: '' }
+  try {
+    const statusMsg = await applicationApi.decideMessage(applicationId, action)
+    mergeMessages([statusMsg], 'append')
+
+    const statusBody = normalizeBody(statusMsg.message.body)
+    const nextStatus = isTutorApplicationStatusBody(statusBody) ? appStatusText(statusBody.status) : action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED'
+    const next = messages.value.map((m) => {
+      if (m.message.id !== msgId) return m
+      const b = normalizeBody(m.message.body)
+      if (!isTutorApplicationBody(b)) return m
+      return { ...m, message: { ...m.message, body: { ...b, status: nextStatus } } }
+    })
+    messages.value = next
+  } catch (e) {
+    appActionError.value = { ...appActionError.value, [applicationId]: e instanceof Error ? e.message : '操作失败' }
+  } finally {
+    appActionBusy.value = { ...appActionBusy.value, [applicationId]: false }
+  }
+}
 function msgText(raw: unknown): string {
   if (!raw) return ''
   if (typeof raw === 'string') return raw
@@ -320,6 +414,67 @@ const renderMessages = computed<RenderMessage[]>(() => {
     ...m,
     body: normalizeBody(m.message?.body),
   }))
+})
+
+type RenderItem = { kind: 'time'; key: string; text: string } | { kind: 'msg'; key: string; m: RenderMessage }
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+function localTodayDay(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+function formatMsgTime(v: string): string {
+  const raw = String(v || '').trim()
+  if (!raw) return ''
+  const s = raw.includes('T') ? raw.replace('T', ' ') : raw
+  if (s.length >= 16) {
+    const day = s.slice(0, 10)
+    const hm = s.slice(11, 16)
+    return day === localTodayDay() ? hm : `${day} ${hm}`
+  }
+  const m = s.match(/\b(\d{2}):(\d{2})\b/)
+  return m ? `${m[1]}:${m[2]}` : s
+}
+
+function parseMsgTime(v: string): number | null {
+  const t = Date.parse(v)
+  return Number.isFinite(t) ? t : null
+}
+
+function msgDay(v: string): string {
+  const s = String(v || '')
+  return s.length >= 10 ? s.slice(0, 10) : s
+}
+
+const renderItems = computed<RenderItem[]>(() => {
+  const out: RenderItem[] = []
+  let prevTs: number | null = null
+  let prevDay: string | null = null
+
+  for (const m of renderMessages.value) {
+    const iso = m.message?.sendTime ?? ''
+    const ts = parseMsgTime(iso)
+    const day = msgDay(iso)
+    const text = formatMsgTime(iso)
+
+    const showTime = !!text && (prevTs == null || prevDay == null || ts == null || day !== prevDay || ts - prevTs > 2 * 60 * 1000)
+    if (showTime) out.push({ kind: 'time', key: `time-${m.message.id}`, text })
+    out.push({ kind: 'msg', key: `msg-${m.message.id}`, m })
+
+    if (ts != null) {
+      prevTs = ts
+      prevDay = day
+    } else {
+      prevTs = null
+      prevDay = null
+    }
+  }
+
+  return out
 })
 
 const collabStatusByProposalId = computed<Record<number, CollaborationProposalStatus>>(() => {
@@ -393,6 +548,10 @@ async function ackLatest() {
 async function onSend() {
   const text = input.value.trim()
   if (!text) return
+  if (!chatUnlocked.value) {
+    error.value = chatLockedHint.value
+    return
+  }
   if (sending.value) return
   sending.value = true
   error.value = null
@@ -477,10 +636,12 @@ onMounted(() => {
   void loadOtherUser()
   void loadMore().then(() => ackLatest())
   void startStream()
+  chatRealtime.setActiveRoom(roomId.value)
 })
 
 onBeforeUnmount(() => {
   stopStream()
+  chatRealtime.setActiveRoom(null)
 })
 
 watch(
@@ -488,6 +649,7 @@ watch(
   () => {
     stopStream()
     void startStream()
+    chatRealtime.setActiveRoom(roomId.value)
   },
 )
 </script>
@@ -511,73 +673,94 @@ watch(
       </div>
 
       <div class="msgs">
-        <div v-for="m in renderMessages" :key="m.message.id" class="msg" :class="{ me: m.fromUser.uid === myUid }">
-          <button class="avatar" type="button" :class="{ clickable: m.fromUser.uid !== myUid }" @click="openCard(m.fromUser.uid)">
-            <img v-if="userAvatar(m.fromUser.uid)" :src="userAvatar(m.fromUser.uid)" alt="" />
-            <span v-else class="avatar-fallback">{{ userName(m.fromUser.uid).slice(0, 1) }}</span>
-          </button>
-          <div class="content">
-            <div class="meta">{{ userName(m.fromUser.uid) }}</div>
-            <div class="bubble">
-              <template v-if="isLessonRequestBody(m.body)">
+        <template v-for="it in renderItems" :key="it.key">
+          <div v-if="it.kind === 'time'" class="time-divider">{{ it.text }}</div>
+          <div v-else class="msg" :class="{ me: it.m.fromUser.uid === myUid }">
+            <button class="avatar" type="button" :class="{ clickable: it.m.fromUser.uid !== myUid }" @click="openCard(it.m.fromUser.uid)">
+              <img v-if="userAvatar(it.m.fromUser.uid)" :src="userAvatar(it.m.fromUser.uid)" alt="" />
+              <span v-else class="avatar-fallback">{{ userName(it.m.fromUser.uid).slice(0, 1) }}</span>
+            </button>
+            <div class="content">
+              <div class="meta">{{ userName(it.m.fromUser.uid) }}</div>
+              <div class="bubble">
+                <template v-if="isLessonRequestBody(it.m.body)">
                 <LessonRequestCard
-                  :body="m.body"
-                  :from-me="m.fromUser.uid === myUid"
-                  :busy="lessonActionBusy[m.body.eventId]"
-                  @accept="respondLesson(m.body.eventId, 'ACCEPT', m.message.id)"
-                  @reject="respondLesson(m.body.eventId, 'REJECT', m.message.id)"
+                  :body="it.m.body"
+                  :from-me="it.m.fromUser.uid === myUid"
+                  :busy="lessonActionBusy[it.m.body.eventId]"
+                  @accept="respondLesson(it.m.body.eventId, 'ACCEPT', it.m.message.id)"
+                  @reject="respondLesson(it.m.body.eventId, 'REJECT', it.m.message.id)"
                 />
-                <div v-if="lessonActionError[m.body.eventId]" class="card-hint error">
-                  {{ lessonActionError[m.body.eventId] }}
+                <div v-if="lessonActionError[it.m.body.eventId]" class="card-hint error">
+                  {{ lessonActionError[it.m.body.eventId] }}
                 </div>
               </template>
-              <template v-else-if="isLessonStatusBody(m.body)">
+              <template v-else-if="isLessonStatusBody(it.m.body)">
                 <div class="sys">
-                  课程状态：{{ m.body.status }}（{{ m.body.title }}）
+                  课程状态：{{ it.m.body.status }}（{{ it.m.body.title }}）
                 </div>
               </template>
-              <template v-else-if="isCollaborationProposalBody(m.body)">
+              <template v-else-if="isTutorApplicationBody(it.m.body)">
+                <TutorApplicationCard
+                  :body="it.m.body"
+                  :from-me="it.m.fromUser.uid === myUid"
+                  :busy="appActionBusy[it.m.body.applicationId]"
+                  @accept="respondTutorApplication(it.m.body.applicationId, 'ACCEPT', it.m.message.id)"
+                  @reject="respondTutorApplication(it.m.body.applicationId, 'REJECT', it.m.message.id)"
+                />
+                <div v-if="appActionError[it.m.body.applicationId]" class="card-hint error">
+                  {{ appActionError[it.m.body.applicationId] }}
+                </div>
+              </template>
+              <template v-else-if="isTutorApplicationStatusBody(it.m.body)">
+                <div class="sys">家教申请：{{ it.m.body.status }}</div>
+              </template>
+              <template v-else-if="isCollaborationProposalBody(it.m.body)">
                 <CollaborationProposalCard
-                  :body="{ ...m.body, status: effectiveCollabStatus(m.body.proposalId, m.body.status) }"
-                  :from-me="m.fromUser.uid === myUid"
-                  :busy="collabActionBusy[m.body.proposalId]"
-                  @accept="respondCollaboration(m.body.proposalId, 'ACCEPT', m.message.id)"
-                  @reject="respondCollaboration(m.body.proposalId, 'REJECT', m.message.id)"
+                  :body="{ ...it.m.body, status: effectiveCollabStatus(it.m.body.proposalId, it.m.body.status) }"
+                  :from-me="it.m.fromUser.uid === myUid"
+                  :busy="collabActionBusy[it.m.body.proposalId]"
+                  @accept="respondCollaboration(it.m.body.proposalId, 'ACCEPT', it.m.message.id)"
+                  @reject="respondCollaboration(it.m.body.proposalId, 'REJECT', it.m.message.id)"
                 />
-                <div v-if="collabActionError[m.body.proposalId]" class="card-hint error">
-                  {{ collabActionError[m.body.proposalId] }}
+                <div v-if="collabActionError[it.m.body.proposalId]" class="card-hint error">
+                  {{ collabActionError[it.m.body.proposalId] }}
                 </div>
               </template>
-              <template v-else-if="isCollaborationStatusBody(m.body)">
-                <div class="sys">合作提案：{{ collabStatusText(m.body.status) }}</div>
+              <template v-else-if="isCollaborationStatusBody(it.m.body)">
+                <div class="sys">合作提案：{{ collabStatusText(it.m.body.status) }}</div>
               </template>
-              <template v-else-if="isBrokerageRequiredBody(m.body)">
+              <template v-else-if="isBrokerageRequiredBody(it.m.body)">
                 <BrokerageRequiredCard
-                  :body="m.body"
-                  :can-pay="auth.user?.userType === 1 && (!m.body.payerUserId || m.body.payerUserId === myUid)"
-                  @pay="goPay(m.body.orderId)"
+                  :body="it.m.body"
+                  :can-pay="auth.user?.userType === 1 && (!it.m.body.payerUserId || it.m.body.payerUserId === myUid)"
+                  @pay="goPay(it.m.body.orderId, it.m.body.proposalId)"
                 />
               </template>
-              <template v-else-if="isContactUnlockedBody(m.body)">
-                <ContactUnlockedCard :body="m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
+              <template v-else-if="isContactUnlockedBody(it.m.body)">
+                <ContactUnlockedCard :body="it.m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
               </template>
               <template v-else>
-                {{ msgText(m.body) }}
+                {{ msgText(it.m.body) }}
               </template>
             </div>
           </div>
         </div>
+        </template>
       </div>
 
       <div class="composer">
         <div class="actions">
-          <button class="btn" type="button" :disabled="hasAnyCollabProposal" @click="openCollaboration">
+          <button v-if="!chatUnlocked && canSendTutorApplication" class="btn btn-primary" type="button" @click="sendTutorApplicationAgain">
+            重新发送家教申请
+          </button>
+          <button v-else class="btn" type="button" :disabled="hasAnyCollabProposal || !chatUnlocked" @click="openCollaboration">
             {{ hasAnyCollabProposal ? '已发起合作' : '发起合作' }}
           </button>
         </div>
         <div class="send">
-          <input v-model="input" class="input" placeholder="请输入消息" @keydown.enter.prevent="onSend" />
-          <button class="btn btn-primary" type="button" :disabled="sending" @click="onSend">
+          <input v-model="input" class="input" :disabled="!chatUnlocked" :placeholder="chatUnlocked ? '请输入消息' : chatLockedHint" @keydown.enter.prevent="onSend" />
+          <button class="btn btn-primary" type="button" :disabled="sending || !chatUnlocked" @click="onSend">
             {{ sending ? '发送中...' : '发送' }}
           </button>
         </div>
@@ -605,9 +788,11 @@ watch(
 
 <style scoped>
 .wrap {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   height: 100%;
+  min-height: 0;
 }
 
 .head {
@@ -625,7 +810,8 @@ watch(
 .panel {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  min-height: 520px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -644,6 +830,19 @@ watch(
   gap: 10px;
   background: #fbfcfe;
   align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.time-divider {
+  justify-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(31, 35, 41, 0.08);
 }
 
 .msg {

@@ -5,6 +5,7 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
+import com.ai.tutor.videocallimservice.chat.domain.entity.ApplicationBrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokeragePayMethod;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
@@ -12,6 +13,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitBrokerageProofReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
+import com.ai.tutor.videocallimservice.chat.mapper.ApplicationBrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
@@ -39,6 +41,12 @@ public class BrokerageOrderService {
     private StudentProfileLiteMapper studentProfileLiteMapper;
     @Resource
     private ChatService chatService;
+
+    @Resource
+    private ApplicationBrokerageOrderMapper applicationBrokerageOrderMapper;
+
+    @Resource
+    private TutorApplicationService tutorApplicationService;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -124,7 +132,18 @@ public class BrokerageOrderService {
 
         BrokerageOrder latest = brokerageOrderMapper.selectById(orderId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
-        sendContactUnlocked(latest);
+        if (latest.getProposalId() != null && latest.getProposalId() > 0) {
+            sendContactUnlocked(latest);
+        } else {
+            if (latest.getApplicationId() != null) {
+                tutorApplicationService.onBrokerageOrderPaid(latest.getApplicationId());
+            } else {
+                ApplicationBrokerageOrder rel = applicationBrokerageOrderMapper.selectByOrderId(orderId);
+                if (rel != null && rel.getApplicationId() != null) {
+                    tutorApplicationService.onBrokerageOrderPaid(rel.getApplicationId());
+                }
+            }
+        }
         return toVO(latest);
     }
 
@@ -194,4 +213,5 @@ public class BrokerageOrderService {
     private static String trim(String s) {
         return s == null ? "" : s.trim();
     }
+
 }

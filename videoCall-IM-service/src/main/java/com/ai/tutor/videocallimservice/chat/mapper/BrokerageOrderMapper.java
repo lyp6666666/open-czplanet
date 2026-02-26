@@ -14,6 +14,8 @@ public interface BrokerageOrderMapper {
 
     BrokerageOrder selectByProposalId(@Param("proposalId") Long proposalId);
 
+    BrokerageOrder selectByApplicationId(@Param("applicationId") Long applicationId);
+
     int submitProof(@Param("id") Long id,
                     @Param("payMethod") String payMethod,
                     @Param("proofUrl") String proofUrl,

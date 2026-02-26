@@ -2,16 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { chatApi } from '@/api/chat'
+import { applicationApi } from '@/api/application'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO } from '@/api/types'
-import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const settings = useSettingsStore()
 
 const id = computed(() => Number(route.params.id))
 
@@ -19,6 +19,11 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<DemandViewVO | null>(null)
 const favorited = ref(false)
+
+const applyBusy = ref(false)
+const applyError = ref<string | null>(null)
+const applyTipOpen = ref(false)
+const applyTipText = ref('')
 
 async function load() {
   loading.value = true
@@ -38,18 +43,42 @@ async function load() {
   }
 }
 
-async function onChat() {
+async function openApply() {
   if (!data.value) return
+  if (applyBusy.value) return
+  applyBusy.value = true
+  applyError.value = null
   try {
-    if (!auth.me) {
-      await auth.refreshMe()
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
     }
-    const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
-    const roomId = await chatApi.startRoom(data.value.parentId, greeting)
-    await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(data.value.parentId) } })
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    const msg = await applicationApi.startChat({
+      receiverUid: data.value.parentId,
+      contextType: 'DEMAND',
+      contextId: id.value,
+      content,
+      clientRequestId: genClientRequestId(),
+    })
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(data.value.parentId) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发起沟通失败'
+    const msg = e instanceof Error ? e.message : '发送申请失败'
+    applyError.value = msg
+    applyTipText.value = msg
+    applyTipOpen.value = true
+  } finally {
+    applyBusy.value = false
   }
+}
+
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 async function onToggleFavorite() {
@@ -81,7 +110,7 @@ onMounted(() => {
         <button class="btn" type="button" :disabled="loading || !data" @click="onToggleFavorite">
           {{ favorited ? '已收藏' : '收藏' }}
         </button>
-        <button class="btn btn-primary" type="button" :disabled="loading || !data" @click="onChat">立即沟通</button>
+        <button class="btn btn-primary" type="button" :disabled="loading || !data" @click="openApply">发起申请</button>
       </div>
     </div>
 
@@ -121,6 +150,17 @@ onMounted(() => {
         <div class="sec-body">{{ data.schedule ? formatScheduleText(data.schedule) : '—' }}</div>
       </div>
     </div>
+
+    <div v-if="applyTipOpen" class="mask" @click.self="applyTipOpen = false">
+      <div class="modal card">
+        <div class="m-title">提示</div>
+        <div class="m-desc">{{ applyTipText }}</div>
+        <div class="m-ops">
+          <button class="btn btn-primary" type="button" @click="applyTipOpen = false">知道了</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -232,5 +272,64 @@ onMounted(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.modal {
+  width: min(520px, 92vw);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.m-title {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.m-desc {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.m-error {
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.txt {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.m-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

@@ -6,6 +6,7 @@ import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
 import { teacherVerificationApi } from '@/api/verification'
 import { useAuthStore } from '@/stores/auth'
+import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -330,6 +331,10 @@ function onLogout() {
   void router.replace({ name: 'home' })
 }
 
+function openSettings() {
+  void router.push({ name: 'settings' })
+}
+
 onMounted(() => {
   void load()
 })
@@ -340,6 +345,7 @@ onMounted(() => {
     <div class="head">
       <div class="title">我的</div>
       <div class="actions">
+        <button class="btn" type="button" @click="openSettings">设置</button>
         <button class="btn" type="button" @click="onLogout">退出登录</button>
         <button class="btn btn-primary" type="button" :disabled="loading" @click="onSave">保存</button>
       </div>
@@ -407,7 +413,7 @@ onMounted(() => {
           </label>
           <label class="field span2">
             <div class="label">简介</div>
-            <textarea v-model="teacherIntroduction" class="textarea" rows="6" placeholder="写点你的优势与授课风格" />
+            <AutoTextarea v-model="teacherIntroduction" class="textarea" :rows="6" placeholder="写点你的优势与授课风格" />
           </label>
         </div>
 
@@ -426,7 +432,7 @@ onMounted(() => {
           </label>
           <label class="field span2">
             <div class="label">需求描述</div>
-            <textarea v-model="studentDemandDescription" class="textarea" rows="4" placeholder="例如：希望提高应用题，孩子基础一般" />
+            <AutoTextarea v-model="studentDemandDescription" class="textarea" :rows="4" placeholder="例如：希望提高应用题，孩子基础一般" />
           </label>
           <label class="field">
             <div class="label">预算</div>

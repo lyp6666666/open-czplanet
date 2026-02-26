@@ -8,6 +8,7 @@
   --primary: #00bebd;
   --primary-weak: rgba(0, 190, 189, 0.12);
   --shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
+  --app-topbar-height: 56px;
 }
 
 * {
@@ -80,4 +81,3 @@ a {
     background-position: 0 0;
   }
 }
-

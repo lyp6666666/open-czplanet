@@ -5,6 +5,8 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.MessageTypeEnum;
+import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomPageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomStartReq;
@@ -13,6 +15,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatRoomItemResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
@@ -24,6 +27,7 @@ import com.ai.tutor.utils.RequestHolder;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,11 +64,18 @@ public class ChatRoomServiceImpl implements ChatRoomService {
     @Resource
     private ChatService chatService;
 
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+
+    @Value("${tutor-application.gating-enabled:true}")
+    private boolean tutorApplicationGatingEnabled;
+
     @Override
     public Long getOrCreateRoomWithUser(Long targetUid, Long uid) {
         ThrowUtils.throwIf(uid == null || targetUid == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(uid.equals(targetUid), ErrorCode.PARAMS_ERROR);
 
+        assertNotBlockedByApplication(uid, targetUid);
         requireActiveUser(uid);
         requireActiveUser(targetUid);
 
@@ -250,6 +261,19 @@ public class ChatRoomServiceImpl implements ChatRoomService {
                             + " ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话已读状态表'"
             );
         } catch (Exception ignored) {
+        }
+    }
+
+    private void assertNotBlockedByApplication(Long uid, Long targetUid) {
+        if (!tutorApplicationGatingEnabled) {
+            return;
+        }
+        TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(uid, targetUid);
+        if (application == null) {
+            return;
+        }
+        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(application.getChatAccessStatus())) {
+            return;
         }
     }
 }

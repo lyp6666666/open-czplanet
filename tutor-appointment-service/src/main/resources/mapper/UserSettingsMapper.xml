@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.UserSettingsMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.appointment.model.entity.UserSettings">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="application_greeting" property="applicationGreeting"/>
+        <result column="settings_json" property="settingsJson"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectByUserId" resultMap="BaseMap">
+        SELECT
+            id, user_id, application_greeting, settings_json, create_time, update_time
+        FROM user_settings
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.UserSettings" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_settings
+        (user_id, application_greeting, settings_json, create_time, update_time)
+        VALUES
+        (#{userId}, #{applicationGreeting}, #{settingsJson}, NOW(3), NOW(3))
+    </insert>
+
+    <update id="updateApplicationGreeting">
+        UPDATE user_settings
+        SET application_greeting = #{applicationGreeting},
+            update_time = NOW(3)
+        WHERE user_id = #{userId}
+    </update>
+</mapper>
+

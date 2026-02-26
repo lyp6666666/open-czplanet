@@ -3,12 +3,19 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { brokerageApi, type BrokerageOrderStatus, type BrokeragePayMethod, type BrokerageOrderVO } from '@/api/brokerage'
+import { applicationApi } from '@/api/application'
 
 const route = useRoute()
 const router = useRouter()
 
 const orderId = computed(() => {
   const raw = route.query.orderId
+  const v = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(v) ? v : null
+})
+
+const applicationId = computed(() => {
+  const raw = route.query.applicationId
   const v = typeof raw === 'string' ? Number(raw) : NaN
   return Number.isFinite(v) ? v : null
 })
@@ -22,6 +29,19 @@ const proofUrl = ref('')
 const proofNote = ref('')
 const submitBusy = ref(false)
 const submitError = ref<string | null>(null)
+
+const adminToken = computed(() => {
+  const s =
+    typeof import.meta.env.VITE_BROKERAGE_ADMIN_TOKEN === 'string' ? import.meta.env.VITE_BROKERAGE_ADMIN_TOKEN.trim() : ''
+  return s || ''
+})
+const tokenInput = ref('')
+const effectiveAdminToken = computed(() => adminToken.value || tokenInput.value.trim())
+const devEnabled = computed(() => import.meta.env.MODE !== 'production')
+const devBusy = ref(false)
+const devError = ref<string | null>(null)
+const enterBusy = ref(false)
+const enterError = ref<string | null>(null)
 
 const wechatQrUrl = computed(() => {
   const s = typeof import.meta.env.VITE_BROKERAGE_WECHAT_QR_URL === 'string' ? import.meta.env.VITE_BROKERAGE_WECHAT_QR_URL.trim() : ''
@@ -92,6 +112,55 @@ async function submit() {
   }
 }
 
+async function devMarkPaid() {
+  if (!orderId.value) return
+  if (!effectiveAdminToken.value) {
+    devError.value = '未配置管理员 token'
+    return
+  }
+  if (devBusy.value) return
+  devBusy.value = true
+  devError.value = null
+  try {
+    order.value = await brokerageApi.adminMarkPaid(orderId.value, effectiveAdminToken.value)
+  } catch (e) {
+    devError.value = e instanceof Error ? e.message : '标记已支付失败'
+  } finally {
+    devBusy.value = false
+  }
+}
+
+async function enterChat() {
+  if (!applicationId.value) return
+  if (enterBusy.value) return
+  enterBusy.value = true
+  enterError.value = null
+  try {
+    const res = await applicationApi.enterChat(applicationId.value)
+    if (res.paymentRequired) {
+      enterError.value = '需要先支付中介费'
+      return
+    }
+    if (res.waitingForTeacherPayment) {
+      enterError.value = '请等待教师完成中介费支付'
+      return
+    }
+    if (res.roomId) {
+      await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
+      return
+    }
+    enterError.value = '暂无法进入聊天'
+  } catch (e) {
+    enterError.value = e instanceof Error ? e.message : '进入聊天失败'
+  } finally {
+    enterBusy.value = false
+  }
+}
+
+function backToChat() {
+  void router.push({ name: 'chatList' })
+}
+
 function back() {
   router.back()
 }
@@ -146,6 +215,31 @@ onMounted(() => {
           {{ submitBusy ? '提交中...' : order.status === 'PENDING' ? '我已完成支付' : '已提交/已确认' }}
         </button>
         <div v-if="submitError" class="hint error">{{ submitError }}</div>
+
+        <div v-if="devEnabled" class="dev">
+          <div v-if="!effectiveAdminToken" class="rowx">
+            <div class="k">管理员 token</div>
+            <input v-model="tokenInput" class="input" placeholder="测试用：admin token（可选）" />
+          </div>
+          <label class="dev-toggle">
+            <input
+              type="checkbox"
+              :checked="order.status === 'PAID'"
+              :disabled="devBusy || order.status === 'PAID'"
+              @change="devMarkPaid"
+            />
+            <span>测试：完成支付</span>
+          </label>
+          <div v-if="devError" class="hint error">{{ devError }}</div>
+        </div>
+
+        <div v-if="order.status === 'PAID' && applicationId" class="after">
+          <button class="btn" type="button" @click="backToChat">返回消息</button>
+          <button class="btn btn-primary" type="button" :disabled="enterBusy" @click="enterChat">
+            {{ enterBusy ? '进入中...' : '进入聊天' }}
+          </button>
+        </div>
+        <div v-if="enterError" class="hint error">{{ enterError }}</div>
       </div>
     </template>
   </div>
@@ -244,6 +338,26 @@ onMounted(() => {
   outline: none;
 }
 
+.dev {
+  margin-top: 10px;
+}
+
+.dev-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.after {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 .hint {
   font-size: 12px;
   color: var(--text);
@@ -258,4 +372,3 @@ onMounted(() => {
   font-weight: 700;
 }
 </style>
-

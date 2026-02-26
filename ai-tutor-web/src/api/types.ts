@@ -221,6 +221,10 @@ export interface UserMeVO {
   studentProfile?: StudentProfile | null
 }
 
+export interface UserSettingsVO {
+  applicationGreeting: string
+}
+
 export interface UserSimpleVO {
   id: number
   name: string
@@ -290,6 +294,39 @@ export interface CursorPageResp<T> {
   list: T[]
 }
 
+export type TutorApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+export type TutorApplicationChatAccessStatus = 'NONE' | 'PAYMENT_REQUIRED' | 'CHAT_ENABLED'
+
+export interface TutorApplicationVO {
+  id: number
+  senderUid: number
+  receiverUid: number
+  senderRole: 'TEACHER' | 'STUDENT'
+  receiverRole: 'TEACHER' | 'STUDENT'
+  contextType: 'DEMAND' | 'TUTOR'
+  contextId: number
+  content: string
+  status: TutorApplicationStatus
+  chatAccessStatus: TutorApplicationChatAccessStatus
+  paymentPayerRole: 'TEACHER'
+  orderId: number | null
+  roomId: number | null
+  receiverRead: boolean | null
+  decidedAt: string | null
+  createTime: string
+}
+
+export interface TutorApplicationUnreadResp {
+  unreadCount: number
+}
+
+export interface TutorApplicationEnterResp {
+  paymentRequired: boolean
+  waitingForTeacherPayment: boolean
+  orderId: number | null
+  roomId: number | null
+}
+
 export interface ChatMessageResp {
   fromUser: { uid: number }
   message: { id: number; roomId: number; sendTime: string; body: unknown }
@@ -297,6 +334,7 @@ export interface ChatMessageResp {
 
 export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'UNKNOWN'
 export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNKNOWN'
+export type TutorApplicationCardStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 
 export interface ScheduleEventVO {
   id: number
@@ -312,6 +350,16 @@ export interface ScheduleEventVO {
 
 export type ChatMessageBody =
   | { type: 'text'; content: string }
+  | {
+      type: 'tutor_application'
+      applicationId: number
+      content: string
+      status: TutorApplicationCardStatus
+      creatorUserId: number
+      contextType: 'DEMAND' | 'TUTOR'
+      contextId: number
+    }
+  | { type: 'tutor_application_status'; applicationId: number; status: TutorApplicationCardStatus; actorUserId: number }
   | {
       type: 'lesson_request'
       eventId: number

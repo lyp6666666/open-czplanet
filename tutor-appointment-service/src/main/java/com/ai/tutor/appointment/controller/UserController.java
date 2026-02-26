@@ -4,6 +4,7 @@ package com.ai.tutor.appointment.controller;
 import com.ai.tutor.appointment.enums.RedisKeyPrefix;
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.dto.user.SendCodeRequest;
+import com.ai.tutor.appointment.model.dto.user.UpdateUserSettingsRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
@@ -15,8 +16,10 @@ import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.model.vo.UserCardVO;
 import com.ai.tutor.appointment.model.vo.UserMeVO;
+import com.ai.tutor.appointment.model.vo.UserSettingsVO;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.UserService;
+import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.utils.ThrowUtils;
@@ -51,6 +54,8 @@ public class UserController {
     private StudentProfileMapper studentProfileMapper;
     @Resource
     private StudentJobPostingMapper studentJobPostingMapper;
+    @Resource
+    private UserSettingsService userSettingsService;
 
     /**
      *  获取验证码
@@ -186,6 +191,24 @@ public class UserController {
     public BaseResponse<String> updateUserPhone(@RequestBody UpdatePhoneRequest requestDto, HttpServletRequest request) {
         userService.updateUserPhone(requestDto,request);
         return ResultUtils.success("更新成功 请重新登录");
+    }
+
+    @GetMapping("/settings")
+    @Operation(summary = "获取用户设置", description = "返回当前登录用户的设置（不存在会创建默认设置）")
+    public BaseResponse<UserSettingsVO> settings(HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        return ResultUtils.success(userSettingsService.getOrCreate(userId));
+    }
+
+    @PostMapping("/settings")
+    @Operation(summary = "更新用户设置", description = "更新当前登录用户设置（目前支持默认申请问候语）")
+    public BaseResponse<UserSettingsVO> updateSettings(@RequestBody UpdateUserSettingsRequest req, HttpServletRequest request) {
+        String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
+        ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
+        Long userId = Long.parseLong(uidStr);
+        return ResultUtils.success(userSettingsService.update(userId, req));
     }
 
     @GetMapping("/sendUpdateUserPhoneCode")

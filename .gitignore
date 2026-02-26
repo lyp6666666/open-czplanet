@@ -48,3 +48,5 @@ debug.md
 Dockerfile/mysql-data/
 Dockerfile/redis-data/
 Dockerfile/minio-data/
+
+common-used.md

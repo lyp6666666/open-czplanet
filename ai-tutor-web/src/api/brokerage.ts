@@ -5,8 +5,8 @@ export type BrokeragePayMethod = 'WECHAT' | 'ALIPAY'
 
 export interface BrokerageOrderVO {
   id: number
-  proposalId: number
-  roomId: number
+  proposalId: number | null
+  roomId: number | null
   payerUid: number
   amountFen: number
   payMethod: string | null
@@ -26,5 +26,11 @@ export const brokerageApi = {
   submitProof(orderId: number, payload: { payMethod?: BrokeragePayMethod | null; proofUrl?: string | null; proofNote?: string | null }) {
     return http.post<unknown, BrokerageOrderVO>(`/chat/brokerage/order/${orderId}/submit-proof`, payload)
   },
+  adminMarkPaid(orderId: number, adminToken: string) {
+    return http.post<unknown, BrokerageOrderVO>(
+      `/chat/brokerage/admin/order/${orderId}/mark-paid`,
+      {},
+      { headers: { 'X-Admin-Token': adminToken } },
+    )
+  },
 }
-

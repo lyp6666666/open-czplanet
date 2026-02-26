@@ -2,17 +2,17 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { chatApi } from '@/api/chat'
+import { applicationApi } from '@/api/application'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO, StudentJobPosting } from '@/api/types'
-import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { formatClassMode, formatEducationRequirement } from '@/utils/present'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
+const settings = useSettingsStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -41,6 +41,11 @@ const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
 const pendingHighlightId = ref<number | null>(null)
+
+const applyBusy = ref(false)
+const applyError = ref<string | null>(null)
+const applyTipOpen = ref(false)
+const applyTipText = ref('')
 
 const openKey = ref<'' | 'type' | 'subject' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
 
@@ -260,16 +265,40 @@ function openDetail(it: StudentJobPosting) {
   selectedId.value = it.id
 }
 
-async function onChat(it: StudentJobPosting) {
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function openApply(it: StudentJobPosting) {
+  if (applyBusy.value) return
+  applyError.value = null
+  applyBusy.value = true
   try {
-    if (!auth.me) {
-      await auth.refreshMe()
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
     }
-    const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
-    const roomId = await chatApi.startRoom(it.parentId, greeting)
-    await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parentId) } })
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    const msg = await applicationApi.startChat({
+      receiverUid: it.parentId,
+      contextType: 'DEMAND',
+      contextId: it.id,
+      content,
+      clientRequestId: genClientRequestId(),
+    })
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(it.parentId) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发起沟通失败'
+    const msg = e instanceof Error ? e.message : '发送申请失败'
+    applyError.value = msg
+    applyTipText.value = msg
+    applyTipOpen.value = true
+  } finally {
+    applyBusy.value = false
   }
 }
 
@@ -503,7 +532,7 @@ onMounted(() => {
             <div class="detail-title">{{ detail.title }}</div>
             <div class="detail-ops">
               <button class="btn" type="button" @click="onToggleFavorite(detail)">{{ favoriteMap[detail.id] ? '已收藏' : '收藏' }}</button>
-              <button class="btn btn-primary" type="button" @click="onChat(detail)">立即沟通</button>
+              <button class="btn btn-primary" type="button" @click="openApply(detail)">发起申请</button>
             </div>
           </div>
 
@@ -551,6 +580,17 @@ onMounted(() => {
         </div>
       </section>
     </div>
+
+    <div v-if="applyTipOpen" class="mask" @click.self="applyTipOpen = false">
+      <div class="modal card">
+        <div class="m-title">提示</div>
+        <div class="m-desc">{{ applyTipText }}</div>
+        <div class="m-ops">
+          <button class="btn btn-primary" type="button" @click="applyTipOpen = false">知道了</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -923,6 +963,65 @@ onMounted(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.modal {
+  width: min(520px, 92vw);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.m-title {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.m-desc {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.m-error {
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.txt {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.m-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (max-width: 980px) {

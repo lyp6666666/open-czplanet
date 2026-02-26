@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { LoginUserVO, UserCardVO, UserMeVO, UserRoleEnum, UserSimpleVO } from './types'
+import type { LoginUserVO, UserCardVO, UserMeVO, UserRoleEnum, UserSettingsVO, UserSimpleVO } from './types'
 
 export interface SendCodeRequest {
   phone: string
@@ -58,5 +58,13 @@ export const userApi = {
 
   updateUserInfo(request: UserUpdateRequest) {
     return http.post<unknown, string>('/user/updateUserInfo', request)
+  },
+
+  settings() {
+    return http.get<unknown, UserSettingsVO>('/user/settings')
+  },
+
+  updateSettings(request: { applicationGreeting?: string | null }) {
+    return http.post<unknown, UserSettingsVO>('/user/settings', request)
   },
 }

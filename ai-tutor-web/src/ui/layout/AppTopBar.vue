@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const chatRealtime = useChatRealtimeStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const displayName = computed(() => auth.me?.teacherProfile?.realName || auth.user?.name || '未登录')
+const unread = computed(() => chatRealtime.totalUnread)
 
 const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
 watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
@@ -94,6 +97,24 @@ function onLogout() {
   auth.logout()
   void router.push('/')
 }
+
+watch(
+  () => auth.token,
+  () => {
+    chatRealtime.stop()
+    void chatRealtime.refreshUnreadFromServer()
+    void chatRealtime.start()
+  },
+)
+
+onMounted(() => {
+  void chatRealtime.refreshUnreadFromServer()
+  void chatRealtime.start()
+})
+
+onBeforeUnmount(() => {
+  chatRealtime.stop()
+})
 </script>
 
 <template>
@@ -158,7 +179,10 @@ function onLogout() {
 
       <div class="right">
         <template v-if="isLoggedIn">
-          <button class="link" type="button" @click="go('/chat')">消息</button>
+          <button class="link link-msg" type="button" @click="go('/chat')">
+            <span class="link-msg-text">消息</span>
+            <span v-if="unread > 0" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
+          </button>
           <button v-if="isTeacher" class="link" type="button" @click="go('/me')">简历</button>
           <button v-else class="link" type="button" @click="go('/me')">我的</button>
 
@@ -218,6 +242,35 @@ function onLogout() {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+}
+
+.link-msg {
+  position: relative;
+}
+
+.link-msg-text {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 77, 79, 0.95);
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 16px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
 }
 
 .inner {
