@@ -77,6 +77,14 @@
         WHERE id = #{roomId}
     </update>
 
+    <update id="closeRoom">
+        UPDATE room
+        SET status = 0,
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{roomId}
+          AND status = 1
+    </update>
+
     <select id="listByTeacherProfileId" resultMap="RoomMap">
         SELECT
             id,

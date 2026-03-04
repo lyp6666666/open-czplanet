@@ -25,7 +25,9 @@
     <module>videoCall-IM-service</module>
     <module>ai-tutor-common</module>
       <module>ai-tutor-mq</module>
-      <module>ai-tutor-starter</module>
+    <module>ai-tutor-starter</module>
+    <module>ai-tutor-admin</module>
+    <module>payment-service</module>
   </modules>
 
   <!-- 统一依赖版本管理 -->

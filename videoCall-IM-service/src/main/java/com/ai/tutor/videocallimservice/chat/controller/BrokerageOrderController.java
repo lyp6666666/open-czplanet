@@ -41,6 +41,13 @@ public class BrokerageOrderController {
         return ResultUtils.success(brokerageOrderService.submitProof(orderId, req, uid));
     }
 
+    @PostMapping("/order/{orderId}/cancel")
+    @Operation(summary = "撤单（撤销支付）")
+    public BaseResponse<BrokerageOrderVO> cancel(@PathVariable("orderId") Long orderId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(brokerageOrderService.cancel(orderId, uid));
+    }
+
     @PostMapping("/admin/order/{orderId}/mark-paid")
     @Operation(summary = "管理端确认到账")
     public BaseResponse<BrokerageOrderVO> markPaid(@PathVariable("orderId") Long orderId, @RequestHeader(value = "X-Admin-Token", required = false) String token) {

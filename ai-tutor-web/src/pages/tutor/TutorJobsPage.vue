@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
 import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting } from '@/api/types'
+import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting, TutorApplicationVO } from '@/api/types'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { useCityStore } from '@/stores/city'
 import { formatClassMode, formatEducationRequirement } from '@/utils/present'
@@ -43,6 +43,10 @@ const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
 const pendingHighlightId = ref<number | null>(null)
+
+const detailApplicationLoading = ref(false)
+const detailApplication = ref<TutorApplicationVO | null>(null)
+let detailApplicationPollTimer: number | null = null
 
 const applyBusy = ref(false)
 const applyError = ref<string | null>(null)
@@ -160,6 +164,14 @@ function parseBudgetInput(raw: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function commitBudgetInputs() {
+  const minRaw = budgetMinInput.value.trim()
+  const maxRaw = budgetMaxInput.value.trim()
+  if (!minRaw && !maxRaw) return
+  budgetMin.value = parseBudgetInput(minRaw)
+  budgetMax.value = parseBudgetInput(maxRaw)
+}
+
 function applyBudget() {
   budgetMin.value = parseBudgetInput(budgetMinInput.value)
   budgetMax.value = parseBudgetInput(budgetMaxInput.value)
@@ -196,6 +208,7 @@ async function syncFavorites(ids: number[]) {
 }
 
 async function refresh() {
+  commitBudgetInputs()
   list.value = []
   cursor.value = null
   isLast.value = false
@@ -284,13 +297,76 @@ function normalizeMsgBody(raw: unknown): { type: string; content?: string } {
   return { type: 'system' }
 }
 
+function parseTutorApplicationMsgBody(raw: unknown): { applicationId: number; content: string; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' } | null {
+  if (!raw || typeof raw !== 'object') return null
+  const b = raw as Record<string, unknown>
+  if (b.type !== 'tutor_application') return null
+  const applicationId = typeof b.applicationId === 'number' ? b.applicationId : null
+  const content = typeof b.content === 'string' ? b.content : ''
+  const status = b.status === 'PENDING' || b.status === 'ACCEPTED' || b.status === 'REJECTED' ? b.status : null
+  if (applicationId == null || status == null) return null
+  return { applicationId, content, status }
+}
+
 function isChatUnlockedByMessages(list: ChatMessageResp[]) {
   return list.some((m) => {
     const b = normalizeMsgBody(m.message?.body)
-    if (b.type === 'contact_unlocked' || b.type === 'brokerage_required') return true
-    if (b.type === 'text' && typeof b.content === 'string' && b.content.trim().length > 0) return true
+    if (b.type === 'contact_unlocked') return true
     return false
   })
+}
+
+function stopDetailApplicationPolling() {
+  if (detailApplicationPollTimer != null) {
+    clearInterval(detailApplicationPollTimer)
+    detailApplicationPollTimer = null
+  }
+}
+
+async function findLatestSentDemandApplication(receiverUid: number, demandId: number): Promise<TutorApplicationVO | null> {
+  let cursor: number | null = null
+  let best: TutorApplicationVO | null = null
+  for (let i = 0; i < 10; i++) {
+    const page = await applicationApi.listSent({ pageSize: 50, cursor })
+    const list = page.list || []
+    for (const it of list) {
+      if (it.contextType !== 'DEMAND') continue
+      if (it.contextId !== demandId) continue
+      if (it.receiverUid !== receiverUid) continue
+      if (!best || it.id > best.id) best = it
+    }
+    cursor = page.cursor ?? null
+    if (page.isLast || list.length === 0) break
+  }
+  return best
+}
+
+async function loadDetailApplication() {
+  stopDetailApplicationPolling()
+  detailApplication.value = null
+  if (!detail.value) return
+  detailApplicationLoading.value = true
+  try {
+    const app = await findLatestSentDemandApplication(detail.value.parentId, detail.value.id)
+    detailApplication.value = app
+    if (app?.status === 'PENDING') {
+      const appId = app.id
+      detailApplicationPollTimer = window.setInterval(async () => {
+        if (!detail.value) return
+        if (!detailApplication.value) return
+        if (detailApplication.value.id !== appId) return
+        try {
+          const latest = await applicationApi.detail(appId)
+          detailApplication.value = latest
+          if (latest.status !== 'PENDING') stopDetailApplicationPolling()
+        } catch {
+          void 0
+        }
+      }, 5000)
+    }
+  } finally {
+    detailApplicationLoading.value = false
+  }
 }
 
 async function findRoomByOtherUid(otherUid: number): Promise<ChatRoomItemResp | null> {
@@ -313,6 +389,33 @@ async function shouldReuseExistingChat(otherUid: number): Promise<{ roomId: numb
   const list = page.list || []
   if (!isChatUnlockedByMessages(list)) return null
   return { roomId: found.roomId }
+}
+
+const applyButton = computed(() => {
+  const d = detail.value
+  if (!d) return { text: '发起申请', disabled: true, mode: 'apply' as const }
+  const app = detailApplication.value
+  if (!app || app.status === 'REJECTED') return { text: '发起申请', disabled: false, mode: 'apply' as const }
+  if (app.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
+  if (app.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
+  return { text: '发起申请', disabled: false, mode: 'apply' as const }
+})
+
+async function openChatForCurrentDetail() {
+  if (!detail.value) return
+  const otherUid = detail.value.parentId
+  const roomId = detailApplication.value?.roomId || (await findRoomByOtherUid(otherUid))?.roomId
+  if (!roomId) return
+  await router.push({ name: 'chatRoom', params: { roomId: String(roomId) }, query: { otherUid: String(otherUid) } })
+}
+
+async function onClickApplyButton() {
+  if (!detail.value) return
+  if (applyButton.value.mode === 'chat') {
+    await openChatForCurrentDetail()
+    return
+  }
+  await openApply(detail.value)
 }
 
 async function openApply(it: StudentJobPosting) {
@@ -345,6 +448,27 @@ async function openApply(it: StudentJobPosting) {
       content,
       clientRequestId: genClientRequestId(),
     })
+    const parsed = parseTutorApplicationMsgBody(msg.message?.body)
+    if (parsed) {
+      detailApplication.value = {
+        id: parsed.applicationId,
+        senderUid: msg.fromUser.uid,
+        receiverUid: it.parentId,
+        senderRole: 'TEACHER',
+        receiverRole: 'STUDENT',
+        contextType: 'DEMAND',
+        contextId: it.id,
+        content: parsed.content,
+        status: parsed.status,
+        chatAccessStatus: 'NONE',
+        paymentPayerRole: 'TEACHER',
+        orderId: null,
+        roomId: msg.message.roomId,
+        receiverRead: null,
+        decidedAt: null,
+        createTime: msg.message.sendTime,
+      }
+    }
     await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(it.parentId) } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '发送申请失败'
@@ -387,9 +511,12 @@ watch(
       detailError.value = null
       try {
         detail.value = await jobsApi.getDemandView(id)
+        await loadDetailApplication()
       } catch (e) {
         detailError.value = e instanceof Error ? e.message : '加载详情失败'
         detail.value = null
+        stopDetailApplicationPolling()
+        detailApplication.value = null
       } finally {
         detailLoading.value = false
       }
@@ -421,6 +548,10 @@ onMounted(() => {
     }
   }
   void refresh()
+})
+
+onBeforeUnmount(() => {
+  stopDetailApplicationPolling()
 })
 
 watch(
@@ -593,7 +724,14 @@ watch(
             <div class="detail-title">{{ detail.title }}</div>
             <div class="detail-ops">
               <button class="btn" type="button" @click="onToggleFavorite(detail)">{{ favoriteMap[detail.id] ? '已收藏' : '收藏' }}</button>
-              <button class="btn btn-primary" type="button" @click="openApply(detail)">发起申请</button>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="applyBusy || detailLoading || detailApplicationLoading || applyButton.disabled"
+                @click="onClickApplyButton"
+              >
+                {{ applyButton.text }}
+              </button>
             </div>
           </div>
 

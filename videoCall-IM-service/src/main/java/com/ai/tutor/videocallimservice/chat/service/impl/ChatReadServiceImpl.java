@@ -35,7 +35,7 @@ public class ChatReadServiceImpl implements ChatReadService {
         ThrowUtils.throwIf(request.getRoomId() == null || request.getLastReadMsgId() == null, ErrorCode.PARAMS_ERROR);
 
         Room room = roomMapper.selectById(request.getRoomId());
-        ThrowUtils.throwIf(room == null || room.getStatus() == null || room.getStatus() != 1, ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(room == null || room.getStatus() == null, ErrorCode.NOT_FOUND_ERROR);
 
         Long teacherUid = resolveUserId(1, room.getTeacherProfileId());
         Long studentUid = resolveUserId(2, room.getStudentProfileId());

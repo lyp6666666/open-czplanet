@@ -7,6 +7,7 @@ import { chatApi } from '@/api/chat'
 import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import type { PageState } from '@/stores/home'
 import { useAuthStore } from '@/stores/auth'
+import UserCardModal from '@/ui/user/UserCardModal.vue'
 import { formatBudgetUnit, formatClassMode, formatScheduleText } from '@/utils/present'
 
 const props = defineProps<{
@@ -44,6 +45,19 @@ const canFavoriteTutor = computed(() => auth.isLoggedIn && auth.user?.userType =
 
 const checkedFavoriteTutorIds = new Set<number>()
 const favoriteTutorMap = ref<Record<number, boolean>>({})
+
+const cardOpen = ref(false)
+const cardUid = ref<number | null>(null)
+
+function openCard(uid: number) {
+  if (!uid) return
+  cardUid.value = uid
+  cardOpen.value = true
+}
+
+function closeCard() {
+  cardOpen.value = false
+}
 
 async function syncTutorFavorites(ids: number[]) {
   const need = ids.filter((id) => !checkedFavoriteTutorIds.has(id))
@@ -163,9 +177,9 @@ watch(
               <span class="muted">{{ it.city }}</span>
             </div>
             <div class="person">
-              <img class="avatar" :src="it.tutor.avatar" alt="" />
+              <img class="avatar clickable" :src="it.tutor.avatar" alt="" @click.stop="openCard(it.tutor.userId)" />
               <div class="info">
-                <div class="name">{{ it.tutor.displayName }}</div>
+                <div class="name clickable" @click.stop="openCard(it.tutor.userId)">{{ it.tutor.displayName }}</div>
                 <div class="sub">{{ it.tutor.education }} · {{ it.tutor.experienceYears }}年</div>
               </div>
               <div class="price">¥{{ it.pricePerHour }}/小时</div>
@@ -236,9 +250,9 @@ watch(
               <span class="muted">{{ it.addressSimple }}</span>
             </div>
             <div class="person">
-              <img class="avatar" :src="it.parent.avatar" alt="" />
+              <img class="avatar clickable" :src="it.parent.avatar" alt="" @click.stop="openCard(it.parent.userId)" />
               <div class="info">
-                <div class="name">{{ it.parent.displayName }}</div>
+                <div class="name clickable" @click.stop="openCard(it.parent.userId)">{{ it.parent.displayName }}</div>
                 <div class="sub">{{ formatScheduleText(it.scheduleText) }}</div>
               </div>
               <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ formatBudgetUnit(it.budget.unit) }}</div>
@@ -302,9 +316,9 @@ watch(
         <template v-else-if="hotTutors.list.length">
           <article v-for="it in hotTutors.list" :key="it.userId" class="item tutor-item">
             <div class="person">
-              <img class="avatar big" :src="it.avatar" alt="" />
+              <img class="avatar big clickable" :src="it.avatar" alt="" @click="openCard(it.userId)" />
               <div class="info">
-                <div class="name">{{ it.displayName }}</div>
+                <div class="name clickable" @click="openCard(it.userId)">{{ it.displayName }}</div>
                 <div class="sub">{{ it.education }} · {{ it.experienceYears }}年 · {{ it.city }}</div>
               </div>
               <div class="price">¥{{ it.ratePerHour }}/小时</div>
@@ -339,6 +353,8 @@ watch(
         </button>
       </div>
     </div>
+
+    <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
   </section>
 </template>
 
@@ -541,6 +557,14 @@ watch(
   object-fit: cover;
   border: 1px solid var(--border);
   background: #fff;
+}
+
+.avatar.clickable {
+  cursor: pointer;
+}
+
+.name.clickable {
+  cursor: pointer;
 }
 
 .avatar.big {

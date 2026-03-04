@@ -62,6 +62,20 @@ function upsertRoomFromEvent(ev: StreamMsgEvent) {
   }
 }
 
+watch(
+  () => chatRealtime.roomUnread,
+  (map) => {
+    rooms.value = rooms.value.map((r) => {
+      const u = map[r.roomId]
+      if (typeof u === 'number' && u !== r.unreadCount) {
+        return { ...r, unreadCount: u }
+      }
+      return r
+    })
+  },
+  { deep: true },
+)
+
 function effectiveUnread(roomId: number, fallback: number) {
   const v = chatRealtime.roomUnread[roomId]
   return typeof v === 'number' ? v : fallback
@@ -122,6 +136,8 @@ function openRoom(roomId: number, otherUid: number) {
   if (room?.lastMsgId) {
     void chatRealtime.ackRoomRead(roomId, room.lastMsgId)
   }
+  // Immediately clear local unread state
+  chatRealtime.clearRoomUnread(roomId)
   chatRealtime.setActiveRoom(roomId)
   void router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(otherUid) } })
 }

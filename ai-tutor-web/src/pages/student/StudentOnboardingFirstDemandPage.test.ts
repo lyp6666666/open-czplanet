@@ -149,8 +149,8 @@ describe('StudentOnboardingFirstDemandPage', () => {
 
     await wrapper.findAll('select')[0]!.setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('数学')
-    await wrapper.findAll('select')[3]!.setValue('online')
+    await wrapper.find('input[type="checkbox"][value="数学"]').setValue(true)
+    await wrapper.findAll('select')[2]!.setValue('online')
     await wrapper.find('textarea').setValue('学生基础一般，需要巩固提升。')
     await wrapper.findAll('button').find((b) => b.text().trim() === '下一步')!.trigger('click')
     await flushPromises()

@@ -38,6 +38,24 @@
         <result column="create_time" property="createTime"/>
     </resultMap>
 
+    <resultMap id="TutorBrowseRowMap" type="com.ai.tutor.appointment.model.dto.parent.TutorBrowseRow">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="user_name" property="userName"/>
+        <result column="avatar" property="avatar"/>
+        <result column="real_name" property="realName"/>
+        <result column="city" property="city"/>
+        <result column="education" property="education"/>
+        <result column="experience_years" property="experienceYears"/>
+        <result column="rate_per_hour" property="ratePerHour"/>
+        <result column="subject" property="subject"/>
+        <result column="teaching_mode" property="teachingMode"/>
+        <result column="highest_edu_school" property="highestEduSchool"/>
+        <result column="realname_verify_status" property="realnameVerifyStatus"/>
+        <result column="edu_verify_status" property="eduVerifyStatus"/>
+        <result column="introduction" property="introduction"/>
+    </resultMap>
+
     <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.TeacherProfile"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO teacher_profile (
@@ -106,6 +124,66 @@
         <foreach collection="userIds" item="uid" open="(" separator="," close=")">
             #{uid}
         </foreach>
+    </select>
+
+    <select id="pageTutorCards" resultMap="TutorBrowseRowMap">
+        SELECT
+            tp.id,
+            tp.user_id,
+            u.name AS user_name,
+            u.avatar AS avatar,
+            tp.real_name,
+            tp.city,
+            tp.education,
+            tp.experience_years,
+            tp.rate_per_hour,
+            tp.subject,
+            tp.teaching_mode,
+            tp.highest_edu_school,
+            tp.realname_verify_status,
+            tp.edu_verify_status,
+            tp.introduction
+        FROM teacher_profile tp
+                 JOIN user u ON u.id = tp.user_id
+        WHERE u.user_type = 1
+          AND u.status = 0
+          AND tp.status = 1
+        <if test="cursor != null">
+            AND tp.id &lt; #{cursor}
+        </if>
+        <if test="city != null and city != '' and (mode == null or mode == '' or mode == 'both')">
+            AND (tp.city = #{city} OR tp.teaching_mode IN ('online','both'))
+        </if>
+        <if test="city != null and city != '' and (mode != null and mode != '' and mode != 'both')">
+            AND tp.city = #{city}
+        </if>
+        <if test="mode != null and mode != '' and mode != 'both'">
+            AND tp.teaching_mode = #{mode}
+        </if>
+        <if test="subject != null and subject != ''">
+            AND (tp.subject LIKE CONCAT('%', #{subject}, '%') OR LOCATE(tp.subject, #{subject}) > 0)
+        </if>
+        <if test="q != null and q != ''">
+            AND (
+                tp.real_name LIKE CONCAT('%', #{q}, '%')
+                OR LOCATE(tp.real_name, #{q}) > 0
+                OR tp.subject LIKE CONCAT('%', #{q}, '%')
+                OR LOCATE(tp.subject, #{q}) > 0
+                OR tp.education LIKE CONCAT('%', #{q}, '%')
+                OR LOCATE(tp.education, #{q}) > 0
+                OR tp.introduction LIKE CONCAT('%', #{q}, '%')
+                OR u.name LIKE CONCAT('%', #{q}, '%')
+                OR LOCATE(u.name, #{q}) > 0
+            )
+        </if>
+        <if test="rateMin != null">
+            AND tp.rate_per_hour &gt;= #{rateMin}
+        </if>
+        <if test="rateMax != null">
+            AND tp.rate_per_hour &lt;= #{rateMax}
+        </if>
+        ORDER BY tp.id DESC
+        LIMIT #{pageSize}
     </select>
 
     <update id="submitEduVerification">

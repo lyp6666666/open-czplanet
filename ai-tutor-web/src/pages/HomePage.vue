@@ -26,11 +26,15 @@ const showHotTutors = computed(() => !auth.isLoggedIn || !isTeacher.value)
 async function onSearch() {
   const q = keyword.value.trim()
   if (!q) return
+  if (!auth.isLoggedIn) {
+    window.alert('请登录之后再使用搜索功能')
+    return
+  }
   if (isTeacher.value) {
     await router.push({ name: 'tutorJobs', query: { q } })
     return
   }
-  await router.push({ name: 'studentPost' })
+  await router.push({ name: 'studentTutors', query: { q } })
 }
 
 function onCityChange(v: string) {
@@ -60,7 +64,12 @@ onMounted(() => {
     <main class="page">
       <div class="container">
         <div v-if="auth.isLoggedIn" class="search card">
-          <input v-model="keyword" class="search-input" placeholder="搜索家教需求关键词" @keydown.enter.prevent="onSearch" />
+          <input
+            v-model="keyword"
+            class="search-input"
+            :placeholder="isTeacher ? '搜索家教需求关键词' : '搜索教师关键词'"
+            @keydown.enter.prevent="onSearch"
+          />
           <button class="btn btn-primary" type="button" @click="onSearch">搜索</button>
         </div>
 

@@ -119,8 +119,12 @@
     <select id="searchByKeyword" resultMap="BaseUserResultMap">
         SELECT *
         FROM user
-        WHERE (name LIKE CONCAT('%', #{keyword}, '%')
-               OR phone LIKE CONCAT('%', #{keyword}, '%'))
+        WHERE (
+            name LIKE CONCAT('%', #{keyword}, '%')
+            OR phone LIKE CONCAT('%', #{keyword}, '%')
+            OR LOCATE(name, #{keyword}) > 0
+            OR LOCATE(phone, #{keyword}) > 0
+        )
           AND status = 0
         ORDER BY id DESC
         LIMIT #{limit}

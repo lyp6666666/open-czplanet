@@ -65,6 +65,22 @@ function fmtBudget(min: string | null, max: string | null) {
   return ''
 }
 
+function fmtJobStatus(s: number) {
+  if (s === 1) return '发布中'
+  if (s === 0) return '已关闭'
+  return '未知'
+}
+
+function fmtApptStatus(s: number) {
+  if (s === 1) return '待确认'
+  if (s === 2) return '已接单'
+  if (s === 3) return '改期中'
+  if (s === 4) return '已取消'
+  if (s === 5) return '已完成'
+  if (s === 6) return '已拒绝'
+  return '未知'
+}
+
 watch(
   () => [props.open, props.uid] as const,
   async ([open, uid]) => {
@@ -198,20 +214,42 @@ async function startTutorApplication() {
           <div v-if="fmt(card.studentProfile.demandDescription)" class="desc">{{ fmt(card.studentProfile.demandDescription) }}</div>
         </div>
 
-        <div v-if="card.jobPosting" class="sec">
-          <div class="sec-title">岗位信息</div>
-          <div class="kv">
-            <div v-if="fmt(card.jobPosting.title)" class="row"><span class="k">标题</span><span class="v">{{ fmt(card.jobPosting.title) }}</span></div>
-            <div v-if="fmtBudget(card.jobPosting.budgetMin, card.jobPosting.budgetMax)" class="row">
-              <span class="k">预算</span><span class="v">{{ fmtBudget(card.jobPosting.budgetMin, card.jobPosting.budgetMax) }}</span>
+        <div v-if="card.studentHistory && card.studentHistory.length > 0" class="sec">
+          <div class="sec-title">历史需求</div>
+          <div class="history-list">
+            <div v-for="job in card.studentHistory" :key="job.id" class="history-item">
+              <div class="h-row1">
+                <span class="h-title">{{ job.title }}</span>
+                <span class="h-status" :class="{ active: job.status === 1 }">{{ fmtJobStatus(job.status) }}</span>
+              </div>
+              <div class="h-row2">
+                <span>{{ job.subjectName }}</span>
+                <span>{{ job.classMode === 'online' ? '线上' : job.city }}</span>
+                <span>{{ fmtBudget(job.budgetMin, job.budgetMax) }}</span>
+              </div>
             </div>
-            <div v-if="fmt(card.jobPosting.classMode)" class="row"><span class="k">授课方式</span><span class="v">{{ fmt(card.jobPosting.classMode) }}</span></div>
-            <div v-if="fmt(card.jobPosting.city)" class="row"><span class="k">城市</span><span class="v">{{ fmt(card.jobPosting.city) }}</span></div>
-            <div v-if="fmt(card.jobPosting.address)" class="row"><span class="k">地点</span><span class="v">{{ fmt(card.jobPosting.address) }}</span></div>
-            <div v-if="fmt(card.jobPosting.availableTime)" class="row"><span class="k">时间</span><span class="v">{{ fmt(card.jobPosting.availableTime) }}</span></div>
-            <div v-if="fmt(card.jobPosting.gradeCode)" class="row"><span class="k">年级</span><span class="v">{{ fmt(card.jobPosting.gradeCode) }}</span></div>
           </div>
-          <div v-if="fmt(card.jobPosting.description)" class="desc">{{ fmt(card.jobPosting.description) }}</div>
+        </div>
+
+        <div v-if="card.teacherHistory && card.teacherHistory.length > 0" class="sec">
+          <div class="sec-title">历史接单</div>
+          <div class="history-list">
+            <div v-for="apt in card.teacherHistory" :key="apt.id" class="history-item">
+              <div class="h-row1">
+                <span class="h-title">{{ apt.title || '无标题课程' }}</span>
+                <span class="h-status done">{{ fmtApptStatus(apt.status) }}</span>
+              </div>
+              <div class="h-row2">
+                <span>{{ apt.startTime ? apt.startTime.replace('T', ' ').slice(0, 16) : '' }}</span>
+                <span>{{ apt.durationMinutes }}分钟</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="card.teacherProfile" class="sec">
+          <div class="sec-title">评价</div>
+          <div class="empty-eval">暂无评价</div>
         </div>
 
         <div v-if="canFavoriteTutor" class="sec">
@@ -414,5 +452,64 @@ async function startTutorApplication() {
   padding: 10px 12px;
   border-radius: 12px;
   word-break: break-word;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.h-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.h-title {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.h-status {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(31, 35, 41, 0.05);
+}
+
+.h-status.active {
+  color: #00bebd;
+  background: rgba(0, 190, 189, 0.08);
+}
+
+.h-status.done {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.08);
+}
+
+.h-row2 {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.empty-eval {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 10px;
+  text-align: center;
+  background: rgba(31, 35, 41, 0.03);
+  border-radius: 8px;
 }
 </style>

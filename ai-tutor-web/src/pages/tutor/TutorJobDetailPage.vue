@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
 import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO } from '@/api/types'
+import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, TutorApplicationVO } from '@/api/types'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import UserCardModal from '@/ui/user/UserCardModal.vue'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
@@ -26,14 +27,32 @@ const applyError = ref<string | null>(null)
 const applyTipOpen = ref(false)
 const applyTipText = ref('')
 
+const applicationLoading = ref(false)
+const application = ref<TutorApplicationVO | null>(null)
+let applicationPollTimer: number | null = null
+
+const cardOpen = ref(false)
+const cardUid = ref<number | null>(null)
+
+function openCard(uid: number) {
+  if (!uid) return
+  cardUid.value = uid
+  cardOpen.value = true
+}
+
+function closeCard() {
+  cardOpen.value = false
+}
+
 async function load() {
   loading.value = true
   error.value = null
   try {
     data.value = await jobsApi.getDemandView(id.value)
+    void loadApplication()
     try {
       const fav = await favoritesApi.checkDemandFavorites([id.value])
-      favorited.value = Array.isArray(fav) && fav.includes(id.value)
+      favorited.value = Array.isArray(fav) && fav.some((it) => String(it) === String(id.value))
     } catch {
       favorited.value = false
     }
@@ -44,8 +63,81 @@ async function load() {
   }
 }
 
-async function openApply() {
+function stopApplicationPolling() {
+  if (applicationPollTimer != null) {
+    clearInterval(applicationPollTimer)
+    applicationPollTimer = null
+  }
+}
+
+async function findLatestSentDemandApplication(receiverUid: number, demandId: number): Promise<TutorApplicationVO | null> {
+  let cursor: number | null = null
+  let best: TutorApplicationVO | null = null
+  for (let i = 0; i < 10; i++) {
+    const page = await applicationApi.listSent({ pageSize: 50, cursor })
+    const list = page.list || []
+    for (const it of list) {
+      if (it.contextType !== 'DEMAND') continue
+      if (it.contextId !== demandId) continue
+      if (it.receiverUid !== receiverUid) continue
+      if (!best || it.id > best.id) best = it
+    }
+    cursor = page.cursor ?? null
+    if (page.isLast || list.length === 0) break
+  }
+  return best
+}
+
+async function loadApplication() {
+  stopApplicationPolling()
+  application.value = null
   if (!data.value) return
+  applicationLoading.value = true
+  try {
+    const app = await findLatestSentDemandApplication(data.value.parentId, data.value.id)
+    application.value = app
+    if (app?.status === 'PENDING') {
+      const appId = app.id
+      applicationPollTimer = window.setInterval(async () => {
+        if (!application.value) return
+        if (application.value.id !== appId) return
+        try {
+          const latest = await applicationApi.detail(appId)
+          application.value = latest
+          if (latest.status !== 'PENDING') stopApplicationPolling()
+        } catch {
+          void 0
+        }
+      }, 5000)
+    }
+  } finally {
+    applicationLoading.value = false
+  }
+}
+
+const applyButton = computed(() => {
+  if (!data.value) return { text: '发起申请', disabled: true, mode: 'apply' as const }
+  const app = application.value
+  if (!app || app.status === 'REJECTED') return { text: '发起申请', disabled: false, mode: 'apply' as const }
+  if (app.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
+  if (app.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
+  return { text: '发起申请', disabled: false, mode: 'apply' as const }
+})
+
+async function openChatForCurrentDemand() {
+  if (!data.value) return
+  const otherUid = data.value.parentId
+  const roomId = application.value?.roomId || (await findRoomByOtherUid(otherUid))?.roomId
+  if (!roomId) return
+  await router.push({ name: 'chatRoom', params: { roomId: String(roomId) }, query: { otherUid: String(otherUid) } })
+}
+
+async function onClickApplyButton() {
+  if (!data.value) return
+  if (applyButton.value.mode === 'chat') {
+    await openChatForCurrentDemand()
+    return
+  }
   if (applyBusy.value) return
   applyBusy.value = true
   applyError.value = null
@@ -76,6 +168,27 @@ async function openApply() {
       content,
       clientRequestId: genClientRequestId(),
     })
+    const parsed = parseTutorApplicationMsgBody(msg.message?.body)
+    if (parsed) {
+      application.value = {
+        id: parsed.applicationId,
+        senderUid: msg.fromUser.uid,
+        receiverUid: data.value.parentId,
+        senderRole: 'TEACHER',
+        receiverRole: 'STUDENT',
+        contextType: 'DEMAND',
+        contextId: id.value,
+        content: parsed.content,
+        status: parsed.status,
+        chatAccessStatus: 'NONE',
+        paymentPayerRole: 'TEACHER',
+        orderId: null,
+        roomId: msg.message.roomId,
+        receiverRead: null,
+        decidedAt: null,
+        createTime: msg.message.sendTime,
+      }
+    }
     await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(data.value.parentId) } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '发送申请失败'
@@ -98,11 +211,21 @@ function normalizeMsgBody(raw: unknown): { type: string; content?: string } {
   return { type: 'system' }
 }
 
+function parseTutorApplicationMsgBody(raw: unknown): { applicationId: number; content: string; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' } | null {
+  if (!raw || typeof raw !== 'object') return null
+  const b = raw as Record<string, unknown>
+  if (b.type !== 'tutor_application') return null
+  const applicationId = typeof b.applicationId === 'number' ? b.applicationId : null
+  const content = typeof b.content === 'string' ? b.content : ''
+  const status = b.status === 'PENDING' || b.status === 'ACCEPTED' || b.status === 'REJECTED' ? b.status : null
+  if (applicationId == null || status == null) return null
+  return { applicationId, content, status }
+}
+
 function isChatUnlockedByMessages(list: ChatMessageResp[]) {
   return list.some((m) => {
     const b = normalizeMsgBody(m.message?.body)
-    if (b.type === 'contact_unlocked' || b.type === 'brokerage_required') return true
-    if (b.type === 'text' && typeof b.content === 'string' && b.content.trim().length > 0) return true
+    if (b.type === 'contact_unlocked') return true
     return false
   })
 }
@@ -153,6 +276,14 @@ async function onToggleFavorite() {
 onMounted(() => {
   void load()
 })
+
+watch(id, () => {
+  void load()
+})
+
+onBeforeUnmount(() => {
+  stopApplicationPolling()
+})
 </script>
 
 <template>
@@ -164,7 +295,14 @@ onMounted(() => {
         <button class="btn" type="button" :disabled="loading || !data" @click="onToggleFavorite">
           {{ favorited ? '已收藏' : '收藏' }}
         </button>
-        <button class="btn btn-primary" type="button" :disabled="loading || !data" @click="openApply">发起申请</button>
+        <button
+          class="btn btn-primary"
+          type="button"
+          :disabled="loading || applicationLoading || applyBusy || applyButton.disabled || !data"
+          @click="onClickApplyButton"
+        >
+          {{ applyButton.text }}
+        </button>
       </div>
     </div>
 
@@ -186,10 +324,10 @@ onMounted(() => {
       </div>
 
       <div v-if="data.publisher" class="sec publisher">
-        <img v-if="data.publisher.avatar" class="avatar" :src="data.publisher.avatar" alt="avatar" />
-        <div v-else class="avatar fallback">{{ (data.publisher.displayName || 'U').slice(0, 1) }}</div>
+        <img v-if="data.publisher.avatar" class="avatar clickable" :src="data.publisher.avatar" alt="avatar" @click="openCard(data.publisher.uid)" />
+        <div v-else class="avatar fallback clickable" @click="openCard(data.publisher.uid)">{{ (data.publisher.displayName || 'U').slice(0, 1) }}</div>
         <div class="pub-info">
-          <div class="pub-name">{{ data.publisher.displayName }}</div>
+          <div class="pub-name clickable" @click="openCard(data.publisher.uid)">{{ data.publisher.displayName }}</div>
           <div class="pub-tag">{{ data.publisher.identityLabel }}</div>
         </div>
       </div>
@@ -214,6 +352,8 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
 
   </div>
 </template>
@@ -297,6 +437,21 @@ onMounted(() => {
 
 .pub-name {
   font-weight: 900;
+}
+
+.avatar.clickable {
+  cursor: pointer;
+}
+
+.avatar.fallback.clickable {
+  cursor: pointer;
+}
+
+.pub-name.clickable {
+  cursor: pointer;
+}
+.pub-name.clickable:hover {
+  text-decoration: underline;
 }
 
 .pub-tag {

@@ -32,13 +32,13 @@ function statusText() {
 <template>
   <div class="cardx">
     <div class="h1">中介费</div>
-    <div class="row">
+    <div v-if="canPay" class="row">
       <div class="k">金额</div>
       <div class="v">{{ amountYuan ? `${amountYuan} 元` : '待定' }}</div>
     </div>
     <div class="row">
       <div class="k">状态</div>
-      <div class="v">{{ statusText() }}</div>
+      <div class="v">{{ canPay ? statusText() : '待教师支付中介费' }}</div>
     </div>
     <div v-if="canPay" class="ops">
       <button class="btn btn-primary" type="button" @click="emit('pay')">去支付</button>
@@ -86,4 +86,3 @@ function statusText() {
   margin-top: 10px;
 }
 </style>
-

@@ -76,4 +76,16 @@
         WHERE id = #{id}
           AND status = 'PENDING'
     </update>
+
+    <update id="updateContent">
+        UPDATE collaboration_proposal
+        SET
+            price_per_hour = #{pricePerHour},
+            class_time = #{classTime},
+            frequency_per_week = #{frequencyPerWeek},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND from_uid = #{fromUid}
+          AND status = 'PENDING'
+    </update>
 </mapper>

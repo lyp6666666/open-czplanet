@@ -76,6 +76,16 @@
         LIMIT 1
     </select>
 
+    <select id="selectPaidByRoomId" resultMap="baseMap">
+        SELECT
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+        FROM brokerage_order
+        WHERE room_id = #{roomId}
+          AND status = 'PAID'
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <update id="submitProof">
         UPDATE brokerage_order
         SET
@@ -93,6 +103,18 @@
         SET
             status = 'PAID',
             paid_at = #{paidAt},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status IN ('PENDING', 'PROOF_SUBMITTED')
+    </update>
+
+    <update id="cancel">
+        UPDATE brokerage_order
+        SET
+            status = 'CANCELED',
+            pay_method = NULL,
+            proof_url = NULL,
+            proof_note = NULL,
             update_time = NOW()
         WHERE id = #{id}
           AND status IN ('PENDING', 'PROOF_SUBMITTED')

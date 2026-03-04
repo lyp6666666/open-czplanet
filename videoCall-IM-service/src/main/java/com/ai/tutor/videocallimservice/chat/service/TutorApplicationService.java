@@ -60,7 +60,7 @@ public class TutorApplicationService {
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
 
-    @Value("${tutor-application.skip-payment-check:true}")
+    @Value("${tutor-application.skip-payment-check:false}")
     private boolean skipPaymentCheck;
 
     public TutorApplicationVO create(CreateTutorApplicationReq req, Long uid) {
@@ -338,6 +338,15 @@ public class TutorApplicationService {
         if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(application.getChatAccessStatus())) {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "请先在申请中完成中介费支付后再进入聊天");
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void handlePaymentSuccess(Long applicationId, String orderNo) {
+        if (applicationId == null) {
+            return;
+        }
+        log.info("payment_success_received applicationId={} orderNo={}", applicationId, orderNo);
+        onBrokerageOrderPaid(applicationId);
     }
 
     public void onBrokerageOrderPaid(Long applicationId) {

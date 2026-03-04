@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -41,9 +41,10 @@ const error = ref<string | null>(null)
 const sending = ref(false)
 const input = ref('')
 
-const refundOpen = ref(false)
-const refundBusy = ref(false)
-const refundError = ref<string | null>(null)
+const endOpen = ref(false)
+const endBusy = ref(false)
+const endError = ref<string | null>(null)
+const endActionBusy = ref(false)
 
 const appActionBusy = ref<Record<number, boolean>>({})
 const appActionError = ref<Record<number, string>>({})
@@ -51,10 +52,16 @@ const appActionError = ref<Record<number, string>>({})
 const collabOpen = ref(false)
 const collabCreateBusy = ref(false)
 const collabCreateError = ref<string | null>(null)
+const collabEdit = ref<{
+  proposalId: number
+  initial: { pricePerHour: string; classTime: string; frequencyPerWeek: number }
+} | null>(null)
 
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
 const messages = ref<ChatMessageResp[]>([])
+const msgsRef = ref<HTMLElement | null>(null)
+const roomVersion = ref(0)
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const myUser = computed<UserSimpleVO | null>(() => {
@@ -152,41 +159,62 @@ function openCollaboration() {
     return
   }
   collabCreateError.value = null
+  collabEdit.value = null
+  collabOpen.value = true
+}
+
+function openCollaborationEdit(payload: { proposalId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
+    return
+  }
+  collabCreateError.value = null
+  collabEdit.value = {
+    proposalId: payload.proposalId,
+    initial: { pricePerHour: payload.pricePerHour, classTime: payload.classTime, frequencyPerWeek: payload.frequencyPerWeek },
+  }
   collabOpen.value = true
 }
 
 function closeCollaboration() {
   if (collabCreateBusy.value) return
   collabOpen.value = false
+  collabEdit.value = null
 }
 
-function openRefund() {
-  if (!canRequestRefund.value) {
+function openEndChat() {
+  if (!canEndChat.value) {
     error.value = composerLockedHint.value
     return
   }
-  refundError.value = null
-  refundOpen.value = true
+  endError.value = null
+  endOpen.value = true
 }
 
-function closeRefund() {
-  if (refundBusy.value) return
-  refundOpen.value = false
+function closeEndChat() {
+  if (endBusy.value) return
+  endOpen.value = false
 }
 
-async function submitRefund() {
-  if (!canRequestRefund.value) return
-  if (refundBusy.value) return
-  refundBusy.value = true
-  refundError.value = null
+async function submitEndChat() {
+  if (!canEndChat.value) return
+  if (endBusy.value) return
+  endBusy.value = true
+  endError.value = null
   try {
+    if (isTeacher.value) {
+      const msg = await chatApi.requestEndChat(roomId.value)
+      mergeMessages([msg], 'append')
+      endOpen.value = false
+      return
+    }
     const msg = await chatApi.requestBrokerageRefund(roomId.value)
     mergeMessages([msg], 'append')
-    refundOpen.value = false
+    endOpen.value = false
   } catch (e) {
-    refundError.value = e instanceof Error ? e.message : '发起失败'
+    endError.value = e instanceof Error ? e.message : '发起失败'
   } finally {
-    refundBusy.value = false
+    endBusy.value = false
   }
 }
 
@@ -210,9 +238,13 @@ async function createCollaboration(payload: { pricePerHour: string; classTime: s
   collabCreateBusy.value = true
   collabCreateError.value = null
   try {
-    const msg = await chatApi.createCollaborationProposal({ roomId: roomId.value, ...payload })
+    const editing = !!collabEdit.value
+    const msg = editing
+      ? await chatApi.updateCollaborationProposal(collabEdit.value!.proposalId, { roomId: roomId.value, ...payload })
+      : await chatApi.createCollaborationProposal({ roomId: roomId.value, ...payload })
     mergeMessages([msg], 'append')
     collabOpen.value = false
+    collabEdit.value = null
   } catch (e) {
     // #region debug-point
     const ax =
@@ -225,7 +257,8 @@ async function createCollaboration(payload: { pricePerHour: string; classTime: s
       status: typeof ax?.response?.status === 'number' ? ax.response.status : null,
     })
     // #endregion debug-point
-    collabCreateError.value = e instanceof Error ? e.message : '发起失败'
+    const editing = !!collabEdit.value
+    collabCreateError.value = e instanceof Error ? e.message : editing ? '修改失败' : '发起失败'
   } finally {
     collabCreateBusy.value = false
   }
@@ -274,6 +307,14 @@ function isTutorApplicationStatusBody(body: ChatMessageBody): body is Extract<Ch
   return body.type === 'tutor_application_status'
 }
 
+function isEndChatRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'end_chat_request' }> {
+  return body.type === 'end_chat_request'
+}
+
+function isEndChatStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'end_chat_status' }> {
+  return body.type === 'end_chat_status'
+}
+
 function isRefundRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'brokerage_refund_request' }> {
   return body.type === 'brokerage_refund_request'
 }
@@ -283,14 +324,32 @@ function isRefundStatusBody(body: ChatMessageBody): body is Extract<ChatMessageB
 }
 
 const chatUnlocked = computed(() => {
-  if (route.query.unlockChat === '1') return true
   return messages.value.some((m) => {
     const b = normalizeBody(m.message.body)
-    return b.type === 'contact_unlocked' || b.type === 'brokerage_required' || (b.type === 'text' && b.content.trim().length > 0)
+    return b.type === 'contact_unlocked'
   })
 })
 
 const chatLockedHint = computed(() => '当前仅可发送家教申请，申请通过并完成支付后再聊天')
+
+const appStatusByApplicationId = computed<Record<number, TutorApplicationCardStatus>>(() => {
+  const out: Record<number, TutorApplicationCardStatus> = {}
+  for (const m of messages.value) {
+    const b = normalizeBody(m.message.body)
+    if (isTutorApplicationBody(b)) {
+      out[b.applicationId] = appStatusText(b.status)
+      continue
+    }
+    if (isTutorApplicationStatusBody(b)) {
+      out[b.applicationId] = appStatusText(b.status)
+    }
+  }
+  return out
+})
+
+function effectiveAppStatus(applicationId: number, fallback: TutorApplicationCardStatus): TutorApplicationCardStatus {
+  return appStatusByApplicationId.value[applicationId] || fallback
+}
 
 const latestTutorApplication = computed(() => {
   let best: { msgId: number; body: Extract<ChatMessageBody, { type: 'tutor_application' }>; fromMe: boolean } | null = null
@@ -299,7 +358,8 @@ const latestTutorApplication = computed(() => {
     if (!isTutorApplicationBody(b)) continue
     const msgId = m.message.id
     if (!best || msgId > best.msgId) {
-      best = { msgId, body: b, fromMe: m.fromUser.uid === myUid.value }
+      const status = effectiveAppStatus(b.applicationId, appStatusText(b.status))
+      best = { msgId, body: { ...b, status }, fromMe: m.fromUser.uid === myUid.value }
     }
   }
   return best
@@ -309,6 +369,7 @@ const canSendTutorApplication = computed(() => {
   if (chatUnlocked.value) return false
   const latest = latestTutorApplication.value
   if (!latest) return false
+  if (!latest.fromMe) return false
   return latest.body.status === 'REJECTED'
 })
 
@@ -447,6 +508,21 @@ const sortedMessages = computed(() => {
 
 type RenderMessage = ChatMessageResp & { body: ChatMessageBody }
 
+const endStatusByRequestId = computed<Record<number, string>>(() => {
+  const out: Record<number, string> = {}
+  for (const m of sortedMessages.value) {
+    const b = normalizeBody(m.message?.body)
+    if (isEndChatRequestBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
+      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
+      continue
+    }
+    if (isEndChatStatusBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
+      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
+    }
+  }
+  return out
+})
+
 const refundStatusByRequestId = computed<Record<number, string>>(() => {
   const out: Record<number, string> = {}
   for (const m of sortedMessages.value) {
@@ -479,6 +555,12 @@ const renderMessages = computed<RenderMessage[]>(() => {
   const list: RenderMessage[] = []
   for (const m of sortedMessages.value) {
     const body = normalizeBody(m.message?.body)
+    if (isEndChatStatusBody(body)) continue
+    if (isEndChatRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
+      const effective = endStatusByRequestId.value[body.requestId]
+      list.push({ ...m, body: { ...body, status: effective || body.status } })
+      continue
+    }
     if (isRefundStatusBody(body)) continue
     if (isRefundRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
       const effective = refundStatusByRequestId.value[body.requestId]
@@ -570,8 +652,8 @@ const collabStatusByProposalId = computed<Record<number, CollaborationProposalSt
   return out
 })
 
-const hasAnyCollabProposal = computed(() => {
-  return renderMessages.value.some((m) => isCollaborationProposalBody(m.body))
+const hasActiveCollabProposal = computed(() => {
+  return Object.values(collabStatusByProposalId.value).some((s) => s !== 'REJECTED')
 })
 
 function effectiveCollabStatus(proposalId: number, fallback: CollaborationProposalStatus): CollaborationProposalStatus {
@@ -582,19 +664,31 @@ const hasAnyRefundRequest = computed(() => {
   return renderMessages.value.some((m) => isRefundRequestBody(m.body))
 })
 
+const hasPendingEndChatRequest = computed(() => {
+  return renderMessages.value.some((m) => {
+    const b = m.body
+    if (!isEndChatRequestBody(b)) return false
+    const s = typeof b.status === 'string' ? b.status.trim().toUpperCase() : ''
+    return s === 'PENDING_CONFIRM'
+  })
+})
+
 const composerEnabled = computed(() => {
   return chatUnlocked.value && !hasAnyRefundRequest.value
 })
 
 const composerLockedHint = computed(() => {
   if (hasAnyRefundRequest.value) {
-    return isTeacher.value ? '已发起退款申请，聊天已关闭' : '对方已经申请退还中介费，聊天功能关闭'
+    return '沟通已结束，退款等待管理员审核'
   }
   return chatLockedHint.value
 })
 
-const canRequestRefund = computed(() => {
-  return isTeacher.value && chatUnlocked.value && !hasAnyRefundRequest.value
+const canEndChat = computed(() => {
+  if (!chatUnlocked.value) return false
+  if (hasAnyRefundRequest.value) return false
+  if (isTeacher.value) return !hasPendingEndChatRequest.value
+  return true
 })
 
 function refundStatusText(raw: unknown): string {
@@ -605,10 +699,42 @@ function refundStatusText(raw: unknown): string {
   return '已经发起，等待管理员审核中，平均审核时长约30分钟，超出8小时直接退回'
 }
 
+function endChatStatusText(raw: unknown): string {
+  const s = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+  if (s === 'CONFIRMED') return '对方已确认结束沟通'
+  if (s === 'REJECTED') return '对方暂不结束'
+  return isTeacher.value ? '等待对方确认结束' : '对方请求结束沟通'
+}
+
+async function respondEndChat(requestId: number, action: 'CONFIRMED' | 'REJECTED') {
+  if (endActionBusy.value) return
+  endActionBusy.value = true
+  try {
+    const statusMsg = await chatApi.respondEndChat(roomId.value, requestId, action)
+    mergeMessages([statusMsg], 'append')
+    if (action === 'CONFIRMED') {
+      const msg = await chatApi.requestBrokerageRefund(roomId.value)
+      mergeMessages([msg], 'append')
+    }
+  } finally {
+    endActionBusy.value = false
+  }
+}
+
 async function loadOtherUser() {
   if (!otherUid.value) return
+  const v = roomVersion.value
   const users = await userApi.batch([otherUid.value])
+  if (v !== roomVersion.value) return
   otherUser.value = users[0] || null
+}
+
+function scrollToBottom() {
+  if (!msgsRef.value) return
+  const el = msgsRef.value
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight
+  })
 }
 
 function mergeMessages(incoming: ChatMessageResp[], mode: 'prepend' | 'append') {
@@ -618,21 +744,35 @@ function mergeMessages(incoming: ChatMessageResp[], mode: 'prepend' | 'append') 
   const merged = Array.from(byId.values())
   merged.sort((a, b) => a.message.id - b.message.id)
   messages.value = merged
-  if (mode === 'prepend') {
-    return
+  if (mode === 'append') {
+    void scrollToBottom()
   }
 }
 
 async function loadMore() {
   if (loading.value || isLast.value) return
+  const v = roomVersion.value
+  const targetRoomId = roomId.value
   loading.value = true
   error.value = null
+  const oldScrollHeight = msgsRef.value?.scrollHeight || 0
+  const oldScrollTop = msgsRef.value?.scrollTop || 0
+
   try {
-    const page = await chatApi.listMessages({ roomId: roomId.value, pageSize: 20, cursor: cursor.value })
+    const page = await chatApi.listMessages({ roomId: targetRoomId, pageSize: 20, cursor: cursor.value })
+    if (v !== roomVersion.value || targetRoomId !== roomId.value) return
     const list = page.list || []
     mergeMessages(list, cursor.value ? 'prepend' : 'append')
     cursor.value = page.cursor ?? null
     isLast.value = !!page.isLast
+
+    if (cursor.value && msgsRef.value) {
+      requestAnimationFrame(() => {
+        if (!msgsRef.value) return
+        const newScrollHeight = msgsRef.value.scrollHeight
+        msgsRef.value.scrollTop = newScrollHeight - oldScrollHeight + oldScrollTop
+      })
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -669,14 +809,17 @@ async function onSend() {
 
 async function ackFromRoomList() {
   if (!auth.isLoggedIn) return
+  const v = roomVersion.value
+  const targetRoomId = roomId.value
   let cursor: number | null = null
   for (let i = 0; i < 10; i++) {
     try {
       const page = await chatApi.listRooms({ pageSize: 50, cursor })
+      if (v !== roomVersion.value || targetRoomId !== roomId.value) return
       const list = page.list || []
-      const found = list.find((r) => r.roomId === roomId.value)
+      const found = list.find((r) => r.roomId === targetRoomId)
       if (found?.lastMsgId) {
-        void chatRealtime.ackRoomRead(roomId.value, found.lastMsgId)
+        void chatRealtime.ackRoomRead(targetRoomId, found.lastMsgId)
         return
       }
       cursor = page.cursor ?? null
@@ -687,22 +830,39 @@ async function ackFromRoomList() {
   }
 }
 
-onMounted(() => {
-  void loadOtherUser()
-  void ackFromRoomList()
-  void loadMore().then(() => ackLatest())
-  chatRealtime.setActiveRoom(roomId.value)
-})
-
 onBeforeUnmount(() => {
   chatRealtime.setActiveRoom(null)
 })
 
 watch(
-  () => roomId.value,
+  () => [roomId.value, otherUid.value] as const,
   () => {
+    roomVersion.value += 1
+    loading.value = false
+    error.value = null
+    collabOpen.value = false
+    collabCreateBusy.value = false
+    collabCreateError.value = null
+    collabEdit.value = null
+    endOpen.value = false
+    endBusy.value = false
+    endError.value = null
+    endActionBusy.value = false
+    appActionBusy.value = {}
+    appActionError.value = {}
+    collabActionBusy.value = {}
+    collabActionError.value = {}
+    lessonActionBusy.value = {}
+    lessonActionError.value = {}
+    cursor.value = null
+    isLast.value = false
+    messages.value = []
+    void loadOtherUser()
+    void ackFromRoomList()
+    void loadMore().then(() => ackLatest())
     chatRealtime.setActiveRoom(roomId.value)
   },
+  { immediate: true },
 )
 
 watch(
@@ -733,14 +893,13 @@ watch(
     <div v-if="error" class="hint error">{{ error }}</div>
 
     <div class="card panel">
-      <div class="top">
-        <button class="btn" type="button" :disabled="loading || isLast" @click="loadMore">
-          <span v-if="isLast">没有更多历史消息</span>
-          <span v-else>{{ loading ? '加载中...' : '加载历史' }}</span>
-        </button>
-      </div>
+      <div class="msgs" ref="msgsRef">
+        <div class="top-hint" v-if="!isLast && !loading">
+          <button class="btn btn-text" type="button" @click="loadMore">查看更多历史消息</button>
+        </div>
+        <div class="top-hint" v-if="loading">加载中...</div>
+        <div class="top-hint muted" v-if="isLast">没有更多历史消息了</div>
 
-      <div class="msgs">
         <template v-for="it in renderItems" :key="it.key">
           <div v-if="it.kind === 'time'" class="time-divider">{{ it.text }}</div>
           <div v-else class="msg" :class="{ me: it.m.fromUser.uid === myUid }">
@@ -770,7 +929,7 @@ watch(
               </template>
               <template v-else-if="isTutorApplicationBody(it.m.body)">
                 <TutorApplicationCard
-                  :body="it.m.body"
+                  :body="{ ...it.m.body, status: effectiveAppStatus(it.m.body.applicationId, it.m.body.status) }"
                   :from-me="it.m.fromUser.uid === myUid"
                   :busy="appActionBusy[it.m.body.applicationId]"
                   @accept="respondTutorApplication(it.m.body.applicationId, 'ACCEPT', it.m.message.id)"
@@ -788,6 +947,7 @@ watch(
                   :body="{ ...it.m.body, status: effectiveCollabStatus(it.m.body.proposalId, it.m.body.status) }"
                   :from-me="it.m.fromUser.uid === myUid"
                   :busy="collabActionBusy[it.m.body.proposalId]"
+                  @edit="openCollaborationEdit"
                   @accept="respondCollaboration(it.m.body.proposalId, 'ACCEPT', it.m.message.id)"
                   @reject="respondCollaboration(it.m.body.proposalId, 'REJECT', it.m.message.id)"
                 />
@@ -808,11 +968,33 @@ watch(
               <template v-else-if="isContactUnlockedBody(it.m.body)">
                 <ContactUnlockedCard :body="it.m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
               </template>
+              <template v-else-if="isEndChatRequestBody(it.m.body)">
+                <div class="end-card">
+                  <div class="h1">结束沟通</div>
+                  <div class="hint">{{ endChatStatusText(it.m.body.status) }}</div>
+                  <div
+                    v-if="
+                      !isTeacher &&
+                      it.m.fromUser.uid !== myUid &&
+                      typeof it.m.body.requestId === 'number' &&
+                      String(it.m.body.status || '').trim().toUpperCase() === 'PENDING_CONFIRM'
+                    "
+                    class="ops"
+                  >
+                    <button class="btn" type="button" :disabled="endActionBusy" @click="respondEndChat(it.m.body.requestId, 'REJECTED')">
+                      暂不结束
+                    </button>
+                    <button class="btn btn-primary" type="button" :disabled="endActionBusy" @click="respondEndChat(it.m.body.requestId, 'CONFIRMED')">
+                      确认结束
+                    </button>
+                  </div>
+                </div>
+              </template>
               <template v-else-if="isRefundRequestBody(it.m.body)">
                 <div class="refund-card">
-                  <div class="h1">退款申请</div>
-                  <div class="hint">{{ isTeacher ? '你已发起退还中介费申请，聊天已关闭。' : '对方已经申请退还中介费，聊天功能关闭。' }}</div>
-                  <div v-if="isTeacher" class="status">{{ refundStatusText(it.m.body.status) }}</div>
+                  <div class="h1">沟通已结束</div>
+                  <div class="hint">已提交退款申请，等待管理员审核通过后原路退回中介费</div>
+                  <div class="status">{{ refundStatusText(it.m.body.status) }}</div>
                 </div>
               </template>
               <template v-else>
@@ -831,11 +1013,11 @@ watch(
           </button>
           <template v-else>
             <div class="action-row">
-              <button class="btn" type="button" :disabled="hasAnyCollabProposal || !composerEnabled" @click="openCollaboration">
-                {{ hasAnyCollabProposal ? '已发起合作' : '发起合作' }}
+              <button class="btn" type="button" :disabled="hasActiveCollabProposal || !composerEnabled" @click="openCollaboration">
+                {{ hasActiveCollabProposal ? '已发起合作' : '发起合作' }}
               </button>
-              <button v-if="isTeacher && chatUnlocked && !hasAnyRefundRequest" class="btn" type="button" :disabled="!composerEnabled" @click="openRefund">
-                发起退款
+              <button v-if="chatUnlocked && !hasAnyRefundRequest" class="btn" type="button" :disabled="!canEndChat" @click="openEndChat">
+                {{ isTeacher && hasPendingEndChatRequest ? '等待买家确认' : '结束沟通' }}
               </button>
             </div>
           </template>
@@ -862,19 +1044,25 @@ watch(
       :open="collabOpen"
       :busy="collabCreateBusy"
       :error="collabCreateError"
+      :title="collabEdit ? '修改提案' : '发起合作'"
+      :submit-text="collabEdit ? '保存修改' : '发送提案'"
+      :initial="collabEdit ? collabEdit.initial : null"
       @close="closeCollaboration"
       @submit="createCollaboration"
     />
 
-    <div v-if="refundOpen" class="mask" @click.self="closeRefund">
+    <div v-if="endOpen" class="mask" @click.self="closeEndChat">
       <div class="modal card">
-        <div class="m-title">发起退款申请</div>
-        <div class="m-desc">发起后双方将无法继续发送消息</div>
-        <div v-if="refundError" class="m-error">{{ refundError }}</div>
+        <div class="m-title">结束沟通</div>
+        <div class="m-desc">
+          <template v-if="isTeacher">发送结束沟通请求，需要买家确认后才会结束</template>
+          <template v-else>结束后无法再发送消息；发起合作请勿脱离平台，避免产生额外纠纷</template>
+        </div>
+        <div v-if="endError" class="m-error">{{ endError }}</div>
         <div class="m-ops">
-          <button class="btn" type="button" :disabled="refundBusy" @click="closeRefund">取消</button>
-          <button class="btn btn-primary" type="button" :disabled="refundBusy" @click="submitRefund">
-            {{ refundBusy ? '提交中...' : '确认发起' }}
+          <button class="btn" type="button" :disabled="endBusy" @click="closeEndChat">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="endBusy" @click="submitEndChat">
+            {{ endBusy ? '提交中...' : '确认' }}
           </button>
         </div>
       </div>
@@ -904,30 +1092,45 @@ watch(
 }
 
 .panel {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
 
-.top {
-  padding: 12px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: center;
-}
-
 .msgs {
+  flex: 1 1 auto;
   padding: 14px;
-  display: grid;
-  grid-template-columns: 1fr;
-  justify-items: stretch;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   background: #fbfcfe;
-  align-content: start;
   overflow-y: auto;
   min-height: 0;
+}
+
+.top-hint {
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.btn-text {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.btn-text:hover {
+  text-decoration: underline;
+}
+
+.top-hint.muted {
+  color: var(--muted);
 }
 
 .time-divider {
@@ -1071,6 +1274,33 @@ watch(
   margin-top: 8px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.end-card {
+  min-width: 260px;
+  max-width: 360px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 10px 10px 12px;
+  background: rgba(18, 180, 171, 0.08);
+  display: grid;
+  gap: 8px;
+}
+
+.end-card .h1 {
+  font-weight: 900;
+}
+
+.end-card .hint {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.end-card .ops {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .mask {

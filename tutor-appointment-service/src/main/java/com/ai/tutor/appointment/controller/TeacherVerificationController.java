@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import static com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID;
 
 @RestController
-@RequestMapping("/teacher/verification")
+@RequestMapping({"/teacher/verification", "/api/v1/teacher/verification"})
 @Tag(name = "教师认证接口", description = "教师实名认证/学历认证提交接口")
 public class TeacherVerificationController {
 
@@ -54,4 +54,3 @@ public class TeacherVerificationController {
         return ResultUtils.success(false);
     }
 }
-

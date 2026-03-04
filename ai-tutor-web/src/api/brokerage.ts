@@ -26,6 +26,9 @@ export const brokerageApi = {
   submitProof(orderId: number, payload: { payMethod?: BrokeragePayMethod | null; proofUrl?: string | null; proofNote?: string | null }) {
     return http.post<unknown, BrokerageOrderVO>(`/chat/brokerage/order/${orderId}/submit-proof`, payload)
   },
+  cancel(orderId: number) {
+    return http.post<unknown, BrokerageOrderVO>(`/chat/brokerage/order/${orderId}/cancel`)
+  },
   adminMarkPaid(orderId: number, adminToken: string) {
     return http.post<unknown, BrokerageOrderVO>(
       `/chat/brokerage/admin/order/${orderId}/mark-paid`,

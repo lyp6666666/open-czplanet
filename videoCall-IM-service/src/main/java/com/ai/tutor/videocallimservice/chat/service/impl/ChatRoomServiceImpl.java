@@ -70,35 +70,37 @@ public class ChatRoomServiceImpl implements ChatRoomService {
     @Value("${tutor-application.gating-enabled:true}")
     private boolean tutorApplicationGatingEnabled;
 
-    @Value("${tutor-application.skip-payment-check:true}")
+    @Value("${tutor-application.skip-payment-check:false}")
     private boolean skipPaymentCheck;
 
     @Override
     public Long getOrCreateRoomWithUser(Long targetUid, Long uid) {
         ThrowUtils.throwIf(uid == null || targetUid == null, ErrorCode.PARAMS_ERROR);
-        ThrowUtils.throwIf(uid.equals(targetUid), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(uid.equals(targetUid), ErrorCode.PARAMS_ERROR, "不能与自己发起聊天");
 
         assertNotBlockedByApplication(uid, targetUid);
         requireActiveUser(uid);
         requireActiveUser(targetUid);
 
         Integer role = RequestHolder.get() == null ? null : RequestHolder.get().getRole();
-        ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR, "用户角色缺失");
 
         Long teacherProfileId;
         Long studentProfileId;
         if (Integer.valueOf(1).equals(role)) {
             teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(uid);
+            ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "教师资料未初始化，请先完成教师端入驻");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(targetUid);
+            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是学生账号，无法建立会话");
         } else if (Integer.valueOf(2).equals(role)) {
             teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(targetUid);
+            ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法建立会话");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(uid);
+            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "学生资料未初始化，请先完成学生端注册");
         } else {
-            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR);
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "用户角色不合法");
             return null;
         }
-
-        ThrowUtils.throwIf(teacherProfileId == null || studentProfileId == null, ErrorCode.PARAMS_ERROR);
 
         Room existing = roomMapper.selectByTeacherAndStudent(teacherProfileId, studentProfileId);
         if (existing != null) {

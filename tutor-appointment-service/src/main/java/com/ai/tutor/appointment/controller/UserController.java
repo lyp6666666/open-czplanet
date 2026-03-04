@@ -12,6 +12,7 @@ import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
+import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
@@ -31,6 +32,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
@@ -56,6 +58,8 @@ public class UserController {
     private StudentProfileMapper studentProfileMapper;
     @Resource
     private StudentJobPostingMapper studentJobPostingMapper;
+    @Resource
+    private ObjectProvider<TutorAppointmentMapper> tutorAppointmentMapperProvider;
     @Resource
     private UserSettingsService userSettingsService;
 
@@ -182,9 +186,14 @@ public class UserController {
 
         if (role == UserRoleEnum.TEACHER) {
             builder.teacherProfile(teacherProfileMapper.selectByUserId(uid));
+            TutorAppointmentMapper appt = tutorAppointmentMapperProvider == null ? null : tutorAppointmentMapperProvider.getIfAvailable();
+            if (appt != null) {
+                builder.teacherHistory(appt.listByUser(uid, 5, null, 20));
+            }
         } else if (role == UserRoleEnum.STUDENT) {
             builder.studentProfile(studentProfileMapper.selectByUserId(uid));
             builder.jobPosting(studentJobPostingMapper.selectLatestPublishedByParentId(uid));
+            builder.studentHistory(studentJobPostingMapper.listByParentId(uid, null, 20));
         }
 
         return ResultUtils.success(builder.build());

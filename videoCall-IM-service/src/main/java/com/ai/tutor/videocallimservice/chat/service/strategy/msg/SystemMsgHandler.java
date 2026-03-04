@@ -161,6 +161,38 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("actorUserId", body.getActorUserId());
             return out;
         }
+        if ("END_CHAT_REQUEST".equals(bizType)) {
+            out.put("type", "end_chat_request");
+            out.put("requestId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("creatorUserId", body.getCreatorUserId() == null ? msg.getFromUid() : body.getCreatorUserId());
+            return out;
+        }
+        if ("END_CHAT_STATUS".equals(bizType)) {
+            out.put("type", "end_chat_status");
+            out.put("requestId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("actorUserId", body.getActorUserId() == null ? msg.getFromUid() : body.getActorUserId());
+            return out;
+        }
+        if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
+            out.put("type", "brokerage_refund_request");
+            out.put("requestId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("creatorUserId", body.getCreatorUserId() == null ? msg.getFromUid() : body.getCreatorUserId());
+            out.put("orderId", body.getOrderId());
+            out.put("proposalId", body.getProposalId());
+            return out;
+        }
+        if ("BROKERAGE_REFUND_STATUS".equals(bizType)) {
+            out.put("type", "brokerage_refund_status");
+            out.put("requestId", body.getEventId());
+            out.put("status", body.getStatus());
+            out.put("actorUserId", body.getActorUserId());
+            out.put("orderId", body.getOrderId());
+            out.put("proposalId", body.getProposalId());
+            return out;
+        }
 
         out.put("type", "system");
         out.put("bizType", body.getBizType());
@@ -211,6 +243,20 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
         if ("TUTOR_APPLICATION_STATUS".equals(bizType)) {
             String s = body.getStatus() == null ? "" : body.getStatus();
             return "家教申请：" + s;
+        }
+        if ("END_CHAT_REQUEST".equals(bizType)) {
+            return "结束沟通确认";
+        }
+        if ("END_CHAT_STATUS".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "结束沟通：" + s;
+        }
+        if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
+            return "退款申请";
+        }
+        if ("BROKERAGE_REFUND_STATUS".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "退款状态：" + s;
         }
         return "系统消息：" + title;
     }

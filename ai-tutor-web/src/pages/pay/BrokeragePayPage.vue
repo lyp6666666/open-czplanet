@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { brokerageApi, type BrokerageOrderStatus, type BrokeragePayMethod, type BrokerageOrderVO } from '@/api/brokerage'
@@ -29,6 +29,9 @@ const proofUrl = ref('')
 const proofNote = ref('')
 const submitBusy = ref(false)
 const submitError = ref<string | null>(null)
+
+const cancelBusy = ref(false)
+const cancelError = ref<string | null>(null)
 
 const adminToken = computed(() => {
   const s =
@@ -67,10 +70,33 @@ function statusText(s: BrokerageOrderStatus | null | undefined) {
   return '未知状态'
 }
 
+const canCancel = computed(() => order.value?.status === 'PENDING' || order.value?.status === 'PROOF_SUBMITTED')
+const canSubmitProof = computed(() => order.value?.status === 'PENDING')
+
 const qrUrl = computed(() => {
   if (payMethod.value === 'ALIPAY') return alipayQrUrl.value
   return wechatQrUrl.value
 })
+
+let pollTimer: number | null = null
+
+function startPolling() {
+  if (pollTimer != null) return
+  pollTimer = window.setInterval(async () => {
+    const s = order.value?.status
+    if (s !== 'PENDING' && s !== 'PROOF_SUBMITTED') {
+      stopPolling()
+      return
+    }
+    await load()
+  }, 3000)
+}
+
+function stopPolling() {
+  if (pollTimer == null) return
+  window.clearInterval(pollTimer)
+  pollTimer = null
+}
 
 async function load() {
   if (!orderId.value) {
@@ -112,6 +138,23 @@ async function submit() {
   }
 }
 
+async function cancelOrder() {
+  if (!orderId.value) return
+  if (!canCancel.value) return
+  if (cancelBusy.value) return
+  if (!window.confirm('确认撤单吗？撤单后本订单将不可继续用于支付，且聊天仍会保持锁定状态。')) return
+
+  cancelBusy.value = true
+  cancelError.value = null
+  try {
+    order.value = await brokerageApi.cancel(orderId.value)
+  } catch (e) {
+    cancelError.value = e instanceof Error ? e.message : '撤单失败'
+  } finally {
+    cancelBusy.value = false
+  }
+}
+
 async function devMarkPaid() {
   if (!orderId.value) return
   if (!effectiveAdminToken.value) {
@@ -132,13 +175,17 @@ async function devMarkPaid() {
 
 async function enterChat() {
   if (!applicationId.value) return
+  if (order.value?.status !== 'PAID') {
+    enterError.value = '支付未确认，暂无法进入聊天'
+    return
+  }
   if (enterBusy.value) return
   enterBusy.value = true
   enterError.value = null
   try {
     const res = await applicationApi.enterChat(applicationId.value)
     if (res.roomId) {
-      await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) }, query: { unlockChat: '1' } })
+      await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
       return
     }
     enterError.value = '暂无法进入聊天'
@@ -158,7 +205,11 @@ function back() {
 }
 
 onMounted(() => {
-  void load()
+  void load().then(() => startPolling())
+})
+
+onUnmounted(() => {
+  stopPolling()
 })
 </script>
 
@@ -187,11 +238,21 @@ onMounted(() => {
         </div>
 
         <div class="qr">
-          <img v-if="qrUrl" class="qr-img" :src="qrUrl" alt="" />
-          <div v-else class="qr-empty">未配置收款码</div>
+          <template v-if="order.status === 'CANCELED'">
+            <div class="qr-empty">订单已撤单</div>
+          </template>
+          <template v-else>
+            <img v-if="qrUrl" class="qr-img" :src="qrUrl" alt="" />
+            <div v-else class="qr-empty">未配置收款码</div>
+          </template>
         </div>
 
-        <div class="hint muted">完成支付后可在此提交凭证，平台确认后自动解锁联系方式。</div>
+        <div class="hint muted">
+          <template v-if="order.status === 'PAID'">支付已确认，可直接进入聊天。</template>
+          <template v-else-if="order.status === 'PROOF_SUBMITTED'">凭证已提交，等待平台确认。</template>
+          <template v-else-if="order.status === 'CANCELED'">你已撤单。如需继续，请返回申请重新发起支付。</template>
+          <template v-else>完成支付后可在此提交凭证，平台确认后自动解锁聊天。</template>
+        </div>
       </div>
 
       <div class="card panel">
@@ -203,10 +264,15 @@ onMounted(() => {
           <div class="k">备注</div>
           <input v-model="proofNote" class="input" placeholder="可选：填写备注信息" />
         </div>
-        <button class="btn btn-primary" type="button" :disabled="submitBusy || order.status !== 'PENDING'" @click="submit">
-          {{ submitBusy ? '提交中...' : order.status === 'PENDING' ? '我已完成支付' : '已提交/已确认' }}
+        <button class="btn btn-primary" type="button" :disabled="submitBusy || !canSubmitProof" @click="submit">
+          {{ submitBusy ? '提交中...' : canSubmitProof ? '我已完成支付' : '已提交/已确认/不可提交' }}
         </button>
         <div v-if="submitError" class="hint error">{{ submitError }}</div>
+
+        <button class="btn btn-danger" type="button" :disabled="cancelBusy || !canCancel" @click="cancelOrder">
+          {{ cancelBusy ? '撤单中...' : '撤单' }}
+        </button>
+        <div v-if="cancelError" class="hint error">{{ cancelError }}</div>
 
         <div v-if="devEnabled" class="dev">
           <div v-if="!effectiveAdminToken" class="rowx">
@@ -227,7 +293,7 @@ onMounted(() => {
 
         <div v-if="applicationId" class="after">
           <button class="btn" type="button" @click="backToChat">返回消息</button>
-          <button class="btn btn-primary" type="button" :disabled="enterBusy" @click="enterChat">
+          <button class="btn btn-primary" type="button" :disabled="enterBusy || order.status !== 'PAID'" @click="enterChat">
             {{ enterBusy ? '进入中...' : '进入聊天' }}
           </button>
         </div>
@@ -362,5 +428,12 @@ onMounted(() => {
 .hint.error {
   color: #ff4d4f;
   font-weight: 700;
+}
+
+.btn-danger {
+  border: 1px solid rgba(255, 77, 79, 0.35);
+  background: rgba(255, 77, 79, 0.08);
+  color: #ff4d4f;
+  font-weight: 900;
 }
 </style>

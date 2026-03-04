@@ -70,12 +70,18 @@ public class ContactsController {
     public BaseResponse<List<UserSimpleVO>> search(@RequestParam("q") String q,
                                                    @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
         ThrowUtils.throwIf(q == null || q.isBlank(), ErrorCode.PARAMS_ERROR);
+        Long uid = RequestHolder.get() == null ? null : RequestHolder.get().getUid();
+        Integer role = RequestHolder.get() == null ? null : RequestHolder.get().getRole();
+        final Integer expectUserType = Integer.valueOf(1).equals(role) ? 2 : (Integer.valueOf(2).equals(role) ? 1 : null);
         int safeLimit = Math.min(Math.max(limit == null ? 50 : limit, 1), 200);
         List<User> users = userMapper.searchByKeyword(q.trim(), safeLimit);
         if (users == null || users.isEmpty()) {
             return ResultUtils.success(Collections.emptyList());
         }
         List<UserSimpleVO> result = users.stream()
+                .filter(u -> u != null)
+                .filter(u -> uid == null || u.getId() == null || !u.getId().equals(uid))
+                .filter(u -> expectUserType == null || (u.getUserType() != null && u.getUserType().equals(expectUserType)))
                 .map(u -> UserSimpleVO.builder()
                         .id(u.getId())
                         .name(u.getName())
@@ -86,4 +92,3 @@ public class ContactsController {
         return ResultUtils.success(result);
     }
 }
-

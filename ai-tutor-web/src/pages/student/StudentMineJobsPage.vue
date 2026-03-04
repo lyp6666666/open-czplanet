@@ -41,6 +41,10 @@ function goEdit(id: number) {
   void router.push({ name: 'studentEditJob', params: { id } })
 }
 
+function goDetail(id: number) {
+  void router.push({ name: 'studentMineJobDetail', params: { id } })
+}
+
 onMounted(() => {
   void loadMore()
 })
@@ -80,6 +84,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="ops">
+            <button class="btn" type="button" @click="goDetail(it.id)">查看</button>
             <button class="btn" type="button" @click="goEdit(it.id)">编辑</button>
           </div>
         </div>
@@ -152,6 +157,11 @@ onMounted(() => {
 .item.hl {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px var(--primary-weak);
+}
+
+.ops {
+  display: flex;
+  gap: 8px;
 }
 
 .t {

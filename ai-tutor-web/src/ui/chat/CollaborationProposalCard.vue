@@ -12,6 +12,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'accept'): void
   (e: 'reject'): void
+  (e: 'edit', payload: { proposalId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }): void
 }>()
 
 const statusText = computed(() => toStatusText(props.body.status))
@@ -44,7 +45,18 @@ function toStatusText(s: CollaborationProposalStatus) {
       <div class="v">{{ statusText }}</div>
     </div>
 
-    <div v-if="!fromMe && body.status === 'PENDING'" class="ops">
+    <div v-if="fromMe && body.status === 'PENDING'" class="ops">
+      <button
+        class="btn"
+        type="button"
+        :disabled="busy"
+        @click="emit('edit', { proposalId: body.proposalId, pricePerHour: body.pricePerHour, classTime: body.classTime, frequencyPerWeek: body.frequencyPerWeek })"
+      >
+        修改提案
+      </button>
+    </div>
+
+    <div v-else-if="!fromMe && body.status === 'PENDING'" class="ops">
       <button class="btn btn-primary" type="button" :disabled="busy" @click="emit('accept')">{{ busy ? '处理中...' : '同意' }}</button>
       <button class="btn" type="button" :disabled="busy" @click="emit('reject')">拒绝</button>
     </div>

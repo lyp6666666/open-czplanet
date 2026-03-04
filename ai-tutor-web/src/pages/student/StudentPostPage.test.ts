@@ -40,9 +40,9 @@ describe('StudentPostPage', () => {
 
     await wrapper.find('select').setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('数学')
-    await wrapper.findAll('select')[3]!.setValue('offline')
-    await wrapper.findAll('select')[3]!.setValue('offline')
+    await wrapper.find('input[type="checkbox"][value="数学"]').setValue(true)
+    await wrapper.findAll('select')[2]!.setValue('offline')
+    await wrapper.findAll('select')[2]!.setValue('offline')
 
     await wrapper.findAll('textarea')[0]!.setValue('孩子基础一般，希望补习巩固。')
 
@@ -68,8 +68,8 @@ describe('StudentPostPage', () => {
 
     await wrapper.findAll('select')[0]!.setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('数学')
-    await wrapper.findAll('select')[3]!.setValue('online')
+    await wrapper.find('input[type="checkbox"][value="数学"]').setValue(true)
+    await wrapper.findAll('select')[2]!.setValue('online')
     await wrapper.findAll('textarea')[0]!.setValue('希望老师重点讲解函数与几何。')
     await wrapper.findAll('textarea')[1]!.setValue('希望老师有耐心，教学经验丰富。')
     await wrapper.find('input[type="number"]').setValue('100')

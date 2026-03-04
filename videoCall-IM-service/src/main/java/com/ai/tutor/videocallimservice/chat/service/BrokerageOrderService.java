@@ -93,6 +93,14 @@ public class BrokerageOrderService {
         return toVO(order);
     }
 
+    public boolean hasPaidOrderInRoom(Long roomId) {
+        if (roomId == null) {
+            return false;
+        }
+        BrokerageOrder paid = brokerageOrderMapper.selectPaidByRoomId(roomId);
+        return paid != null;
+    }
+
     public BrokerageOrderVO getById(Long orderId, Long uid) {
         ThrowUtils.throwIf(orderId == null || uid == null, ErrorCode.PARAMS_ERROR);
         BrokerageOrder order = brokerageOrderMapper.selectById(orderId);
@@ -113,6 +121,39 @@ public class BrokerageOrderService {
         String proofNote = trim(req == null ? null : req.getProofNote());
 
         int updated = brokerageOrderMapper.submitProof(orderId, payMethod, proofUrl, proofNote);
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        BrokerageOrder latest = brokerageOrderMapper.selectById(orderId);
+        ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
+        return toVO(latest);
+    }
+
+    /**
+     * 付款人撤单（撤销支付）。
+     *
+     * 允许状态：
+     * - PENDING：待支付，可撤单
+     * - PROOF_SUBMITTED：已提交凭证，可撤单（用于撤回误提交）
+     *
+     * 不允许状态：
+     * - PAID / REJECTED / CANCELED：不允许重复撤单或撤销已完成交易
+     */
+    public BrokerageOrderVO cancel(Long orderId, Long uid) {
+        ThrowUtils.throwIf(orderId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        BrokerageOrder order = brokerageOrderMapper.selectById(orderId);
+        ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(!uid.equals(order.getPayerUid()), ErrorCode.NO_AUTH_ERROR);
+
+        String status = order.getStatus();
+        if (BrokerageOrderStatus.CANCELED.name().equals(status)) {
+            return toVO(order);
+        }
+        ThrowUtils.throwIf(
+                !BrokerageOrderStatus.PENDING.name().equals(status) && !BrokerageOrderStatus.PROOF_SUBMITTED.name().equals(status),
+                ErrorCode.OPERATION_ERROR,
+                "当前状态不允许撤单"
+        );
+
+        int updated = brokerageOrderMapper.cancel(orderId);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
         BrokerageOrder latest = brokerageOrderMapper.selectById(orderId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);

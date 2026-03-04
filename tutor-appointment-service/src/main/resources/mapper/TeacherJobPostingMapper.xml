@@ -126,7 +126,7 @@
             max_students, status, create_time, update_time
         FROM teacher_job_posting
         WHERE status = 1
-          AND title LIKE CONCAT('%', #{keyword}, '%')
+          AND (title LIKE CONCAT('%', #{keyword}, '%') OR LOCATE(title, #{keyword}) > 0)
         ORDER BY id DESC
         LIMIT #{limit}
     </select>

@@ -8,8 +8,10 @@ const UpdatePhonePage = () => import('@/pages/UpdatePhonePage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
+const StudentMineJobDetailPage = () => import('@/pages/student/StudentMineJobDetailPage.vue')
 const StudentEditJobPage = () => import('@/pages/student/StudentEditJobPage.vue')
 const StudentFavoritesPage = () => import('@/pages/student/StudentFavoritesPage.vue')
+const StudentTutorsPage = () => import('@/pages/student/StudentTutorsPage.vue')
 const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
 const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
 const TutorFavoritesPage = () => import('@/pages/tutor/TutorFavoritesPage.vue')
@@ -89,6 +91,11 @@ export const router = createRouter({
       component: StudentMineJobsPage,
     },
     {
+      path: '/student/jobs/:id',
+      name: 'studentMineJobDetail',
+      component: StudentMineJobDetailPage,
+    },
+    {
       path: '/student/jobs/:id/edit',
       name: 'studentEditJob',
       component: StudentEditJobPage,
@@ -97,6 +104,11 @@ export const router = createRouter({
       path: '/student/favorites',
       name: 'studentFavorites',
       component: StudentFavoritesPage,
+    },
+    {
+      path: '/student/tutors',
+      name: 'studentTutors',
+      component: StudentTutorsPage,
     },
     {
       path: '/tutor/jobs',

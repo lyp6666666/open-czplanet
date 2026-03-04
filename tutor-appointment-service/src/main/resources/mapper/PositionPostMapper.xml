@@ -44,7 +44,7 @@
             update_time
         FROM position_post
         WHERE enable_status = 1
-          AND name LIKE CONCAT('%', #{keyword}, '%')
+          AND (name LIKE CONCAT('%', #{keyword}, '%') OR LOCATE(name, #{keyword}) > 0)
         ORDER BY sort ASC, id ASC
         LIMIT #{limit}
     </select>

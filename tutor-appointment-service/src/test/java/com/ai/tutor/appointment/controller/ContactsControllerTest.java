@@ -49,6 +49,7 @@ class ContactsControllerTest {
     void setUp() {
         RequestInfo info = new RequestInfo();
         info.setUid(1001L);
+        info.setRole(1);
         RequestHolder.set(info);
     }
 
@@ -91,6 +92,32 @@ class ContactsControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("张三"));
     }
 
+    @Test
+    void searchShouldFilterSelfAndNonTargetRole() throws Exception {
+        User self = new User();
+        self.setId(1001L);
+        self.setName("我自己");
+        self.setUserType(1);
+
+        User otherTeacher = new User();
+        otherTeacher.setId(1004L);
+        otherTeacher.setName("另一个老师");
+        otherTeacher.setUserType(1);
+
+        User student = new User();
+        student.setId(1002L);
+        student.setName("张三");
+        student.setUserType(2);
+
+        when(userMapper.searchByKeyword(eq("1"), eq(50))).thenReturn(List.of(self, otherTeacher, student));
+
+        mockMvc.perform(get("/api/v1/contacts/search").param("q", "1").param("limit", "50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(1002));
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration(exclude = {
             DataSourceAutoConfiguration.class,
@@ -102,4 +129,3 @@ class ContactsControllerTest {
     static class TestConfig {
     }
 }
-

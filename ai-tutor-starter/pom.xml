@@ -37,6 +37,18 @@
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.ai.tutor</groupId>
+            <artifactId>ai-tutor-admin</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ai.tutor</groupId>
+            <artifactId>payment-service</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
         <!-- Web / Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

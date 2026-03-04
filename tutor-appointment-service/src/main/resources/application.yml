@@ -1,6 +1,10 @@
 spring:
   application:
     name: tutor-appointment-service
+  config:
+    import:
+      - optional:file:./.private/tutor-appointment-service.yml
+      - optional:file:../.private/tutor-appointment-service.yml
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -30,9 +34,13 @@ spring:
           # 连接池中最大连接数，负数表示没有限制
           max-active: 20
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-
 
 springdoc:
   packages-to-scan: com.ai.tutor.appointment.controller
@@ -60,6 +68,11 @@ ops:
 
 dev:
   exposeSmsCode: ${DEV_EXPOSE_SMS_CODE:false}
+
+sms:
+  spug:
+    baseUrl: https://push.spug.cc
+    senderName: 推送助手
 
 home:
   guest:
@@ -115,8 +128,8 @@ storage:
     allowedAvatarUrlPrefixes:
       - http://127.0.0.1:9000/ai-tutor-assets
   upload:
-    maxSizeBytes: 5242880
-    avatarMaxSizeBytes: 2097152
+    maxSizeBytes: 20971520
+    avatarMaxSizeBytes: 5242880
     allowedContentTypes:
       - image/jpeg
       - image/png

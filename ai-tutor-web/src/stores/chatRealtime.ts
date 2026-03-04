@@ -204,7 +204,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       const myUid = auth.user?.id
       if (!myUid) return
       if (ev.toUid !== myUid) return
-      if (this.activeRoomId != null && ev.roomId === this.activeRoomId) return
+      // If active in this room, we assume it's read immediately
+      if (this.activeRoomId != null && ev.roomId === this.activeRoomId) {
+        void this.ackRoomRead(ev.roomId, ev.msgId)
+        return
+      }
       const prev = this.roomUnread[ev.roomId] || 0
       this.roomUnread = { ...this.roomUnread, [ev.roomId]: prev + 1 }
       this.totalUnread += 1

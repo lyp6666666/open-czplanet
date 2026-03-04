@@ -6,6 +6,7 @@ import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
 import { teacherVerificationApi } from '@/api/verification'
 import { useAuthStore } from '@/stores/auth'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 
 const auth = useAuthStore()
@@ -32,6 +33,29 @@ const teacherIntroduction = ref('')
 const teacherCity = ref('')
 const teacherHighestEduSchool = ref('')
 const teacherTeachingMode = ref<string>('')
+const teacherCityModalOpen = ref(false)
+
+const teacherAllowNational = computed(() => {
+  const v = String(teacherTeachingMode.value || '').trim().toUpperCase()
+  if (!v) return true
+  return v === 'ONLINE'
+})
+
+const teacherCityHotCities = computed(() => {
+  const base = [teacherCity.value, localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
+  return Array.from(new Set(base.map((x) => String(x || '').trim()).filter(Boolean)))
+})
+
+function onSelectTeacherCity(v: string) {
+  const raw = String(v || '').trim()
+  const mode = String(teacherTeachingMode.value || '').trim().toUpperCase()
+  if ((mode === 'OFFLINE' || mode === 'BOTH') && raw === '全国') {
+    error.value = '线下授课请选择具体城市'
+    return
+  }
+  if (raw) localStorage.setItem('ai_tutor_city', raw)
+  teacherCity.value = raw
+}
 
 const realnameVerifyStatus = ref<number>(0)
 const realnameVerifyRejectReason = ref('')
@@ -74,29 +98,30 @@ async function load() {
     sex.value = me?.sex ?? auth.user?.sex ?? null
     avatar.value = me?.avatar || auth.user?.avatar || ''
 
-    const tp = me?.teacherProfile
-    const sp = me?.studentProfile
+    if (me?.teacherProfile) {
+      teacherRealName.value = me.teacherProfile.realName || ''
+      teacherEducation.value = me.teacherProfile.education || ''
+      teacherSubject.value = me.teacherProfile.subject || ''
+      teacherExperienceYears.value = me.teacherProfile.experienceYears ?? null
+      teacherRatePerHour.value = me.teacherProfile.ratePerHour != null ? Number(me.teacherProfile.ratePerHour) : null
+      teacherIntroduction.value = me.teacherProfile.introduction || ''
+      teacherCity.value = me.teacherProfile.city || ''
+      teacherHighestEduSchool.value = me.teacherProfile.highestEduSchool || ''
+      teacherTeachingMode.value = me.teacherProfile.teachingMode || ''
+      realnameVerifyStatus.value = me.teacherProfile.realnameVerifyStatus ?? 0
+      realnameVerifyRejectReason.value = me.teacherProfile.realnameVerifyRejectReason || ''
+      realnameIdnoMasked.value = me.teacherProfile.realnameVerifyIdnoMasked || ''
+      eduVerifyStatus.value = me.teacherProfile.eduVerifyStatus ?? 0
+      eduVerifyRejectReason.value = me.teacherProfile.eduVerifyRejectReason || ''
+    }
 
-    teacherRealName.value = tp?.realName || ''
-    teacherEducation.value = tp?.education || ''
-    teacherSubject.value = tp?.subject || ''
-    teacherExperienceYears.value = tp?.experienceYears ?? null
-    teacherRatePerHour.value = tp?.ratePerHour != null ? Number(tp.ratePerHour) : null
-    teacherIntroduction.value = tp?.introduction || ''
-    teacherCity.value = tp?.city || ''
-    teacherHighestEduSchool.value = tp?.highestEduSchool || ''
-    teacherTeachingMode.value = tp?.teachingMode || ''
-    realnameVerifyStatus.value = tp?.realnameVerifyStatus ?? 0
-    realnameVerifyRejectReason.value = tp?.realnameVerifyRejectReason || ''
-    realnameIdnoMasked.value = tp?.realnameVerifyIdnoMasked || ''
-    eduVerifyStatus.value = tp?.eduVerifyStatus ?? 0
-    eduVerifyRejectReason.value = tp?.eduVerifyRejectReason || ''
-
-    studentRealName.value = sp?.realName || ''
-    studentChildAge.value = sp?.childAge ?? null
-    studentAddress.value = sp?.address || ''
-    studentDemandDescription.value = sp?.demandDescription || ''
-    studentBudget.value = sp?.budget != null ? Number(sp.budget) : null
+    if (me?.studentProfile) {
+      studentRealName.value = me.studentProfile.realName || ''
+      studentChildAge.value = me.studentProfile.childAge ?? null
+      studentAddress.value = me.studentProfile.address || ''
+      studentDemandDescription.value = me.studentProfile.demandDescription || ''
+      studentBudget.value = me.studentProfile.budget != null ? Number(me.studentProfile.budget) : null
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -113,8 +138,8 @@ async function onSelectAvatar(e: Event) {
     error.value = '请选择图片文件'
     return
   }
-  if (f.size > 2 * 1024 * 1024) {
-    error.value = '头像文件不能超过 2MB'
+  if (f.size > 5 * 1024 * 1024) {
+    error.value = '头像文件不能超过 5MB'
     return
   }
   avatarUploading.value = true
@@ -134,6 +159,13 @@ async function onSave() {
   savedHint.value = null
   error.value = null
   try {
+    if (!isTeacher.value) {
+      if (studentChildAge.value !== null && !Number.isFinite(studentChildAge.value)) {
+        error.value = '年龄必须是数字'
+        return
+      }
+    }
+
     await userApi.updateUserInfo({
       baseUserInfo: {
         name: name.value.trim() || undefined,
@@ -177,11 +209,11 @@ const eduStatusText = computed(() => {
   return '未认证'
 })
 
-const eduStatusClass = computed(() => {
-  if (eduVerifyStatus.value === 2) return 'ok'
-  if (eduVerifyStatus.value === 1) return 'pending'
-  if (eduVerifyStatus.value === 3) return 'error'
-  return 'plain'
+const realnameStatusText = computed(() => {
+  if (realnameVerifyStatus.value === 2) return '已通过实名认证'
+  if (realnameVerifyStatus.value === 1) return '审核中'
+  if (realnameVerifyStatus.value === 3) return '未通过'
+  return '未认证'
 })
 
 function openEduVerify() {
@@ -209,8 +241,8 @@ async function uploadOtherImage(e: Event, setUrl: (v: string) => void, setUpload
     error.value = '请选择图片文件'
     return
   }
-  if (f.size > 5 * 1024 * 1024) {
-    error.value = '图片文件不能超过 5MB'
+  if (f.size > 20 * 1024 * 1024) {
+    error.value = '图片文件不能超过 20MB'
     return
   }
   setUploading(true)
@@ -257,8 +289,8 @@ async function onAddEduProof(e: Event) {
     eduHint.value = '请选择图片文件'
     return
   }
-  if (f.size > 5 * 1024 * 1024) {
-    eduHint.value = '图片文件不能超过 5MB'
+  if (f.size > 20 * 1024 * 1024) {
+    eduHint.value = '图片文件不能超过 20MB'
     return
   }
   if (eduProofUrls.value.length >= 3) {
@@ -391,30 +423,58 @@ onMounted(() => {
         </div>
       </div>
 
+      <div class="sec" v-if="isTeacher">
+        <div class="sec-title">认证中心</div>
+        <div class="verify-cards">
+          <!-- Realname Verification -->
+          <div class="verify-card" :class="{ done: realnameVerifyStatus === 2 }">
+            <div class="vc-icon">🆔</div>
+            <div class="vc-info">
+              <div class="vc-title">实名认证</div>
+              <div class="vc-desc">{{ realnameStatusText }}</div>
+            </div>
+            <button class="btn sm" :disabled="realnameVerifyStatus === 1 || realnameVerifyStatus === 2" @click="realnameModalOpen = true">
+              {{ realnameVerifyStatus === 2 ? '已认证' : (realnameVerifyStatus === 3 ? '重新认证' : '去认证') }}
+            </button>
+          </div>
+
+          <!-- Education Verification -->
+          <div class="verify-card" :class="{ done: eduVerifyStatus === 2 }">
+            <div class="vc-icon">🎓</div>
+            <div class="vc-info">
+              <div class="vc-title">学历认证 (学信网)</div>
+              <div class="vc-desc">{{ eduStatusText }}</div>
+            </div>
+            <button class="btn sm" :disabled="eduVerifyStatus === 1 || eduVerifyStatus === 2" @click="openEduVerify">
+              {{ eduVerifyStatus === 2 ? '已认证' : (eduVerifyStatus === 3 ? '重新认证' : '去认证') }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="sec">
-        <div class="sec-title">{{ isTeacher ? '教师资料' : '家长资料' }}</div>
+        <div class="sec-title">{{ isTeacher ? '教师资料' : '学生资料' }}</div>
         <div class="grid" v-if="isTeacher">
           <label class="field">
             <div class="label-row">
               <div class="label">学历</div>
-              <div class="verify">
-                <span class="badge" :class="eduStatusClass">{{ eduStatusText }}</span>
-                <button
-                  class="link-btn"
-                  type="button"
-                  :disabled="eduVerifyStatus === 1 || eduVerifyStatus === 2"
-                  @click="openEduVerify"
-                >
-                  {{ eduVerifyStatus === 3 ? '重新提交' : '去认证' }}
-                </button>
-              </div>
             </div>
             <input v-model="teacherEducation" class="input" placeholder="例如：本科" />
             <div v-if="eduVerifyStatus === 3 && eduVerifyRejectReason" class="mini-hint error">驳回原因：{{ eduVerifyRejectReason }}</div>
           </label>
           <label class="field">
             <div class="label">所在城市</div>
-            <input v-model="teacherCity" class="input" placeholder="例如：北京" />
+            <button class="input" type="button" :disabled="loading" @click="teacherCityModalOpen = true">
+              {{ teacherCity.trim() || '请选择城市' }}
+            </button>
+            <CitySelectModal
+              :open="teacherCityModalOpen"
+              :model-value="teacherCity"
+              :hot-cities="teacherCityHotCities"
+              :allow-national="teacherAllowNational"
+              @update:model-value="onSelectTeacherCity"
+              @close="teacherCityModalOpen = false"
+            />
           </label>
           <label class="field">
             <div class="label">最高学历学校</div>
@@ -449,20 +509,16 @@ onMounted(() => {
             <input v-model="studentRealName" class="input" placeholder="例如：王女士" />
           </label>
           <label class="field">
-            <div class="label">孩子年龄</div>
+            <div class="label">年龄</div>
             <input v-model.number="studentChildAge" class="input" inputmode="numeric" placeholder="例如：9" />
           </label>
           <label class="field span2">
             <div class="label">地址</div>
-            <input v-model="studentAddress" class="input" placeholder="例如：北京·朝阳·望京" />
+            <input v-model="studentAddress" class="input" placeholder="例如：朝阳区望京街道望京花园小区3号楼2单元1203" />
           </label>
           <label class="field span2">
-            <div class="label">需求描述</div>
+            <div class="label">孩子描述</div>
             <AutoTextarea v-model="studentDemandDescription" class="textarea" :rows="4" placeholder="例如：希望提高应用题，孩子基础一般" />
-          </label>
-          <label class="field">
-            <div class="label">预算</div>
-            <input v-model.number="studentBudget" class="input" inputmode="decimal" placeholder="例如：120" />
           </label>
         </div>
       </div>
@@ -865,5 +921,62 @@ onMounted(() => {
   .proof-list {
     grid-template-columns: 1fr;
   }
+}
+
+.verify-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.verify-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+}
+
+.verify-card.done {
+  border-color: rgba(0, 190, 189, 0.35);
+  background: rgba(0, 190, 189, 0.04);
+}
+
+.vc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.04);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+.verify-card.done .vc-icon {
+  background: rgba(0, 190, 189, 0.15);
+}
+
+.vc-info {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.vc-title {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.vc-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.btn.sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
 }
 </style>

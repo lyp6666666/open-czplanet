@@ -63,7 +63,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
     @Autowired
     private StudentProfileLiteMapper studentProfileLiteMapper;
 
-    @Value("${tutor-application.skip-payment-check:true}")
+    @Value("${tutor-application.skip-payment-check:false}")
     private boolean skipPaymentCheck;
 
     @Override
@@ -96,6 +96,12 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
         AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
         Long msgId = msgHandler.checkAndSaveMsg(request, uid);
         roomMapper.updateAfterSend(request.getRoomId(), msgId);
+        if (Integer.valueOf(8).equals(request.getMsgType())) {
+            String bizType = extractBizType(request.getBody());
+            if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
+                roomMapper.closeRoom(request.getRoomId());
+            }
+        }
         applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
         return msgId;
     }

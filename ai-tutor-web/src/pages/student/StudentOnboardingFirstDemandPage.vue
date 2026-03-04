@@ -28,7 +28,7 @@ const avatar = ref('')
 const avatarUploading = ref(false)
 const name = ref('')
 
-const subjectPreset = ref<string>('')
+const subjectSelected = ref<string[]>([])
 const subjectOtherName = ref('')
 
 const gradeCode = ref('')
@@ -88,20 +88,42 @@ const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL'
 const stageCode = computed(() => gradeOptions.find((o) => o.value === gradeCode.value)?.stageCode ?? null)
 const gradeLabel = computed(() => gradeOptions.find((o) => o.value === gradeCode.value)?.label ?? '')
 
-const subjectName = computed(() => {
-  if (!subjectPreset.value) return null
-  if (subjectPreset.value === SUBJECT_OTHER_VALUE) return subjectOtherName.value.trim() || null
-  return subjectPreset.value
+function splitOtherSubjects(raw: string): string[] {
+  return raw
+    .split(/[，,、;；]/g)
+    .map((x) => x.trim())
+    .filter(Boolean)
+}
+
+const subjectTokens = computed(() => {
+  const out: string[] = []
+  for (const s of subjectSelected.value) {
+    if (!s || s === SUBJECT_OTHER_VALUE) continue
+    if (!out.includes(s)) out.push(s)
+  }
+  if (subjectSelected.value.includes(SUBJECT_OTHER_VALUE)) {
+    for (const s of splitOtherSubjects(subjectOtherName.value)) {
+      if (!out.includes(s)) out.push(s)
+    }
+  }
+  return out.slice(0, 5)
 })
 
-const subjectOther = computed(() => subjectPreset.value === SUBJECT_OTHER_VALUE)
+const subjectName = computed(() => {
+  if (subjectTokens.value.length === 0) return null
+  return subjectTokens.value.join('、')
+})
+
+const subjectOther = computed(() => subjectSelected.value.includes(SUBJECT_OTHER_VALUE))
 
 function buildTitle() {
   const g = gradeLabel.value
-  const s = subjectName.value
-  if (g && s) return `${g}${s}家教`
+  const sList = subjectTokens.value
+  if (g && sList.length === 1) return `${g}${sList[0]}家教`
+  if (g && sList.length > 1) return `${g}${sList[0]}等家教`
   if (g) return `${g}家教需求`
-  if (s) return `${s}家教`
+  if (sList.length === 1) return `${sList[0]}家教`
+  if (sList.length > 1) return `${sList[0]}等家教`
   return '家教需求'
 }
 
@@ -149,8 +171,8 @@ async function nextStep1() {
 
 function validateStudentDemandBasics(): string | null {
   if (!studentGender.value) return '请选择学员性别'
-  if (!subjectPreset.value) return '请选择教学科目'
-  if (subjectOther.value && !subjectOtherName.value.trim()) return '请输入其他科目'
+  if (subjectTokens.value.length === 0) return '请选择教学科目'
+  if (subjectOther.value && splitOtherSubjects(subjectOtherName.value).length === 0) return '请输入其他科目'
   if (!gradeCode.value) return '请选择学生年级'
   if (!description.value.trim()) return '请填写学生情况描述'
   if (description.value.trim().length < 10) return '学生情况描述至少10个字'
@@ -373,21 +395,23 @@ watch(
                 </label>
               </div>
 
-              <label class="field">
-                <div class="label"><span class="req">*</span>教学科目</div>
-                <select v-model="subjectPreset" class="input" :disabled="loading">
-                  <option value="">请选择</option>
-                  <option v-for="s in SUBJECT_PRESETS" :key="s" :value="s">{{ s }}</option>
-                  <option :value="SUBJECT_OTHER_VALUE">其他</option>
-                </select>
-                <input
-                  v-if="subjectPreset === SUBJECT_OTHER_VALUE"
-                  v-model="subjectOtherName"
-                  class="input"
-                  placeholder="请输入科目"
-                  :disabled="loading"
-                />
-              </label>
+              <div class="field">
+                <div class="label"><span class="req">*</span>教学科目（多选）</div>
+                <div class="chips">
+                  <label v-for="s in SUBJECT_PRESETS" :key="s" class="chip">
+                    <input v-model="subjectSelected" type="checkbox" :value="s" :disabled="loading" />
+                    <span>{{ s }}</span>
+                  </label>
+                  <label class="chip">
+                    <input v-model="subjectSelected" type="checkbox" :value="SUBJECT_OTHER_VALUE" :disabled="loading" />
+                    <span>其他</span>
+                  </label>
+                </div>
+                <div v-if="subjectSelected.includes(SUBJECT_OTHER_VALUE)" class="other-box">
+                  <input v-model="subjectOtherName" class="input" placeholder="输入其他科目，如：编程、围棋" :disabled="loading" />
+                  <div class="other-hint">多个用逗号分隔</div>
+                </div>
+              </div>
 
               <label class="field">
                 <div class="label"><span class="req">*</span>授课方式</div>
@@ -472,24 +496,52 @@ watch(
               </label>
               <div class="field">
                 <div class="label"><span class="req">*</span>预算（每小时）</div>
-                <select v-model="budgetMode" class="input" :disabled="loading">
-                  <option value="single">填写一个数</option>
-                  <option value="range">填写上下限</option>
-                </select>
-                <div class="row" v-if="budgetMode === 'single'">
-                  <div class="field">
-                    <div class="label">预算</div>
-                    <input v-model="budgetSingle" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：100" :disabled="loading" />
+                <div class="budget-row-container">
+                  <div class="budget-toggle">
+                    <div class="toggle-bg" :class="{ right: budgetMode === 'range' }"></div>
+                    <button class="toggle-item" :class="{ active: budgetMode === 'single' }" type="button" @click="budgetMode = 'single'">
+                      固定金额
+                    </button>
+                    <button class="toggle-item" :class="{ active: budgetMode === 'range' }" type="button" @click="budgetMode = 'range'">
+                      范围预算
+                    </button>
                   </div>
-                </div>
-                <div class="row" v-else>
-                  <div class="field">
-                    <div class="label">预算下限</div>
-                    <input v-model="budgetMin" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：80" :disabled="loading" />
-                  </div>
-                  <div class="field">
-                    <div class="label">预算上限</div>
-                    <input v-model="budgetMax" class="input" type="number" inputmode="decimal" min="0" placeholder="例如：120" :disabled="loading" />
+
+                  <div class="budget-inputs">
+                    <div v-if="budgetMode === 'single'" class="single-input-wrapper">
+                <input
+                  v-model="budgetSingle"
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  placeholder="例如：100"
+                  :disabled="loading"
+                />
+                <span class="sep placeholder">-</span>
+                <div class="input placeholder"></div>
+              </div>
+              <div v-else class="range-input-wrapper">
+                      <input
+                        v-model="budgetMin"
+                        class="input"
+                        type="number"
+                        inputmode="decimal"
+                        min="0"
+                        placeholder="最低"
+                        :disabled="loading"
+                      />
+                      <span class="sep">-</span>
+                      <input
+                        v-model="budgetMax"
+                        class="input"
+                        type="number"
+                        inputmode="decimal"
+                        min="0"
+                        placeholder="最高"
+                        :disabled="loading"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -600,6 +652,45 @@ watch(
   gap: 8px;
 }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  background: #fff;
+}
+
+.chip:has(input:checked) {
+  border-color: #12b4ab;
+  background: rgba(18, 180, 171, 0.08);
+  color: #0b2f2d;
+}
+
+.other-box {
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.other-hint {
+  font-size: 12px;
+  color: rgba(11, 47, 45, 0.7);
+}
+
 .label {
   font-size: 12px;
   color: rgba(11, 47, 45, 0.7);
@@ -695,6 +786,100 @@ watch(
   }
   .row {
     grid-template-columns: 1fr;
+  }
+}
+
+.budget-row-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.budget-toggle {
+  position: relative;
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  padding: 4px;
+  width: 180px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.toggle-bg {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.toggle-bg.right {
+  left: 50%;
+}
+
+.toggle-item {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(11, 47, 45, 0.55);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.toggle-item.active {
+  color: #0b2f2d;
+}
+
+.budget-inputs {
+  flex: 1;
+}
+
+.single-input-wrapper,
+.range-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+}
+
+.range-input-wrapper .input,
+.single-input-wrapper .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sep {
+  color: rgba(0, 0, 0, 0.3);
+  font-weight: 700;
+}
+
+.sep.placeholder {
+  visibility: hidden;
+}
+
+.input.placeholder {
+  visibility: hidden;
+  border: none;
+  background: transparent;
+}
+
+@media (max-width: 600px) {
+  .budget-row-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .budget-toggle {
+    width: 100%;
   }
 }
 </style>

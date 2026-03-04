@@ -81,6 +81,15 @@ function closeSuggest() {
   }, 150)
 }
 
+function onSearchClick() {
+  const q = keyword.value.trim()
+  if (!q) return
+  if (!auth.isLoggedIn) {
+    window.alert('请登录之后再使用搜索功能')
+    return
+  }
+}
+
 function hasToken() {
   // 这里仅做“是否存在 token”判断，后续可扩展为调用后端接口校验/刷新登录态
   return auth.isLoggedIn
@@ -134,9 +143,10 @@ const userInitial = computed(() => {
             :placeholder="placeholder"
             @input="onKeywordInput"
             @focus="onKeywordInput"
+            @keydown.enter.prevent="onSearchClick"
             @blur="closeSuggest"
           />
-          <button class="btn btn-primary search-btn" type="button">搜索</button>
+          <button class="btn btn-primary search-btn" type="button" @click="onSearchClick">搜索</button>
         </div>
 
         <div class="hot-words" v-if="hotWords?.list?.length">

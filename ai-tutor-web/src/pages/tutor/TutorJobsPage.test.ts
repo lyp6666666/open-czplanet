@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   feedDemands: vi.fn(),
   getDemandView: vi.fn(),
   checkDemandFavorites: vi.fn(),
+  listSent: vi.fn(),
+  applicationDetail: vi.fn(),
 }))
 
 vi.mock('@/api/jobs', () => ({
@@ -34,6 +36,14 @@ vi.mock('@/api/chat', () => ({
   },
 }))
 
+vi.mock('@/api/application', () => ({
+  applicationApi: {
+    listSent: mocks.listSent,
+    detail: mocks.applicationDetail,
+    startChat: vi.fn(),
+  },
+}))
+
 function createTestRouter() {
   return createRouter({
     history: createWebHashHistory(),
@@ -42,11 +52,48 @@ function createTestRouter() {
 }
 
 describe('TutorJobsPage', () => {
+  it('applies budget filter when clicking search without confirming budget menu', async () => {
+    localStorage.setItem('ai_tutor_city', '北京')
+    mocks.feedDemands.mockReset()
+    mocks.getDemandView.mockReset()
+    mocks.checkDemandFavorites.mockReset()
+    mocks.listSent.mockReset()
+
+    mocks.feedDemands.mockResolvedValue({
+      nextCursor: null,
+      isLast: true,
+      list: [],
+    })
+    mocks.checkDemandFavorites.mockResolvedValue([])
+    mocks.listSent.mockResolvedValue({ cursor: null, isLast: true, list: [] })
+
+    const router = createTestRouter()
+    await router.push('/tutor/jobs')
+    await router.isReady()
+
+    const wrapper = mount(TutorJobsPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text().includes('薪资待遇'))!.trigger('click')
+    const inputs = wrapper.findAll('input')
+    await inputs.find((i) => i.attributes('placeholder') === '下限')!.setValue('120')
+    await inputs.find((i) => i.attributes('placeholder') === '上限')!.setValue('180')
+
+    await wrapper.findAll('button').find((b) => b.text().trim() === '搜索')!.trigger('click')
+    await flushPromises()
+
+    const lastCall = mocks.feedDemands.mock.calls[mocks.feedDemands.mock.calls.length - 1]![0] as Record<string, unknown>
+    expect(lastCall).toMatchObject({ budgetMin: 120, budgetMax: 180 })
+  })
+
   it('renders demand view without address block when online', async () => {
     localStorage.setItem('ai_tutor_city', '北京')
     mocks.feedDemands.mockReset()
     mocks.getDemandView.mockReset()
     mocks.checkDemandFavorites.mockReset()
+    mocks.listSent.mockReset()
 
     mocks.feedDemands.mockResolvedValue({
       nextCursor: null,
@@ -78,6 +125,7 @@ describe('TutorJobsPage', () => {
       ],
     })
     mocks.checkDemandFavorites.mockResolvedValue([])
+    mocks.listSent.mockResolvedValue({ cursor: null, isLast: true, list: [] })
     mocks.getDemandView.mockResolvedValue({
       id: 3001,
       parentId: 101,

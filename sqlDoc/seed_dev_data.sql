@@ -3,6 +3,14 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 USE ai_tutor;
 
+INSERT INTO `sys_admin_user` (`username`, `password`, `nickname`, `status`)
+VALUES ('admin', '$2a$10$Qe6N8DbgmYojC4dWNsCSX.7sAFBwq/.zF4WyTgl0HGOIDFZZA0SS2', '超级管理员', 1)
+ON DUPLICATE KEY UPDATE
+`password`=VALUES(`password`),
+`nickname`=VALUES(`nickname`),
+`status`=VALUES(`status`),
+`update_time`=NOW(3);
+
 INSERT INTO `user` (id, name, phone, avatar, sex, open_id, active_status, last_opt_time, ip_info, item_id, status, user_type, ref_id, create_time, update_time)
 VALUES
 (101, '家长-林女士', '15268836901', '/avatars/u101.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1001, NOW(3), NOW(3)),

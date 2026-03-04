@@ -160,6 +160,9 @@ onBeforeUnmount(() => {
             </button>
           </template>
           <template v-else>
+            <button class="tab" :class="{ active: route.path.startsWith('/student/tutors') }" type="button" @click="go('/student/tutors')">
+              找教师
+            </button>
             <button class="tab" :class="{ active: route.path.startsWith('/student/post') }" type="button" @click="go('/student/post')">
               发布需求
             </button>
@@ -197,8 +200,9 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="menuOpen" class="menu card" @click.stop>
-            <button class="menu-item" type="button" @click="go('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
             <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
+            <button class="menu-item" type="button" @click="go('/settings'); closeMenu()">设置</button>
             <button class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
             <button class="menu-item danger" type="button" @click="onLogout">退出登录</button>
           </div>

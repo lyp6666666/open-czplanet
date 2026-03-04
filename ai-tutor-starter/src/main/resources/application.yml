@@ -33,6 +33,11 @@ spring:
           # 连接池中最大连接数，负数表示没有限制
           max-active: 20
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
 
@@ -99,11 +104,25 @@ storage:
     allowedAvatarUrlPrefixes:
       - http://127.0.0.1:9000/ai-tutor-assets
   upload:
-    maxSizeBytes: 5242880
-    avatarMaxSizeBytes: 2097152
+    maxSizeBytes: 20971520
+    avatarMaxSizeBytes: 5242880
     allowedContentTypes:
       - image/jpeg
       - image/png
       - image/webp
       - image/gif
       - image/svg+xml
+
+springdoc:
+  packages-to-scan: com.ai.tutor
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+admin:
+  jwt:
+    secrets:
+      - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
+    expiration: 24h
+    issuer: ai-tutor-admin

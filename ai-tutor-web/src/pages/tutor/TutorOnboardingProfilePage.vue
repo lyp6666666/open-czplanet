@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
@@ -14,7 +15,9 @@ const error = ref<string | null>(null)
 
 const education = ref('')
 const educationOther = ref('')
-const city = ref('')
+const storedCity = (localStorage.getItem('ai_tutor_city') || '北京').trim()
+const city = ref(storedCity || '')
+const cityModalOpen = ref(false)
 const highestEduSchool = ref('')
 const introduction = ref('')
 
@@ -24,6 +27,23 @@ const subjectOther = ref('')
 const teachingMode = ref<'ONLINE' | 'OFFLINE' | 'BOTH' | ''>('')
 
 const eduOptions = ['本科', '硕士', '博士', '专科', '海外', '其他']
+
+const allowNational = computed(() => teachingMode.value === 'ONLINE')
+
+const cities = computed(() => {
+  const base = [city.value, localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
+  return Array.from(new Set(base.map((x) => String(x || '').trim()).filter(Boolean)))
+})
+
+function onSelectCity(v: string) {
+  const raw = String(v || '').trim()
+  if ((teachingMode.value === 'OFFLINE' || teachingMode.value === 'BOTH') && raw === '全国') {
+    error.value = '线下授课请选择具体城市'
+    return
+  }
+  if (raw) localStorage.setItem('ai_tutor_city', raw)
+  city.value = raw
+}
 
 const finalEducation = computed(() => {
   if (education.value !== '其他') return education.value.trim()
@@ -123,102 +143,203 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="wrap">
-    <div class="head card">
-      <div class="title">完善个人简历</div>
-      <button class="btn" type="button" :disabled="loading" @click="skip">跳过</button>
-    </div>
+  <div class="page">
+    <div class="shell">
+      <div class="card board">
+        <aside class="left">
+          <div class="brand">
+            <div class="logo">Hi，欢迎成为老师</div>
+            <div class="slogan">开启高效接单方式，仅需3步</div>
+          </div>
+          <div class="illustration" />
+        </aside>
 
-    <div v-if="error" class="hint error">{{ error }}</div>
+        <section class="right">
+          <div class="right-head">
+            <div class="r-title">完善个人简历</div>
+            <button class="skip-btn" type="button" :disabled="loading" @click="skip">跳过</button>
+          </div>
 
-    <div class="card form">
-      <label class="field">
-        <div class="label">学历</div>
-        <select v-model="education" class="input" :disabled="loading">
-          <option value="" disabled>请选择学历</option>
-          <option v-for="o in eduOptions" :key="o" :value="o">{{ o }}</option>
-        </select>
-      </label>
+          <div v-if="error" class="hint error">{{ error }}</div>
 
-      <label v-if="education === '其他'" class="field">
-        <div class="label">补充学历</div>
-        <input v-model="educationOther" class="input" placeholder="例如：双一流/211/985/海外院校" :disabled="loading" />
-      </label>
+          <div class="form">
+            <label class="field">
+              <div class="label">学历</div>
+              <select v-model="education" class="input" :disabled="loading">
+                <option value="" disabled>请选择学历</option>
+                <option v-for="o in eduOptions" :key="o" :value="o">{{ o }}</option>
+              </select>
+            </label>
 
-      <label class="field">
-        <div class="label">所在城市</div>
-        <input v-model="city" class="input" placeholder="例如：北京" :disabled="loading" />
-      </label>
+            <label v-if="education === '其他'" class="field">
+              <div class="label">补充学历</div>
+              <input v-model="educationOther" class="input" placeholder="例如：双一流/211/985/海外院校" :disabled="loading" />
+            </label>
 
-      <label class="field">
-        <div class="label">最高学历学校</div>
-        <input v-model="highestEduSchool" class="input" placeholder="例如：北京大学" :disabled="loading" />
-      </label>
+            <label class="field">
+              <div class="label">所在城市</div>
+              <button class="input" type="button" :disabled="loading" @click="cityModalOpen = true">{{ city.trim() || '请选择城市' }}</button>
+              <CitySelectModal
+                :open="cityModalOpen"
+                :model-value="city"
+                :hot-cities="cities"
+                :allow-national="allowNational"
+                @update:model-value="onSelectCity"
+                @close="cityModalOpen = false"
+              />
+            </label>
 
-      <label class="field">
-        <div class="label">自我介绍</div>
-        <textarea v-model="introduction" class="textarea" rows="4" placeholder="简单介绍你的教学经历与优势" :disabled="loading" />
-      </label>
+            <label class="field">
+              <div class="label">最高学历学校</div>
+              <input v-model="highestEduSchool" class="input" placeholder="例如：北京大学" :disabled="loading" />
+            </label>
 
-      <div class="field">
-        <div class="label">擅长学科（多选）</div>
-        <div class="chips">
-          <label v-for="s in SUBJECT_PRESETS" :key="s" class="chip">
-            <input v-model="subjectSelected" type="checkbox" :value="s" :disabled="loading" />
-            <span>{{ s }}</span>
-          </label>
-          <label class="chip">
-            <input v-model="subjectSelected" type="checkbox" :value="SUBJECT_OTHER_VALUE" :disabled="loading" />
-            <span>其他</span>
-          </label>
-        </div>
-        <input
-          v-if="subjectSelected.includes(SUBJECT_OTHER_VALUE)"
-          v-model="subjectOther"
-          class="input"
-          placeholder="输入其他学科，多个用逗号分隔"
-          :disabled="loading"
-        />
-      </div>
+            <label class="field">
+              <div class="label">自我介绍</div>
+              <textarea v-model="introduction" class="textarea" rows="4" placeholder="简单介绍你的教学经历与优势" :disabled="loading" />
+            </label>
 
-      <label class="field">
-        <div class="label">支持教学方式</div>
-        <select v-model="teachingMode" class="input" :disabled="loading">
-          <option value="" disabled>请选择教学方式</option>
-          <option value="ONLINE">线上教学</option>
-          <option value="OFFLINE">线下教学</option>
-          <option value="BOTH">均可</option>
-        </select>
-      </label>
+            <div class="field">
+              <div class="label">擅长学科（多选）</div>
+              <div class="chips">
+                <label v-for="s in SUBJECT_PRESETS" :key="s" class="chip">
+                  <input v-model="subjectSelected" type="checkbox" :value="s" :disabled="loading" />
+                  <span>{{ s }}</span>
+                </label>
+                <label class="chip">
+                  <input v-model="subjectSelected" type="checkbox" :value="SUBJECT_OTHER_VALUE" :disabled="loading" />
+                  <span>其他</span>
+                </label>
+              </div>
+              <input
+                v-if="subjectSelected.includes(SUBJECT_OTHER_VALUE)"
+                v-model="subjectOther"
+                class="input"
+                placeholder="输入其他学科，多个用逗号分隔"
+                :disabled="loading"
+              />
+            </div>
 
-      <div class="actions">
-        <button class="btn btn-primary" type="button" :disabled="loading || !canSubmit" @click="submit">保存并完成</button>
+            <label class="field">
+              <div class="label">支持教学方式</div>
+              <select v-model="teachingMode" class="input" :disabled="loading">
+                <option value="" disabled>请选择教学方式</option>
+                <option value="ONLINE">线上教学</option>
+                <option value="OFFLINE">线下教学</option>
+                <option value="BOTH">均可</option>
+              </select>
+            </label>
+
+            <div class="actions">
+              <button class="btn btn-primary" type="button" :disabled="loading || !canSubmit" @click="submit">保存并完成</button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.wrap {
-  display: grid;
-  gap: 12px;
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #12b4ab;
+  padding: 24px;
 }
 
-.head.card {
+.shell {
+  width: min(980px, 100%);
+}
+
+.card.board {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.16);
+}
+
+.left {
+  background: #e7fbfa;
+  padding: 34px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0b2f2d;
+}
+
+.slogan {
+  margin-top: 10px;
+  font-size: 14px;
+  color: rgba(11, 47, 45, 0.7);
+}
+
+.illustration {
+  flex: 1;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 25% 35%, rgba(18, 180, 171, 0.22), transparent 55%),
+    radial-gradient(circle at 70% 55%, rgba(18, 180, 171, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(18, 180, 171, 0.12), rgba(18, 180, 171, 0.04));
+}
+
+.right {
+  padding: 34px 34px 26px;
+}
+
+.right-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px;
+  margin-bottom: 18px;
 }
 
-.title {
-  font-weight: 900;
+.r-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0b2f2d;
+}
+
+.skip-btn {
+  font-size: 13px;
+  color: rgba(11, 47, 45, 0.6);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.skip-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #0b2f2d;
+}
+
+.hint {
+  margin: 10px 0 16px;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 0, 0, 0.12);
+  background: rgba(255, 0, 0, 0.04);
+}
+
+.hint.error {
+  color: #d03050;
 }
 
 .form {
-  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .field {
@@ -228,20 +349,27 @@ onMounted(async () => {
 
 .label {
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(11, 47, 45, 0.7);
 }
 
 .input,
 .textarea {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px;
-  font-size: 13px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
 }
 
 .textarea {
   resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: #12b4ab;
+  box-shadow: 0 0 0 4px rgba(18, 180, 171, 0.12);
 }
 
 .chips {
@@ -254,14 +382,52 @@ onMounted(async () => {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.chip:has(input:checked) {
+  border-color: #12b4ab;
+  background: rgba(18, 180, 171, 0.08);
+  color: #0b2f2d;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+  color: rgba(11, 47, 45, 0.85);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-primary {
+  border: none;
+  background: #12b4ab;
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 860px) {
+  .card.board {
+    grid-template-columns: 1fr;
+  }
+  .left {
+    display: none;
+  }
 }
 </style>

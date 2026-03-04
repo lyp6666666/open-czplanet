@@ -12,6 +12,9 @@ const auth = useAuthStore()
 const useAppFrame = computed(() => {
   const p = route.path
   if (p.startsWith('/auth/')) return false
+  if (p.startsWith('/student/onboarding/first-demand')) return false
+  if (p.startsWith('/tutor/onboarding/basic')) return false
+  if (p.startsWith('/tutor/onboarding/profile')) return false
   if (p === '/') return auth.isLoggedIn
   return p.startsWith('/tutor/') || p.startsWith('/student/') || p.startsWith('/chat') || p === '/me' || p.startsWith('/schedule')
 })

@@ -149,6 +149,22 @@ export interface HotTutorCardVO {
   }>
 }
 
+export interface ParentTutorCardVO {
+  userId: number
+  displayName: string
+  avatar: string | null
+  city: string | null
+  education: string | null
+  experienceYears: number | null
+  ratePerHour: string | null
+  teachingMode: string | null
+  subjectTags: string[]
+  highlights: string[]
+  introduction: string | null
+  highestEduSchool?: string | null
+  eduVerifyStatus?: number | null
+}
+
 export interface FooterLinksVO {
   links: Array<{ name: string; url: string }>
 }
@@ -241,6 +257,23 @@ export interface UserCardVO {
   teacherProfile: TeacherProfile | null
   studentProfile: StudentProfile | null
   jobPosting: StudentJobPosting | null
+  studentHistory?: StudentJobPosting[]
+  teacherHistory?: TutorAppointment[]
+}
+
+export interface TutorAppointment {
+  id: number
+  parentId: number
+  tutorId: number
+  title: string
+  subjectId: number
+  classMode: string
+  city: string
+  address: string
+  startTime: string
+  durationMinutes: number
+  status: number
+  createTime: string
 }
 
 export interface StudentJobPosting {
@@ -364,6 +397,18 @@ export type ChatMessageBody =
       contextId: number
     }
   | { type: 'tutor_application_status'; applicationId: number; status: TutorApplicationCardStatus; actorUserId: number }
+  | {
+      type: 'end_chat_request'
+      requestId: number | null
+      status: string | null
+      creatorUserId: number | null
+    }
+  | {
+      type: 'end_chat_status'
+      requestId: number | null
+      status: string | null
+      actorUserId: number | null
+    }
   | {
       type: 'lesson_request'
       eventId: number
