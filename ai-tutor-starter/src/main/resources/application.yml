@@ -50,6 +50,12 @@ jwt:
   expiration: 24h
   issuer: ai-tutor
 
+sms:
+  spug:
+    baseUrl: https://push.spug.cc
+    token: j1xw4otxS5qNVWugRVLAhA
+    senderName: 推送助手
+
 home:
   guest:
     bannersUseMinio: true
