@@ -136,3 +136,9 @@ storage:
       - image/webp
       - image/gif
       - image/svg+xml
+
+sms:
+  spug:
+    baseUrl: https://push.spug.cc
+    token: j1xw4otxS5qNVWugRVLAhA
+    senderName: 推送助手
