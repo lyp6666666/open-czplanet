@@ -5,6 +5,7 @@ import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.ClassPathResource;
@@ -26,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 @Service
+@Slf4j
 public class SmsServiceImpl implements SmsService {
 
     @Resource
@@ -68,6 +70,7 @@ public class SmsServiceImpl implements SmsService {
         } catch (Exception ignored) {
         }
         sendSms(phone, code);
+        log.info("SMS SEND SUCCESS - phone: {}, code: {}, prefix: {}", phone, code, prefix);
         return code;
     }
 
