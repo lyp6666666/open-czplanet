@@ -34,6 +34,38 @@
   <dependencyManagement>
     <dependencies>
 
+      <!-- Internal modules (align to parent version) -->
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>ai-tutor-common</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>ai-tutor-mq</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>tutor-appointment-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>videoCall-IM-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>ai-tutor-admin</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>payment-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
       <!-- Spring Boot 这里使用BOM来统一管理springboot相关的所有版本-->
       <dependency>
         <groupId>org.springframework.boot</groupId>

@@ -8,7 +8,6 @@
     </parent>
 
     <artifactId>ai-tutor-common</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>ai-tutor-common</name>
 
     <dependencies>

@@ -45,6 +45,7 @@ const devBusy = ref(false)
 const devError = ref<string | null>(null)
 const enterBusy = ref(false)
 const enterError = ref<string | null>(null)
+const cashierOpened = ref(false)
 
 const wechatQrUrl = computed(() => {
   const s = typeof import.meta.env.VITE_BROKERAGE_WECHAT_QR_URL === 'string' ? import.meta.env.VITE_BROKERAGE_WECHAT_QR_URL.trim() : ''
@@ -204,7 +205,19 @@ function back() {
   router.back()
 }
 
+function openCashier() {
+  if (!orderId.value) return
+  const href = router.resolve({
+    name: 'cashierPay',
+    query: { contextType: 'BROKERAGE_ORDER', contextId: String(orderId.value) },
+  }).href
+  const url = `${window.location.origin}${window.location.pathname}${href}`
+  window.open(url, '_blank', 'noopener')
+  cashierOpened.value = true
+}
+
 onMounted(() => {
+  openCashier()
   void load().then(() => startPolling())
 })
 
@@ -219,6 +232,11 @@ onUnmounted(() => {
       <button class="btn back" type="button" @click="back">返回</button>
       <div class="name">中介费支付</div>
       <div />
+    </div>
+
+    <div v-if="cashierOpened" class="hint">
+      收银台已在新标签页打开。如未打开，请点击
+      <button class="btn inline" type="button" @click="openCashier">重新打开</button>
     </div>
 
     <div v-if="loading" class="hint">加载中...</div>

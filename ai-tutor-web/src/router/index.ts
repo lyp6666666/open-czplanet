@@ -21,6 +21,7 @@ const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
+const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -156,6 +157,11 @@ export const router = createRouter({
       path: '/pay/brokerage',
       name: 'brokeragePay',
       component: BrokeragePayPage,
+    },
+    {
+      path: '/pay/cashier',
+      name: 'cashierPay',
+      component: CashierPayPage,
     },
   ],
 })

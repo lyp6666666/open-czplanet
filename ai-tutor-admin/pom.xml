@@ -9,7 +9,6 @@
     </parent>
 
     <artifactId>ai-tutor-admin</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>ai-tutor-admin</name>
     <description>Admin backend for AI Tutor Platform</description>
 
@@ -18,14 +17,12 @@
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>ai-tutor-common</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Appointment Service (for shared entities) -->
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>tutor-appointment-service</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <!-- Web -->

@@ -2,6 +2,23 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+  cloud:
+    nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
   application:
     name: videoCall-IM-service
   datasource:
@@ -50,54 +67,6 @@ jwt:
   expiration: 24h
   issuer: ai-tutor
 
-sms:
-  spug:
-    baseUrl: https://push.spug.cc
-    token: j1xw4otxS5qNVWugRVLAhA
-    senderName: 推送助手
-
-home:
-  guest:
-    bannersUseMinio: true
-    banners:
-      carousel:
-        - id: carousel-1
-          title: 家教直聘
-          subtitle: 快速匹配合适老师，先聊再约课
-          imageUrl: /banners/carousel-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-2
-          title: 初中数学提分
-          subtitle: 一对一讲解 + 习题巩固，循序渐进
-          imageUrl: /banners/carousel-2.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-3
-          title: 英语口语陪练
-          subtitle: 沉浸式对话纠音，表达更自信
-          imageUrl: /banners/carousel-3.svg
-          link:
-            type: ROUTE
-            url: /
-      cards:
-        - id: card-1
-          title: 新手指南
-          subtitle: 快速了解发布需求与挑选家教
-          imageUrl: /banners/card-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: card-2
-          title: 在线沟通
-          subtitle: 先聊再约课，沟通更高效
-          imageUrl: /banners/card-2.svg
-          link:
-            type: ROUTE
-            url: /
-
 storage:
   minio:
     enabled: true
@@ -132,3 +101,23 @@ admin:
       - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
     expiration: 24h
     issuer: ai-tutor-admin
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    nacos:
+      config:
+        namespace: 3066af4f-57ee-4f4d-80fe-0d2a4e791f7d
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  cloud:
+    nacos:
+      config:
+        namespace: be1662a5-65d2-4be8-92ef-31001b7fa427

@@ -12,6 +12,7 @@
         <RouterLink class="nav-link" to="/jobs">需求审核</RouterLink>
         <RouterLink class="nav-link" to="/verification">教师认证</RouterLink>
         <RouterLink class="nav-link" to="/refunds">退款纠纷</RouterLink>
+        <RouterLink class="nav-link" to="/payments">付款记录</RouterLink>
       </nav>
 
       <div class="sidebar-footer">
@@ -55,6 +56,8 @@ const title = computed(() => {
   if (name === 'verificationDetail') return '认证详情'
   if (name === 'refunds') return '退款纠纷'
   if (name === 'refundDetail') return '纠纷详情'
+  if (name === 'paymentOrders') return '付款记录'
+  if (name === 'paymentOrderDetail') return '付款记录详情'
   return '管理端'
 })
 

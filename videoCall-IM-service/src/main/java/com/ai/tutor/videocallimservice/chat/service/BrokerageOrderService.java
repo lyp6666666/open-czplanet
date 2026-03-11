@@ -188,6 +188,35 @@ public class BrokerageOrderService {
         return toVO(latest);
     }
 
+    /**
+     * 支付成功事件驱动的订单完结逻辑（用于 MQ 消费场景）。
+     *
+     * <p>与管理端“确认到账”不同：该方法不做管理员 token 校验，而是依赖支付域已完成验签与金额校验，
+     * 并通过 MQ 事件驱动业务域最终一致性。</p>
+     *
+     * <p>幂等要求：
+     * - 重复消费同一支付成功事件不得导致状态回退或异常
+     * - 若订单已是 PAID，仍需尽力确保后续“解锁/流转”逻辑被触发（避免上一次触发失败）</p>
+     *
+     * @param orderId 中介费订单ID
+     * @param paidAt  支付时间
+     * @param payMethod 支付方式（WECHAT/ALIPAY），可为空
+     */
+    public void onPaymentSuccess(Long orderId, LocalDateTime paidAt, String payMethod) {
+        ThrowUtils.throwIf(orderId == null, ErrorCode.PARAMS_ERROR);
+        BrokerageOrder order = brokerageOrderMapper.selectById(orderId);
+        ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
+
+        if (!BrokerageOrderStatus.PAID.name().equals(order.getStatus())) {
+            LocalDateTime now = paidAt == null ? LocalDateTime.now() : paidAt;
+            brokerageOrderMapper.markPaidWithMethod(orderId, now, normalizePayMethod(payMethod));
+            order = brokerageOrderMapper.selectById(orderId);
+            ThrowUtils.throwIf(order == null, ErrorCode.OPERATION_ERROR);
+        }
+
+        afterPaid(order);
+    }
+
     public void sendBrokerageRequired(Long roomId, Long proposalId, BrokerageOrderVO order, Long senderUid) {
         ThrowUtils.throwIf(roomId == null || proposalId == null || order == null || senderUid == null, ErrorCode.PARAMS_ERROR);
         SystemMsgReq body = new SystemMsgReq();
@@ -223,6 +252,24 @@ public class BrokerageOrderService {
                 .body(body)
                 .build();
         chatService.sendMsg(msgReq, order.getPayerUid());
+    }
+
+    private void afterPaid(BrokerageOrder latest) {
+        if (latest == null) {
+            return;
+        }
+        if (latest.getProposalId() != null && latest.getProposalId() > 0) {
+            sendContactUnlocked(latest);
+            return;
+        }
+        if (latest.getApplicationId() != null) {
+            tutorApplicationService.onBrokerageOrderPaid(latest.getApplicationId());
+            return;
+        }
+        ApplicationBrokerageOrder rel = applicationBrokerageOrderMapper.selectByOrderId(latest.getId());
+        if (rel != null && rel.getApplicationId() != null) {
+            tutorApplicationService.onBrokerageOrderPaid(rel.getApplicationId());
+        }
     }
 
     private static BrokerageOrderVO toVO(BrokerageOrder order) {

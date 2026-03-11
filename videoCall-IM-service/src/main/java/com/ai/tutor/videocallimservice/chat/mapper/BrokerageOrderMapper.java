@@ -26,6 +26,16 @@ public interface BrokerageOrderMapper {
     int markPaid(@Param("id") Long id, @Param("paidAt") LocalDateTime paidAt);
 
     /**
+     * 标记订单已支付（可同时写入支付方式）。
+     *
+     * @param id 订单ID
+     * @param paidAt 支付时间
+     * @param payMethod 支付方式（WECHAT/ALIPAY），可为空
+     * @return 受影响行数
+     */
+    int markPaidWithMethod(@Param("id") Long id, @Param("paidAt") LocalDateTime paidAt, @Param("payMethod") String payMethod);
+
+    /**
      * 付款人撤单：仅允许在待支付或已提交凭证状态撤销
      *
      * @param id 订单ID

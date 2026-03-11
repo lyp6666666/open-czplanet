@@ -54,6 +54,29 @@ public class UserServiceImpl implements UserService {
     @Resource
     private MinioProperties minioProperties;
 
+    private String resolveDefaultAvatarUrl() {
+        if (minioProperties == null || !minioProperties.isEnabled()) {
+            return null;
+        }
+        String publicBaseUrl = minioProperties.getPublicBaseUrl();
+        String objectKey = minioProperties.getDefaultAvatarObjectKey();
+        if (publicBaseUrl == null || publicBaseUrl.trim().isEmpty()) {
+            return null;
+        }
+        if (objectKey == null || objectKey.trim().isEmpty()) {
+            return null;
+        }
+        String base = publicBaseUrl.trim();
+        String key = objectKey.trim();
+        if (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+        if (base.endsWith("/")) {
+            return base + key;
+        }
+        return base + "/" + key;
+    }
+
 
     /**
      * 登录或注册用户
@@ -146,7 +169,7 @@ public class UserServiceImpl implements UserService {
                 .id(user.getId())
                 .name(user.getName())
                 .phone(phone)
-                .avatar(user.getAvatar())
+                .avatar(user.getAvatar() == null || user.getAvatar().trim().isEmpty() ? resolveDefaultAvatarUrl() : user.getAvatar())
                 .sex(user.getSex())
                 .userType(user.getUserType())
                 .isNew(isNew)

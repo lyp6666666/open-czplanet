@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
@@ -54,6 +54,16 @@ async function load() {
   }
 }
 
+function onCashierMessage(e: MessageEvent) {
+  if (e.origin !== window.location.origin) return
+  const data = e.data as unknown
+  if (!data || typeof data !== 'object') return
+  const t = (data as { type?: unknown }).type
+  if (t === 'PAY_SUCCESS') {
+    void load()
+  }
+}
+
 async function decide(action: 'ACCEPT' | 'REJECT') {
   if (!id.value || busy.value) return
   busy.value = true
@@ -98,12 +108,27 @@ async function enterChat() {
   }
 }
 
+function openCashier() {
+  if (!data.value?.orderId) return
+  const href = router.resolve({
+    name: 'cashierPay',
+    query: { contextType: 'BROKERAGE_ORDER', contextId: String(data.value.orderId) },
+  }).href
+  const url = `${window.location.origin}${window.location.pathname}${href}`
+  window.open(url, '_blank', 'noopener')
+}
+
 function back() {
   router.back()
 }
 
 onMounted(() => {
   void load()
+  window.addEventListener('message', onCashierMessage)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('message', onCashierMessage)
 })
 </script>
 
@@ -146,7 +171,7 @@ onMounted(() => {
             class="btn"
             type="button"
             :disabled="busy"
-            @click="router.push({ name: 'brokeragePay', query: { orderId: String(data.orderId), applicationId: String(id) } })"
+            @click="openCashier"
           >
             去支付
           </button>

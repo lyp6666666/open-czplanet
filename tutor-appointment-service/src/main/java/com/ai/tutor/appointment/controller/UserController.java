@@ -23,6 +23,7 @@ import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
+import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.common.BaseResponse;
@@ -63,7 +64,40 @@ public class UserController {
     @Resource
     private UserSettingsService userSettingsService;
 
+    @Resource
+    private MinioProperties minioProperties;
+
     private static final Pattern PHONE_PATTERN = Pattern.compile("^1\\d{10}$");
+
+    private String resolveDefaultAvatarUrl() {
+        if (minioProperties == null || !minioProperties.isEnabled()) {
+            return null;
+        }
+        String publicBaseUrl = minioProperties.getPublicBaseUrl();
+        String objectKey = minioProperties.getDefaultAvatarObjectKey();
+        if (publicBaseUrl == null || publicBaseUrl.trim().isEmpty()) {
+            return null;
+        }
+        if (objectKey == null || objectKey.trim().isEmpty()) {
+            return null;
+        }
+        String base = publicBaseUrl.trim();
+        String key = objectKey.trim();
+        if (key.startsWith("/")) {
+            key = key.substring(1);
+        }
+        if (base.endsWith("/")) {
+            return base + key;
+        }
+        return base + "/" + key;
+    }
+
+    private String normalizeAvatar(String avatar) {
+        if (avatar != null && !avatar.trim().isEmpty()) {
+            return avatar;
+        }
+        return resolveDefaultAvatarUrl();
+    }
 
     /**
      *  获取验证码
@@ -133,7 +167,7 @@ public class UserController {
                 .id(user.getId())
                 .name(user.getName())
                 .phone(user.getPhone())
-                .avatar(user.getAvatar())
+                .avatar(normalizeAvatar(user.getAvatar()))
                 .sex(user.getSex())
                 .userType(user.getUserType());
         if (role == UserRoleEnum.TEACHER) {
@@ -158,7 +192,7 @@ public class UserController {
                 .map(u -> UserSimpleVO.builder()
                         .id(u.getId())
                         .name(u.getName())
-                        .avatar(u.getAvatar())
+                        .avatar(normalizeAvatar(u.getAvatar()))
                         .userType(u.getUserType())
                         .build())
                 .collect(Collectors.toList());
@@ -180,7 +214,7 @@ public class UserController {
                 .user(UserSimpleVO.builder()
                         .id(user.getId())
                         .name(user.getName())
-                        .avatar(user.getAvatar())
+                        .avatar(normalizeAvatar(user.getAvatar()))
                         .userType(user.getUserType())
                         .build());
 

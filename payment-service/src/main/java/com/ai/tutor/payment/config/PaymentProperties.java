@@ -29,6 +29,11 @@ public class PaymentProperties {
      */
     private Wechat wechat = new Wechat();
 
+    /**
+     * YunGouOS 聚合支付配置
+     */
+    private Yungouos yungouos = new Yungouos();
+
     @Data
     public static class Alipay {
         /**
@@ -91,5 +96,50 @@ public class PaymentProperties {
          * 说明：必须是公网可访问的HTTPS地址，例如 https://api.yourdomain.com/payment/notify/wechat
          */
         private String notifyUrl;
+    }
+
+    @Data
+    public static class Yungouos {
+        /**
+         * YunGouOS 应用/商户的 AppId（以 YunGouOS 文档与控制台字段为准）
+         */
+        private String appId;
+
+        /**
+         * YunGouOS 密钥（用于签名/验签），务必通过配置中心或环境变量注入，禁止硬编码
+         */
+        private String appKey;
+
+        /**
+         * YunGouOS API 地址
+         */
+        private String baseUrl = "https://api.pay.yungouos.com";
+
+        /**
+         * 微信渠道商户号（mch_id）
+         */
+        private String wechatMchId;
+
+        /**
+         * 支付宝渠道商户号（mch_id）
+         */
+        private String alipayMchId;
+
+        /**
+         * 异步回调地址（notify_url），必须公网可达
+         */
+        private String notifyUrl;
+
+        /**
+         * 同步跳转地址（return_url），可选
+         */
+        private String returnUrl;
+
+        /**
+         * 扫码支付二维码返回类型：
+         * 1：返回微信/支付宝原生支付链接（前端自行生成二维码）
+         * 2：返回二维码图片地址（前端直接展示图片）
+         */
+        private String nativePayType = "2";
     }
 }

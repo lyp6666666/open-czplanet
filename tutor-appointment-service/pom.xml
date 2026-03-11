@@ -10,7 +10,6 @@
 	</parent>
 
 	<artifactId>tutor-appointment-service</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
 	<name>tutor-appointment-service</name>
 
 	<description>tutor-appointment-service</description>
@@ -23,7 +22,6 @@
 		<dependency>
 			<groupId>com.ai.tutor</groupId>
 			<artifactId>ai-tutor-common</artifactId>
-			<version>0.0.1-SNAPSHOT</version>
 		</dependency>
 
 		<!-- Spring Boot Web -->

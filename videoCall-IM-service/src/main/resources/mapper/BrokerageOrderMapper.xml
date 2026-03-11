@@ -108,6 +108,19 @@
           AND status IN ('PENDING', 'PROOF_SUBMITTED')
     </update>
 
+    <update id="markPaidWithMethod">
+        UPDATE brokerage_order
+        SET
+            status = 'PAID',
+            paid_at = #{paidAt},
+            <if test="payMethod != null and payMethod != ''">
+                pay_method = #{payMethod},
+            </if>
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status IN ('PENDING', 'PROOF_SUBMITTED')
+    </update>
+
     <update id="cancel">
         UPDATE brokerage_order
         SET

@@ -69,54 +69,6 @@ ops:
 dev:
   exposeSmsCode: ${DEV_EXPOSE_SMS_CODE:false}
 
-sms:
-  spug:
-    baseUrl: https://push.spug.cc
-    token: j1xw4otxS5qNVWugRVLAhA
-    senderName: 推送助手
-
-home:
-  guest:
-    bannersUseMinio: true
-    banners:
-      carousel:
-        - id: carousel-1
-          title: 家教直聘
-          subtitle: 快速匹配合适老师，先聊再约课
-          imageUrl: /banners/carousel-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-2
-          title: 初中数学提分
-          subtitle: 一对一讲解 + 习题巩固，循序渐进
-          imageUrl: /banners/carousel-2.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-3
-          title: 英语口语陪练
-          subtitle: 沉浸式对话纠音，表达更自信
-          imageUrl: /banners/carousel-3.svg
-          link:
-            type: ROUTE
-            url: /
-      cards:
-        - id: card-1
-          title: 新手指南
-          subtitle: 快速了解发布需求与挑选家教
-          imageUrl: /banners/card-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: card-2
-          title: 在线沟通
-          subtitle: 先聊再约课，沟通更高效
-          imageUrl: /banners/card-2.svg
-          link:
-            type: ROUTE
-            url: /
-
 storage:
   minio:
     enabled: true
@@ -125,6 +77,7 @@ storage:
     secretKey: minioadmin
     bucket: ai-tutor-assets
     publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
+    defaultAvatarObjectKey: avatars/default.svg
     autoCreateBucket: true
     allowedAvatarUrlPrefixes:
       - http://127.0.0.1:9000/ai-tutor-assets

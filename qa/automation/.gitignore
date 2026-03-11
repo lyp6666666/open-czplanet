@@ -1,0 +1,6 @@
+artifacts/
+.pytest_cache/
+playwright-report/
+test-results/
+.env
+__pycache__/

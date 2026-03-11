@@ -9,14 +9,17 @@ import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminAuthService;
 import com.ai.tutor.admin.service.AdminDashboardService;
 import com.ai.tutor.admin.service.AdminJobService;
+import com.ai.tutor.admin.service.AdminPaymentRecordService;
 import com.ai.tutor.admin.service.AdminRefundService;
 import com.ai.tutor.admin.service.AdminUserManageService;
 import com.ai.tutor.admin.service.AdminVerificationService;
+import com.ai.tutor.admin.model.entity.PaymentOrderRecord;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
 
 @SpringBootApplication(
@@ -74,6 +77,26 @@ public class AdminTestApplication {
 
             @Override
             public void rejectJob(Long id, String reason) {
+            }
+        };
+    }
+
+    @Bean
+    public AdminPaymentRecordService adminPaymentRecordService() {
+        return new AdminPaymentRecordService() {
+            @Override
+            public PageResult<PaymentOrderRecord> list(int page, int size, String orderNo, Long userId, String contextType, Long contextId, String channel, String status, LocalDateTime startTime, LocalDateTime endTime) {
+                return PageResult.<PaymentOrderRecord>builder()
+                        .records(Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public PaymentOrderRecord detail(String orderNo) {
+                return null;
             }
         };
     }

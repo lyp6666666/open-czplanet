@@ -1,5 +1,6 @@
 package com.ai.tutor.appointment.service.impl;
 
+import com.ai.tutor.appointment.config.SmsProperties;
 import com.ai.tutor.appointment.config.SmsSpugProperties;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.utils.ThrowUtils;
@@ -10,6 +11,8 @@ import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -35,6 +38,12 @@ public class SmsServiceImpl implements SmsService {
 
     @Resource
     private SmsSpugProperties smsSpugProperties;
+
+    @Resource
+    private Environment environment;
+
+    @Resource
+    private SmsProperties smsProperties;
 
     private final RestTemplate restTemplate;
 
@@ -75,6 +84,13 @@ public class SmsServiceImpl implements SmsService {
     }
 
     private void sendSms(String phone, String code) {
+        if (smsProperties != null && !smsProperties.isRealSendEnabled()) {
+            if (environment != null && environment.acceptsProfiles(Profiles.of("prod", "production"))) {
+                log.info("SMS SEND SKIPPED (real send disabled) - phone: {}, code: {}", phone, code);
+            }
+            return;
+        }
+
         String token = smsSpugProperties == null || smsSpugProperties.getToken() == null ? "" : smsSpugProperties.getToken().trim();
         if (token.isEmpty()) {
             token = resolveTokenFromFallbackFiles();

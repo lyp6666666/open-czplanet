@@ -10,7 +10,6 @@
     </parent>
 
     <artifactId>videoCall-IM-service</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>videoCall-IM-service</name>
 
     <description>videoCall-IM-service</description>
@@ -24,19 +23,16 @@
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>ai-tutor-common</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>ai-tutor-mq</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>payment-service</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>

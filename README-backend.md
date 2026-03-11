@@ -177,6 +177,17 @@ bash scripts/minio_sync_assets.sh
 
 执行完成后，再打开前端首页，Banner 即可正常展示；头像上传也会直接写入 MinIO。
 
+如果你希望“未上传头像的用户也有默认头像”，需要额外写入一个默认头像对象（只需执行一次）：
+
+```bash
+cd /Users/bytedance/lyp/project/huoyue/ai_platform
+bash scripts/minio_seed_defaults.sh
+```
+
+默认头像对象 key 可通过配置项 `storage.minio.defaultAvatarObjectKey` 指定（默认 `avatars/default.svg`）：
+- 想“替换默认头像图片”但不改配置：直接把新图片覆盖上传到同一个 objectKey（avatars/default.svg）
+- 想切换到另一个默认头像：上传到新 objectKey，然后把 `storage.minio.defaultAvatarObjectKey` 改成对应值
+
 > 脚本默认通过 `host.docker.internal:9000` 访问本机 MinIO（适配 macOS Docker Desktop）。如果你在 Linux 上执行，可显式指定 `MINIO_ENDPOINT` 为你的可达地址（例如 `http://127.0.0.1:9000` 或 compose 网络内的 `http://minio:9000`）。
 
 ## 7. 常见问题

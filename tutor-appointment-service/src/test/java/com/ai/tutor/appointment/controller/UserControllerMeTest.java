@@ -10,6 +10,7 @@ import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
+import com.ai.tutor.appointment.storage.MinioProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
@@ -50,6 +51,8 @@ class UserControllerMeTest {
     private StudentJobPostingMapper studentJobPostingMapper;
     @MockBean
     private UserSettingsService userSettingsService;
+    @MockBean
+    private MinioProperties minioProperties;
 
     @Test
     void meShouldReturnDefaultGreetingForTeacher() throws Exception {

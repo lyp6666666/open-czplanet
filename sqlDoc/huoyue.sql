@@ -329,6 +329,44 @@ CREATE TABLE `brokerage_order` (
             KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='中介费订单表';
 
+DROP TABLE IF EXISTS `payment_order`;
+CREATE TABLE `payment_order` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '支付订单ID',
+            `order_no` varchar(64) NOT NULL COMMENT '商户订单号（唯一）',
+            `user_id` bigint(20) NOT NULL COMMENT '支付用户ID',
+            `amount` bigint(20) NOT NULL COMMENT '支付金额（单位：分）',
+            `currency` varchar(8) NOT NULL DEFAULT 'CNY' COMMENT '币种',
+            `channel` varchar(32) NOT NULL COMMENT '支付渠道：ALIPAY, WECHAT',
+            `provider` varchar(32) NOT NULL DEFAULT 'YUNGOUOS' COMMENT '支付提供方：YUNGOUOS',
+            `status` varchar(32) NOT NULL COMMENT '订单状态：PENDING, SUCCESS, FAILED, CLOSED',
+            `transaction_id` varchar(64) DEFAULT NULL COMMENT '第三方交易流水号',
+            `provider_order_no` varchar(64) DEFAULT NULL COMMENT '第三方系统单号（如 YunGouOS orderNo）',
+            `context_id` bigint(20) NOT NULL COMMENT '业务上下文ID',
+            `context_type` varchar(32) NOT NULL COMMENT '业务上下文类型',
+            `subject` varchar(256) NOT NULL COMMENT '订单标题',
+            `body` varchar(1024) DEFAULT NULL COMMENT '订单描述',
+            `client_ip` varchar(64) DEFAULT NULL COMMENT '客户端IP',
+            `extra_params` text COMMENT '附加参数（JSON格式）',
+            `pay_data` text COMMENT '支付要素数据（JSON：二维码图片地址/支付链接等）',
+            `notify_count` int(11) NOT NULL DEFAULT 0 COMMENT '回调接收次数',
+            `last_notify_time` datetime(3) DEFAULT NULL COMMENT '最后一次回调接收时间',
+            `notify_verified` tinyint(1) NOT NULL DEFAULT 0 COMMENT '回调验签是否通过：0否 1是',
+            `event_sent` tinyint(1) NOT NULL DEFAULT 0 COMMENT '支付成功事件是否已投递：0否 1是',
+            `event_sent_time` datetime(3) DEFAULT NULL COMMENT '支付成功事件投递时间',
+            `event_send_fail_reason` varchar(256) DEFAULT NULL COMMENT '事件投递失败原因（用于排障）',
+            `success_time` datetime(3) DEFAULT NULL COMMENT '支付成功时间',
+            `expire_time` datetime(3) DEFAULT NULL COMMENT '订单过期时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uk_order_no` (`order_no`),
+            KEY `idx_user_id` (`user_id`),
+            KEY `idx_context` (`context_id`, `context_type`),
+            KEY `idx_create_time` (`create_time`),
+            KEY `idx_status_create_time` (`status`, `create_time`),
+            KEY `idx_event_sent` (`status`, `event_sent`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付订单表';
+
 DROP TABLE IF EXISTS `tutor_application`;
 CREATE TABLE `tutor_application` (
             `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '申请id',
