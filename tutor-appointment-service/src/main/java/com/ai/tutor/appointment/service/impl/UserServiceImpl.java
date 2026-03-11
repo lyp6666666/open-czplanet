@@ -26,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -54,27 +53,25 @@ public class UserServiceImpl implements UserService {
     @Resource
     private MinioProperties minioProperties;
 
+    private static final String DEFAULT_AVATAR_PATH = "/avatars/default-avatar.svg";
+
     private String resolveDefaultAvatarUrl() {
-        if (minioProperties == null || !minioProperties.isEnabled()) {
-            return null;
+        if (minioProperties != null && minioProperties.isEnabled()) {
+            String publicBaseUrl = minioProperties.getPublicBaseUrl();
+            String objectKey = minioProperties.getDefaultAvatarObjectKey();
+            if (publicBaseUrl != null && !publicBaseUrl.trim().isEmpty() && objectKey != null && !objectKey.trim().isEmpty()) {
+                String base = publicBaseUrl.trim();
+                String key = objectKey.trim();
+                if (key.startsWith("/")) {
+                    key = key.substring(1);
+                }
+                if (base.endsWith("/")) {
+                    return base + key;
+                }
+                return base + "/" + key;
+            }
         }
-        String publicBaseUrl = minioProperties.getPublicBaseUrl();
-        String objectKey = minioProperties.getDefaultAvatarObjectKey();
-        if (publicBaseUrl == null || publicBaseUrl.trim().isEmpty()) {
-            return null;
-        }
-        if (objectKey == null || objectKey.trim().isEmpty()) {
-            return null;
-        }
-        String base = publicBaseUrl.trim();
-        String key = objectKey.trim();
-        if (key.startsWith("/")) {
-            key = key.substring(1);
-        }
-        if (base.endsWith("/")) {
-            return base + key;
-        }
-        return base + "/" + key;
+        return DEFAULT_AVATAR_PATH;
     }
 
 
@@ -101,9 +98,8 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             User created = transactionTemplate.execute(status -> {
                 try {
-                    String baseName = "用户" + phone.substring(phone.length() - 4);
                     User u = new User();
-                    u.setName(baseName);
+                    u.setName(null);
                     u.setPhone(phone);
                     u.setUserType(role.getValue());
                     u.setStatus(0);
@@ -119,25 +115,6 @@ public class UserServiceImpl implements UserService {
                         ensureProfile(existing.getId(), phone, role);
                         return existing;
                     }
-
-                    String baseName = "用户" + phone.substring(phone.length() - 4);
-                    for (int i = 0; i < 3; i++) {
-                        try {
-                            User u = new User();
-                            u.setName(baseName + "-" + ThreadLocalRandom.current().nextInt(1000, 10000));
-                            u.setPhone(phone);
-                            u.setUserType(role.getValue());
-                            u.setStatus(0);
-                            u.setActiveStatus(2);
-                            u.setCreateTime(LocalDateTime.now());
-                            u.setUpdateTime(LocalDateTime.now());
-                            userMapper.insert(u);
-                            ensureProfile(u.getId(), phone, role);
-                            return u;
-                        } catch (DuplicateKeyException ignored) {
-                        }
-                    }
-
                     ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
                     return null;
                 }
@@ -183,7 +160,7 @@ public class UserServiceImpl implements UserService {
             if (tp != null) return;
             TeacherProfile created = new TeacherProfile();
             created.setUserId(userId);
-            created.setRealName("教师" + phone.substring(phone.length() - 4));
+            created.setRealName("");
             created.setStatus(1);
             created.setCreateTime(LocalDateTime.now());
             created.setUpdateTime(LocalDateTime.now());
@@ -193,7 +170,7 @@ public class UserServiceImpl implements UserService {
             if (sp != null) return;
             StudentProfile created = new StudentProfile();
             created.setUserId(userId);
-            created.setRealName("学生" + phone.substring(phone.length() - 4));
+            created.setRealName("");
             created.setStatus(1);
             created.setCreateTime(LocalDateTime.now());
             created.setUpdateTime(LocalDateTime.now());

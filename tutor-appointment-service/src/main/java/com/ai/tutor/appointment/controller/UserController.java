@@ -68,28 +68,25 @@ public class UserController {
     private MinioProperties minioProperties;
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("^1\\d{10}$");
+    private static final String DEFAULT_AVATAR_PATH = "/avatars/default-avatar.svg";
 
     private String resolveDefaultAvatarUrl() {
-        if (minioProperties == null || !minioProperties.isEnabled()) {
-            return null;
+        if (minioProperties != null && minioProperties.isEnabled()) {
+            String publicBaseUrl = minioProperties.getPublicBaseUrl();
+            String objectKey = minioProperties.getDefaultAvatarObjectKey();
+            if (publicBaseUrl != null && !publicBaseUrl.trim().isEmpty() && objectKey != null && !objectKey.trim().isEmpty()) {
+                String base = publicBaseUrl.trim();
+                String key = objectKey.trim();
+                if (key.startsWith("/")) {
+                    key = key.substring(1);
+                }
+                if (base.endsWith("/")) {
+                    return base + key;
+                }
+                return base + "/" + key;
+            }
         }
-        String publicBaseUrl = minioProperties.getPublicBaseUrl();
-        String objectKey = minioProperties.getDefaultAvatarObjectKey();
-        if (publicBaseUrl == null || publicBaseUrl.trim().isEmpty()) {
-            return null;
-        }
-        if (objectKey == null || objectKey.trim().isEmpty()) {
-            return null;
-        }
-        String base = publicBaseUrl.trim();
-        String key = objectKey.trim();
-        if (key.startsWith("/")) {
-            key = key.substring(1);
-        }
-        if (base.endsWith("/")) {
-            return base + key;
-        }
-        return base + "/" + key;
+        return DEFAULT_AVATAR_PATH;
     }
 
     private String normalizeAvatar(String avatar) {

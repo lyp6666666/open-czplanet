@@ -133,7 +133,7 @@ class UserServiceImplTest {
         ArgumentCaptor<User> inserted = ArgumentCaptor.forClass(User.class);
         verify(userMapper, times(1)).insert(inserted.capture());
         assertThat(inserted.getValue().getPhone()).isEqualTo(phone);
-        assertThat(inserted.getValue().getName()).isEqualTo("用户1234");
+        assertThat(inserted.getValue().getName()).isNull();
 
         verify(studentProfileMapper, times(1)).insert(any(StudentProfile.class));
     }
@@ -163,19 +163,17 @@ class UserServiceImplTest {
     }
 
     @Test
-    void shouldRetryWithDifferentNameWhenUniqNameConflicts() {
+    void shouldReturnExistingWhenConcurrentInsertHitsDuplicateKey() {
         String phone = "13800005678";
         when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
 
-        when(userMapper.selectByPhone(phone)).thenReturn(null);
-        doThrow(new DuplicateKeyException("dup"))
-                .doAnswer(inv -> {
-                    User u = inv.getArgument(0);
-                    u.setId(4004L);
-                    return 1;
-                })
-                .when(userMapper)
-                .insert(any(User.class));
+        User existing = new User();
+        existing.setId(4004L);
+        existing.setPhone(phone);
+        existing.setName(null);
+
+        when(userMapper.selectByPhone(phone)).thenReturn(null, existing);
+        doThrow(new DuplicateKeyException("dup")).when(userMapper).insert(any(User.class));
 
         when(studentProfileMapper.selectByUserId(4004L)).thenReturn(null);
         when(userMapper.updateUserType(4004L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
@@ -185,8 +183,8 @@ class UserServiceImplTest {
         assertThat(vo.getId()).isEqualTo(4004L);
 
         ArgumentCaptor<User> inserted = ArgumentCaptor.forClass(User.class);
-        verify(userMapper, times(2)).insert(inserted.capture());
-        assertThat(inserted.getAllValues().get(1).getName()).startsWith("用户5678-");
+        verify(userMapper, times(1)).insert(inserted.capture());
+        assertThat(inserted.getValue().getName()).isNull();
     }
 
     @Test

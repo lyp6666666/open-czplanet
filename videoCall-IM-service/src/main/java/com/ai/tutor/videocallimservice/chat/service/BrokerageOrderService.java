@@ -24,7 +24,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class BrokerageOrderService {
@@ -54,6 +58,9 @@ public class BrokerageOrderService {
     @Value("${brokerage.admin-token:}")
     private String adminToken;
 
+    private static final int LESSON_HOURS = 2;
+    private static final Pattern PRICE_NUMBER = Pattern.compile("(\\d+(?:\\.\\d+)?)");
+
     public BrokerageOrderVO getOrCreateByProposal(Long proposalId, Long uid) {
         ThrowUtils.throwIf(proposalId == null || uid == null, ErrorCode.PARAMS_ERROR);
         CollaborationProposal proposal = collaborationProposalMapper.selectById(proposalId);
@@ -73,11 +80,12 @@ public class BrokerageOrderService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        long amountFen = computeInfoFeeAmountFen(proposal);
         BrokerageOrder order = BrokerageOrder.builder()
                 .proposalId(proposalId)
                 .roomId(proposal.getRoomId())
                 .payerUid(teacherUid)
-                .amountFen(defaultAmountFen)
+                .amountFen(amountFen)
                 .status(BrokerageOrderStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
@@ -91,6 +99,57 @@ public class BrokerageOrderService {
         }
         ThrowUtils.throwIf(order.getId() == null, ErrorCode.OPERATION_ERROR);
         return toVO(order);
+    }
+
+    private long computeInfoFeeAmountFen(CollaborationProposal proposal) {
+        if (proposal == null) {
+            return defaultAmountFen;
+        }
+        Integer frequencyPerWeek = proposal.getFrequencyPerWeek();
+        BigDecimal rate = resolveInfoFeeRate(frequencyPerWeek);
+        Long pricePerHourFen = parsePricePerHourFen(proposal.getPricePerHour());
+        if (pricePerHourFen == null || pricePerHourFen <= 0L) {
+            return defaultAmountFen;
+        }
+        long lessonsPerWeek = frequencyPerWeek == null || frequencyPerWeek <= 0 ? 1L : frequencyPerWeek.longValue();
+        BigDecimal weeklyCourseFeeFen = BigDecimal.valueOf(pricePerHourFen)
+                .multiply(BigDecimal.valueOf(LESSON_HOURS))
+                .multiply(BigDecimal.valueOf(lessonsPerWeek));
+        BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
+        long out = infoFeeFen.longValue();
+        return out <= 0L ? 1L : out;
+    }
+
+    private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
+        int n = frequencyPerWeek == null ? 1 : frequencyPerWeek;
+        if (n <= 1) return BigDecimal.ONE;
+        if (n == 2) return new BigDecimal("0.9");
+        if (n == 3) return new BigDecimal("0.8");
+        if (n == 4) return new BigDecimal("0.7");
+        if (n == 5) return new BigDecimal("0.6");
+        return new BigDecimal("0.5");
+    }
+
+    private static Long parsePricePerHourFen(String pricePerHour) {
+        String raw = pricePerHour == null ? "" : pricePerHour.trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        Matcher m = PRICE_NUMBER.matcher(raw);
+        if (!m.find()) {
+            return null;
+        }
+        BigDecimal cny;
+        try {
+            cny = new BigDecimal(m.group(1));
+        } catch (Exception ignored) {
+            return null;
+        }
+        if (cny.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        BigDecimal fen = cny.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP);
+        return fen.longValue();
     }
 
     public boolean hasPaidOrderInRoom(Long roomId) {

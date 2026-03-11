@@ -5,6 +5,7 @@ import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.ApplicationBrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
+import com.ai.tutor.videocallimservice.chat.domain.entity.StudentJobPostingLite;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
@@ -21,6 +22,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.TutorApplicationU
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.TutorApplicationVO;
 import com.ai.tutor.videocallimservice.chat.mapper.ApplicationBrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
 import jakarta.annotation.Resource;
@@ -31,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -42,6 +46,7 @@ public class TutorApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(TutorApplicationService.class);
     private static final int DAILY_CREATE_LIMIT = 5;
+    private static final int LESSON_HOURS = 2;
 
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
@@ -53,6 +58,9 @@ public class TutorApplicationService {
     private ChatRoomService chatRoomService;
     @Resource
     private ChatService chatService;
+
+    @Resource
+    private StudentJobPostingLiteMapper studentJobPostingLiteMapper;
 
     @Resource
     private SseSessionManager sseSessionManager;
@@ -401,12 +409,13 @@ public class TutorApplicationService {
 
         Long teacherUid = resolveTeacherUid(application);
         LocalDateTime now = LocalDateTime.now();
+        long amountFen = computeInfoFeeAmountFenForApplication(application);
         BrokerageOrder order = BrokerageOrder.builder()
                 .proposalId(null)
                 .applicationId(application.getId())
                 .roomId(application.getRoomId())
                 .payerUid(teacherUid)
-                .amountFen(defaultAmountFen)
+                .amountFen(amountFen)
                 .status(BrokerageOrderStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
@@ -434,6 +443,42 @@ public class TutorApplicationService {
             return latest.getOrderId();
         }
         return order.getId();
+    }
+
+    private long computeInfoFeeAmountFenForApplication(TutorApplication application) {
+        if (application == null) {
+            return defaultAmountFen;
+        }
+        if (!"DEMAND".equals(application.getContextType()) || application.getContextId() == null) {
+            return defaultAmountFen;
+        }
+        StudentJobPostingLite demand = studentJobPostingLiteMapper.selectById(application.getContextId());
+        if (demand == null) {
+            return defaultAmountFen;
+        }
+        Integer frequencyPerWeek = demand.getFrequencyPerWeek();
+        BigDecimal rate = resolveInfoFeeRate(frequencyPerWeek);
+        BigDecimal hourlyCny = demand.getBudgetMax() != null ? demand.getBudgetMax() : demand.getBudgetMin();
+        if (hourlyCny == null || hourlyCny.compareTo(BigDecimal.ZERO) <= 0) {
+            return defaultAmountFen;
+        }
+        long lessonsPerWeek = frequencyPerWeek == null || frequencyPerWeek <= 0 ? 1L : frequencyPerWeek.longValue();
+        BigDecimal weeklyCourseFeeFen = hourlyCny.multiply(BigDecimal.valueOf(100))
+                .multiply(BigDecimal.valueOf(LESSON_HOURS))
+                .multiply(BigDecimal.valueOf(lessonsPerWeek));
+        BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
+        long out = infoFeeFen.longValue();
+        return out <= 0L ? 1L : out;
+    }
+
+    private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
+        int n = frequencyPerWeek == null ? 1 : frequencyPerWeek;
+        if (n <= 1) return BigDecimal.ONE;
+        if (n == 2) return new BigDecimal("0.9");
+        if (n == 3) return new BigDecimal("0.8");
+        if (n == 4) return new BigDecimal("0.7");
+        if (n == 5) return new BigDecimal("0.6");
+        return new BigDecimal("0.5");
     }
 
     private CursorPageResp<TutorApplicationVO> toPage(List<TutorApplication> list, Integer pageSize) {

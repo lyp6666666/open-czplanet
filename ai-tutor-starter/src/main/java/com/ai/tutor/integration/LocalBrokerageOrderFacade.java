@@ -49,8 +49,8 @@ public class LocalBrokerageOrderFacade implements BrokerageOrderFacade {
         info.setPayerUid(order.getPayerUid());
         info.setAmountFen(order.getAmountFen());
         info.setStatus(order.getStatus());
-        info.setSubject("中介费支付");
-        info.setBody("中介费支付");
+        info.setSubject("信息费支付");
+        info.setBody("对接咨询费支付");
         info.setApplicationId(order.getApplicationId());
         return info;
     }

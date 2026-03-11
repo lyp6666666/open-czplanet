@@ -16,7 +16,14 @@ const cityStore = useCityStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
-const displayName = computed(() => auth.me?.teacherProfile?.realName || auth.user?.name || '未登录')
+const displayName = computed(() => {
+  if (!auth.isLoggedIn) return '未登录'
+  const t = (auth.me?.teacherProfile?.realName || '').trim()
+  if (t) return t
+  const n = (auth.user?.name || '').trim()
+  if (n) return n
+  return '未填写姓名'
+})
 const unread = computed(() => chatRealtime.totalUnread)
 
 const city = computed({
