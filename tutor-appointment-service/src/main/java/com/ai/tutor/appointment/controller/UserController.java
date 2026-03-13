@@ -142,6 +142,13 @@ public class UserController {
         return ResultUtils.success(loginUserVO);
     }
 
+    @PostMapping("/wechatLogin")
+    @Operation(summary = "微信小程序登录", description = "使用微信code登录")
+    public BaseResponse<LoginUserVO> wechatLogin(@RequestBody com.ai.tutor.appointment.model.dto.user.WechatLoginRequest request) {
+        ThrowUtils.throwIf(request == null || request.getCode() == null, ErrorCode.PARAMS_ERROR);
+        return ResultUtils.success(userService.wechatLogin(request.getCode()));
+    }
+
     @PostMapping("/updateUserInfo")
     @Operation(summary = "更新用户信息", description = "更新用户信息")
     public BaseResponse<String> updateUserInfo(@RequestBody UserUpdateRequest requestDto, HttpServletRequest request) {

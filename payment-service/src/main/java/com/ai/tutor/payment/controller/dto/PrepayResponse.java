@@ -38,5 +38,10 @@ public class PrepayResponse {
      * 过期时间
      */
     private LocalDateTime expireTime;
+
+    /**
+     * 支付参数（JSAPI/APP 支付时返回的签名数据）
+     */
+    private Object payParams;
 }
 

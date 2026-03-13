@@ -67,10 +67,14 @@ public class PaymentProperties {
     @Data
     public static class Wechat {
         /**
-         * 微信应用ID
+         * 微信应用ID (App支付)
          * 获取方式：微信开放平台 (https://open.weixin.qq.com) -> 管理中心 -> 应用详情 -> AppID
          */
         private String appId;
+        /**
+         * 微信小程序ID (JSAPI支付)
+         */
+        private String miniappId;
         /**
          * 商户号
          * 获取方式：微信支付商户平台 (https://pay.weixin.qq.com) -> 账户中心 -> 商户信息 -> 微信支付商户号
@@ -96,6 +100,11 @@ public class PaymentProperties {
          * 说明：必须是公网可访问的HTTPS地址，例如 https://api.yourdomain.com/payment/notify/wechat
          */
         private String notifyUrl;
+        
+        /**
+         * 是否启用 Mock 模式（跳过微信 API 调用，返回模拟支付参数）
+         */
+        private Boolean mockEnabled = false;
     }
 
     @Data

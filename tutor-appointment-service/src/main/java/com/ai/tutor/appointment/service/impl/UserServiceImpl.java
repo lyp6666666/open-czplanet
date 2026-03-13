@@ -12,6 +12,9 @@ import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.service.UserService;
+import com.ai.tutor.appointment.service.WechatAuthService;
+import cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.utils.ThrowUtils;
@@ -49,6 +52,8 @@ public class UserServiceImpl implements UserService {
     private StudentProfileMapper studentProfileMapper;
     @Resource
     private TransactionTemplate transactionTemplate;
+    @Resource
+    private WechatAuthService wechatAuthService;
 
     @Resource
     private MinioProperties minioProperties;
@@ -405,5 +410,54 @@ public class UserServiceImpl implements UserService {
         }
         int count = teacherProfileMapper.updateTeacherProfile(teacherExtInfo, userId);
         return count;
+    }
+
+    @Override
+    public LoginUserVO wechatLogin(String code) {
+        // 1. Get OpenID from WeChat
+        WxMaJscode2SessionResult session = wechatAuthService.login(code);
+        String openid = session.getOpenid();
+
+        // 2. Find user by OpenID
+        User user = userMapper.selectByOpenId(openid);
+        boolean isNew = false;
+
+        if (user == null) {
+            // 3. Create new user if not exists
+            isNew = true;
+            user = new User();
+            user.setOpenId(openid);
+            user.setUserType(UserRoleEnum.STUDENT.getValue()); // Default to Student
+            user.setStatus(0);
+            user.setActiveStatus(1);
+            user.setCreateTime(LocalDateTime.now());
+            user.setUpdateTime(LocalDateTime.now());
+            // Name and Avatar can be empty initially, or updated later
+            userMapper.insert(user);
+            ensureProfile(user.getId(), null, UserRoleEnum.STUDENT);
+        }
+
+        // 4. Generate Token
+        // Phone might be null for WeChat users initially
+        String phone = user.getPhone();
+        String token = jwtUtil.generateToken(user.getId(), phone != null ? phone : "", UserRoleEnum.fromValue(user.getUserType()));
+
+        // 5. Cache token
+        if (phone != null) {
+             String key = RedisKeyPrefix.USER_TOKEN.key(phone);
+             redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
+        }
+
+        return LoginUserVO.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .phone(user.getPhone())
+                .avatar(user.getAvatar() == null || user.getAvatar().trim().isEmpty() ? resolveDefaultAvatarUrl() : user.getAvatar())
+                .sex(user.getSex())
+                .userType(user.getUserType())
+                .isNew(isNew)
+                .token(token)
+                .openid(user.getOpenId())
+                .build();
     }
 }

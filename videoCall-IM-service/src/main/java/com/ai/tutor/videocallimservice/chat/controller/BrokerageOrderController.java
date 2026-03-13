@@ -3,6 +3,7 @@ package com.ai.tutor.videocallimservice.chat.controller;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.CreateDirectBrokerageOrderReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitBrokerageProofReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
 import com.ai.tutor.videocallimservice.chat.service.BrokerageOrderService;
@@ -19,6 +20,13 @@ public class BrokerageOrderController {
 
     @Resource
     private BrokerageOrderService brokerageOrderService;
+
+    @PostMapping("/order/direct")
+    @Operation(summary = "创建直接支付订单（测试/预约用）")
+    public BaseResponse<BrokerageOrderVO> createDirect(@Valid @RequestBody CreateDirectBrokerageOrderReq req) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(brokerageOrderService.createDirectOrder(req, uid));
+    }
 
     @PostMapping("/order/by-proposal/{proposalId}")
     @Operation(summary = "按合作提案创建/获取订单（幂等）")

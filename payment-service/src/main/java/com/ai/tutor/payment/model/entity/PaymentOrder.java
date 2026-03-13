@@ -1,10 +1,14 @@
 package com.ai.tutor.payment.model.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * 支付订单实体
@@ -12,6 +16,20 @@ import java.time.LocalDateTime;
 @Data
 @TableName("payment_order")
 public class PaymentOrder implements Serializable {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    public String getExtra(String key) {
+        if (extraParams == null || extraParams.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, String> map = OBJECT_MAPPER.readValue(extraParams, new TypeReference<Map<String, String>>() {});
+            return map.get(key);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     private static final long serialVersionUID = 1L;
 

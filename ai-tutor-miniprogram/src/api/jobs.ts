@@ -1,0 +1,35 @@
+import { request } from '@/utils/request';
+
+export const jobsApi = {
+  // 发布需求
+  createDemand(data: any) {
+    return request({
+      url: '/api/v1/parent/jobs',
+      method: 'POST',
+      data
+    });
+  },
+  // 我的需求
+  mineDemands(params: any) {
+    return request({
+      url: '/api/v1/parent/jobs/mine',
+      method: 'GET',
+      data: params
+    });
+  },
+  // 需求广场 (Feed)
+  feedDemands(params: any) {
+    return request({
+      url: '/api/v1/parent/jobs/feed',
+      method: 'GET',
+      data: params
+    });
+  },
+  // 需求详情
+  getDemand(id: number) {
+    return request({
+      url: `/api/v1/parent/jobs/${id}`,
+      method: 'GET'
+    });
+  }
+};

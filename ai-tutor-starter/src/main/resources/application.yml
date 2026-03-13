@@ -102,6 +102,20 @@ admin:
     expiration: 24h
     issuer: ai-tutor-admin
 
+# 本地开发 Mock 配置（如果 Nacos 中未配置，将使用此处的默认值）
+wechat:
+  miniapp:
+    appid: ${WX_MINI_APPID:wx_mock_appid}
+    secret: ${WX_MINI_SECRET:mock_secret}
+    mock-enabled: ${WX_MOCK_ENABLED:true}
+
+payment:
+  wechat:
+    appId: ${WX_PAY_APPID:wx_mock_appid}
+    miniappId: ${WX_MINI_APPID:wx_mock_appid}
+    mchId: ${WX_PAY_MCHID:mock_mch_id}
+    mock-enabled: ${PAYMENT_MOCK_ENABLED:true}
+
 ---
 spring:
   config:

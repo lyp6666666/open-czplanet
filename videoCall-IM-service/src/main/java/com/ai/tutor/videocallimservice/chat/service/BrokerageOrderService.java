@@ -10,6 +10,7 @@ import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokeragePayMethod;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.CreateDirectBrokerageOrderReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitBrokerageProofReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
@@ -30,7 +31,10 @@ import java.time.LocalDateTime;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Service
+@Slf4j
 public class BrokerageOrderService {
 
     @Resource
@@ -97,6 +101,31 @@ public class BrokerageOrderService {
             ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
             return toVO(latest);
         }
+        ThrowUtils.throwIf(order.getId() == null, ErrorCode.OPERATION_ERROR);
+        return toVO(order);
+    }
+
+    public BrokerageOrderVO createDirectOrder(CreateDirectBrokerageOrderReq req, Long uid) {
+        ThrowUtils.throwIf(req == null || uid == null, ErrorCode.PARAMS_ERROR);
+        Long amountFen = req.getAmountFen();
+        ThrowUtils.throwIf(amountFen == null || amountFen <= 0, ErrorCode.PARAMS_ERROR);
+
+        if (req.getAppointmentId() != null) {
+            log.info("Creating BrokerageOrder for Appointment ID: {}", req.getAppointmentId());
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        BrokerageOrder order = BrokerageOrder.builder()
+                .proposalId(0L) // 0 表示没有关联提案
+                .roomId(0L)
+                .payerUid(uid)
+                .amountFen(amountFen)
+                .status(BrokerageOrderStatus.PENDING.name())
+                .createTime(now)
+                .updateTime(now)
+                .proofNote(req.getAppointmentId() != null ? "ApptID:" + req.getAppointmentId() : null)
+                .build();
+        brokerageOrderMapper.insert(order);
         ThrowUtils.throwIf(order.getId() == null, ErrorCode.OPERATION_ERROR);
         return toVO(order);
     }

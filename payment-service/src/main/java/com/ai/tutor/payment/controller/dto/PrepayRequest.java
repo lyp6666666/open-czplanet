@@ -26,5 +26,15 @@ public class PrepayRequest {
      */
     @NotBlank(message = "channel 不能为空")
     private String channel;
+
+    /**
+     * 支付方式：APP / JSAPI / NATIVE / H5
+     */
+    private String tradeType;
+
+    /**
+     * 用户标识（JSAPI 支付必填）
+     */
+    private String openid;
 }
 

@@ -31,6 +31,9 @@ public class LoginUserVO implements Serializable {
 
     /*返回的登录凭证*/
     private String token;
+    
+    /** 微信 OpenID */
+    private String openid;
 
 
     private static final long serialVersionUID = 1L;

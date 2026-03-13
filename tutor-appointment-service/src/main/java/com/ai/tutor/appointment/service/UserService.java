@@ -16,4 +16,6 @@ public interface UserService {
 
     void updateUserPhoneV2(UpdatePhoneV2Request requestDto, HttpServletRequest request);
 
+    LoginUserVO wechatLogin(String code);
+
 }

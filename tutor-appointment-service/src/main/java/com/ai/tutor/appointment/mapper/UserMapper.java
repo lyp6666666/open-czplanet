@@ -9,6 +9,9 @@ import java.util.List;
 @Mapper
 public interface UserMapper {
 
+    @Select("SELECT * FROM user WHERE open_id = #{openId} LIMIT 1")
+    User selectByOpenId(@Param("openId") String openId);
+
     @Select("SELECT * FROM user WHERE phone = #{phone} LIMIT 1")
     User selectByPhone(String phone);
 

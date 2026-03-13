@@ -134,5 +134,12 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- WeChat Mini Program -->
+        <dependency>
+            <groupId>com.github.binarywang</groupId>
+            <artifactId>weixin-java-miniapp</artifactId>
+            <version>4.6.0</version>
+        </dependency>
+
     </dependencies>
 </project>
