@@ -6,12 +6,15 @@ import { jobsApi } from '@/api/jobs'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 import type { StudentJobPosting } from '@/api/types'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
+import { useToastStore } from '@/stores/toast'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToastStore()
 
 const id = computed(() => Number(route.params.id))
+const isOrg = computed(() => String(route.path || '').startsWith('/org/'))
 
 const loading = ref(false)
 const saving = ref(false)
@@ -159,7 +162,7 @@ async function load() {
   error.value = null
   doneHint.value = null
   try {
-    const d = await jobsApi.getDemand(id.value)
+    const d = await (isOrg.value ? jobsApi.getOrgDemand(id.value) : jobsApi.getDemand(id.value))
     form.value = d
     if (form.value) {
       if (!form.value.classMode) form.value.classMode = 'online'
@@ -180,44 +183,42 @@ async function load() {
 
 async function onSave() {
   if (!form.value) return
-  error.value = null
-  doneHint.value = null
   if (!String(form.value.studentGender || '').trim()) {
-    error.value = '请选择学员性别'
+    toast.show('请选择学员性别', 'error')
     return
   }
   if (subjectTokens.value.length === 0) {
-    error.value = '请选择教学科目'
+    toast.show('请选择教学科目', 'error')
     return
   }
   if (subjectOther.value && splitOtherSubjects(subjectOtherName.value).length === 0) {
-    error.value = '请输入其他科目'
+    toast.show('请输入其他科目', 'error')
     return
   }
   if (!String(form.value.gradeCode || '').trim()) {
-    error.value = '请选择学生年级'
+    toast.show('请选择学生年级', 'error')
     return
   }
   if (!form.value.classMode) {
-    error.value = '请选择授课方式'
+    toast.show('请选择授课方式', 'error')
     return
   }
   const desc = String(form.value.description || '').trim()
   if (!desc) {
-    error.value = '请填写学生情况描述'
+    toast.show('请填写学生情况描述', 'error')
     return
   }
   if (desc.length < 10) {
-    error.value = '学生情况描述至少10个字'
+    toast.show('学生情况描述至少10个字', 'error')
     return
   }
   const reqDetail = String(form.value.teacherRequirementDetail || '').trim()
   if (!reqDetail) {
-    error.value = '请填写对教员的详细要求'
+    toast.show('请填写对教员的详细要求', 'error')
     return
   }
   if (reqDetail.length < 10) {
-    error.value = '对教员的详细要求至少10个字'
+    toast.show('对教员的详细要求至少10个字', 'error')
     return
   }
   let budgetMinNum: number
@@ -225,12 +226,12 @@ async function onSave() {
   if (budgetMode.value === 'single') {
     const raw = String(budgetSingle.value ?? '').trim()
     if (!raw) {
-      error.value = '请填写预算'
+      toast.show('请填写预算', 'error')
       return
     }
     const v = Number(raw)
     if (!Number.isFinite(v) || v <= 0) {
-      error.value = '预算需为大于 0 的数字'
+      toast.show('预算需为大于 0 的数字', 'error')
       return
     }
     budgetMinNum = v
@@ -239,34 +240,35 @@ async function onSave() {
     const rawMin = String(budgetMin.value ?? '').trim()
     const rawMax = String(budgetMax.value ?? '').trim()
     if (!rawMin || !rawMax) {
-      error.value = '请填写预算上下限'
+      toast.show('请填写预算上下限', 'error')
       return
     }
     const vMin = Number(rawMin)
     const vMax = Number(rawMax)
     if (!Number.isFinite(vMin) || vMin <= 0) {
-      error.value = '预算下限需为大于 0 的数字'
+      toast.show('预算下限需为大于 0 的数字', 'error')
       return
     }
     if (!Number.isFinite(vMax) || vMax <= 0) {
-      error.value = '预算上限需为大于 0 的数字'
+      toast.show('预算上限需为大于 0 的数字', 'error')
       return
     }
     if (vMin > vMax) {
-      error.value = '预算下限不能大于预算上限'
+      toast.show('预算下限不能大于预算上限', 'error')
       return
     }
     budgetMinNum = vMin
     budgetMaxNum = vMax
   }
   if ((form.value.classMode === 'offline' || form.value.classMode === 'both') && (!String(form.value.city || '').trim() || !String(form.value.address || '').trim())) {
-    error.value = '上门辅导必须填写城市与上课地址'
+    toast.show('上门辅导必须填写城市与上课地址', 'error')
     return
   }
   saving.value = true
   try {
     const stage = resolveStageCodeByGradeCode(form.value.gradeCode)
-    await jobsApi.updateDemand(id.value, {
+    const updater = isOrg.value ? jobsApi.updateOrgDemand : jobsApi.updateDemand
+    await updater(id.value, {
       title: buildTitle(),
       subjectName: subjectName.value as string,
       subjectOther: subjectOther.value,
@@ -284,9 +286,9 @@ async function onSave() {
       stageCode: stage || undefined,
       status: form.value.status ?? undefined,
     })
-    doneHint.value = '已保存'
+    toast.show('已保存', 'success')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    toast.show(e instanceof Error ? e.message : '保存失败', 'error')
   } finally {
     saving.value = false
   }
@@ -296,7 +298,7 @@ function onSelectCity(v: string) {
   if (!form.value) return
   if (form.value.classMode === 'offline' || form.value.classMode === 'both') {
     if (String(v || '').trim() === '全国') {
-      error.value = '上门辅导请选择具体城市'
+      toast.show('上门辅导请选择具体城市', 'error')
       return
     }
   }
@@ -339,7 +341,6 @@ watch(
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>
-    <div v-else-if="doneHint" class="hint ok">{{ doneHint }}</div>
 
     <div v-if="form" class="card form">
       <div class="section">

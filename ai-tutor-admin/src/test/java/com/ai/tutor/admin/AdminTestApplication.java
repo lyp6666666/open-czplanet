@@ -11,6 +11,7 @@ import com.ai.tutor.admin.service.AdminDashboardService;
 import com.ai.tutor.admin.service.AdminJobService;
 import com.ai.tutor.admin.service.AdminPaymentRecordService;
 import com.ai.tutor.admin.service.AdminRefundService;
+import com.ai.tutor.admin.service.AdminOrganizationService;
 import com.ai.tutor.admin.service.AdminUserManageService;
 import com.ai.tutor.admin.service.AdminVerificationService;
 import com.ai.tutor.admin.model.entity.PaymentOrderRecord;
@@ -140,6 +141,39 @@ public class AdminTestApplication {
 
             @Override
             public void disable(Long id) {
+            }
+        };
+    }
+
+    @Bean
+    public AdminOrganizationService adminOrganizationService() {
+        return new AdminOrganizationService() {
+            @Override
+            public com.ai.tutor.admin.model.vo.AdminOrganizationCreateResponse create(com.ai.tutor.admin.model.dto.AdminOrganizationCreateRequest request) {
+                return null;
+            }
+
+            @Override
+            public com.ai.tutor.admin.model.vo.PageResult<com.ai.tutor.admin.model.vo.AdminOrganizationRowVO> page(String q, int page, int size) {
+                return com.ai.tutor.admin.model.vo.PageResult.<com.ai.tutor.admin.model.vo.AdminOrganizationRowVO>builder()
+                        .records(java.util.Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public com.ai.tutor.admin.model.vo.AdminOrganizationDetailVO getDetail(Long orgUserId) {
+                return null;
+            }
+
+            @Override
+            public void update(Long orgUserId, com.ai.tutor.admin.model.dto.AdminOrganizationUpdateRequest request) {
+            }
+
+            @Override
+            public void disable(Long orgUserId) {
             }
         };
     }

@@ -42,6 +42,22 @@ update_time=VALUES(update_time);
 
 INSERT INTO `user` (id, name, phone, avatar, sex, open_id, active_status, last_opt_time, ip_info, item_id, status, user_type, ref_id, create_time, update_time)
 VALUES
+(301, '默默机构', '19900000001', '/avatars/org301.png', NULL, NULL, 2, NOW(3), NULL, NULL, 0, 3, 1301, NOW(3), NOW(3)),
+(20019, '示例机构20019', '19900020019', '/avatars/org20019.png', NULL, NULL, 2, NOW(3), NULL, NULL, 0, 3, 62019, NOW(3), NOW(3))
+ON DUPLICATE KEY UPDATE
+name=VALUES(name),
+phone=VALUES(phone),
+avatar=VALUES(avatar),
+sex=VALUES(sex),
+active_status=VALUES(active_status),
+last_opt_time=VALUES(last_opt_time),
+status=VALUES(status),
+user_type=VALUES(user_type),
+ref_id=VALUES(ref_id),
+update_time=VALUES(update_time);
+
+INSERT INTO `user` (id, name, phone, avatar, sex, open_id, active_status, last_opt_time, ip_info, item_id, status, user_type, ref_id, create_time, update_time)
+VALUES
 (1, '用户5678', '13812345678', NULL, NULL, NULL, 2, NULL, NULL, NULL, 0, 1, NULL, '2025-11-30 12:06:31.429', '2025-11-30 12:06:31.429'),
 (3, '用户6909', '15268836999', NULL, NULL, NULL, 2, NULL, NULL, NULL, 0, 2, NULL, '2025-11-30 22:00:46.260', '2025-11-30 22:00:46.260')
 ON DUPLICATE KEY UPDATE
@@ -76,6 +92,44 @@ demand_description=VALUES(demand_description),
 budget=VALUES(budget),
 status=VALUES(status),
 update_time=VALUES(update_time);
+
+INSERT INTO `student_profile` (id, user_id, real_name, age, address, demand_description, budget, status, create_time, update_time)
+VALUES
+(1301, 301, '默默机构', NULL, '北京·海淀', '机构介绍：专注中小学一对一家教与学习规划。', NULL, 1, NOW(3), NOW(3)),
+(62019, 20019, '示例机构20019', NULL, '北京·朝阳', '机构介绍：用于本地联调的机构账号（兼容聊天/申请）。', NULL, 1, NOW(3), NOW(3))
+ON DUPLICATE KEY UPDATE
+real_name=VALUES(real_name),
+age=VALUES(age),
+address=VALUES(address),
+demand_description=VALUES(demand_description),
+budget=VALUES(budget),
+status=VALUES(status),
+update_time=VALUES(update_time);
+
+INSERT INTO `organization_profile` (id, user_id, org_name, intro, contact_name, contact_phone, address, license_no, split_platform_percent, split_org_percent, status)
+VALUES
+(4001, 301, '默默机构', '专注中小学一对一辅导，提供学习规划与阶段测评。', '客服小默', '19900000001', '北京·海淀', '91110108MA0000000X', 50, 50, 1),
+(42019, 20019, '示例机构20019', '用于本地联调的机构资料。', '联系人20019', '19900020019', '北京·朝阳', '91110108MA0020019X', 50, 50, 1)
+ON DUPLICATE KEY UPDATE
+org_name=VALUES(org_name),
+intro=VALUES(intro),
+contact_name=VALUES(contact_name),
+contact_phone=VALUES(contact_phone),
+address=VALUES(address),
+license_no=VALUES(license_no),
+split_platform_percent=VALUES(split_platform_percent),
+split_org_percent=VALUES(split_org_percent),
+status=VALUES(status),
+update_time=NOW(3);
+
+INSERT INTO `organization_account` (org_user_id, username, password_hash, must_change_password, status)
+VALUES
+(301, 'momo_org', '$2y$10$LbNkUflDfYhPkKJyVJJsv.Hddizb59IKgpP3dlYYtvKA8BPQp7HTC', 1, 1)
+ON DUPLICATE KEY UPDATE
+password_hash=VALUES(password_hash),
+must_change_password=VALUES(must_change_password),
+status=VALUES(status),
+update_time=NOW(3);
 
 INSERT INTO `teacher_profile` (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, certificate_urls, status, create_time, update_time)
 VALUES
@@ -117,7 +171,8 @@ VALUES
 (3017, 107, 103, '小学英语', 'male', '青岛小学英语自然拼读', '提升自然拼读与朗读能力，建立语感。', 9, 'offline', '青岛', '市南区五四广场附近', 2, 120.00, 180.00, 'PRIMARY', 'UNLIMITED', 'PARENT', '["Wed 19-20","Sun 19-20"]', 1, NOW(3), NOW(3)),
 (3018, 108, 201, '初中数学', 'female', '济南初三数学冲刺（函数压轴）', '冲刺阶段希望专项突破函数压轴题。', 15, 'both', '济南', '历下区泉城广场附近', 3, 220.00, 320.00, 'JUNIOR', 'C985', 'PARENT', '["Thu 19-21","Sat 9-12","Sun 9-12"]', 1, NOW(3), NOW(3)),
 (3019, 109, 103, '小学英语', 'male', '福州小学英语词汇听力提升（线上）', '制定学习计划，坚持打卡与复盘。', 12, 'online', '全国', NULL, 2, 100.00, 160.00, 'PRIMARY', 'BACHELOR', 'STUDENT_SELF', '["Tue 20-21","Thu 20-21"]', 1, NOW(3), NOW(3)),
-(3020, 110, 101, '小学数学', 'female', '广州小学奥数启蒙', '培养思维与兴趣，注重过程与方法。', 11, 'offline', '广州', '天河区体育西附近', 2, 160.00, 240.00, 'PRIMARY', 'OVERSEAS', 'PARENT', '["Sat 10-12","Sun 10-12"]', 1, NOW(3), NOW(3))
+(3020, 110, 101, '小学数学', 'female', '广州小学奥数启蒙', '培养思维与兴趣，注重过程与方法。', 11, 'offline', '广州', '天河区体育西附近', 2, 160.00, 240.00, 'PRIMARY', 'OVERSEAS', 'PARENT', '["Sat 10-12","Sun 10-12"]', 1, NOW(3), NOW(3)),
+(3021, 20019, 201, '初中数学', 'male', '机构单｜初二数学提分（函数/几何）', '机构需求：希望老师具备带班提分经验，能制定阶段计划。', 14, 'offline', '北京', '朝阳区望京附近', 2, 180.00, 260.00, 'JUNIOR', 'BACHELOR', 'ORGANIZATION', '["Tue 19-21","Sat 10-12"]', 1, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
 subject_name=VALUES(subject_name),
 student_gender=VALUES(student_gender),
@@ -337,6 +392,23 @@ address=VALUES(address),
 budget_min=VALUES(budget_min),
 budget_max=VALUES(budget_max),
 schedule=VALUES(schedule),
+status=VALUES(status),
+update_time=VALUES(update_time);
+
+INSERT INTO `student_job_posting`
+(id, parent_id, subject_id, subject_name, student_gender, title, description, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time)
+VALUES
+(3101, 301, 201, '初中数学', 'male', '机构单｜初二数学系统提分（函数/几何）', '机构发布：匹配擅长函数与几何的老师，需可做阶段测评与学习规划。', 14, 'offline', '北京', '海淀区中关村附近', 2, 200.00, 280.00, 'JUNIOR', 'BACHELOR', 'ORGANIZATION', '["Tue 19-21","Sat 10-12"]', 1, NOW(3), NOW(3))
+ON DUPLICATE KEY UPDATE
+title=VALUES(title),
+description=VALUES(description),
+class_mode=VALUES(class_mode),
+city=VALUES(city),
+address=VALUES(address),
+frequency_per_week=VALUES(frequency_per_week),
+budget_min=VALUES(budget_min),
+budget_max=VALUES(budget_max),
+publisher_identity=VALUES(publisher_identity),
 status=VALUES(status),
 update_time=VALUES(update_time);
 

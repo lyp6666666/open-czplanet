@@ -27,6 +27,7 @@
         <result column="education_requirement" property="educationRequirement"/>
         <result column="publisher_identity" property="publisherIdentity"/>
         <result column="schedule" property="schedule"/>
+        <result column="biz_status" property="bizStatus"/>
         <result column="status" property="status"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
@@ -34,10 +35,10 @@
 
     <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.StudentJobPosting" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO student_job_posting
-        (parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time)
+        (parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time)
         VALUES
         (#{parentId}, #{subjectId}, #{subjectName}, #{subjectIsOther}, #{title}, #{description}, #{studentGender}, #{gradeCode}, #{availableTime}, #{teacherGenderPreference}, #{teacherRequirementDetail}, #{childAge}, #{classMode}, #{city}, #{address},
-         #{frequencyPerWeek}, #{budgetMin}, #{budgetMax}, #{stageCode}, #{educationRequirement}, #{publisherIdentity}, #{schedule}, #{status}, NOW(), NOW())
+         #{frequencyPerWeek}, #{budgetMin}, #{budgetMax}, #{stageCode}, #{educationRequirement}, #{publisherIdentity}, #{schedule}, #{bizStatus}, #{status}, NOW(), NOW())
     </insert>
 
     <update id="updateById" parameterType="com.ai.tutor.appointment.model.entity.StudentJobPosting">
@@ -66,6 +67,7 @@
             <if test="educationRequirement != null">education_requirement = #{educationRequirement},</if>
             <if test="publisherIdentity != null">publisher_identity = #{publisherIdentity},</if>
             <if test="schedule != null">schedule = #{schedule},</if>
+            <if test="bizStatus != null">biz_status = #{bizStatus},</if>
             <if test="status != null">status = #{status},</if>
             update_time = NOW()
         </set>
@@ -75,7 +77,7 @@
     <select id="selectById" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE id = #{id}
         LIMIT 1
@@ -84,7 +86,7 @@
     <select id="listByParentId" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE parent_id = #{parentId}
         <if test="cursor != null">
@@ -97,7 +99,7 @@
     <select id="selectLatestPublishedByParentId" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE parent_id = #{parentId}
           AND status = 1
@@ -108,7 +110,7 @@
     <select id="listPublished" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
         <if test="subjectId != null">
@@ -130,7 +132,7 @@
     <select id="listPublishedSorted" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
         <if test="subjectId != null">
@@ -167,7 +169,7 @@
     <select id="listPublishedFiltered" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
         <if test="subjectId != null">
@@ -266,7 +268,7 @@
     <select id="searchPublishedByTitle" resultMap="StudentJobPostingMap">
         SELECT
             id, parent_id, subject_id, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
-            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
           AND (title LIKE CONCAT('%', #{keyword}, '%') OR LOCATE(title, #{keyword}) > 0)

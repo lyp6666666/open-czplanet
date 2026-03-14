@@ -74,6 +74,7 @@ CREATE TABLE student_job_posting (
   education_requirement VARCHAR(32),
   publisher_identity VARCHAR(16) NOT NULL DEFAULT 'PARENT',
   schedule VARCHAR(2000),
+  biz_status TINYINT NOT NULL DEFAULT 1,
   status TINYINT NOT NULL DEFAULT 1,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP

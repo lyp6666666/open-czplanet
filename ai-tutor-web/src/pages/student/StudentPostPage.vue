@@ -5,13 +5,24 @@ import { useRouter } from 'vue-router'
 import { jobsApi } from '@/api/jobs'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
+import { useToastStore } from '@/stores/toast'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
+const props = withDefaults(
+  defineProps<{
+    publisherIdentity?: string
+    afterSuccessRouteName?: string
+    apiVariant?: 'student' | 'org'
+    showBack?: boolean
+    backRouteName?: string
+  }>(),
+  { publisherIdentity: 'PARENT', afterSuccessRouteName: 'studentMineJobs', apiVariant: 'student', showBack: false, backRouteName: '' },
+)
+
 const router = useRouter()
+const toast = useToastStore()
 
 const loading = ref(false)
-const error = ref<string | null>(null)
-const doneHint = ref<string | null>(null)
 
 const subjectSelected = ref<string[]>([])
 const subjectOtherName = ref('')
@@ -116,54 +127,61 @@ function buildTitle() {
 function onSelectCity(v: string) {
   if (classMode.value === 'offline' || classMode.value === 'both') {
     if (String(v || '').trim() === '全国') {
-      error.value = '上门辅导请选择具体城市'
+      toast.show('上门辅导请选择具体城市', 'error')
       return
     }
   }
   city.value = String(v || '').trim()
 }
 
+function onBack() {
+  const n = String(props.backRouteName || '').trim()
+  if (n) {
+    void router.push({ name: n })
+    return
+  }
+  router.back()
+}
+
 async function onSubmit() {
-  doneHint.value = null
-  error.value = null
   if (!studentGender.value) {
-    error.value = '请选择学员性别'
+    toast.show('请选择学员性别', 'error')
     return
   }
   if (subjectTokens.value.length === 0) {
-    error.value = '请选择教学科目'
+    toast.show('请选择教学科目', 'error')
     return
   }
   if (subjectOther.value && splitOtherSubjects(subjectOtherName.value).length === 0) {
-    error.value = '请输入其他科目'
+    toast.show('请输入其他科目', 'error')
     return
   }
   if (!gradeCode.value) {
-    error.value = '请选择学生年级'
+    toast.show('请选择学生年级', 'error')
     return
   }
   if (!description.value.trim()) {
-    error.value = '请填写学生情况描述'
+    toast.show('请填写学生情况描述', 'error')
     return
   }
   if (description.value.trim().length < 10) {
-    error.value = '学生情况描述至少10个字'
+    toast.show('学生情况描述至少10个字', 'error')
     return
   }
   if ((classMode.value === 'offline' || classMode.value === 'both') && (!city.value.trim() || !address.value.trim())) {
-    error.value = '上门辅导必须填写城市与上课地址'
+    toast.show('上门辅导必须填写城市与上课地址', 'error')
     return
   }
   if (!teacherRequirementDetail.value.trim()) {
-    error.value = '请填写对教员的详细要求'
+    toast.show('请填写对教员的详细要求', 'error')
     return
   }
   if (teacherRequirementDetail.value.trim().length < 10) {
-    error.value = '对教员的详细要求至少10个字'
+    toast.show('对教员的详细要求至少10个字', 'error')
     return
   }
   if (!Number.isFinite(frequencyPerWeek.value) || frequencyPerWeek.value < 1 || frequencyPerWeek.value > 7) {
-    error.value = '每周上课次数需在 1~7 之间'
+    toast.show('每周上课次数需在 1~7 之间', 'error')
     return
   }
   let budgetMinNum: number
@@ -171,12 +189,12 @@ async function onSubmit() {
   if (budgetMode.value === 'single') {
     const raw = String(budgetSingle.value ?? '').trim()
     if (!raw) {
-      error.value = '请填写预算'
+      toast.show('请填写预算', 'error')
       return
     }
     const v = Number(raw)
     if (!Number.isFinite(v) || v <= 0) {
-      error.value = '预算需为大于 0 的数字'
+      toast.show('预算需为大于 0 的数字', 'error')
       return
     }
     budgetMinNum = v
@@ -185,21 +203,21 @@ async function onSubmit() {
     const rawMin = String(budgetMin.value ?? '').trim()
     const rawMax = String(budgetMax.value ?? '').trim()
     if (!rawMin || !rawMax) {
-      error.value = '请填写预算上下限'
+      toast.show('请填写预算上下限', 'error')
       return
     }
     const vMin = Number(rawMin)
     const vMax = Number(rawMax)
     if (!Number.isFinite(vMin) || vMin <= 0) {
-      error.value = '预算下限需为大于 0 的数字'
+      toast.show('预算下限需为大于 0 的数字', 'error')
       return
     }
     if (!Number.isFinite(vMax) || vMax <= 0) {
-      error.value = '预算上限需为大于 0 的数字'
+      toast.show('预算上限需为大于 0 的数字', 'error')
       return
     }
     if (vMin > vMax) {
-      error.value = '预算下限不能大于预算上限'
+      toast.show('预算下限不能大于预算上限', 'error')
       return
     }
     budgetMinNum = vMin
@@ -207,7 +225,7 @@ async function onSubmit() {
   }
   loading.value = true
   try {
-    const id = await jobsApi.createDemand({
+    const payload = {
       title: buildTitle(),
       subjectName: subjectName.value as string,
       subjectOther: subjectOther.value,
@@ -225,12 +243,13 @@ async function onSubmit() {
       budgetMax: budgetMaxNum,
       stageCode: stageCode.value as string,
       educationRequirement: 'UNLIMITED',
-      publisherIdentity: 'PARENT',
-    })
-    doneHint.value = '发布成功'
-    await router.replace({ name: 'studentMineJobs', query: { highlight: String(id) } })
+      publisherIdentity: props.publisherIdentity,
+    }
+    const id = await (props.apiVariant === 'org' ? jobsApi.createOrgDemand(payload) : jobsApi.createDemand(payload))
+    toast.show('发布成功', 'success')
+    await router.replace({ name: props.afterSuccessRouteName, query: { highlight: String(id) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发布失败'
+    toast.show(e instanceof Error ? e.message : '发布失败', 'error')
   } finally {
     loading.value = false
   }
@@ -249,14 +268,10 @@ watch(
 <template>
   <div class="wrap">
     <div class="head">
+      <button v-if="showBack" class="btn" type="button" :disabled="loading" @click="onBack">返回</button>
       <div class="title">发布需求</div>
-      <button class="btn btn-primary" type="button" :disabled="loading" @click="onSubmit">
-        {{ loading ? '提交中...' : '发布' }}
-      </button>
+      <button class="btn btn-primary" type="button" :disabled="loading" @click="onSubmit">{{ loading ? '提交中...' : '发布' }}</button>
     </div>
-
-    <div v-if="error" class="hint error">{{ error }}</div>
-    <div v-else-if="doneHint" class="hint ok">{{ doneHint }}</div>
 
     <div class="card form">
       <div class="section">
@@ -433,15 +448,16 @@ watch(
 }
 
 .head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 
 .title {
   font-size: 18px;
   font-weight: 900;
+  text-align: center;
 }
 
 .form {

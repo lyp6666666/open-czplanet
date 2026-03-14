@@ -5,6 +5,7 @@ import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.StudentProfileMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.service.UserService;
@@ -47,6 +48,8 @@ class UserControllerMeTest {
     private TeacherProfileMapper teacherProfileMapper;
     @MockBean
     private StudentProfileMapper studentProfileMapper;
+    @MockBean
+    private OrganizationProfileMapper organizationProfileMapper;
     @MockBean
     private StudentJobPostingMapper studentJobPostingMapper;
     @MockBean

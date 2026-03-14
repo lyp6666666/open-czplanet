@@ -9,6 +9,7 @@ import { jobsApi } from '@/api/jobs'
 import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, TutorApplicationVO } from '@/api/types'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
+import OrgCardModal from '@/ui/user/OrgCardModal.vue'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
@@ -20,6 +21,7 @@ const id = computed(() => Number(route.params.id))
 const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<DemandViewVO | null>(null)
+const avatarLoadFailed = ref(false)
 const favorited = ref(false)
 
 const applyBusy = ref(false)
@@ -33,11 +35,19 @@ let applicationPollTimer: number | null = null
 
 const cardOpen = ref(false)
 const cardUid = ref<number | null>(null)
+const orgCardOpen = ref(false)
+const orgCardId = ref<number | null>(null)
 
 function openCard(uid: number) {
   if (!uid) return
   cardUid.value = uid
   cardOpen.value = true
+}
+
+function openOrgCard(id: number) {
+  if (!id) return
+  orgCardId.value = id
+  orgCardOpen.value = true
 }
 
 function closeCard() {
@@ -62,6 +72,13 @@ async function load() {
     loading.value = false
   }
 }
+
+watch(
+  () => data.value?.publisher?.avatar,
+  () => {
+    avatarLoadFailed.value = false
+  },
+)
 
 function stopApplicationPolling() {
   if (applicationPollTimer != null) {
@@ -318,17 +335,41 @@ onBeforeUnmount(() => {
         <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
       </div>
 
+      <div v-if="String(data.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="hint notice">
+        <div class="n-title">机构单说明</div>
+        <div class="n-body">
+          机构为需求发布与履约主体，平台提供信息撮合、支付托管与纠纷介入机制；平台不直接保证授课质量与履约结果。
+        </div>
+      </div>
+
       <div class="sec">
         <div class="sec-title">需求描述</div>
         <div class="sec-body">{{ data.description || '—' }}</div>
       </div>
 
       <div v-if="data.publisher" class="sec publisher">
-        <img v-if="data.publisher.avatar" class="avatar clickable" :src="data.publisher.avatar" alt="avatar" @click="openCard(data.publisher.uid)" />
+        <img
+          v-if="data.publisher.avatar && !avatarLoadFailed"
+          class="avatar clickable"
+          :src="data.publisher.avatar"
+          alt="avatar"
+          @error="avatarLoadFailed = true"
+          @click="openCard(data.publisher.uid)"
+        />
         <div v-else class="avatar fallback clickable" @click="openCard(data.publisher.uid)">{{ (data.publisher.displayName || 'U').slice(0, 1) }}</div>
         <div class="pub-info">
           <div class="pub-name clickable" @click="openCard(data.publisher.uid)">{{ data.publisher.displayName }}</div>
-          <div class="pub-tag">{{ data.publisher.identityLabel }}</div>
+          <div class="pub-tags">
+            <div class="pub-tag">{{ data.publisher.identityLabel }}</div>
+            <button
+              v-if="String(data.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'"
+              class="link"
+              type="button"
+              @click="openOrgCard(data.parentId)"
+            >
+              查看机构主页
+            </button>
+          </div>
         </div>
       </div>
 
@@ -354,6 +395,7 @@ onBeforeUnmount(() => {
     </div>
 
     <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
+    <OrgCardModal :open="orgCardOpen" :org-id="orgCardId" @close="orgCardOpen = false" />
 
   </div>
 </template>
@@ -459,6 +501,23 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
+.pub-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.link {
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .sec-title {
   font-size: 12px;
   color: var(--muted);
@@ -481,6 +540,21 @@ onBeforeUnmount(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.hint.notice {
+  border-color: rgba(255, 170, 0, 0.28);
+  background: rgba(255, 170, 0, 0.06);
+}
+
+.n-title {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.n-body {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .mask {

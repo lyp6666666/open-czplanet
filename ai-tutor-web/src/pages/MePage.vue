@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
 import { teacherVerificationApi } from '@/api/verification'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const toast = useToastStore()
 
 const loading = ref(false)
-const error = ref<string | null>(null)
 const savedHint = ref<string | null>(null)
 
 const isTeacher = computed(() => auth.user?.userType === 1)
@@ -23,6 +24,36 @@ const sex = ref<number | null>(null)
 const avatar = ref('')
 const avatarUploading = ref(false)
 const avatarHint = ref<string | null>(null)
+const avatarLoaded = ref(false)
+let avatarProbeId = 0
+
+const avatarSrc = computed(() => {
+  const v = String(avatar.value || '').trim()
+  if (!v) return ''
+  const low = v.toLowerCase()
+  if (low === 'null' || low === 'undefined') return ''
+  return v
+})
+
+watch(
+  avatarSrc,
+  (src) => {
+    avatarLoaded.value = false
+    if (!src) return
+    const probeId = (avatarProbeId += 1)
+    const img = new Image()
+    img.onload = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = true
+    }
+    img.onerror = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = false
+    }
+    img.src = src
+  },
+  { immediate: true },
+)
 
 const teacherRealName = ref('')
 const teacherEducation = ref('')
@@ -50,7 +81,7 @@ function onSelectTeacherCity(v: string) {
   const raw = String(v || '').trim()
   const mode = String(teacherTeachingMode.value || '').trim().toUpperCase()
   if ((mode === 'OFFLINE' || mode === 'BOTH') && raw === '全国') {
-    error.value = '线下授课请选择具体城市'
+    toast.show('线下授课请选择具体城市', 'error')
     return
   }
   if (raw) localStorage.setItem('ai_tutor_city', raw)
@@ -89,7 +120,6 @@ const studentBudget = ref<number | null>(null)
 async function load() {
   if (!auth.isLoggedIn) return
   loading.value = true
-  error.value = null
   savedHint.value = null
   avatarHint.value = null
   try {
@@ -123,7 +153,7 @@ async function load() {
       studentBudget.value = me.studentProfile.budget != null ? Number(me.studentProfile.budget) : null
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+    toast.show(e instanceof Error ? e.message : '加载失败', 'error')
   } finally {
     loading.value = false
   }
@@ -135,11 +165,11 @@ async function onSelectAvatar(e: Event) {
   const f = input?.files?.[0]
   if (!f) return
   if (!f.type || !f.type.startsWith('image/')) {
-    error.value = '请选择图片文件'
+    toast.show('请选择图片文件', 'error')
     return
   }
   if (f.size > 5 * 1024 * 1024) {
-    error.value = '头像文件不能超过 5MB'
+    toast.show('头像文件不能超过 5MB', 'error')
     return
   }
   avatarUploading.value = true
@@ -148,7 +178,7 @@ async function onSelectAvatar(e: Event) {
     avatar.value = r.url
     avatarHint.value = '头像已上传，点击保存生效'
   } catch (e2) {
-    error.value = e2 instanceof Error ? e2.message : '头像上传失败'
+    toast.show(e2 instanceof Error ? e2.message : '头像上传失败', 'error')
   } finally {
     avatarUploading.value = false
     if (input) input.value = ''
@@ -157,11 +187,10 @@ async function onSelectAvatar(e: Event) {
 
 async function onSave() {
   savedHint.value = null
-  error.value = null
   try {
     if (!isTeacher.value) {
       if (studentChildAge.value !== null && !Number.isFinite(studentChildAge.value)) {
-        error.value = '年龄必须是数字'
+        toast.show('年龄必须是数字', 'error')
         return
       }
     }
@@ -198,7 +227,7 @@ async function onSave() {
     savedHint.value = '已保存'
     await load()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    toast.show(e instanceof Error ? e.message : '保存失败', 'error')
   }
 }
 
@@ -238,11 +267,11 @@ async function uploadOtherImage(e: Event, setUrl: (v: string) => void, setUpload
   const f = input?.files?.[0]
   if (!f) return
   if (!f.type || !f.type.startsWith('image/')) {
-    error.value = '请选择图片文件'
+    toast.show('请选择图片文件', 'error')
     return
   }
   if (f.size > 20 * 1024 * 1024) {
-    error.value = '图片文件不能超过 20MB'
+    toast.show('图片文件不能超过 20MB', 'error')
     return
   }
   setUploading(true)
@@ -250,7 +279,7 @@ async function uploadOtherImage(e: Event, setUrl: (v: string) => void, setUpload
     const r = await assetsApi.uploadImage(f, 'other')
     setUrl(r.url)
   } catch (e2) {
-    error.value = e2 instanceof Error ? e2.message : '上传失败'
+    toast.show(e2 instanceof Error ? e2.message : '上传失败', 'error')
   } finally {
     setUploading(false)
     if (input) input.value = ''
@@ -392,8 +421,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="error" class="hint error">{{ error }}</div>
-    <div v-else-if="savedHint" class="hint ok">{{ savedHint }}</div>
+    <div v-if="savedHint" class="hint ok">{{ savedHint }}</div>
     <div v-else-if="avatarHint" class="hint ok">{{ avatarHint }}</div>
 
     <div class="card form">
@@ -403,7 +431,7 @@ onMounted(() => {
           <label class="field span2">
             <div class="label">头像</div>
             <div class="avatar-row">
-              <img v-if="avatar" class="avatar-img" :src="avatar" alt="avatar" />
+              <img v-if="avatarSrc && avatarLoaded" class="avatar-img" :src="avatarSrc" alt="avatar" />
               <div v-else class="avatar-img fallback">U</div>
               <input class="avatar-file" type="file" accept="image/*" :disabled="avatarUploading" @change="onSelectAvatar" />
             </div>

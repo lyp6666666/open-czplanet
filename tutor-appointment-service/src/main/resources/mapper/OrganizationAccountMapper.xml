@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.OrganizationAccountMapper">
+
+    <resultMap id="OrganizationAccountMap" type="com.ai.tutor.appointment.model.entity.OrganizationAccount">
+        <id column="id" property="id"/>
+        <result column="org_user_id" property="orgUserId"/>
+        <result column="username" property="username"/>
+        <result column="password_hash" property="passwordHash"/>
+        <result column="must_change_password" property="mustChangePassword"/>
+        <result column="status" property="status"/>
+        <result column="last_login_time" property="lastLoginTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectByUsername" parameterType="string" resultMap="OrganizationAccountMap">
+        SELECT * FROM organization_account WHERE username = #{username} LIMIT 1
+    </select>
+
+    <select id="selectByOrgUserId" parameterType="long" resultMap="OrganizationAccountMap">
+        SELECT * FROM organization_account WHERE org_user_id = #{orgUserId} LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.OrganizationAccount"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO organization_account (
+            org_user_id, username, password_hash, must_change_password, status,
+            last_login_time, create_time, update_time
+        ) VALUES (
+            #{orgUserId}, #{username}, #{passwordHash}, #{mustChangePassword}, #{status},
+            #{lastLoginTime}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updatePassword">
+        UPDATE organization_account
+        SET password_hash = #{passwordHash},
+            must_change_password = #{mustChangePassword},
+            update_time = NOW(3)
+        WHERE org_user_id = #{orgUserId}
+    </update>
+
+    <update id="updateLastLogin">
+        UPDATE organization_account
+        SET last_login_time = NOW(3),
+            update_time = NOW(3)
+        WHERE org_user_id = #{orgUserId}
+    </update>
+</mapper>

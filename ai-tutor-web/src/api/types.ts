@@ -128,6 +128,7 @@ export interface HotDemandCardVO {
   addressSimple: string
   childAge: number
   scheduleText: string
+  publisherIdentity?: string
   parent: { userId: number; displayName: string; avatar: string }
   tags: string[]
 }
@@ -170,6 +171,31 @@ export interface FooterLinksVO {
 }
 
 export type UserRoleEnum = 'TEACHER' | 'STUDENT'
+
+export interface OrganizationProfile {
+  id: number
+  userId: number
+  orgName: string
+  intro: string | null
+  contactName: string | null
+  contactPhone: string | null
+  address: string | null
+  licenseNo: string | null
+  splitPlatformPercent: number
+  splitOrgPercent: number
+  status: number
+  createTime: string
+  updateTime: string
+}
+
+export interface OrgLoginVO {
+  id: number
+  name: string
+  userType: number
+  token: string
+  mustChangePassword: boolean
+  organizationProfile: OrganizationProfile
+}
 
 export interface LoginUserVO {
   id: number
@@ -239,6 +265,7 @@ export interface UserMeVO {
   userType: number
   teacherProfile?: TeacherProfile | null
   studentProfile?: StudentProfile | null
+  organizationProfile?: OrganizationProfile | null
 }
 
 export interface UserSettingsVO {
@@ -300,6 +327,7 @@ export interface StudentJobPosting {
   educationRequirement: string | null
   publisherIdentity: string | null
   schedule: string | null
+  bizStatus?: number | null
   status: number
   createTime: string
   updateTime: string

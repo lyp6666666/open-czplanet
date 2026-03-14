@@ -5,12 +5,13 @@ import { useRouter } from 'vue-router'
 import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const loading = ref(false)
-const error = ref<string | null>(null)
 
 const avatar = ref('')
 const avatarUploading = ref(false)
@@ -31,16 +32,15 @@ const canSubmit = computed(() => {
 })
 
 async function onSelectAvatarFile(e: Event) {
-  error.value = null
   const input = e.target as HTMLInputElement | null
   const f = input?.files?.[0]
   if (!f) return
   if (!f.type || !f.type.startsWith('image/')) {
-    error.value = '请选择图片文件'
+    toast.show('请选择图片文件', 'error')
     return
   }
   if (f.size > 2 * 1024 * 1024) {
-    error.value = '头像文件不能超过 2MB'
+    toast.show('头像文件不能超过 2MB', 'error')
     return
   }
   avatarUploading.value = true
@@ -48,7 +48,7 @@ async function onSelectAvatarFile(e: Event) {
     const r = await assetsApi.uploadImage(f, 'avatar')
     avatar.value = r.url
   } catch (e2) {
-    error.value = e2 instanceof Error ? e2.message : '头像上传失败'
+    toast.show(e2 instanceof Error ? e2.message : '头像上传失败', 'error')
   } finally {
     avatarUploading.value = false
     if (input) input.value = ''
@@ -58,7 +58,6 @@ async function onSelectAvatarFile(e: Event) {
 async function submit() {
   if (!canSubmit.value) return
   loading.value = true
-  error.value = null
   try {
     await userApi.updateUserInfo({
       baseUserInfo: { avatar: avatar.value.trim() },
@@ -67,7 +66,7 @@ async function submit() {
     await auth.refreshMe()
     await router.replace('/tutor/onboarding/profile')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    toast.show(e instanceof Error ? e.message : '保存失败', 'error')
   } finally {
     loading.value = false
   }
@@ -121,8 +120,6 @@ function onAvatarError() {
             <div class="r-title">创建老师名片</div>
             <div class="r-desc">完善基础信息后即可进入需求页</div>
           </div>
-
-          <div v-if="error" class="hint error">{{ error }}</div>
 
           <div class="form">
             <div class="field">

@@ -249,4 +249,3 @@ onMounted(() => {
   background: rgba(255, 0, 0, 0.06);
 }
 </style>
-

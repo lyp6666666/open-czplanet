@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { brokerageApi, type BrokerageOrderStatus, type BrokeragePayMethod, type BrokerageOrderVO } from '@/api/brokerage'
 import { applicationApi } from '@/api/application'
+import { useToastStore } from '@/stores/toast'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToastStore()
 
 const orderId = computed(() => {
   const raw = route.query.orderId
@@ -28,10 +30,8 @@ const payMethod = ref<BrokeragePayMethod>('WECHAT')
 const proofUrl = ref('')
 const proofNote = ref('')
 const submitBusy = ref(false)
-const submitError = ref<string | null>(null)
 
 const cancelBusy = ref(false)
-const cancelError = ref<string | null>(null)
 
 const adminToken = computed(() => {
   const s =
@@ -42,9 +42,7 @@ const tokenInput = ref('')
 const effectiveAdminToken = computed(() => adminToken.value || tokenInput.value.trim())
 const devEnabled = computed(() => import.meta.env.MODE !== 'production')
 const devBusy = ref(false)
-const devError = ref<string | null>(null)
 const enterBusy = ref(false)
-const enterError = ref<string | null>(null)
 const cashierOpened = ref(false)
 
 const wechatQrUrl = computed(() => {
@@ -124,7 +122,6 @@ async function submit() {
   if (!orderId.value) return
   if (submitBusy.value) return
   submitBusy.value = true
-  submitError.value = null
   try {
     const next = await brokerageApi.submitProof(orderId.value, {
       payMethod: payMethod.value,
@@ -132,8 +129,9 @@ async function submit() {
       proofNote: proofNote.value.trim() || null,
     })
     order.value = next
+    toast.show('提交成功', 'success')
   } catch (e) {
-    submitError.value = e instanceof Error ? e.message : '提交失败'
+    toast.show(e instanceof Error ? e.message : '提交失败', 'error')
   } finally {
     submitBusy.value = false
   }
@@ -146,11 +144,11 @@ async function cancelOrder() {
   if (!window.confirm('确认撤单吗？撤单后本订单将不可继续用于支付，且聊天仍会保持锁定状态。')) return
 
   cancelBusy.value = true
-  cancelError.value = null
   try {
     order.value = await brokerageApi.cancel(orderId.value)
+    toast.show('已撤单', 'success')
   } catch (e) {
-    cancelError.value = e instanceof Error ? e.message : '撤单失败'
+    toast.show(e instanceof Error ? e.message : '撤单失败', 'error')
   } finally {
     cancelBusy.value = false
   }
@@ -159,16 +157,16 @@ async function cancelOrder() {
 async function devMarkPaid() {
   if (!orderId.value) return
   if (!effectiveAdminToken.value) {
-    devError.value = '未配置管理员 token'
+    toast.show('未配置管理员 token', 'error')
     return
   }
   if (devBusy.value) return
   devBusy.value = true
-  devError.value = null
   try {
     order.value = await brokerageApi.adminMarkPaid(orderId.value, effectiveAdminToken.value)
+    toast.show('标记成功', 'success')
   } catch (e) {
-    devError.value = e instanceof Error ? e.message : '标记已支付失败'
+    toast.show(e instanceof Error ? e.message : '标记已支付失败', 'error')
   } finally {
     devBusy.value = false
   }
@@ -177,21 +175,20 @@ async function devMarkPaid() {
 async function enterChat() {
   if (!applicationId.value) return
   if (order.value?.status !== 'PAID') {
-    enterError.value = '支付未确认，暂无法进入聊天'
+    toast.show('支付未确认，暂无法进入聊天', 'error')
     return
   }
   if (enterBusy.value) return
   enterBusy.value = true
-  enterError.value = null
   try {
     const res = await applicationApi.enterChat(applicationId.value)
     if (res.roomId) {
       await router.push({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
       return
     }
-    enterError.value = '暂无法进入聊天'
+    toast.show('暂无法进入聊天', 'error')
   } catch (e) {
-    enterError.value = e instanceof Error ? e.message : '进入聊天失败'
+    toast.show(e instanceof Error ? e.message : '进入聊天失败', 'error')
   } finally {
     enterBusy.value = false
   }
@@ -285,12 +282,10 @@ onUnmounted(() => {
         <button class="btn btn-primary" type="button" :disabled="submitBusy || !canSubmitProof" @click="submit">
           {{ submitBusy ? '提交中...' : canSubmitProof ? '我已完成支付' : '已提交/已确认/不可提交' }}
         </button>
-        <div v-if="submitError" class="hint error">{{ submitError }}</div>
 
         <button class="btn btn-danger" type="button" :disabled="cancelBusy || !canCancel" @click="cancelOrder">
           {{ cancelBusy ? '撤单中...' : '撤单' }}
         </button>
-        <div v-if="cancelError" class="hint error">{{ cancelError }}</div>
 
         <div v-if="devEnabled" class="dev">
           <div v-if="!effectiveAdminToken" class="rowx">
@@ -306,7 +301,6 @@ onUnmounted(() => {
             />
             <span>测试：完成支付</span>
           </label>
-          <div v-if="devError" class="hint error">{{ devError }}</div>
         </div>
 
         <div v-if="applicationId" class="after">
@@ -315,7 +309,6 @@ onUnmounted(() => {
             {{ enterBusy ? '进入中...' : '进入聊天' }}
           </button>
         </div>
-        <div v-if="enterError" class="hint error">{{ enterError }}</div>
       </div>
     </template>
   </div>

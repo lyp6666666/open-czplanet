@@ -190,6 +190,7 @@ public class HomeGuestVOs {
         private String addressSimple;
         private Integer childAge;
         private String scheduleText;
+        private String publisherIdentity;
         private Parent parent;
         private List<String> tags;
 
@@ -260,4 +261,3 @@ public class HomeGuestVOs {
         }
     }
 }
-

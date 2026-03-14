@@ -41,7 +41,7 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
         ThrowUtils.throwIf(pageRequest == null, ErrorCode.PARAMS_ERROR);
         User me = userMapper.selectById(uid);
         ThrowUtils.throwIf(me == null, ErrorCode.NOT_LOGIN_ERROR);
-        ThrowUtils.throwIf(me.getUserType() == null || me.getUserType() != 2, ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(me.getUserType() == null || (me.getUserType() != 2 && me.getUserType() != 3), ErrorCode.NO_AUTH_ERROR);
 
         String qv = normalize(q);
         String cv = CityCatalog.normalizeCityForFilter(city);

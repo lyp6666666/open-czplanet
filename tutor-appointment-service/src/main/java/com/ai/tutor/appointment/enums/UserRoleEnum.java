@@ -6,7 +6,8 @@ import lombok.Getter;
 public enum UserRoleEnum {
 
     TEACHER(1, "teacher", "教师"),
-    STUDENT(2, "student", "学生");
+    STUDENT(2, "student", "学生"),
+    ORG(3, "org", "机构");
 
     private final int value;     // 数据库存储值
     private final String code;   // 标识符
@@ -42,4 +43,3 @@ public enum UserRoleEnum {
         throw new IllegalArgumentException("未知的用户角色类型值: " + value);
     }
 }
-

@@ -3,6 +3,7 @@ import { computed, onErrorCaptured, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 import AppTopBar from '@/ui/layout/AppTopBar.vue'
+import Toast from '@/ui/common/Toast.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const fatalError = ref<unknown>(null)
@@ -16,7 +17,15 @@ const useAppFrame = computed(() => {
   if (p.startsWith('/tutor/onboarding/basic')) return false
   if (p.startsWith('/tutor/onboarding/profile')) return false
   if (p === '/') return auth.isLoggedIn
-  return p.startsWith('/tutor/') || p.startsWith('/student/') || p.startsWith('/chat') || p === '/me' || p.startsWith('/schedule')
+  return (
+    p.startsWith('/tutor/') ||
+    p.startsWith('/student/') ||
+    p.startsWith('/org/') ||
+    p.startsWith('/organization/') ||
+    p.startsWith('/chat') ||
+    p === '/me' ||
+    p.startsWith('/schedule')
+  )
 })
 
 onErrorCaptured((err) => {
@@ -39,6 +48,7 @@ onErrorCaptured((err) => {
     </main>
   </div>
   <RouterView v-else />
+  <Toast />
 </template>
 
 <style scoped>

@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { HotDemandCardVO, HotServiceCardVO, HotTabsVO, HotTutorCardVO } from '@/api/types'
-import { chatApi } from '@/api/chat'
+import { applicationApi } from '@/api/application'
 import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import type { PageState } from '@/stores/home'
 import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { useToastStore } from '@/stores/toast'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
 import { formatBudgetUnit, formatClassMode, formatScheduleText } from '@/utils/present'
 
@@ -40,8 +42,11 @@ const showTutors = computed(() => props.showTutors !== false)
 
 const router = useRouter()
 const auth = useAuthStore()
-const canChat = computed(() => auth.isLoggedIn && auth.user?.userType === 1)
+const settings = useSettingsStore()
+const toast = useToastStore()
+const canApplyDemand = computed(() => auth.isLoggedIn && auth.user?.userType === 1)
 const canFavoriteTutor = computed(() => auth.isLoggedIn && auth.user?.userType === 2)
+const avatarFailedMap = ref<Record<number, boolean>>({})
 
 const checkedFavoriteTutorIds = new Set<number>()
 const favoriteTutorMap = ref<Record<number, boolean>>({})
@@ -57,6 +62,17 @@ function openCard(uid: number) {
 
 function closeCard() {
   cardOpen.value = false
+}
+
+function userInitial(name: string | null | undefined): string {
+  const n = String(name || '').trim()
+  return n ? n.slice(0, 1) : 'U'
+}
+
+function markAvatarFailed(uid: number) {
+  if (!uid) return
+  if (avatarFailedMap.value[uid]) return
+  avatarFailedMap.value = { ...avatarFailedMap.value, [uid]: true }
 }
 
 async function syncTutorFavorites(ids: number[]) {
@@ -82,18 +98,62 @@ function range(n: number) {
   return Array.from({ length: n }, (_, i) => i)
 }
 
+function isOrgDemand(it: HotDemandCardVO): boolean {
+  return String(it.publisherIdentity || '').trim().toUpperCase() === 'ORGANIZATION'
+}
+
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 const servicePlaceholders = computed(() => range(6))
 const demandPlaceholders = computed(() => range(6))
 const tutorPlaceholders = computed(() => range(4))
 
-async function onChatDemand(it: HotDemandCardVO) {
-  if (!canChat.value) return
-  if (!auth.me) {
-    await auth.refreshMe()
+const applyBusy = ref(false)
+const appliedMap = ref<Record<number, boolean>>({})
+
+async function onApplyDemand(it: HotDemandCardVO) {
+  if (!canApplyDemand.value || applyBusy.value || appliedMap.value[it.demandId]) return
+  applyBusy.value = true
+  try {
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
+    }
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    
+    if (isOrgDemand(it)) {
+      await applicationApi.create({
+        receiverUid: it.parent.userId,
+        contextType: 'DEMAND',
+        contextId: it.demandId,
+        content,
+        clientRequestId: genClientRequestId(),
+      })
+      appliedMap.value = { ...appliedMap.value, [it.demandId]: true }
+      toast.show('申请已发送', 'success')
+    } else {
+      const msg = await applicationApi.startChat({
+        receiverUid: it.parent.userId,
+        contextType: 'DEMAND',
+        contextId: it.demandId,
+        content,
+        clientRequestId: genClientRequestId(),
+      })
+      await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(it.parent.userId) } })
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : '发起申请失败'
+    toast.show(msg, 'error')
+  } finally {
+    applyBusy.value = false
   }
-  const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
-  const roomId = await chatApi.startRoom(it.parent.userId, greeting)
-  await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parent.userId) } })
 }
 
 async function onOpenDemand(it: HotDemandCardVO) {
@@ -111,7 +171,8 @@ async function onToggleFavoriteTutor(uid: number) {
     }
     favoriteTutorMap.value = { ...favoriteTutorMap.value, [uid]: !current }
   } catch (e) {
-    void e
+    const msg = e instanceof Error ? e.message : '操作失败'
+    toast.show(msg, 'error')
   }
 }
 
@@ -177,7 +238,15 @@ watch(
               <span class="muted">{{ it.city }}</span>
             </div>
             <div class="person">
-              <img class="avatar clickable" :src="it.tutor.avatar" alt="" @click.stop="openCard(it.tutor.userId)" />
+              <img
+                v-if="it.tutor.avatar && !avatarFailedMap[it.tutor.userId]"
+                class="avatar clickable"
+                :src="it.tutor.avatar"
+                alt=""
+                @error="markAvatarFailed(it.tutor.userId)"
+                @click.stop="openCard(it.tutor.userId)"
+              />
+              <div v-else class="avatar fallback clickable" @click.stop="openCard(it.tutor.userId)">{{ userInitial(it.tutor.displayName) }}</div>
               <div class="info">
                 <div class="name clickable" @click.stop="openCard(it.tutor.userId)">{{ it.tutor.displayName }}</div>
                 <div class="sub">{{ it.tutor.education }} · {{ it.tutor.experienceYears }}年</div>
@@ -242,6 +311,7 @@ watch(
 
         <template v-else-if="hotDemands.list.length">
           <article v-for="it in hotDemands.list" :key="it.demandId" class="item clickable" @click="onOpenDemand(it)">
+            <span v-if="isOrgDemand(it)" class="corner-org">机构单</span>
             <div class="item-title">{{ it.title }}</div>
             <div class="line">
               <span class="pill">{{ it.subject.name }}</span>
@@ -250,7 +320,15 @@ watch(
               <span class="muted">{{ it.addressSimple }}</span>
             </div>
             <div class="person">
-              <img class="avatar clickable" :src="it.parent.avatar" alt="" @click.stop="openCard(it.parent.userId)" />
+              <img
+                v-if="it.parent.avatar && !avatarFailedMap[it.parent.userId]"
+                class="avatar clickable"
+                :src="it.parent.avatar"
+                alt=""
+                @error="markAvatarFailed(it.parent.userId)"
+                @click.stop="openCard(it.parent.userId)"
+              />
+              <div v-else class="avatar fallback clickable" @click.stop="openCard(it.parent.userId)">{{ userInitial(it.parent.displayName) }}</div>
               <div class="info">
                 <div class="name clickable" @click.stop="openCard(it.parent.userId)">{{ it.parent.displayName }}</div>
                 <div class="sub">{{ formatScheduleText(it.scheduleText) }}</div>
@@ -258,10 +336,17 @@ watch(
               <div class="price">¥{{ it.budget.min }}-{{ it.budget.max }}/{{ formatBudgetUnit(it.budget.unit) }}</div>
             </div>
             <div class="tags">
-              <span v-for="tag in it.tags" :key="tag" class="tag">{{ tag }}</span>
+              <span v-for="tag in it.tags" :key="tag" class="tag">{{ formatScheduleText(tag) }}</span>
             </div>
-            <div v-if="canChat" class="ops">
-              <button class="btn btn-primary" type="button" @click.stop="onChatDemand(it)">立即沟通</button>
+            <div v-if="canApplyDemand" class="ops">
+              <button 
+                class="btn btn-primary" 
+                type="button" 
+                :disabled="applyBusy || appliedMap[it.demandId]" 
+                @click.stop="onApplyDemand(it)"
+              >
+                {{ appliedMap[it.demandId] ? '已申请' : (applyBusy ? '提交中...' : '发起申请') }}
+              </button>
             </div>
           </article>
         </template>
@@ -316,7 +401,15 @@ watch(
         <template v-else-if="hotTutors.list.length">
           <article v-for="it in hotTutors.list" :key="it.userId" class="item tutor-item">
             <div class="person">
-              <img class="avatar big clickable" :src="it.avatar" alt="" @click="openCard(it.userId)" />
+              <img
+                v-if="it.avatar && !avatarFailedMap[it.userId]"
+                class="avatar big clickable"
+                :src="it.avatar"
+                alt=""
+                @error="markAvatarFailed(it.userId)"
+                @click="openCard(it.userId)"
+              />
+              <div v-else class="avatar big fallback clickable" @click="openCard(it.userId)">{{ userInitial(it.displayName) }}</div>
               <div class="info">
                 <div class="name clickable" @click="openCard(it.userId)">{{ it.displayName }}</div>
                 <div class="sub">{{ it.education }} · {{ it.experienceYears }}年 · {{ it.city }}</div>
@@ -437,6 +530,9 @@ watch(
   border-radius: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.9);
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .item.clickable {
@@ -559,6 +655,14 @@ watch(
   background: #fff;
 }
 
+.avatar.fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--primary);
+  background: rgba(0, 190, 189, 0.12);
+}
+
 .avatar.clickable {
   cursor: pointer;
 }
@@ -603,8 +707,21 @@ watch(
   background: #fff;
 }
 
+.corner-org {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #d46b08;
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  background: rgba(255, 170, 0, 0.12);
+  font-weight: 800;
+}
+
 .ops {
-  margin-top: 10px;
+  margin-top: auto;
   display: flex;
   justify-content: flex-end;
 }

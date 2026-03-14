@@ -9,6 +9,7 @@
       <nav class="nav">
         <RouterLink class="nav-link" to="/dashboard">仪表盘</RouterLink>
         <RouterLink class="nav-link" to="/users">用户管理</RouterLink>
+        <RouterLink class="nav-link" to="/organizations">机构账号</RouterLink>
         <RouterLink class="nav-link" to="/jobs">需求审核</RouterLink>
         <RouterLink class="nav-link" to="/verification">教师认证</RouterLink>
         <RouterLink class="nav-link" to="/refunds">退款纠纷</RouterLink>
@@ -51,6 +52,7 @@ const title = computed(() => {
   const name = String(route.name || '')
   if (name === 'dashboard') return '仪表盘'
   if (name === 'users') return '用户管理'
+  if (name === 'organizations') return '机构账号'
   if (name === 'jobs') return '需求审核'
   if (name === 'verification') return '教师认证审核'
   if (name === 'verificationDetail') return '认证详情'

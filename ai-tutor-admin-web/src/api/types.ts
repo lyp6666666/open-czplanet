@@ -17,6 +17,71 @@ export interface AdminLoginResponse {
   nickname: string | null
 }
 
+export interface AdminOrganizationCreateRequest {
+  orgName: string
+  username?: string | null
+  initialPassword?: string | null
+  contactName?: string | null
+  contactPhone: string
+  address?: string | null
+  intro?: string | null
+  licenseNo?: string | null
+  splitPlatformPercent?: number | null
+  splitOrgPercent?: number | null
+}
+
+export interface AdminOrganizationCreateResponse {
+  orgUserId: number
+  username: string
+  initialPassword: string
+}
+
+export interface AdminOrganizationRow {
+  orgUserId: number
+  orgName: string | null
+  username: string | null
+  contactPhone: string | null
+  userStatus: number | null
+  accountStatus: number | null
+  mustChangePassword: number | null
+  lastLoginTime: string | null
+  createTime: string | null
+  updateTime: string | null
+}
+
+export interface AdminOrganizationDetail {
+  orgUserId: number
+  orgName: string | null
+  username: string | null
+  accountStatus: number | null
+  mustChangePassword: number | null
+  lastLoginTime: string | null
+  userStatus: number | null
+  contactName: string | null
+  contactPhone: string | null
+  address: string | null
+  intro: string | null
+  licenseNo: string | null
+  splitPlatformPercent: number | null
+  splitOrgPercent: number | null
+  createTime: string | null
+  updateTime: string | null
+}
+
+export interface AdminOrganizationUpdateRequest {
+  orgName?: string | null
+  username?: string | null
+  initialPassword?: string | null
+  accountStatus?: number | null
+  contactName?: string | null
+  contactPhone?: string | null
+  address?: string | null
+  intro?: string | null
+  licenseNo?: string | null
+  splitPlatformPercent?: number | null
+  splitOrgPercent?: number | null
+}
+
 export interface DashboardStatsResponse {
   totalUsers: number
   activeTeachers: number

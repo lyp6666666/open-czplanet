@@ -3,6 +3,7 @@ package com.ai.tutor.videocallimservice.chat.service;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
@@ -12,6 +13,8 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
@@ -40,6 +43,10 @@ public class CollaborationProposalService {
     private TeacherProfileLiteMapper teacherProfileLiteMapper;
     @Resource
     private StudentProfileLiteMapper studentProfileLiteMapper;
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+    @Resource
+    private StudentJobPostingLiteMapper studentJobPostingLiteMapper;
     @Resource
     private ChatService chatService;
     @Resource
@@ -231,6 +238,13 @@ public class CollaborationProposalService {
         LocalDateTime now = LocalDateTime.now();
         int updated = collaborationProposalMapper.updateStatus(proposalId, next.name(), uid, now);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+
+        if (CollaborationProposalStatus.ACCEPTED.equals(next) && proposal.getRoomId() != null) {
+            TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(proposal.getRoomId());
+            if (application != null && "DEMAND".equalsIgnoreCase(application.getContextType()) && application.getContextId() != null) {
+                studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 4);
+            }
+        }
 
         SystemMsgReq body = new SystemMsgReq();
         body.setBizType("COLLAB_PROPOSAL_STATUS");

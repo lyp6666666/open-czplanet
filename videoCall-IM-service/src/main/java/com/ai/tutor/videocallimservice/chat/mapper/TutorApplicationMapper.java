@@ -43,4 +43,6 @@ public interface TutorApplicationMapper {
     Long countCreatedBySenderBetween(@Param("senderUid") Long senderUid, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
 
     int bindRoom(@Param("id") Long id, @Param("roomId") Long roomId);
+
+    TutorApplication selectLatestByRoomId(@Param("roomId") Long roomId);
 }

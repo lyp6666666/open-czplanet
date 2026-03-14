@@ -4,14 +4,15 @@ import { useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const loading = ref(false)
-const error = ref<string | null>(null)
 
 const education = ref('')
 const educationOther = ref('')
@@ -38,7 +39,7 @@ const cities = computed(() => {
 function onSelectCity(v: string) {
   const raw = String(v || '').trim()
   if ((teachingMode.value === 'OFFLINE' || teachingMode.value === 'BOTH') && raw === '全国') {
-    error.value = '线下授课请选择具体城市'
+    toast.show('线下授课请选择具体城市', 'error')
     return
   }
   if (raw) localStorage.setItem('ai_tutor_city', raw)
@@ -74,7 +75,6 @@ const canSubmit = computed(() => {
 async function submit() {
   if (!canSubmit.value) return
   loading.value = true
-  error.value = null
   try {
     await userApi.updateUserInfo({
       teacherExtInfo: {
@@ -89,7 +89,7 @@ async function submit() {
     await auth.refreshMe()
     await router.replace('/tutor/jobs')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    toast.show(e instanceof Error ? e.message : '保存失败', 'error')
   } finally {
     loading.value = false
   }
@@ -159,8 +159,6 @@ onMounted(async () => {
             <div class="r-title">完善个人简历</div>
             <button class="skip-btn" type="button" :disabled="loading" @click="skip">跳过</button>
           </div>
-
-          <div v-if="error" class="hint error">{{ error }}</div>
 
           <div class="form">
             <label class="field">

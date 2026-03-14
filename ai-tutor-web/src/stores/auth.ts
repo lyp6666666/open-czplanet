@@ -46,7 +46,7 @@ export const useAuthStore = defineStore('auth', {
   },
   getters: {
     isLoggedIn: (s) => typeof s.token === 'string' && s.token.length > 0,
-    role: (s) => (s.user?.userType === 1 ? 'TEACHER' : s.user?.userType === 2 ? 'STUDENT' : null),
+    role: (s) => (s.user?.userType === 1 ? 'TEACHER' : s.user?.userType === 2 ? 'STUDENT' : s.user?.userType === 3 ? 'ORG' : null),
   },
   actions: {
     async sendCode(phone: string) {
@@ -60,6 +60,24 @@ export const useAuthStore = defineStore('auth', {
       this.me = null
       persistAuth(user)
       return user
+    },
+
+    async loginOrg(username: string, password: string) {
+      const org = await userApi.orgLogin({ username, password })
+      const user: LoginUserVO = {
+        id: org.id,
+        name: org.name,
+        phone: org.organizationProfile?.contactPhone ?? '',
+        avatar: null,
+        sex: null,
+        userType: org.userType,
+        token: org.token,
+      }
+      this.token = user.token
+      this.user = user
+      this.me = null
+      persistAuth(user)
+      return org
     },
 
     async refreshMe() {

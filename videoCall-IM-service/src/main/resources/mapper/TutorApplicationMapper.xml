@@ -204,4 +204,14 @@
         WHERE id = #{id}
           AND (room_id IS NULL OR room_id = 0)
     </update>
+
+    <select id="selectLatestByRoomId" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE room_id = #{roomId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
 </mapper>

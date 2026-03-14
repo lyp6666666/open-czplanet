@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { homeGuestApi } from '@/api/homeGuest'
@@ -22,6 +22,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const userMenuOpen = ref(false)
 const cityModalOpen = ref(false)
+const avatarLoadFailed = ref(false)
 
 const cities = computed(() => {
   const base = [props.city, '北京', '上海', '广州', '深圳', '杭州']
@@ -111,6 +112,13 @@ const userInitial = computed(() => {
   const n = auth.user?.name?.trim()
   return n && n.length > 0 ? n.slice(0, 1) : 'U'
 })
+
+watch(
+  () => auth.user?.avatar,
+  () => {
+    avatarLoadFailed.value = false
+  },
+)
 </script>
 
 <template>
@@ -173,7 +181,13 @@ const userInitial = computed(() => {
       <div class="right">
         <template v-if="auth.isLoggedIn && auth.user">
           <div class="user" @mouseenter="userMenuOpen = true" @mouseleave="userMenuOpen = false">
-            <img v-if="auth.user.avatar" class="avatar" :src="auth.user.avatar" alt="avatar" />
+            <img
+              v-if="auth.user.avatar && !avatarLoadFailed"
+              class="avatar"
+              :src="auth.user.avatar"
+              alt="avatar"
+              @error="avatarLoadFailed = true"
+            />
             <div v-else class="avatar fallback">{{ userInitial }}</div>
 
             <div v-if="userMenuOpen" class="menu card">

@@ -100,6 +100,11 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.selectByPhone(phone);
         boolean isNew = user == null;
 
+        // 机构账号不允许走手机号验证码登录，避免普通用户冒用或把机构账号误切换角色
+        if (user != null && user.getUserType() != null && user.getUserType() == UserRoleEnum.ORG.getValue()) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "机构账号请使用机构登录入口");
+        }
+
         if (user == null) {
             User created = transactionTemplate.execute(status -> {
                 try {

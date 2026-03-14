@@ -81,11 +81,14 @@ public class DemandViewVO implements Serializable {
     @Schema(description = "学历要求")
     private String educationRequirement;
 
-    @Schema(description = "发布者身份：PARENT/ STUDENT_SELF")
+    @Schema(description = "发布者身份：PARENT/STUDENT_SELF/ORGANIZATION")
     private String publisherIdentity;
 
     @Schema(description = "期望上课时间(JSON)")
     private String schedule;
+
+    @Schema(description = "业务状态：1匹配中 2待支付解锁 3沟通中 4合作中 5已结课 6已关闭")
+    private Integer bizStatus;
 
     @Schema(description = "状态：1发布中 0关闭")
     private Integer status;
@@ -112,7 +115,7 @@ public class DemandViewVO implements Serializable {
         @Schema(description = "头像")
         private String avatar;
 
-        @Schema(description = "身份文案：学生家长/学生本人")
+        @Schema(description = "身份文案：学生家长/学生本人/家教机构")
         private String identityLabel;
     }
 

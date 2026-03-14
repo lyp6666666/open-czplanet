@@ -16,6 +16,8 @@ const cityStore = useCityStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
+const isOrg = computed(() => auth.user?.userType === 3)
+const canChat = computed(() => auth.user?.userType === 1 || auth.user?.userType === 2)
 const displayName = computed(() => {
   if (!auth.isLoggedIn) return '未登录'
   const t = (auth.me?.teacherProfile?.realName || '').trim()
@@ -45,6 +47,7 @@ const menuOpen = ref(false)
 const cityModalOpen = ref(false)
 const switchModalOpen = ref(false)
 const greetingModalOpen = ref(false)
+const avatarLoadFailed = ref(false)
 const greetingText = ref('')
 const greetingBusy = ref(false)
 const greetingError = ref<string | null>(null)
@@ -105,20 +108,34 @@ function confirmSwitch() {
 
 function onLogout() {
   closeMenu()
+  const t = auth.user?.userType
   auth.logout()
-  void router.push('/')
+  void router.push(t === 3 ? '/auth/org' : '/')
 }
 
 watch(
   () => auth.token,
   () => {
     chatRealtime.stop()
+    if (!canChat.value) {
+      chatRealtime.totalUnread = 0
+      chatRealtime.roomUnread = {}
+      return
+    }
     void chatRealtime.refreshUnreadFromServer()
     void chatRealtime.start()
   },
 )
 
+watch(
+  () => auth.user?.avatar,
+  () => {
+    avatarLoadFailed.value = false
+  },
+)
+
 onMounted(() => {
+  if (!canChat.value) return
   void chatRealtime.refreshUnreadFromServer()
   void chatRealtime.start()
 })
@@ -166,6 +183,17 @@ onBeforeUnmount(() => {
               课程安排
             </button>
           </template>
+          <template v-else-if="isOrg">
+            <button class="tab" :class="{ active: route.path.startsWith('/org/tutors') }" type="button" @click="go('/org/tutors')">
+              找教师
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/org/post') }" type="button" @click="go('/org/post')">
+              发布需求
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/org/jobs') }" type="button" @click="go('/org/jobs/mine')">
+              我的需求
+            </button>
+          </template>
           <template v-else>
             <button class="tab" :class="{ active: route.path.startsWith('/student/tutors') }" type="button" @click="go('/student/tutors')">
               找教师
@@ -193,24 +221,32 @@ onBeforeUnmount(() => {
 
       <div class="right">
         <template v-if="isLoggedIn">
-          <button class="link link-msg" type="button" @click="go('/chat')">
+          <button v-if="canChat" class="link link-msg" type="button" @click="go('/chat')">
             <span class="link-msg-text">消息</span>
             <span v-if="unread > 0" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
           </button>
           <button v-if="isTeacher" class="link" type="button" @click="go('/me')">简历</button>
+          <button v-else-if="isOrg" class="link" type="button" @click="go('/org/change-password')">修改密码</button>
           <button v-else class="link" type="button" @click="go('/me')">我的</button>
 
           <div class="user" @click.stop="toggleMenu">
-            <img v-if="auth.user?.avatar" class="avatar" :src="auth.user.avatar" alt="avatar" />
+            <img
+              v-if="auth.user?.avatar && !avatarLoadFailed"
+              class="avatar"
+              :src="auth.user.avatar"
+              alt="avatar"
+              @error="avatarLoadFailed = true"
+            />
             <div v-else class="avatar fallback">{{ userInitial }}</div>
             <div class="name">{{ displayName }}</div>
           </div>
 
           <div v-if="menuOpen" class="menu card" @click.stop>
-            <button class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button v-else class="menu-item" type="button" @click="go('/org/change-password'); closeMenu()">修改密码</button>
             <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
             <button class="menu-item" type="button" @click="go('/settings'); closeMenu()">设置</button>
-            <button class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
             <button class="menu-item danger" type="button" @click="onLogout">退出登录</button>
           </div>
         </template>

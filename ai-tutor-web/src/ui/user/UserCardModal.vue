@@ -26,10 +26,21 @@ const auth = useAuthStore()
 const router = useRouter()
 const settings = useSettingsStore()
 
+const avatarLoaded = ref(false)
+let avatarProbeId = 0
+
 const title = computed(() => {
   const user = card.value?.user
   if (!user) return ''
   return user.name || `用户${user.id}`
+})
+
+const avatarSrc = computed(() => {
+  const v = String(card.value?.user?.avatar || '').trim()
+  if (!v) return ''
+  const low = v.toLowerCase()
+  if (low === 'null' || low === 'undefined') return ''
+  return v
 })
 
 const identityLabel = computed(() => {
@@ -104,6 +115,26 @@ watch(
   { immediate: true },
 )
 
+watch(
+  avatarSrc,
+  (src) => {
+    avatarLoaded.value = false
+    if (!src) return
+    const probeId = (avatarProbeId += 1)
+    const img = new Image()
+    img.onload = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = true
+    }
+    img.onerror = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = false
+    }
+    img.src = src
+  },
+  { immediate: true },
+)
+
 async function onToggleFavoriteTutor() {
   const uid = props.uid
   if (!uid || !canFavoriteTutor.value || favoriteBusy.value) return
@@ -167,7 +198,7 @@ async function startTutorApplication() {
     <div class="modal card">
       <div class="m-head">
         <div class="u">
-          <img v-if="card?.user?.avatar" class="u-avatar" :src="card.user.avatar" alt="" />
+          <img v-if="avatarSrc && avatarLoaded" class="u-avatar" :src="avatarSrc" alt="" />
           <div v-else class="u-avatar fallback">{{ title.slice(0, 1) }}</div>
           <div class="u-main">
             <div class="u-name">

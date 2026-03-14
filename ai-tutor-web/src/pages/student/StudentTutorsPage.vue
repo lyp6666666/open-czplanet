@@ -23,6 +23,8 @@ const settings = useSettingsStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+const canUseStudentActions = computed(() => auth.user?.userType === 2)
+
 const q = ref('')
 const mode = ref<string>('')
 const subject = ref<string>('')
@@ -37,6 +39,7 @@ const rateMaxInput = ref('')
 const list = ref<ParentTutorCardVO[]>([])
 const cursor = ref<number | null>(null)
 const isLast = ref(false)
+const avatarFailedMap = ref<Record<number, boolean>>({})
 
 const selectedUid = ref<number | null>(null)
 const detailLoading = ref(false)
@@ -134,6 +137,17 @@ function displayName(it: ParentTutorCardVO): string {
   return it.displayName || `教师${it.userId}`
 }
 
+function userInitial(name: string | null | undefined): string {
+  const n = String(name || '').trim()
+  return n ? n.slice(0, 1) : 'U'
+}
+
+function markAvatarFailed(uid: number) {
+  if (!uid) return
+  if (avatarFailedMap.value[uid]) return
+  avatarFailedMap.value = { ...avatarFailedMap.value, [uid]: true }
+}
+
 function metaText(it: ParentTutorCardVO): string {
   const parts: string[] = []
   if (it.city) parts.push(it.city)
@@ -187,7 +201,7 @@ async function loadMore() {
     isLast.value = !!page.isLast
     const next = page.list || []
     list.value = [...list.value, ...next]
-    if (next.length && auth.user?.userType === 2) {
+    if (next.length && canUseStudentActions.value) {
       await syncFavorites(next.map((it) => it.userId))
     }
     if (selectedUid.value == null) {
@@ -218,6 +232,7 @@ function selectTeacher(it: ParentTutorCardVO) {
 }
 
 async function onToggleFavorite(uid: number) {
+  if (!canUseStudentActions.value) return
   const current = !!favoriteMap.value[uid]
   try {
     if (current) {
@@ -277,6 +292,7 @@ async function shouldReuseExistingChat(otherUid: number): Promise<{ roomId: numb
 }
 
 async function openApply() {
+  if (!canUseStudentActions.value) return
   if (applyBusy.value) return
   const targetUid = detail.value?.user?.id
   const tutorId = detail.value?.teacherProfile?.id
@@ -430,7 +446,15 @@ onMounted(() => {
           >
             <div class="line1">
               <div class="t">
-                <img class="avatar clickable" :src="it.avatar || ''" alt="" @click.stop="openCard(it.userId)" />
+                <img
+                  v-if="it.avatar && !avatarFailedMap[it.userId]"
+                  class="avatar clickable"
+                  :src="it.avatar"
+                  alt=""
+                  @error="markAvatarFailed(it.userId)"
+                  @click.stop="openCard(it.userId)"
+                />
+                <div v-else class="avatar clickable fallback" @click.stop="openCard(it.userId)">{{ userInitial(displayName(it)) }}</div>
                 <span class="name clickable" @click.stop="openCard(it.userId)">{{ displayName(it) }}</span>
                 <span v-if="it.eduVerifyStatus === 2" class="verified-badge">学信网认证</span>
               </div>
@@ -463,7 +487,7 @@ onMounted(() => {
               {{ detail.teacherProfile.realName || detail.user.name || `教师${detail.user.id}` }}
               <span v-if="detail.teacherProfile.eduVerifyStatus === 2" class="verified-badge">学信网认证</span>
             </div>
-            <div class="detail-ops">
+            <div v-if="canUseStudentActions" class="detail-ops">
               <button class="btn" type="button" @click="onToggleFavorite(detail.user.id)">
                 {{ favoriteMap[detail.user.id] ? '已收藏' : '收藏' }}
               </button>
@@ -706,6 +730,14 @@ onMounted(() => {
   border: 1px solid var(--border);
   background: #fff;
   cursor: pointer;
+}
+
+.avatar.fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--primary);
+  background: rgba(0, 190, 189, 0.12);
 }
 
 .name.clickable:hover {

@@ -510,7 +510,8 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                     p.getCity(),
                     simplifyAddress(p.getAddress()),
                     p.getChildAge(),
-                    scheduleText(p.getSchedule()),
+                    scheduleText(StrUtil.isNotBlank(p.getAvailableTime()) ? p.getAvailableTime() : p.getSchedule()),
+                    p.getPublisherIdentity(),
                     parentVo,
                     tags
             ));
@@ -872,7 +873,7 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                 tags.add("预算≥" + min);
             }
         }
-        String schedule = scheduleText(p.getSchedule());
+        String schedule = scheduleText(StrUtil.isNotBlank(p.getAvailableTime()) ? p.getAvailableTime() : p.getSchedule());
         if (StrUtil.isNotBlank(schedule)) {
             tags.add(schedule);
         }
@@ -920,9 +921,6 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         String s = schedule.trim();
         if (s.isBlank()) {
             return null;
-        }
-        if (s.length() > 20) {
-            return s.substring(0, 20) + "...";
         }
         return s;
     }

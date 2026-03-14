@@ -4,6 +4,8 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.RespondCollaborationProposalReq;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -22,11 +24,15 @@ class CollaborationProposalServiceTest {
         CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
         ChatService chatService = mock(ChatService.class);
         BrokerageOrderService brokerageOrderService = mock(BrokerageOrderService.class);
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        StudentJobPostingLiteMapper studentJobPostingLiteMapper = mock(StudentJobPostingLiteMapper.class);
 
         CollaborationProposalService svc = new CollaborationProposalService();
         ReflectionTestUtils.setField(svc, "collaborationProposalMapper", collaborationProposalMapper);
         ReflectionTestUtils.setField(svc, "chatService", chatService);
         ReflectionTestUtils.setField(svc, "brokerageOrderService", brokerageOrderService);
+        ReflectionTestUtils.setField(svc, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(svc, "studentJobPostingLiteMapper", studentJobPostingLiteMapper);
 
         CollaborationProposal proposal = CollaborationProposal.builder()
                 .id(10L)
@@ -40,6 +46,7 @@ class CollaborationProposalServiceTest {
         when(collaborationProposalMapper.updateStatus(eq(10L), eq("ACCEPTED"), eq(2L), any())).thenReturn(1);
         when(chatService.sendMsg(any(ChatMessageReq.class), eq(2L))).thenReturn(9001L);
         when(brokerageOrderService.hasPaidOrderInRoom(100L)).thenReturn(true);
+        when(tutorApplicationMapper.selectLatestByRoomId(100L)).thenReturn(null);
 
         RespondCollaborationProposalReq req = new RespondCollaborationProposalReq();
         req.setAction("ACCEPT");
@@ -50,4 +57,3 @@ class CollaborationProposalServiceTest {
         verify(brokerageOrderService, never()).sendBrokerageRequired(any(), any(), any(), any());
     }
 }
-

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
 import type { StudentJobPosting } from '@/api/types'
-import { formatClassMode } from '@/utils/present'
+import { formatClassMode, formatDemandBizStatus } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
@@ -74,7 +74,10 @@ onMounted(() => {
           :class="{ hl: highlightId != null && it.id === highlightId }"
         >
           <div class="main">
-            <div class="t">{{ it.title }}</div>
+            <div class="trow">
+              <div class="t">{{ it.title }}</div>
+              <div class="tag">{{ formatDemandBizStatus(it.bizStatus, it.status) }}</div>
+            </div>
             <div class="meta">
               <span v-if="it.city">{{ it.city }}</span>
               <span v-if="it.classMode">{{ formatClassMode(it.classMode) }}</span>
@@ -167,6 +170,23 @@ onMounted(() => {
 .t {
   font-weight: 900;
   font-size: 14px;
+}
+
+.trow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .meta {

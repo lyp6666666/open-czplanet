@@ -6,7 +6,7 @@ import type { BaseResponse } from './types'
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
 
-const AUTH_INVALID_CODES = new Set([40100, 40101])
+const AUTH_INVALID_CODES = new Set([40100])
 
 let authInvalidHandler: ((reason: string) => void) | null = null
 let lastAuthInvalidAt = 0
@@ -26,9 +26,29 @@ export function notifyAuthInvalid(reason: string) {
     return
   }
 
+  let userType: number | null = null
+  try {
+    const rawUser = localStorage.getItem(STORAGE_USER_KEY)
+    if (rawUser) {
+      const u = JSON.parse(rawUser) as { userType?: unknown }
+      const v = typeof u.userType === 'number' ? u.userType : Number(u.userType)
+      userType = Number.isFinite(v) ? v : null
+    }
+  } catch {
+    userType = null
+  }
+
   localStorage.removeItem(STORAGE_TOKEN_KEY)
   localStorage.removeItem(STORAGE_USER_KEY)
   if (window.location.hash.startsWith('#/auth/')) return
+  if (userType === 3) {
+    window.location.hash = '#/auth/org'
+    return
+  }
+  if (userType === 1) {
+    window.location.hash = '#/auth/tutor'
+    return
+  }
   window.location.hash = '#/auth/student'
 }
 
@@ -85,8 +105,23 @@ http.interceptors.response.use(
     const status = error.response?.status
     const data = error.response?.data as BaseResponse<unknown> | undefined
     const code = data && typeof data.code === 'number' ? data.code : null
-    if (status === 401 || status === 403) {
+    if (status === 401) {
       notifyAuthInvalid(`http_${status}`)
+    } else if (status === 403) {
+      let userType: number | null = null
+      try {
+        const rawUser = localStorage.getItem(STORAGE_USER_KEY)
+        if (rawUser) {
+          const u = JSON.parse(rawUser) as { userType?: unknown }
+          const v = typeof u.userType === 'number' ? u.userType : Number(u.userType)
+          userType = Number.isFinite(v) ? v : null
+        }
+      } catch {
+        userType = null
+      }
+      if (userType !== 3) {
+        notifyAuthInvalid(`http_${status}`)
+      }
     } else if (code != null && AUTH_INVALID_CODES.has(code)) {
       notifyAuthInvalid(`api_code_${code}`)
     }

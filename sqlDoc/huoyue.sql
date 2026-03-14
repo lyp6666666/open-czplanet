@@ -65,14 +65,16 @@ CREATE TABLE `student_job_posting`  (
   `budget_max` decimal(10, 2) NULL DEFAULT NULL COMMENT '预算上限（每小时）',
   `stage_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER',
   `education_requirement` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等',
-  `publisher_identity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PARENT' COMMENT '发布者身份：PARENT/ STUDENT_SELF',
+  `publisher_identity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PARENT' COMMENT '发布者身份：PARENT/STUDENT_SELF/ORGANIZATION',
   `schedule` json NULL COMMENT '期望上课时间，例如：[\"Tue 19-21\",\"Sat 10-12\"]',
+  `biz_status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '业务状态：1匹配中 2待支付解锁 3沟通中 4合作中 5已结课 6已关闭',
   `status` tinyint(4) NULL DEFAULT 1 COMMENT '状态：1发布中 0关闭',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_parent_id`(`parent_id`) USING BTREE,
   INDEX `idx_subject_id`(`subject_id`) USING BTREE,
+  INDEX `idx_biz_status`(`biz_status`) USING BTREE,
   INDEX `idx_status`(`status`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '家长发布的家教岗位需求表' ROW_FORMAT = Dynamic;
 
@@ -222,7 +224,7 @@ CREATE TABLE `user`  (
   `ip_info` json NULL COMMENT 'ip信息',
   `item_id` bigint(20) NULL DEFAULT NULL COMMENT '佩戴的徽章id',
   `status` int(11) NULL DEFAULT 0 COMMENT '使用状态 0正常 1拉黑',
-  `user_type` tinyint(1) NOT NULL COMMENT '用户类型 1教师 2家长',
+  `user_type` tinyint(1) NOT NULL COMMENT '用户类型 1教师 2家长 3机构',
   `ref_id` bigint(20) NULL DEFAULT NULL COMMENT '逻辑外键，指向教师表或家长表id',
   `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
@@ -245,6 +247,41 @@ CREATE TABLE `user_settings` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户设置表';
+
+DROP TABLE IF EXISTS `organization_profile`;
+CREATE TABLE `organization_profile` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '机构资料id',
+  `user_id` bigint(20) UNSIGNED NOT NULL COMMENT '机构主账号 user_id（逻辑外键）',
+  `org_name` varchar(100) NOT NULL COMMENT '机构名称',
+  `intro` varchar(2000) DEFAULT NULL COMMENT '机构介绍',
+  `contact_name` varchar(50) DEFAULT NULL COMMENT '联系人姓名',
+  `contact_phone` varchar(32) DEFAULT NULL COMMENT '联系人电话',
+  `address` varchar(255) DEFAULT NULL COMMENT '机构地址',
+  `license_no` varchar(64) DEFAULT NULL COMMENT '营业执照号/统一社会信用代码',
+  `split_platform_percent` int NOT NULL DEFAULT 50 COMMENT '平台分成比例（百分比）',
+  `split_org_percent` int NOT NULL DEFAULT 50 COMMENT '机构分成比例（百分比）',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_org_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构资料表';
+
+DROP TABLE IF EXISTS `organization_account`;
+CREATE TABLE `organization_account` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '机构账号id',
+  `org_user_id` bigint(20) UNSIGNED NOT NULL COMMENT '机构主账号 user_id（逻辑外键）',
+  `username` varchar(50) NOT NULL COMMENT '登录账号（由管理端创建发放）',
+  `password_hash` varchar(128) NOT NULL COMMENT 'BCrypt 密码哈希',
+  `must_change_password` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否首次登录强制改密 1是 0否',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
+  `last_login_time` datetime(3) DEFAULT NULL COMMENT '最后登录时间',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_username` (`username`),
+  UNIQUE KEY `uniq_org_user_id` (`org_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构登录账号表';
 
 
 DROP TABLE IF EXISTS `room`;
@@ -450,6 +487,23 @@ CREATE TABLE `tutor_appointment` (
             KEY `idx_start_time` (`start_time`),
             KEY `idx_room_id` (`room_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约/邀约表';
+
+DROP TABLE IF EXISTS `tutor_review`;
+CREATE TABLE `tutor_review` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '评价id',
+            `appointment_id` bigint(20) UNSIGNED NOT NULL COMMENT '预约id（逻辑外键）',
+            `parent_id` bigint(20) UNSIGNED NOT NULL COMMENT '评价方 user_id（学生/家长/机构）',
+            `tutor_id` bigint(20) UNSIGNED NOT NULL COMMENT '被评价教师 user_id',
+            `rating` tinyint(4) NOT NULL COMMENT '评分 1~5',
+            `content` varchar(1000) DEFAULT NULL COMMENT '评价内容',
+            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0删除',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_appointment` (`appointment_id`),
+            KEY `idx_tutor_id` (`tutor_id`),
+            KEY `idx_parent_id` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教师评价表（预约完成后评价）';
 
 DROP TABLE IF EXISTS `sys_admin_user`;
 CREATE TABLE `sys_admin_user` (

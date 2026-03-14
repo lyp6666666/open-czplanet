@@ -245,6 +245,9 @@ public class TutorApplicationService {
         TutorApplication latest = tutorApplicationMapper.selectById(applicationId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
         ensureRoom(latest, uid);
+        if ("DEMAND".equalsIgnoreCase(latest.getContextType()) && latest.getContextId() != null) {
+            studentJobPostingLiteMapper.updateBizStatus(latest.getContextId(), 2);
+        }
         Long orderId = getOrCreateBrokerageOrderForApplication(latest);
         log.info("tutor_application_decided applicationId={} receiverUid={} status={} orderId={}", latest.getId(), uid, latest.getStatus(), orderId);
         sseSessionManager.sendToUid(latest.getSenderUid(), "application", Map.of(
@@ -364,6 +367,9 @@ public class TutorApplicationService {
         tutorApplicationMapper.updateChatAccessStatus(applicationId, TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
         TutorApplication application = tutorApplicationMapper.selectById(applicationId);
         if (application != null) {
+            if ("DEMAND".equalsIgnoreCase(application.getContextType()) && application.getContextId() != null) {
+                studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 3);
+            }
             log.info("tutor_application_paid applicationId={} senderUid={} receiverUid={}", applicationId, application.getSenderUid(), application.getReceiverUid());
             Map<String, Object> payload = Map.of(
                     "type", "PAID",

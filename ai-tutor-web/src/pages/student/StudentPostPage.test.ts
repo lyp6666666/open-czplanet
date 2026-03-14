@@ -8,12 +8,17 @@ import StudentPostPage from './StudentPostPage.vue'
 
 const mocks = vi.hoisted(() => ({
   createDemand: vi.fn(),
+  toastShow: vi.fn(),
 }))
 
 vi.mock('@/api/jobs', () => ({
   jobsApi: {
     createDemand: mocks.createDemand,
   },
+}))
+
+vi.mock('@/stores/toast', () => ({
+  useToastStore: () => ({ show: mocks.toastShow }),
 }))
 
 function createTestRouter() {
@@ -29,6 +34,7 @@ function createTestRouter() {
 describe('StudentPostPage', () => {
   it('blocks publish when offline without address', async () => {
     mocks.createDemand.mockReset()
+    mocks.toastShow.mockReset()
     const router = createTestRouter()
     await router.push('/student/post')
     await router.isReady()
@@ -49,12 +55,13 @@ describe('StudentPostPage', () => {
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('上门辅导必须填写城市与上课地址')
+    expect(mocks.toastShow).toHaveBeenCalledWith('上门辅导必须填写城市与上课地址', 'error')
     expect(mocks.createDemand).not.toHaveBeenCalled()
   })
 
   it('submits required fields and calls createDemand', async () => {
     mocks.createDemand.mockReset()
+    mocks.toastShow.mockReset()
     mocks.createDemand.mockResolvedValue(3001)
 
     const router = createTestRouter()

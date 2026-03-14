@@ -34,6 +34,9 @@ public interface UserMapper {
     @Update("UPDATE user SET user_type = #{userType}, update_time = now() WHERE id = #{id}")
     int updateUserType(@Param("id") Long id, @Param("userType") Integer userType);
 
+    @Update("UPDATE user SET ref_id = #{refId}, update_time = now() WHERE id = #{id}")
+    int updateRefId(@Param("id") Long id, @Param("refId") Long refId);
+
     @Update("UPDATE user SET password = #{newPassword} WHERE id = #{id}")
     int updateUserPassWord(String newPassword, Long id);
 

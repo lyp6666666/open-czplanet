@@ -9,7 +9,8 @@ import { jobsApi } from '@/api/jobs'
 import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting, TutorApplicationVO } from '@/api/types'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { useCityStore } from '@/stores/city'
-import { formatClassMode, formatEducationRequirement } from '@/utils/present'
+import OrgCardModal from '@/ui/user/OrgCardModal.vue'
+import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
@@ -42,6 +43,7 @@ const selectedId = ref<number | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
+const publisherAvatarFailed = ref(false)
 const pendingHighlightId = ref<number | null>(null)
 
 const detailApplicationLoading = ref(false)
@@ -52,6 +54,15 @@ const applyBusy = ref(false)
 const applyError = ref<string | null>(null)
 const applyTipOpen = ref(false)
 const applyTipText = ref('')
+
+const orgCardOpen = ref(false)
+const orgCardId = ref<number | null>(null)
+
+function openOrgCard(id: number) {
+  if (!id) return
+  orgCardId.value = id
+  orgCardOpen.value = true
+}
 
 const openKey = ref<'' | 'type' | 'subject' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
 
@@ -525,6 +536,13 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => detail.value?.publisher?.avatar,
+  () => {
+    publisherAvatarFailed.value = false
+  },
+)
+
 function renderLocation(it: Pick<StudentJobPosting, 'classMode' | 'city'>): string {
   const mode = (it.classMode || '').toLowerCase()
   if (mode === 'online') return '线上'
@@ -690,7 +708,10 @@ watch(
             @click="openDetail(it)"
           >
             <div class="line1">
-              <div class="t">{{ it.title }}</div>
+              <div class="t">
+                <span>{{ it.title }}</span>
+                <span v-if="String(it.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="org-tag">机构发布</span>
+              </div>
               <div v-if="it.budgetMin || it.budgetMax" class="pay">{{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时</div>
             </div>
             <div class="meta">
@@ -742,6 +763,13 @@ watch(
             <span>{{ formatEducationRequirement(detail.educationRequirement) }}</span>
           </div>
 
+          <div v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="hint notice">
+            <div class="n-title">机构单说明</div>
+            <div class="n-body">
+              机构为需求发布与履约主体，平台提供信息撮合、支付托管与纠纷介入机制；平台不直接保证授课质量与履约结果。
+            </div>
+          </div>
+
           <div class="detail-block">
             <div class="detail-label">需求描述</div>
             <div class="detail-text">{{ detail.description || '—' }}</div>
@@ -749,7 +777,9 @@ watch(
 
           <div v-if="detail.availableTime || detail.schedule" class="detail-block">
             <div class="detail-label">可上课时间</div>
-            <div class="detail-text">{{ detail.availableTime || detail.schedule }}</div>
+            <div class="detail-text">
+              {{ detail.availableTime || (detail.schedule ? formatScheduleText(detail.schedule) : '') }}
+            </div>
           </div>
 
           <div v-if="detail.teacherRequirementDetail" class="detail-block">
@@ -758,12 +788,26 @@ watch(
           </div>
 
           <div v-if="detail.publisher" class="publisher">
-            <img v-if="detail.publisher.avatar" class="p-avatar" :src="detail.publisher.avatar" alt="avatar" />
+            <img
+              v-if="detail.publisher.avatar && !publisherAvatarFailed"
+              class="p-avatar"
+              :src="detail.publisher.avatar"
+              alt="avatar"
+              @error="publisherAvatarFailed = true"
+            />
             <div v-else class="p-avatar fallback">{{ (detail.publisher.displayName || 'U').slice(0, 1) }}</div>
             <div class="p-info">
               <div class="p-name">{{ detail.publisher.displayName }}</div>
               <div class="p-tags">
                 <span class="tag">{{ detail.publisher.identityLabel }}</span>
+                <button
+                  v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'"
+                  class="link"
+                  type="button"
+                  @click="openOrgCard(detail.parentId)"
+                >
+                  查看机构主页
+                </button>
               </div>
             </div>
           </div>
@@ -789,6 +833,8 @@ watch(
         </div>
       </div>
     </div>
+
+    <OrgCardModal :open="orgCardOpen" :org-id="orgCardId" @close="orgCardOpen = false" />
 
   </div>
 </template>
@@ -979,6 +1025,19 @@ watch(
   flex: 1 1 auto;
 }
 
+.org-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #d46b08;
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  background: rgba(255, 170, 0, 0.08);
+  margin-left: 6px;
+}
+
 .pay {
   flex: 0 0 auto;
   color: #ff4d4f;
@@ -1115,6 +1174,31 @@ watch(
   font-size: 12px;
   color: var(--muted);
   background: rgba(31, 35, 41, 0.06);
+}
+
+.link {
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hint.notice {
+  border-color: rgba(255, 170, 0, 0.28);
+  background: rgba(255, 170, 0, 0.06);
+}
+
+.n-title {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.n-body {
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .empty {

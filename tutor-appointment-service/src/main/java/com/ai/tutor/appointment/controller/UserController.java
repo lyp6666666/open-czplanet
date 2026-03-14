@@ -14,6 +14,7 @@ import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.model.vo.UserCardVO;
@@ -57,6 +58,8 @@ public class UserController {
     private TeacherProfileMapper teacherProfileMapper;
     @Resource
     private StudentProfileMapper studentProfileMapper;
+    @Resource
+    private OrganizationProfileMapper organizationProfileMapper;
     @Resource
     private StudentJobPostingMapper studentJobPostingMapper;
     @Resource
@@ -178,6 +181,8 @@ public class UserController {
             builder.teacherProfile(teacherProfileMapper.selectByUserId(userId));
         } else if (role == UserRoleEnum.STUDENT) {
             builder.studentProfile(studentProfileMapper.selectByUserId(userId));
+        } else if (role == UserRoleEnum.ORG) {
+            builder.organizationProfile(organizationProfileMapper.selectByUserId(userId));
         }
         return ResultUtils.success(builder.build());
     }

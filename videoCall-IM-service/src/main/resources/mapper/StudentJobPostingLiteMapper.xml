@@ -20,5 +20,11 @@
         WHERE id = #{id}
         LIMIT 1
     </select>
-</mapper>
 
+    <update id="updateBizStatus">
+        UPDATE student_job_posting
+        SET biz_status = #{bizStatus},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+</mapper>

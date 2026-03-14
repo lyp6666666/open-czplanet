@@ -3,10 +3,12 @@ package com.ai.tutor.appointment.service.impl;
 import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
 import com.ai.tutor.appointment.enums.PublisherIdentityEnum;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
+import com.ai.tutor.appointment.model.entity.OrganizationProfile;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.entity.PositionPost;
@@ -32,6 +34,9 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
 
     @Resource
     private UserMapper userMapper;
+
+    @Resource
+    private OrganizationProfileMapper organizationProfileMapper;
 
     @Resource
     private PositionPostMapper positionPostMapper;
@@ -82,6 +87,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .educationRequirement(normalizeEducationRequirementForStorage(request.getEducationRequirement()))
                 .publisherIdentity(normalizePublisherIdentity(request.getPublisherIdentity()))
                 .schedule(request.getSchedule())
+                .bizStatus(1)
                 .status(1)
                 .build();
         int inserted = studentJobPostingMapper.insert(posting);
@@ -164,6 +170,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .educationRequirement(request.getEducationRequirement() == null ? null : normalizeEducationRequirementForStorage(request.getEducationRequirement()))
                 .publisherIdentity(request.getPublisherIdentity() == null ? null : normalizePublisherIdentity(request.getPublisherIdentity()))
                 .schedule(request.getSchedule())
+                .bizStatus(request.getStatus() != null && request.getStatus() == 0 ? 6 : null)
                 .status(request.getStatus())
                 .subjectTouched(touchSubject)
                 .build();
@@ -183,9 +190,13 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     public DemandViewVO getViewById(Long id) {
         StudentJobPosting posting = getById(id);
         User user = userMapper.selectById(posting.getParentId());
+        OrganizationProfile orgProfile = null;
+        if (PublisherIdentityEnum.ORGANIZATION == PublisherIdentityEnum.fromCode(posting.getPublisherIdentity())) {
+            orgProfile = organizationProfileMapper.selectByUserId(posting.getParentId());
+        }
         DemandViewVO.Publisher publisher = DemandViewVO.Publisher.builder()
                 .uid(posting.getParentId())
-                .displayName(buildDisplayName(user))
+                .displayName(buildPublisherDisplayName(user, orgProfile))
                 .avatar(user == null ? null : user.getAvatar())
                 .identityLabel(resolvePublisherIdentityLabel(posting.getPublisherIdentity()))
                 .build();
@@ -214,6 +225,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .educationRequirement(posting.getEducationRequirement())
                 .publisherIdentity(posting.getPublisherIdentity())
                 .schedule(posting.getSchedule())
+                .bizStatus(posting.getBizStatus())
                 .status(posting.getStatus())
                 .createTime(posting.getCreateTime())
                 .updateTime(posting.getUpdateTime())
@@ -463,6 +475,16 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     private static String resolvePublisherIdentityLabel(String raw) {
         PublisherIdentityEnum e = PublisherIdentityEnum.fromCode(raw);
         return e == null ? PublisherIdentityEnum.PARENT.getLabel() : e.getLabel();
+    }
+
+    private static String buildPublisherDisplayName(User user, OrganizationProfile orgProfile) {
+        if (orgProfile != null) {
+            String orgName = orgProfile.getOrgName();
+            if (orgName != null && !orgName.trim().isEmpty()) {
+                return orgName.trim();
+            }
+        }
+        return buildDisplayName(user);
     }
 
     private static String buildDisplayName(User user) {

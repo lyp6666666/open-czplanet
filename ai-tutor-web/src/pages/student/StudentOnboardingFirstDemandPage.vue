@@ -6,6 +6,7 @@ import { assetsApi } from '@/api/assets'
 import { jobsApi } from '@/api/jobs'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
@@ -18,10 +19,10 @@ function buildStudentFirstDemandCompletedKey(uid: number) {
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const step = ref<1 | 2 | 3>(1)
 const loading = ref(false)
-const error = ref<string | null>(null)
 const uid = ref<number | null>(null)
 
 const avatar = ref('')
@@ -139,16 +140,15 @@ function buildTitle() {
 const canNextStep1 = computed(() => !!(name.value.trim() && avatar.value.trim()))
 
 async function onSelectAvatarFile(e: Event) {
-  error.value = null
   const input = e.target as HTMLInputElement | null
   const f = input?.files?.[0]
   if (!f) return
   if (!f.type || !f.type.startsWith('image/')) {
-    error.value = '请选择图片文件'
+    toast.show('请选择图片文件', 'error')
     return
   }
   if (f.size > 2 * 1024 * 1024) {
-    error.value = '头像文件不能超过 2MB'
+    toast.show('头像文件不能超过 2MB', 'error')
     return
   }
   avatarUploading.value = true
@@ -156,7 +156,7 @@ async function onSelectAvatarFile(e: Event) {
     const r = await assetsApi.uploadImage(f, 'avatar')
     avatar.value = r.url
   } catch (e2) {
-    error.value = e2 instanceof Error ? e2.message : '头像上传失败'
+    toast.show(e2 instanceof Error ? e2.message : '头像上传失败', 'error')
   } finally {
     avatarUploading.value = false
     if (input) input.value = ''
@@ -166,13 +166,12 @@ async function onSelectAvatarFile(e: Event) {
 async function nextStep1() {
   if (!canNextStep1.value) return
   loading.value = true
-  error.value = null
   try {
     await userApi.updateUserInfo({ baseUserInfo: { name: name.value.trim(), avatar: avatar.value.trim() } })
     await auth.refreshMe()
     step.value = 2
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    toast.show(e instanceof Error ? e.message : '保存失败', 'error')
   } finally {
     loading.value = false
   }
@@ -190,10 +189,9 @@ function validateStudentDemandBasics(): string | null {
 }
 
 function nextStep2() {
-  error.value = null
   const err = validateStudentDemandBasics()
   if (err) {
-    error.value = err
+    toast.show(err, 'error')
     return
   }
   step.value = 3
@@ -202,7 +200,7 @@ function nextStep2() {
 function onSelectCity(v: string) {
   if (classMode.value === 'offline' || classMode.value === 'both') {
     if (String(v || '').trim() === '全国') {
-      error.value = '上门辅导请选择具体城市'
+      toast.show('上门辅导请选择具体城市', 'error')
       return
     }
   }
@@ -216,22 +214,21 @@ async function skipDemand() {
 }
 
 async function submitDemand() {
-  error.value = null
   const err = validateStudentDemandBasics()
   if (err) {
-    error.value = err
+    toast.show(err, 'error')
     return
   }
   if (!teacherRequirementDetail.value.trim()) {
-    error.value = '请填写对教员的详细要求'
+    toast.show('请填写对教员的详细要求', 'error')
     return
   }
   if (teacherRequirementDetail.value.trim().length < 10) {
-    error.value = '对教员的详细要求至少10个字'
+    toast.show('对教员的详细要求至少10个字', 'error')
     return
   }
   if (!Number.isFinite(frequencyPerWeek.value) || frequencyPerWeek.value < 1 || frequencyPerWeek.value > 7) {
-    error.value = '每周上课次数需在 1~7 之间'
+    toast.show('每周上课次数需在 1~7 之间', 'error')
     return
   }
   let budgetMinNum: number
@@ -239,12 +236,12 @@ async function submitDemand() {
   if (budgetMode.value === 'single') {
     const raw = String(budgetSingle.value ?? '').trim()
     if (!raw) {
-      error.value = '请填写预算'
+      toast.show('请填写预算', 'error')
       return
     }
     const v = Number(raw)
     if (!Number.isFinite(v) || v <= 0) {
-      error.value = '预算需为大于 0 的数字'
+      toast.show('预算需为大于 0 的数字', 'error')
       return
     }
     budgetMinNum = v
@@ -253,21 +250,21 @@ async function submitDemand() {
     const rawMin = String(budgetMin.value ?? '').trim()
     const rawMax = String(budgetMax.value ?? '').trim()
     if (!rawMin || !rawMax) {
-      error.value = '请填写预算上下限'
+      toast.show('请填写预算上下限', 'error')
       return
     }
     const vMin = Number(rawMin)
     const vMax = Number(rawMax)
     if (!Number.isFinite(vMin) || vMin <= 0) {
-      error.value = '预算下限需为大于 0 的数字'
+      toast.show('预算下限需为大于 0 的数字', 'error')
       return
     }
     if (!Number.isFinite(vMax) || vMax <= 0) {
-      error.value = '预算上限需为大于 0 的数字'
+      toast.show('预算上限需为大于 0 的数字', 'error')
       return
     }
     if (vMin > vMax) {
-      error.value = '预算下限不能大于预算上限'
+      toast.show('预算下限不能大于预算上限', 'error')
       return
     }
     budgetMinNum = vMin
@@ -298,9 +295,10 @@ async function submitDemand() {
     if (uid.value) {
       localStorage.setItem(buildStudentFirstDemandCompletedKey(uid.value), '1')
     }
+    toast.show('发布成功', 'success')
     await router.replace({ name: 'studentMineJobs', query: { highlight: String(id) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发布失败'
+    toast.show(e instanceof Error ? e.message : '发布失败', 'error')
   } finally {
     loading.value = false
   }
@@ -367,8 +365,6 @@ watch(
             </div>
             <div class="r-desc">第 {{ step }}/3 步</div>
           </div>
-
-          <div v-if="error" class="hint error">{{ error }}</div>
 
           <div v-if="step === 1" class="form">
             <div class="field">

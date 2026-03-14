@@ -6,11 +6,13 @@ import lombok.Getter;
  * 需求发布者身份枚举：
  * - PARENT：学生家长（为孩子找家教）
  * - STUDENT_SELF：学生本人（自己找家教）
+ * - ORGANIZATION：家教机构（机构发布需求）
  */
 @Getter
 public enum PublisherIdentityEnum {
     PARENT("PARENT", "学生家长"),
-    STUDENT_SELF("STUDENT_SELF", "学生本人");
+    STUDENT_SELF("STUDENT_SELF", "学生本人"),
+    ORGANIZATION("ORGANIZATION", "家教机构");
 
     private final String code;
     private final String label;
@@ -36,4 +38,3 @@ public enum PublisherIdentityEnum {
         return null;
     }
 }
-

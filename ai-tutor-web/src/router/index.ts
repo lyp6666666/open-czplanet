@@ -22,6 +22,14 @@ const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
 const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
+const OrgAuthPage = () => import('@/pages/org/OrgAuthPage.vue')
+const OrgChangePasswordPage = () => import('@/pages/org/OrgChangePasswordPage.vue')
+const OrgPostPage = () => import('@/pages/org/OrgPostPage.vue')
+const OrgTutorsPage = () => import('@/pages/org/OrgTutorsPage.vue')
+const OrgFavoritesPage = () => import('@/pages/org/OrgFavoritesPage.vue')
+const OrgMineJobsPage = () => import('@/pages/org/OrgMineJobsPage.vue')
+const OrgMineJobDetailPage = () => import('@/pages/org/OrgMineJobDetailPage.vue')
+const OrgPublicProfilePage = () => import('@/pages/org/OrgPublicProfilePage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -60,6 +68,51 @@ export const router = createRouter({
       name: 'authStudent',
       component: AuthPage,
       props: { role: 'STUDENT' },
+    },
+    {
+      path: '/auth/org',
+      name: 'authOrg',
+      component: OrgAuthPage,
+    },
+    {
+      path: '/org/change-password',
+      name: 'orgChangePassword',
+      component: OrgChangePasswordPage,
+    },
+    {
+      path: '/org/tutors',
+      name: 'orgTutors',
+      component: OrgTutorsPage,
+    },
+    {
+      path: '/org/post',
+      name: 'orgPost',
+      component: OrgPostPage,
+    },
+    {
+      path: '/org/jobs/mine',
+      name: 'orgMineJobs',
+      component: OrgMineJobsPage,
+    },
+    {
+      path: '/org/favorites',
+      name: 'orgFavorites',
+      component: OrgFavoritesPage,
+    },
+    {
+      path: '/org/jobs/:id',
+      name: 'orgMineJobDetail',
+      component: OrgMineJobDetailPage,
+    },
+    {
+      path: '/org/jobs/:id/edit',
+      name: 'orgEditJob',
+      component: StudentEditJobPage,
+    },
+    {
+      path: '/organization/:orgUserId',
+      name: 'orgPublicProfile',
+      component: OrgPublicProfilePage,
     },
     {
       path: '/me',
@@ -173,6 +226,7 @@ router.beforeEach((to) => {
   if (loggedIn && to.path.startsWith('/auth/')) {
     if (userType === 1) return { path: '/tutor/jobs' }
     if (userType === 2) return { path: '/student/post' }
+    if (userType === 3) return { path: '/org/jobs/mine' }
     return { path: '/' }
   }
 
@@ -183,16 +237,19 @@ router.beforeEach((to) => {
     to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||
     to.path.startsWith('/tutor/') ||
+    to.path.startsWith('/org/') ||
     to.path.startsWith('/chat')
 
   if (needAuth && !loggedIn) {
     if (to.path.startsWith('/tutor/')) return { path: '/auth/tutor' }
+    if (to.path.startsWith('/org/')) return { path: '/auth/org' }
     return { path: '/auth/student' }
   }
 
   if (loggedIn && userType != null) {
     if (to.path.startsWith('/tutor/') && userType !== 1) return { path: '/student/post' }
     if (to.path.startsWith('/student/') && userType !== 2) return { path: '/tutor/jobs' }
+    if (to.path.startsWith('/org/') && userType !== 3) return { path: '/' }
   }
 
   if (loggedIn && userType === 1 && to.path.startsWith('/tutor/')) {

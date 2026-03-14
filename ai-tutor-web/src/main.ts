@@ -27,6 +27,10 @@ setAuthInvalidHandler(() => {
 
   const path = router.currentRoute.value.path
   if (path.startsWith('/auth/')) return
+  if (userType === 3) {
+    void router.replace('/auth/org')
+    return
+  }
   void router.replace(userType === 1 ? '/auth/tutor' : '/auth/student')
 })
 
