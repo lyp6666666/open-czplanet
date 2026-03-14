@@ -17,4 +17,6 @@ public class UserCardVO {
     private TeacherProfile teacherProfile;
     private StudentProfile studentProfile;
     private StudentJobPosting jobPosting;
+    private java.util.List<StudentJobPosting> studentHistory;
+    private java.util.List<com.ai.tutor.appointment.model.entity.TutorAppointment> teacherHistory;
 }

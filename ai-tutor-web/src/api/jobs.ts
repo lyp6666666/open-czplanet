@@ -6,19 +6,19 @@ export interface CreateStudentJobPostingRequest {
   subjectName: string
   subjectOther: boolean
   title: string
-  description?: string
+  description: string
   studentGender: string
   gradeCode?: string
   teacherGenderPreference?: string
   availableTime?: string
-  teacherRequirementDetail?: string
+  teacherRequirementDetail: string
   childAge?: number
   classMode: string
   city?: string
   address?: string
   frequencyPerWeek: number
-  budgetMin?: number
-  budgetMax?: number
+  budgetMin: number
+  budgetMax: number
   stageCode: string
   educationRequirement: string
   publisherIdentity: string
@@ -55,12 +55,24 @@ export const jobsApi = {
     return http.post<unknown, number>('/api/v1/parent/jobs', request)
   },
 
+  createOrgDemand(request: CreateStudentJobPostingRequest) {
+    return http.post<unknown, number>('/api/v1/org/jobs', request)
+  },
+
   updateDemand(id: number, request: UpdateStudentJobPostingRequest) {
     return http.put<unknown, string>(`/api/v1/parent/jobs/${id}`, request)
   },
 
+  updateOrgDemand(id: number, request: UpdateStudentJobPostingRequest) {
+    return http.put<unknown, string>(`/api/v1/org/jobs/${id}`, request)
+  },
+
   getDemand(id: number) {
     return http.get<unknown, StudentJobPosting>(`/api/v1/parent/jobs/${id}`)
+  },
+
+  getOrgDemand(id: number) {
+    return http.get<unknown, StudentJobPosting>(`/api/v1/org/jobs/${id}`)
   },
 
   getDemandView(id: number) {
@@ -69,6 +81,10 @@ export const jobsApi = {
 
   mineDemands(params: { pageSize?: number; cursor?: number | null }) {
     return http.get<unknown, CursorPageResponse<StudentJobPosting>>('/api/v1/parent/jobs/mine', { params })
+  },
+
+  mineOrgDemands(params: { pageSize?: number; cursor?: number | null }) {
+    return http.get<unknown, CursorPageResponse<StudentJobPosting>>('/api/v1/org/jobs/mine', { params })
   },
 
   feedDemands(params: {

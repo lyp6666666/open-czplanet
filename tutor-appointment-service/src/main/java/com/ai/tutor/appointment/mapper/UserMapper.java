@@ -9,6 +9,9 @@ import java.util.List;
 @Mapper
 public interface UserMapper {
 
+    @Select("SELECT * FROM user WHERE open_id = #{openId} LIMIT 1")
+    User selectByOpenId(@Param("openId") String openId);
+
     @Select("SELECT * FROM user WHERE phone = #{phone} LIMIT 1")
     User selectByPhone(String phone);
 
@@ -30,6 +33,9 @@ public interface UserMapper {
 
     @Update("UPDATE user SET user_type = #{userType}, update_time = now() WHERE id = #{id}")
     int updateUserType(@Param("id") Long id, @Param("userType") Integer userType);
+
+    @Update("UPDATE user SET ref_id = #{refId}, update_time = now() WHERE id = #{id}")
+    int updateRefId(@Param("id") Long id, @Param("refId") Long refId);
 
     @Update("UPDATE user SET password = #{newPassword} WHERE id = #{id}")
     int updateUserPassWord(String newPassword, Long id);

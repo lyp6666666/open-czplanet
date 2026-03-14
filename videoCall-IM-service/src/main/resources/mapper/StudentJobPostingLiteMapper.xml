@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper">
+
+    <resultMap id="StudentJobPostingLiteMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.StudentJobPostingLite">
+        <id column="id" property="id"/>
+        <result column="frequency_per_week" property="frequencyPerWeek"/>
+        <result column="budget_min" property="budgetMin"/>
+        <result column="budget_max" property="budgetMax"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="StudentJobPostingLiteMap">
+        SELECT
+            id,
+            frequency_per_week,
+            budget_min,
+            budget_max
+        FROM student_job_posting
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <update id="updateBizStatus">
+        UPDATE student_job_posting
+        SET biz_status = #{bizStatus},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+</mapper>

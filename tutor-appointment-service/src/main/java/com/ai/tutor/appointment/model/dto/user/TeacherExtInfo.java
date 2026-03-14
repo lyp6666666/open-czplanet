@@ -22,6 +22,12 @@ public class TeacherExtInfo {
 
     private String introduction; // 简介
 
+    private String city;
+
+    private String highestEduSchool;
+
+    private String teachingMode;
+
     private String defaultGreeting;
 
     private String certificateUrls; // 证书链接（JSON）

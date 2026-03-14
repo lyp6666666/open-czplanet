@@ -85,12 +85,15 @@ public class StudentJobPosting {
 
     /**
      * 发布者身份：
-     * PARENT（学生家长） / STUDENT_SELF（学生本人）。
+     * PARENT（学生家长） / STUDENT_SELF（学生本人） / ORGANIZATION（家教机构）。
      */
     private String publisherIdentity;
 
     /** 期望上课时间，JSON 格式 */
     private String schedule;
+
+    /** 业务状态：1匹配中 2待支付解锁 3沟通中 4合作中 5已结课 6已关闭 */
+    private Integer bizStatus;
 
     /** 状态：1发布中 0已关闭 */
     private Integer status;

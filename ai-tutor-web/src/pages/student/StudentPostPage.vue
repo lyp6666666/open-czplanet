@@ -3,15 +3,28 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
+import AutoTextarea from '@/ui/form/AutoTextarea.vue'
+import CitySelectModal from '@/ui/city/CitySelectModal.vue'
+import { useToastStore } from '@/stores/toast'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
+const props = withDefaults(
+  defineProps<{
+    publisherIdentity?: string
+    afterSuccessRouteName?: string
+    apiVariant?: 'student' | 'org'
+    showBack?: boolean
+    backRouteName?: string
+  }>(),
+  { publisherIdentity: 'PARENT', afterSuccessRouteName: 'studentMineJobs', apiVariant: 'student', showBack: false, backRouteName: '' },
+)
+
 const router = useRouter()
+const toast = useToastStore()
 
 const loading = ref(false)
-const error = ref<string | null>(null)
-const doneHint = ref<string | null>(null)
 
-const subjectPreset = ref<string>('')
+const subjectSelected = ref<string[]>([])
 const subjectOtherName = ref('')
 
 const gradeCode = ref('')
@@ -23,8 +36,29 @@ const availableTime = ref('')
 const description = ref('')
 const teacherRequirementDetail = ref('')
 
-const city = ref('北京')
+const frequencyOptions = [1, 2, 3, 4, 5, 6, 7] as const
+const frequencyPerWeek = ref<number>(2)
+
+const budgetMode = ref<'single' | 'range'>('single')
+const budgetSingle = ref<string | number>('')
+const budgetMin = ref<string | number>('')
+const budgetMax = ref<string | number>('')
+
+const storedCity = (localStorage.getItem('ai_tutor_city') || '北京').trim()
+const city = ref(storedCity && storedCity !== '全国' ? storedCity : '')
 const address = ref('')
+const cityModalOpen = ref(false)
+
+watch(city, (v) => {
+  const raw = String(v || '').trim()
+  if (!raw) return
+  localStorage.setItem('ai_tutor_city', raw)
+})
+
+const cities = computed(() => {
+  const base = [city.value, localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
+  return Array.from(new Set(base.map((x) => String(x || '').trim()).filter(Boolean)))
+})
 
 const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL' | 'PRIMARY' | 'JUNIOR' | 'SENIOR' | 'OTHER' }> = [
   { value: 'PRESCHOOL', label: '幼儿', stageCode: 'PRESCHOOL' },
@@ -51,49 +85,147 @@ const gradeOptions: Array<{ value: string; label: string; stageCode: 'PRESCHOOL'
 const stageCode = computed(() => gradeOptions.find((o) => o.value === gradeCode.value)?.stageCode ?? null)
 const gradeLabel = computed(() => gradeOptions.find((o) => o.value === gradeCode.value)?.label ?? '')
 
-const subjectName = computed(() => {
-  if (!subjectPreset.value) return null
-  if (subjectPreset.value === SUBJECT_OTHER_VALUE) return subjectOtherName.value.trim() || null
-  return subjectPreset.value
+function splitOtherSubjects(raw: string): string[] {
+  return raw
+    .split(/[，,、;；]/g)
+    .map((x) => x.trim())
+    .filter(Boolean)
+}
+
+const subjectTokens = computed(() => {
+  const out: string[] = []
+  for (const s of subjectSelected.value) {
+    if (!s || s === SUBJECT_OTHER_VALUE) continue
+    if (!out.includes(s)) out.push(s)
+  }
+  if (subjectSelected.value.includes(SUBJECT_OTHER_VALUE)) {
+    for (const s of splitOtherSubjects(subjectOtherName.value)) {
+      if (!out.includes(s)) out.push(s)
+    }
+  }
+  return out.slice(0, 5)
 })
 
-const subjectOther = computed(() => subjectPreset.value === SUBJECT_OTHER_VALUE)
+const subjectName = computed(() => {
+  if (subjectTokens.value.length === 0) return null
+  return subjectTokens.value.join('、')
+})
+
+const subjectOther = computed(() => subjectSelected.value.includes(SUBJECT_OTHER_VALUE))
 
 function buildTitle() {
   const g = gradeLabel.value
-  const s = subjectName.value
-  if (g && s) return `${g}${s}家教`
+  const sList = subjectTokens.value
+  if (g && sList.length === 1) return `${g}${sList[0]}家教`
+  if (g && sList.length > 1) return `${g}${sList[0]}等家教`
   if (g) return `${g}家教需求`
-  if (s) return `${s}家教`
+  if (sList.length === 1) return `${sList[0]}家教`
+  if (sList.length > 1) return `${sList[0]}等家教`
   return '家教需求'
 }
 
+function onSelectCity(v: string) {
+  if (classMode.value === 'offline' || classMode.value === 'both') {
+    if (String(v || '').trim() === '全国') {
+      toast.show('上门辅导请选择具体城市', 'error')
+      return
+    }
+  }
+  city.value = String(v || '').trim()
+}
+
+function onBack() {
+  const n = String(props.backRouteName || '').trim()
+  if (n) {
+    void router.push({ name: n })
+    return
+  }
+  router.back()
+}
+
 async function onSubmit() {
-  doneHint.value = null
-  error.value = null
   if (!studentGender.value) {
-    error.value = '请选择学员性别'
+    toast.show('请选择学员性别', 'error')
     return
   }
-  if (!subjectPreset.value) {
-    error.value = '请选择教学科目'
+  if (subjectTokens.value.length === 0) {
+    toast.show('请选择教学科目', 'error')
     return
   }
-  if (subjectOther.value && !subjectOtherName.value.trim()) {
-    error.value = '请输入其他科目'
+  if (subjectOther.value && splitOtherSubjects(subjectOtherName.value).length === 0) {
+    toast.show('请输入其他科目', 'error')
     return
   }
   if (!gradeCode.value) {
-    error.value = '请选择学生年级'
+    toast.show('请选择学生年级', 'error')
+    return
+  }
+  if (!description.value.trim()) {
+    toast.show('请填写学生情况描述', 'error')
+    return
+  }
+  if (description.value.trim().length < 10) {
+    toast.show('学生情况描述至少10个字', 'error')
     return
   }
   if ((classMode.value === 'offline' || classMode.value === 'both') && (!city.value.trim() || !address.value.trim())) {
-    error.value = '上门辅导必须填写城市与上课地址'
+    toast.show('上门辅导必须填写城市与上课地址', 'error')
     return
+  }
+  if (!teacherRequirementDetail.value.trim()) {
+    toast.show('请填写对教员的详细要求', 'error')
+    return
+  }
+  if (teacherRequirementDetail.value.trim().length < 10) {
+    toast.show('对教员的详细要求至少10个字', 'error')
+    return
+  }
+  if (!Number.isFinite(frequencyPerWeek.value) || frequencyPerWeek.value < 1 || frequencyPerWeek.value > 7) {
+    toast.show('每周上课次数需在 1~7 之间', 'error')
+    return
+  }
+  let budgetMinNum: number
+  let budgetMaxNum: number
+  if (budgetMode.value === 'single') {
+    const raw = String(budgetSingle.value ?? '').trim()
+    if (!raw) {
+      toast.show('请填写预算', 'error')
+      return
+    }
+    const v = Number(raw)
+    if (!Number.isFinite(v) || v <= 0) {
+      toast.show('预算需为大于 0 的数字', 'error')
+      return
+    }
+    budgetMinNum = v
+    budgetMaxNum = v
+  } else {
+    const rawMin = String(budgetMin.value ?? '').trim()
+    const rawMax = String(budgetMax.value ?? '').trim()
+    if (!rawMin || !rawMax) {
+      toast.show('请填写预算上下限', 'error')
+      return
+    }
+    const vMin = Number(rawMin)
+    const vMax = Number(rawMax)
+    if (!Number.isFinite(vMin) || vMin <= 0) {
+      toast.show('预算下限需为大于 0 的数字', 'error')
+      return
+    }
+    if (!Number.isFinite(vMax) || vMax <= 0) {
+      toast.show('预算上限需为大于 0 的数字', 'error')
+      return
+    }
+    if (vMin > vMax) {
+      toast.show('预算下限不能大于预算上限', 'error')
+      return
+    }
+    budgetMinNum = vMin
+    budgetMaxNum = vMax
   }
   loading.value = true
   try {
-    const id = await jobsApi.createDemand({
+    const payload = {
       title: buildTitle(),
       subjectName: subjectName.value as string,
       subjectOther: subjectOther.value,
@@ -102,19 +234,22 @@ async function onSubmit() {
       gradeCode: gradeCode.value,
       teacherGenderPreference: teacherGenderPreference.value,
       availableTime: availableTime.value.trim() || undefined,
-      teacherRequirementDetail: teacherRequirementDetail.value.trim() || undefined,
+      teacherRequirementDetail: teacherRequirementDetail.value.trim(),
       classMode: classMode.value,
       city: classMode.value === 'online' ? undefined : city.value.trim() || undefined,
       address: classMode.value === 'online' ? undefined : address.value.trim() || undefined,
-      frequencyPerWeek: 2,
+      frequencyPerWeek: frequencyPerWeek.value,
+      budgetMin: budgetMinNum,
+      budgetMax: budgetMaxNum,
       stageCode: stageCode.value as string,
       educationRequirement: 'UNLIMITED',
-      publisherIdentity: 'PARENT',
-    })
-    doneHint.value = '发布成功'
-    await router.replace({ name: 'studentMineJobs', query: { highlight: String(id) } })
+      publisherIdentity: props.publisherIdentity,
+    }
+    const id = await (props.apiVariant === 'org' ? jobsApi.createOrgDemand(payload) : jobsApi.createDemand(payload))
+    toast.show('发布成功', 'success')
+    await router.replace({ name: props.afterSuccessRouteName, query: { highlight: String(id) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发布失败'
+    toast.show(e instanceof Error ? e.message : '发布失败', 'error')
   } finally {
     loading.value = false
   }
@@ -124,7 +259,6 @@ watch(
   () => classMode.value,
   (v) => {
     if (v === 'online') {
-      city.value = '北京'
       address.value = ''
     }
   },
@@ -134,14 +268,10 @@ watch(
 <template>
   <div class="wrap">
     <div class="head">
+      <button v-if="showBack" class="btn" type="button" :disabled="loading" @click="onBack">返回</button>
       <div class="title">发布需求</div>
-      <button class="btn btn-primary" type="button" :disabled="loading" @click="onSubmit">
-        {{ loading ? '提交中...' : '发布' }}
-      </button>
+      <button class="btn btn-primary" type="button" :disabled="loading" @click="onSubmit">{{ loading ? '提交中...' : '发布' }}</button>
     </div>
-
-    <div v-if="error" class="hint error">{{ error }}</div>
-    <div v-else-if="doneHint" class="hint ok">{{ doneHint }}</div>
 
     <div class="card form">
       <div class="section">
@@ -166,20 +296,23 @@ watch(
           </label>
         </div>
 
-        <label class="field">
-          <div class="label"><span class="req">*</span>教学科目</div>
-          <select v-model="subjectPreset" class="input">
-            <option value="">请选择</option>
-            <option v-for="s in SUBJECT_PRESETS" :key="s" :value="s">{{ s }}</option>
-            <option :value="SUBJECT_OTHER_VALUE">其他</option>
-          </select>
-          <input
-            v-if="subjectPreset === SUBJECT_OTHER_VALUE"
-            v-model="subjectOtherName"
-            class="input"
-            placeholder="请输入科目"
-          />
-        </label>
+        <div class="field">
+          <div class="label"><span class="req">*</span>教学科目（多选）</div>
+          <div class="chips">
+            <label v-for="s in SUBJECT_PRESETS" :key="s" class="chip">
+              <input v-model="subjectSelected" type="checkbox" :value="s" :disabled="loading" />
+              <span>{{ s }}</span>
+            </label>
+            <label class="chip">
+              <input v-model="subjectSelected" type="checkbox" :value="SUBJECT_OTHER_VALUE" :disabled="loading" />
+              <span>其他</span>
+            </label>
+          </div>
+          <div v-if="subjectSelected.includes(SUBJECT_OTHER_VALUE)" class="other-box">
+            <input v-model="subjectOtherName" class="input" placeholder="输入其他科目，如：编程、围棋" :disabled="loading" />
+            <div class="other-hint">多个用逗号分隔</div>
+          </div>
+        </div>
 
         <div class="row">
           <label class="field">
@@ -195,11 +328,19 @@ watch(
         <div class="row" v-if="classMode !== 'online'">
           <label class="field">
             <div class="label"><span class="req">*</span>城市</div>
-            <input v-model="city" class="input" placeholder="例如：北京" />
+            <button class="input" type="button" @click="cityModalOpen = true">{{ city || '请选择城市' }}</button>
+            <CitySelectModal
+              :open="cityModalOpen"
+              :model-value="city"
+              :hot-cities="cities"
+              :allow-national="false"
+              @update:model-value="onSelectCity"
+              @close="cityModalOpen = false"
+            />
           </label>
           <label class="field">
             <div class="label"><span class="req">*</span>上课地址</div>
-            <input v-model="address" class="input" placeholder="例如：朝阳·望京" />
+            <input v-model="address" class="input" placeholder="例如：朝阳区望京街道望京花园小区3号楼2单元1203" />
           </label>
         </div>
 
@@ -209,12 +350,12 @@ watch(
         </label>
 
         <label class="field">
-          <div class="label">学生情况描述</div>
-          <textarea
+          <div class="label"><span class="req">*</span>学生情况描述</div>
+          <AutoTextarea
             v-model="description"
             class="textarea"
-            rows="4"
-            placeholder="请详细说明学员基础、学习状况、性格等便于有针对性地安排合适的教员"
+            :rows="4"
+            placeholder="请至少填写10个字，例如：孩子基础、学习情况、性格等"
           />
         </label>
       </div>
@@ -230,8 +371,70 @@ watch(
           </select>
         </label>
         <label class="field">
-          <div class="label">对教员的详细要求</div>
-          <textarea v-model="teacherRequirementDetail" class="textarea" rows="4" placeholder="对教员的学历，教学经验，性格等要求" />
+          <div class="label"><span class="req">*</span>每周几次课</div>
+          <select v-model.number="frequencyPerWeek" class="input">
+            <option v-for="n in frequencyOptions" :key="n" :value="n">{{ n }}</option>
+          </select>
+        </label>
+        <div class="field">
+          <div class="label"><span class="req">*</span>预算（每小时）</div>
+          <div class="budget-row-container">
+            <div class="budget-toggle">
+              <div class="toggle-bg" :class="{ right: budgetMode === 'range' }"></div>
+              <button class="toggle-item" :class="{ active: budgetMode === 'single' }" type="button" @click="budgetMode = 'single'">
+                固定金额
+              </button>
+              <button class="toggle-item" :class="{ active: budgetMode === 'range' }" type="button" @click="budgetMode = 'range'">
+                范围预算
+              </button>
+            </div>
+
+            <div class="budget-inputs">
+              <div v-if="budgetMode === 'single'" class="single-input-wrapper">
+                <input
+                  v-model="budgetSingle"
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  placeholder="例如：100"
+                  :disabled="loading"
+                />
+                <span class="sep placeholder">-</span>
+                <div class="input placeholder"></div>
+              </div>
+              <div v-else class="range-input-wrapper">
+                <input
+                  v-model="budgetMin"
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  placeholder="最低"
+                  :disabled="loading"
+                />
+                <span class="sep">-</span>
+                <input
+                  v-model="budgetMax"
+                  class="input"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  placeholder="最高"
+                  :disabled="loading"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <label class="field">
+          <div class="label"><span class="req">*</span>对教员的详细要求</div>
+          <AutoTextarea
+            v-model="teacherRequirementDetail"
+            class="textarea"
+            :rows="4"
+            placeholder="请至少填写10个字，例如：学历、经验、性格等"
+          />
         </label>
       </div>
     </div>
@@ -245,15 +448,16 @@ watch(
 }
 
 .head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
 }
 
 .title {
   font-size: 18px;
   font-weight: 900;
+  text-align: center;
 }
 
 .form {
@@ -282,6 +486,45 @@ watch(
 .field {
   display: grid;
   gap: 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  background: #fff;
+}
+
+.chip:has(input:checked) {
+  border-color: var(--primary);
+  background: var(--primary-weak);
+  color: var(--text);
+}
+
+.other-box {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.other-hint {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .label {
@@ -339,6 +582,100 @@ watch(
 @media (max-width: 860px) {
   .row {
     grid-template-columns: 1fr;
+  }
+}
+
+.budget-row-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.budget-toggle {
+  position: relative;
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  padding: 4px;
+  width: 180px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.toggle-bg {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.toggle-bg.right {
+  left: 50%;
+}
+
+.toggle-item {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(11, 47, 45, 0.55);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.toggle-item.active {
+  color: #0b2f2d;
+}
+
+.budget-inputs {
+  flex: 1;
+}
+
+.single-input-wrapper,
+.range-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+}
+
+.range-input-wrapper .input,
+.single-input-wrapper .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sep {
+  color: rgba(0, 0, 0, 0.3);
+  font-weight: 700;
+}
+
+.sep.placeholder {
+  visibility: hidden;
+}
+
+.input.placeholder {
+  visibility: hidden;
+  border: none;
+  background: transparent;
+}
+
+@media (max-width: 600px) {
+  .budget-row-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .budget-toggle {
+    width: 100%;
   }
 }
 </style>

@@ -29,11 +29,11 @@ public class UploadProperties {
     /**
      * 默认最大上传大小（字节）。
      */
-    private long maxSizeBytes = 5L * 1024 * 1024;
+    private long maxSizeBytes = 20L * 1024 * 1024;
 
     /**
      * 头像最大上传大小（字节）。
      */
-    private long avatarMaxSizeBytes = 2L * 1024 * 1024;
+    private long avatarMaxSizeBytes = 5L * 1024 * 1024;
 }
 

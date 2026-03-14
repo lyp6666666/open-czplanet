@@ -1,6 +1,10 @@
 spring:
   application:
     name: tutor-appointment-service
+  config:
+    import:
+      - optional:file:./.private/tutor-appointment-service.yml
+      - optional:file:../.private/tutor-appointment-service.yml
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -30,9 +34,13 @@ spring:
           # 连接池中最大连接数，负数表示没有限制
           max-active: 20
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-
 
 springdoc:
   packages-to-scan: com.ai.tutor.appointment.controller
@@ -61,48 +69,6 @@ ops:
 dev:
   exposeSmsCode: ${DEV_EXPOSE_SMS_CODE:false}
 
-home:
-  guest:
-    bannersUseMinio: true
-    banners:
-      carousel:
-        - id: carousel-1
-          title: 家教直聘
-          subtitle: 快速匹配合适老师，先聊再约课
-          imageUrl: /banners/carousel-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-2
-          title: 初中数学提分
-          subtitle: 一对一讲解 + 习题巩固，循序渐进
-          imageUrl: /banners/carousel-2.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-3
-          title: 英语口语陪练
-          subtitle: 沉浸式对话纠音，表达更自信
-          imageUrl: /banners/carousel-3.svg
-          link:
-            type: ROUTE
-            url: /
-      cards:
-        - id: card-1
-          title: 新手指南
-          subtitle: 快速了解发布需求与挑选家教
-          imageUrl: /banners/card-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: card-2
-          title: 在线沟通
-          subtitle: 先聊再约课，沟通更高效
-          imageUrl: /banners/card-2.svg
-          link:
-            type: ROUTE
-            url: /
-
 storage:
   minio:
     enabled: true
@@ -111,15 +77,25 @@ storage:
     secretKey: minioadmin
     bucket: ai-tutor-assets
     publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
+    defaultAvatarObjectKey: avatars/default.svg
     autoCreateBucket: true
     allowedAvatarUrlPrefixes:
       - http://127.0.0.1:9000/ai-tutor-assets
   upload:
-    maxSizeBytes: 5242880
-    avatarMaxSizeBytes: 2097152
+    maxSizeBytes: 20971520
+    avatarMaxSizeBytes: 5242880
     allowedContentTypes:
       - image/jpeg
       - image/png
       - image/webp
       - image/gif
       - image/svg+xml
+
+wechat:
+  miniapp:
+    appid: ${WX_MINI_APPID:wx123456}
+    secret: ${WX_MINI_SECRET:secret123456}
+    token: ${WX_MINI_TOKEN:}
+    aesKey: ${WX_MINI_AESKEY:}
+    msgDataFormat: JSON
+    mock-enabled: ${WX_MOCK_ENABLED:true} # 默认开启 Mock 以便自测

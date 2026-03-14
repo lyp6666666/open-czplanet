@@ -5,6 +5,9 @@ const props = defineProps<{
   open: boolean
   busy?: boolean
   error?: string | null
+  title?: string
+  submitText?: string
+  initial?: { pricePerHour: string; classTime: string; frequencyPerWeek: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -17,9 +20,16 @@ const classTime = ref('')
 const frequencyPerWeek = ref<number | null>(null)
 
 watch(
-  () => props.open,
-  (open) => {
+  () => [props.open, props.initial] as const,
+  ([open]) => {
     if (!open) return
+    const init = props.initial
+    if (init) {
+      pricePerHour.value = init.pricePerHour || ''
+      classTime.value = init.classTime || ''
+      frequencyPerWeek.value = typeof init.frequencyPerWeek === 'number' ? init.frequencyPerWeek : 1
+      return
+    }
     pricePerHour.value = ''
     classTime.value = ''
     frequencyPerWeek.value = 1
@@ -54,7 +64,7 @@ function submit() {
   <div v-if="open" class="mask" @click.self="close">
     <div class="modal card">
       <div class="m-head">
-        <div class="title">发起合作</div>
+        <div class="title">{{ title || '发起合作' }}</div>
         <button class="icon-btn" type="button" :disabled="busy" @click="close">×</button>
       </div>
 
@@ -78,7 +88,7 @@ function submit() {
 
       <div class="ops">
         <button class="btn" type="button" :disabled="busy" @click="close">取消</button>
-        <button class="btn btn-primary" type="button" :disabled="!canSubmit" @click="submit">发送提案</button>
+        <button class="btn btn-primary" type="button" :disabled="!canSubmit" @click="submit">{{ submitText || '发送提案' }}</button>
       </div>
     </div>
   </div>

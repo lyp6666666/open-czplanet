@@ -2,6 +2,7 @@ package com.ai.tutor.appointment.model.vo;
 
 import com.ai.tutor.appointment.model.entity.StudentProfile;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
+import com.ai.tutor.appointment.model.entity.OrganizationProfile;
 import lombok.Builder;
 import lombok.Data;
 
@@ -27,6 +28,7 @@ public class UserMeVO implements Serializable {
 
     private StudentProfile studentProfile;
 
+    private OrganizationProfile organizationProfile;
+
     private static final long serialVersionUID = 1L;
 }
-

@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { applicationApi } from '@/api/application'
 import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
-import type { DemandViewVO, StudentJobPosting } from '@/api/types'
-import { useAuthStore } from '@/stores/auth'
-import { formatClassMode, formatEducationRequirement } from '@/utils/present'
+import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting, TutorApplicationVO } from '@/api/types'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { useCityStore } from '@/stores/city'
+import OrgCardModal from '@/ui/user/OrgCardModal.vue'
+import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
+const settings = useSettingsStore()
+const cityStore = useCityStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -25,8 +29,7 @@ const educationRequirement = ref<string>('')
 const frequencyPerWeek = ref<number | null>(null)
 const teacherGenderPreference = ref<string>('')
 
-const city = ref(localStorage.getItem('ai_tutor_city') || '全国')
-watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
+const city = computed(() => cityStore.city)
 
 const budgetMin = ref<number | null>(null)
 const budgetMax = ref<number | null>(null)
@@ -40,7 +43,26 @@ const selectedId = ref<number | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 const detail = ref<DemandViewVO | null>(null)
+const publisherAvatarFailed = ref(false)
 const pendingHighlightId = ref<number | null>(null)
+
+const detailApplicationLoading = ref(false)
+const detailApplication = ref<TutorApplicationVO | null>(null)
+let detailApplicationPollTimer: number | null = null
+
+const applyBusy = ref(false)
+const applyError = ref<string | null>(null)
+const applyTipOpen = ref(false)
+const applyTipText = ref('')
+
+const orgCardOpen = ref(false)
+const orgCardId = ref<number | null>(null)
+
+function openOrgCard(id: number) {
+  if (!id) return
+  orgCardId.value = id
+  orgCardOpen.value = true
+}
 
 const openKey = ref<'' | 'type' | 'subject' | 'budget' | 'stage' | 'edu' | 'freq' | 'tGender'>('')
 
@@ -153,6 +175,14 @@ function parseBudgetInput(raw: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function commitBudgetInputs() {
+  const minRaw = budgetMinInput.value.trim()
+  const maxRaw = budgetMaxInput.value.trim()
+  if (!minRaw && !maxRaw) return
+  budgetMin.value = parseBudgetInput(minRaw)
+  budgetMax.value = parseBudgetInput(maxRaw)
+}
+
 function applyBudget() {
   budgetMin.value = parseBudgetInput(budgetMinInput.value)
   budgetMax.value = parseBudgetInput(budgetMaxInput.value)
@@ -189,6 +219,7 @@ async function syncFavorites(ids: number[]) {
 }
 
 async function refresh() {
+  commitBudgetInputs()
   list.value = []
   cursor.value = null
   isLast.value = false
@@ -260,16 +291,203 @@ function openDetail(it: StudentJobPosting) {
   selectedId.value = it.id
 }
 
-async function onChat(it: StudentJobPosting) {
-  try {
-    if (!auth.me) {
-      await auth.refreshMe()
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function normalizeMsgBody(raw: unknown): { type: string; content?: string } {
+  if (!raw) return { type: 'text', content: '' }
+  if (typeof raw === 'string') return { type: 'text', content: raw }
+  if (typeof raw === 'object') {
+    const any = raw as Record<string, unknown>
+    if (typeof any.type === 'string') return any as { type: string; content?: string }
+    if (typeof any.content === 'string') return { type: 'text', content: any.content }
+  }
+  return { type: 'system' }
+}
+
+function parseTutorApplicationMsgBody(raw: unknown): { applicationId: number; content: string; status: 'PENDING' | 'ACCEPTED' | 'REJECTED' } | null {
+  if (!raw || typeof raw !== 'object') return null
+  const b = raw as Record<string, unknown>
+  if (b.type !== 'tutor_application') return null
+  const applicationId = typeof b.applicationId === 'number' ? b.applicationId : null
+  const content = typeof b.content === 'string' ? b.content : ''
+  const status = b.status === 'PENDING' || b.status === 'ACCEPTED' || b.status === 'REJECTED' ? b.status : null
+  if (applicationId == null || status == null) return null
+  return { applicationId, content, status }
+}
+
+function isChatUnlockedByMessages(list: ChatMessageResp[]) {
+  return list.some((m) => {
+    const b = normalizeMsgBody(m.message?.body)
+    if (b.type === 'contact_unlocked') return true
+    return false
+  })
+}
+
+function stopDetailApplicationPolling() {
+  if (detailApplicationPollTimer != null) {
+    clearInterval(detailApplicationPollTimer)
+    detailApplicationPollTimer = null
+  }
+}
+
+async function findLatestSentDemandApplication(receiverUid: number, demandId: number): Promise<TutorApplicationVO | null> {
+  let cursor: number | null = null
+  let best: TutorApplicationVO | null = null
+  for (let i = 0; i < 10; i++) {
+    const page = await applicationApi.listSent({ pageSize: 50, cursor })
+    const list = page.list || []
+    for (const it of list) {
+      if (it.contextType !== 'DEMAND') continue
+      if (it.contextId !== demandId) continue
+      if (it.receiverUid !== receiverUid) continue
+      if (!best || it.id > best.id) best = it
     }
-    const greeting = auth.me?.teacherProfile?.defaultGreeting ?? null
-    const roomId = await chatApi.startRoom(it.parentId, greeting)
-    await router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(it.parentId) } })
+    cursor = page.cursor ?? null
+    if (page.isLast || list.length === 0) break
+  }
+  return best
+}
+
+async function loadDetailApplication() {
+  stopDetailApplicationPolling()
+  detailApplication.value = null
+  if (!detail.value) return
+  detailApplicationLoading.value = true
+  try {
+    const app = await findLatestSentDemandApplication(detail.value.parentId, detail.value.id)
+    detailApplication.value = app
+    if (app?.status === 'PENDING') {
+      const appId = app.id
+      detailApplicationPollTimer = window.setInterval(async () => {
+        if (!detail.value) return
+        if (!detailApplication.value) return
+        if (detailApplication.value.id !== appId) return
+        try {
+          const latest = await applicationApi.detail(appId)
+          detailApplication.value = latest
+          if (latest.status !== 'PENDING') stopDetailApplicationPolling()
+        } catch {
+          void 0
+        }
+      }, 5000)
+    }
+  } finally {
+    detailApplicationLoading.value = false
+  }
+}
+
+async function findRoomByOtherUid(otherUid: number): Promise<ChatRoomItemResp | null> {
+  let cursor: number | null = null
+  for (let i = 0; i < 10; i++) {
+    const page = await chatApi.listRooms({ pageSize: 50, cursor })
+    const list = page.list || []
+    const found = list.find((r) => r.otherUid === otherUid) || null
+    if (found) return found
+    cursor = page.cursor ?? null
+    if (page.isLast || list.length === 0) break
+  }
+  return null
+}
+
+async function shouldReuseExistingChat(otherUid: number): Promise<{ roomId: number } | null> {
+  const found = await findRoomByOtherUid(otherUid)
+  if (!found?.roomId) return null
+  const page = await chatApi.listMessages({ roomId: found.roomId, pageSize: 20, cursor: null })
+  const list = page.list || []
+  if (!isChatUnlockedByMessages(list)) return null
+  return { roomId: found.roomId }
+}
+
+const applyButton = computed(() => {
+  const d = detail.value
+  if (!d) return { text: '发起申请', disabled: true, mode: 'apply' as const }
+  const app = detailApplication.value
+  if (!app || app.status === 'REJECTED') return { text: '发起申请', disabled: false, mode: 'apply' as const }
+  if (app.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
+  if (app.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
+  return { text: '发起申请', disabled: false, mode: 'apply' as const }
+})
+
+async function openChatForCurrentDetail() {
+  if (!detail.value) return
+  const otherUid = detail.value.parentId
+  const roomId = detailApplication.value?.roomId || (await findRoomByOtherUid(otherUid))?.roomId
+  if (!roomId) return
+  await router.push({ name: 'chatRoom', params: { roomId: String(roomId) }, query: { otherUid: String(otherUid) } })
+}
+
+async function onClickApplyButton() {
+  if (!detail.value) return
+  if (applyButton.value.mode === 'chat') {
+    await openChatForCurrentDetail()
+    return
+  }
+  await openApply(detail.value)
+}
+
+async function openApply(it: StudentJobPosting) {
+  if (applyBusy.value) return
+  applyError.value = null
+  applyBusy.value = true
+  try {
+    try {
+      const reuse = await shouldReuseExistingChat(it.parentId)
+      if (reuse?.roomId) {
+        await router.push({ name: 'chatRoom', params: { roomId: String(reuse.roomId) }, query: { otherUid: String(it.parentId) } })
+        return
+      }
+    } catch {
+      void 0
+    }
+
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
+    }
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    const msg = await applicationApi.startChat({
+      receiverUid: it.parentId,
+      contextType: 'DEMAND',
+      contextId: it.id,
+      content,
+      clientRequestId: genClientRequestId(),
+    })
+    const parsed = parseTutorApplicationMsgBody(msg.message?.body)
+    if (parsed) {
+      detailApplication.value = {
+        id: parsed.applicationId,
+        senderUid: msg.fromUser.uid,
+        receiverUid: it.parentId,
+        senderRole: 'TEACHER',
+        receiverRole: 'STUDENT',
+        contextType: 'DEMAND',
+        contextId: it.id,
+        content: parsed.content,
+        status: parsed.status,
+        chatAccessStatus: 'NONE',
+        paymentPayerRole: 'TEACHER',
+        orderId: null,
+        roomId: msg.message.roomId,
+        receiverRead: null,
+        decidedAt: null,
+        createTime: msg.message.sendTime,
+      }
+    }
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(it.parentId) } })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '发起沟通失败'
+    const msg = e instanceof Error ? e.message : '发送申请失败'
+    applyError.value = msg
+    applyTipText.value = msg
+    applyTipOpen.value = true
+  } finally {
+    applyBusy.value = false
   }
 }
 
@@ -304,15 +522,25 @@ watch(
       detailError.value = null
       try {
         detail.value = await jobsApi.getDemandView(id)
+        await loadDetailApplication()
       } catch (e) {
         detailError.value = e instanceof Error ? e.message : '加载详情失败'
         detail.value = null
+        stopDetailApplicationPolling()
+        detailApplication.value = null
       } finally {
         detailLoading.value = false
       }
     })()
   },
   { immediate: true },
+)
+
+watch(
+  () => detail.value?.publisher?.avatar,
+  () => {
+    publisherAvatarFailed.value = false
+  },
 )
 
 function renderLocation(it: Pick<StudentJobPosting, 'classMode' | 'city'>): string {
@@ -339,6 +567,17 @@ onMounted(() => {
   }
   void refresh()
 })
+
+onBeforeUnmount(() => {
+  stopDetailApplicationPolling()
+})
+
+watch(
+  () => cityStore.city,
+  () => {
+    void refresh()
+  },
+)
 </script>
 
 <template>
@@ -469,7 +708,10 @@ onMounted(() => {
             @click="openDetail(it)"
           >
             <div class="line1">
-              <div class="t">{{ it.title }}</div>
+              <div class="t">
+                <span>{{ it.title }}</span>
+                <span v-if="String(it.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="org-tag">机构发布</span>
+              </div>
               <div v-if="it.budgetMin || it.budgetMax" class="pay">{{ it.budgetMin || '-' }}-{{ it.budgetMax || '-' }}/小时</div>
             </div>
             <div class="meta">
@@ -503,7 +745,14 @@ onMounted(() => {
             <div class="detail-title">{{ detail.title }}</div>
             <div class="detail-ops">
               <button class="btn" type="button" @click="onToggleFavorite(detail)">{{ favoriteMap[detail.id] ? '已收藏' : '收藏' }}</button>
-              <button class="btn btn-primary" type="button" @click="onChat(detail)">立即沟通</button>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="applyBusy || detailLoading || detailApplicationLoading || applyButton.disabled"
+                @click="onClickApplyButton"
+              >
+                {{ applyButton.text }}
+              </button>
             </div>
           </div>
 
@@ -514,6 +763,13 @@ onMounted(() => {
             <span>{{ formatEducationRequirement(detail.educationRequirement) }}</span>
           </div>
 
+          <div v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="hint notice">
+            <div class="n-title">机构单说明</div>
+            <div class="n-body">
+              机构为需求发布与履约主体，平台提供信息撮合、支付托管与纠纷介入机制；平台不直接保证授课质量与履约结果。
+            </div>
+          </div>
+
           <div class="detail-block">
             <div class="detail-label">需求描述</div>
             <div class="detail-text">{{ detail.description || '—' }}</div>
@@ -521,7 +777,9 @@ onMounted(() => {
 
           <div v-if="detail.availableTime || detail.schedule" class="detail-block">
             <div class="detail-label">可上课时间</div>
-            <div class="detail-text">{{ detail.availableTime || detail.schedule }}</div>
+            <div class="detail-text">
+              {{ detail.availableTime || (detail.schedule ? formatScheduleText(detail.schedule) : '') }}
+            </div>
           </div>
 
           <div v-if="detail.teacherRequirementDetail" class="detail-block">
@@ -530,12 +788,26 @@ onMounted(() => {
           </div>
 
           <div v-if="detail.publisher" class="publisher">
-            <img v-if="detail.publisher.avatar" class="p-avatar" :src="detail.publisher.avatar" alt="avatar" />
+            <img
+              v-if="detail.publisher.avatar && !publisherAvatarFailed"
+              class="p-avatar"
+              :src="detail.publisher.avatar"
+              alt="avatar"
+              @error="publisherAvatarFailed = true"
+            />
             <div v-else class="p-avatar fallback">{{ (detail.publisher.displayName || 'U').slice(0, 1) }}</div>
             <div class="p-info">
               <div class="p-name">{{ detail.publisher.displayName }}</div>
               <div class="p-tags">
                 <span class="tag">{{ detail.publisher.identityLabel }}</span>
+                <button
+                  v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'"
+                  class="link"
+                  type="button"
+                  @click="openOrgCard(detail.parentId)"
+                >
+                  查看机构主页
+                </button>
               </div>
             </div>
           </div>
@@ -551,6 +823,19 @@ onMounted(() => {
         </div>
       </section>
     </div>
+
+    <div v-if="applyTipOpen" class="mask" @click.self="applyTipOpen = false">
+      <div class="modal card">
+        <div class="m-title">提示</div>
+        <div class="m-desc">{{ applyTipText }}</div>
+        <div class="m-ops">
+          <button class="btn btn-primary" type="button" @click="applyTipOpen = false">知道了</button>
+        </div>
+      </div>
+    </div>
+
+    <OrgCardModal :open="orgCardOpen" :org-id="orgCardId" @close="orgCardOpen = false" />
+
   </div>
 </template>
 
@@ -740,6 +1025,19 @@ onMounted(() => {
   flex: 1 1 auto;
 }
 
+.org-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #d46b08;
+  border: 1px solid rgba(255, 170, 0, 0.35);
+  background: rgba(255, 170, 0, 0.08);
+  margin-left: 6px;
+}
+
 .pay {
   flex: 0 0 auto;
   color: #ff4d4f;
@@ -878,6 +1176,31 @@ onMounted(() => {
   background: rgba(31, 35, 41, 0.06);
 }
 
+.link {
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hint.notice {
+  border-color: rgba(255, 170, 0, 0.28);
+  background: rgba(255, 170, 0, 0.06);
+}
+
+.n-title {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.n-body {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .empty {
   padding: 28px 10px;
   display: grid;
@@ -923,6 +1246,65 @@ onMounted(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.38);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.modal {
+  width: min(520px, 92vw);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.m-title {
+  font-weight: 900;
+  font-size: 16px;
+}
+
+.m-desc {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.m-error {
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.txt {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.m-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 @media (max-width: 980px) {

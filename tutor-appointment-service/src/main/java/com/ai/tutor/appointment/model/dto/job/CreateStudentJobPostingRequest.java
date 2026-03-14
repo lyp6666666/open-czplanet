@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -28,6 +29,8 @@ public class CreateStudentJobPostingRequest {
     private String title;
 
     @Schema(description = "描述", example = "希望讲解应用题与计算，孩子基础一般")
+    @NotBlank(message = "学生情况描述不能为空")
+    @Size(min = 10, message = "学生情况描述至少10个字")
     private String description;
 
     @Schema(description = "学员性别：male/female", example = "female")
@@ -44,6 +47,8 @@ public class CreateStudentJobPostingRequest {
     private String teacherGenderPreference;
 
     @Schema(description = "对教员的详细要求（自由文本）", example = "对教员的学历，教学经验，性格等要求")
+    @NotBlank(message = "对教员的详细要求不能为空")
+    @Size(min = 10, message = "对教员的详细要求至少10个字")
     private String teacherRequirementDetail;
 
     @Schema(description = "孩子年龄", example = "9")
@@ -70,9 +75,11 @@ public class CreateStudentJobPostingRequest {
     private String publisherIdentity;
 
     @Schema(description = "预算下限（每小时）", example = "80")
+    @NotNull(message = "预算不能为空")
     private BigDecimal budgetMin;
 
     @Schema(description = "预算上限（每小时）", example = "120")
+    @NotNull(message = "预算不能为空")
     private BigDecimal budgetMax;
 
     @NotBlank

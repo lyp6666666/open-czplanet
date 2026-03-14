@@ -42,6 +42,11 @@ public interface TeacherJobPostingMapper {
                                           @Param("cursor") Long cursor,
                                           @Param("pageSize") Integer pageSize);
 
+    List<HomeHotTutorAggRow> listHotTutorsCityHybrid(@Param("subjectId") Long subjectId,
+                                                     @Param("city") String city,
+                                                     @Param("cursor") Long cursor,
+                                                     @Param("pageSize") Integer pageSize);
+
     List<TeacherJobPosting> listTopNByTutorIds(@Param("tutorIds") List<Long> tutorIds,
                                               @Param("topN") Integer topN);
 }

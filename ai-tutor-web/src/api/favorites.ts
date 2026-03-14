@@ -11,7 +11,7 @@ export const favoritesApi = {
   },
 
   checkDemandFavorites(ids: number[]) {
-    return http.get<unknown, number[]>('/api/v1/tutor/favorites/demands/check', { params: { ids } })
+    return http.get<unknown, number[]>('/api/v1/tutor/favorites/demands/check', { params: { ids: ids.join(',') } })
   },
 
   pageDemandFavorites(params: { pageSize?: number; cursor?: number | null }) {

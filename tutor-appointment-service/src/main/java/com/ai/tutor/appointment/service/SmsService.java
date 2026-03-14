@@ -17,4 +17,6 @@ public interface SmsService {
      * @return
      */
     boolean verifyCode(String phone, String code,String prefix);
+
+    String debugPeekCode(String phone, String prefix);
 }

@@ -46,7 +46,7 @@ export const useAuthStore = defineStore('auth', {
   },
   getters: {
     isLoggedIn: (s) => typeof s.token === 'string' && s.token.length > 0,
-    role: (s) => (s.user?.userType === 1 ? 'TEACHER' : s.user?.userType === 2 ? 'STUDENT' : null),
+    role: (s) => (s.user?.userType === 1 ? 'TEACHER' : s.user?.userType === 2 ? 'STUDENT' : s.user?.userType === 3 ? 'ORG' : null),
   },
   actions: {
     async sendCode(phone: string) {
@@ -62,6 +62,24 @@ export const useAuthStore = defineStore('auth', {
       return user
     },
 
+    async loginOrg(username: string, password: string) {
+      const org = await userApi.orgLogin({ username, password })
+      const user: LoginUserVO = {
+        id: org.id,
+        name: org.name,
+        phone: org.organizationProfile?.contactPhone ?? '',
+        avatar: null,
+        sex: null,
+        userType: org.userType,
+        token: org.token,
+      }
+      this.token = user.token
+      this.user = user
+      this.me = null
+      persistAuth(user)
+      return org
+    },
+
     async refreshMe() {
       if (!this.isLoggedIn) return null
       const me = await userApi.me()
@@ -72,7 +90,7 @@ export const useAuthStore = defineStore('auth', {
         persistAuth(merged)
       }
       if (me?.userType === 1) {
-        const completed = !!(me.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())
+        const completed = !!(me.avatar && me.teacherProfile?.realName?.trim())
         localStorage.setItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY, completed ? '1' : '0')
       }
       return me

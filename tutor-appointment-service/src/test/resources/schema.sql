@@ -74,6 +74,7 @@ CREATE TABLE student_job_posting (
   education_requirement VARCHAR(32),
   publisher_identity VARCHAR(16) NOT NULL DEFAULT 'PARENT',
   schedule VARCHAR(2000),
+  biz_status TINYINT NOT NULL DEFAULT 1,
   status TINYINT NOT NULL DEFAULT 1,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -124,6 +125,10 @@ CREATE TABLE teacher_profile (
   default_greeting VARCHAR(1024),
   certificate_urls VARCHAR(2000),
   basic_completed TINYINT DEFAULT 0,
+  resume_completed TINYINT DEFAULT 0,
+  city VARCHAR(100),
+  highest_edu_school VARCHAR(255),
+  teaching_mode VARCHAR(20),
   realname_verify_status TINYINT DEFAULT 0,
   realname_verify_method VARCHAR(20),
   realname_verify_id_front_url VARCHAR(255),
@@ -139,6 +144,16 @@ CREATE TABLE teacher_profile (
   edu_verify_submit_time TIMESTAMP NULL,
   edu_verify_time TIMESTAMP NULL,
   status INT,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE room_read_state (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  room_id BIGINT NOT NULL,
+  uid BIGINT NOT NULL,
+  last_read_msg_id BIGINT,
+  last_read_time TIMESTAMP NULL,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

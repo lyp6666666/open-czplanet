@@ -66,6 +66,13 @@ public class TutorAppointmentController {
         return ResultUtils.success("OK");
     }
 
+    @PostMapping("/{id}/complete")
+    @Operation(summary = "结课（标记预约完成）")
+    public BaseResponse<String> complete(@PathVariable("id") Long id) {
+        tutorAppointmentService.complete(id, RequestHolder.get().getUid());
+        return ResultUtils.success("OK");
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "预约详情")
     public BaseResponse<TutorAppointment> detail(@PathVariable("id") Long id) {
@@ -79,4 +86,3 @@ public class TutorAppointmentController {
         return ResultUtils.success(tutorAppointmentService.mine(RequestHolder.get().getUid(), status, request));
     }
 }
-

@@ -1,10 +1,12 @@
 package com.ai.tutor.appointment.mapper;
 
 import com.ai.tutor.appointment.model.dto.user.TeacherExtInfo;
+import com.ai.tutor.appointment.model.dto.parent.TutorBrowseRow;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,6 +20,15 @@ public interface TeacherProfileMapper {
     int updateTeacherProfile(@Param("teacherExtInfo") TeacherExtInfo teacherExtInfo, @Param("userId") Long userId);
 
     List<TeacherProfile> listByUserIds(@Param("userIds") List<Long> userIds);
+
+    List<TutorBrowseRow> pageTutorCards(@Param("q") String q,
+                                        @Param("city") String city,
+                                        @Param("mode") String mode,
+                                        @Param("subject") String subject,
+                                        @Param("rateMin") BigDecimal rateMin,
+                                        @Param("rateMax") BigDecimal rateMax,
+                                        @Param("cursor") Long cursor,
+                                        @Param("pageSize") Integer pageSize);
 
     int submitEduVerification(@Param("userId") Long userId,
                               @Param("proofUrls") String proofUrls,
@@ -47,4 +58,6 @@ public interface TeacherProfileMapper {
                               @Param("verifyTime") LocalDateTime verifyTime);
 
     int markBasicCompleted(@Param("userId") Long userId);
+
+    int markResumeCompleted(@Param("userId") Long userId);
 }

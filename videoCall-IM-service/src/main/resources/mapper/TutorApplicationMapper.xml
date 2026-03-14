@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper">
+
+    <resultMap id="baseMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication">
+        <id column="id" property="id"/>
+        <result column="sender_uid" property="senderUid"/>
+        <result column="receiver_uid" property="receiverUid"/>
+        <result column="sender_role" property="senderRole"/>
+        <result column="receiver_role" property="receiverRole"/>
+        <result column="context_type" property="contextType"/>
+        <result column="context_id" property="contextId"/>
+        <result column="content" property="content"/>
+        <result column="client_request_id" property="clientRequestId"/>
+        <result column="status" property="status"/>
+        <result column="chat_access_status" property="chatAccessStatus"/>
+        <result column="room_id" property="roomId"/>
+        <result column="decided_at" property="decidedAt"/>
+        <result column="receiver_read" property="receiverRead"/>
+        <result column="receiver_read_time" property="receiverReadTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tutor_application
+        (
+            sender_uid,
+            receiver_uid,
+            sender_role,
+            receiver_role,
+            context_type,
+            context_id,
+            content,
+            client_request_id,
+            status,
+            chat_access_status,
+            room_id,
+            decided_at,
+            receiver_read,
+            receiver_read_time,
+            create_time,
+            update_time
+        )
+        VALUES
+        (
+            #{senderUid},
+            #{receiverUid},
+            #{senderRole},
+            #{receiverRole},
+            #{contextType},
+            #{contextId},
+            #{content},
+            #{clientRequestId},
+            #{status},
+            #{chatAccessStatus},
+            #{roomId},
+            #{decidedAt},
+            #{receiverRead},
+            #{receiverReadTime},
+            #{createTime},
+            #{updateTime}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectBySenderAndClientRequestId" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE sender_uid = #{senderUid}
+          AND client_request_id = #{clientRequestId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="listBySender" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE sender_uid = #{senderUid}
+          <if test="cursor != null">
+              AND id &lt; #{cursor}
+          </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="listByReceiver" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE receiver_uid = #{receiverUid}
+          <if test="cursor != null">
+              AND id &lt; #{cursor}
+          </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+    <select id="countUnreadByReceiver" resultType="long">
+        SELECT COUNT(1)
+        FROM tutor_application
+        WHERE receiver_uid = #{receiverUid}
+          AND receiver_read = 0
+    </select>
+
+    <update id="markReceiverRead">
+        UPDATE tutor_application
+        SET
+            receiver_read = 1,
+            receiver_read_time = #{readTime},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND receiver_uid = #{receiverUid}
+          AND receiver_read = 0
+    </update>
+
+    <update id="decide">
+        UPDATE tutor_application
+        SET
+            status = #{status},
+            chat_access_status = #{chatAccessStatus},
+            decided_at = #{decidedAt},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND receiver_uid = #{receiverUid}
+          AND status = 'PENDING'
+    </update>
+
+    <update id="updateChatAccessStatus">
+        UPDATE tutor_application
+        SET
+            chat_access_status = #{chatAccessStatus},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="selectLatestAcceptedBetween" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE status = 'ACCEPTED'
+          AND (
+            (sender_uid = #{uidA} AND receiver_uid = #{uidB})
+             OR
+            (sender_uid = #{uidB} AND receiver_uid = #{uidA})
+          )
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestPendingBetween" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE sender_uid = #{senderUid}
+          AND receiver_uid = #{receiverUid}
+          AND status = 'PENDING'
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestBySenderReceiverContext" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE sender_uid = #{senderUid}
+          AND receiver_uid = #{receiverUid}
+          AND context_type = #{contextType}
+          AND context_id = #{contextId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="countCreatedBySenderBetween" resultType="long">
+        SELECT COUNT(1)
+        FROM tutor_application
+        WHERE sender_uid = #{senderUid}
+          AND create_time &gt;= #{startTime}
+          AND create_time &lt; #{endTime}
+    </select>
+
+    <update id="bindRoom">
+        UPDATE tutor_application
+        SET
+            room_id = #{roomId},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND (room_id IS NULL OR room_id = 0)
+    </update>
+
+    <select id="selectLatestByRoomId" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE room_id = #{roomId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+</mapper>

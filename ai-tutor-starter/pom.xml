@@ -28,13 +28,21 @@
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>tutor-appointment-service</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
         </dependency>
 
         <dependency>
             <groupId>com.ai.tutor</groupId>
             <artifactId>videoCall-IM-service</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ai.tutor</groupId>
+            <artifactId>ai-tutor-admin</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.ai.tutor</groupId>
+            <artifactId>payment-service</artifactId>
         </dependency>
 
         <!-- Web / Boot -->
@@ -44,8 +52,18 @@
         </dependency>
 
         <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
         </dependency>
 
 

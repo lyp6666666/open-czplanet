@@ -61,4 +61,13 @@ public class SystemMsgReq {
 
     @Schema(description = "金额（分）（部分系统消息使用）")
     private Long amountFen;
+
+    @Schema(description = "文本内容（部分系统消息使用）")
+    private String content;
+
+    @Schema(description = "上下文类型（部分系统消息使用）")
+    private String contextType;
+
+    @Schema(description = "上下文id（部分系统消息使用）")
+    private Long contextId;
 }

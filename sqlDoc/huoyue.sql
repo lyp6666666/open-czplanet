@@ -65,14 +65,16 @@ CREATE TABLE `student_job_posting`  (
   `budget_max` decimal(10, 2) NULL DEFAULT NULL COMMENT '预算上限（每小时）',
   `stage_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '授课学段：PRESCHOOL/PRIMARY/JUNIOR/SENIOR/OTHER',
   `education_requirement` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学历要求：TOP2/C985/C211/DOUBLE_FIRST_CLASS/FIRST_TIER/BACHELOR/OVERSEAS/QS50 等',
-  `publisher_identity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PARENT' COMMENT '发布者身份：PARENT/ STUDENT_SELF',
+  `publisher_identity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PARENT' COMMENT '发布者身份：PARENT/STUDENT_SELF/ORGANIZATION',
   `schedule` json NULL COMMENT '期望上课时间，例如：[\"Tue 19-21\",\"Sat 10-12\"]',
+  `biz_status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '业务状态：1匹配中 2待支付解锁 3沟通中 4合作中 5已结课 6已关闭',
   `status` tinyint(4) NULL DEFAULT 1 COMMENT '状态：1发布中 0关闭',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_parent_id`(`parent_id`) USING BTREE,
   INDEX `idx_subject_id`(`subject_id`) USING BTREE,
+  INDEX `idx_biz_status`(`biz_status`) USING BTREE,
   INDEX `idx_status`(`status`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '家长发布的家教岗位需求表' ROW_FORMAT = Dynamic;
 
@@ -177,6 +179,10 @@ CREATE TABLE `teacher_profile`  (
   `default_greeting` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '默认打招呼语',
   `certificate_urls` json NULL COMMENT '教师证书或资格证明文件链接',
   `basic_completed` tinyint(1) NOT NULL DEFAULT 0 COMMENT '基础信息是否已补全 0否 1是',
+  `resume_completed` tinyint(1) NOT NULL DEFAULT 0 COMMENT '简历是否已补全 0否 1是',
+  `city` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '所在城市',
+  `highest_edu_school` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '最高学历学校',
+  `teaching_mode` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '支持教学方式 ONLINE/OFFLINE/BOTH',
   `realname_verify_status` tinyint(4) NOT NULL DEFAULT 0 COMMENT '实名认证状态 0未提交 1审核中 2通过 3驳回',
   `realname_verify_method` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '实名认证提交方式 ID_PHOTO/NAME_IDNO',
   `realname_verify_id_front_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '身份证人像面截图',
@@ -218,7 +224,7 @@ CREATE TABLE `user`  (
   `ip_info` json NULL COMMENT 'ip信息',
   `item_id` bigint(20) NULL DEFAULT NULL COMMENT '佩戴的徽章id',
   `status` int(11) NULL DEFAULT 0 COMMENT '使用状态 0正常 1拉黑',
-  `user_type` tinyint(1) NOT NULL COMMENT '用户类型 1教师 2家长',
+  `user_type` tinyint(1) NOT NULL COMMENT '用户类型 1教师 2家长 3机构',
   `ref_id` bigint(20) NULL DEFAULT NULL COMMENT '逻辑外键，指向教师表或家长表id',
   `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '修改时间',
@@ -229,6 +235,53 @@ CREATE TABLE `user`  (
   INDEX `idx_update_time`(`update_time`) USING BTREE,
   INDEX `idx_active_status_last_opt_time`(`active_status`, `last_opt_time`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
+
+DROP TABLE IF EXISTS `user_settings`;
+CREATE TABLE `user_settings` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '设置id',
+  `user_id` bigint(20) UNSIGNED NOT NULL COMMENT '用户id',
+  `application_greeting` varchar(500) DEFAULT NULL COMMENT '默认申请问候语',
+  `settings_json` json DEFAULT NULL COMMENT '扩展设置JSON',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户设置表';
+
+DROP TABLE IF EXISTS `organization_profile`;
+CREATE TABLE `organization_profile` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '机构资料id',
+  `user_id` bigint(20) UNSIGNED NOT NULL COMMENT '机构主账号 user_id（逻辑外键）',
+  `org_name` varchar(100) NOT NULL COMMENT '机构名称',
+  `intro` varchar(2000) DEFAULT NULL COMMENT '机构介绍',
+  `contact_name` varchar(50) DEFAULT NULL COMMENT '联系人姓名',
+  `contact_phone` varchar(32) DEFAULT NULL COMMENT '联系人电话',
+  `address` varchar(255) DEFAULT NULL COMMENT '机构地址',
+  `license_no` varchar(64) DEFAULT NULL COMMENT '营业执照号/统一社会信用代码',
+  `split_platform_percent` int NOT NULL DEFAULT 50 COMMENT '平台分成比例（百分比）',
+  `split_org_percent` int NOT NULL DEFAULT 50 COMMENT '机构分成比例（百分比）',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_org_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构资料表';
+
+DROP TABLE IF EXISTS `organization_account`;
+CREATE TABLE `organization_account` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '机构账号id',
+  `org_user_id` bigint(20) UNSIGNED NOT NULL COMMENT '机构主账号 user_id（逻辑外键）',
+  `username` varchar(50) NOT NULL COMMENT '登录账号（由管理端创建发放）',
+  `password_hash` varchar(128) NOT NULL COMMENT 'BCrypt 密码哈希',
+  `must_change_password` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否首次登录强制改密 1是 0否',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
+  `last_login_time` datetime(3) DEFAULT NULL COMMENT '最后登录时间',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_username` (`username`),
+  UNIQUE KEY `uniq_org_user_id` (`org_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构登录账号表';
 
 
 DROP TABLE IF EXISTS `room`;
@@ -290,6 +343,105 @@ CREATE TABLE `collaboration_proposal` (
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天合作提案表';
 
+DROP TABLE IF EXISTS `brokerage_order`;
+CREATE TABLE `brokerage_order` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '中介费订单id',
+            `proposal_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '合作提案id',
+            `application_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '申请id',
+            `room_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '会话id',
+            `payer_uid` bigint(20) UNSIGNED NOT NULL COMMENT '付款人uid（教师）',
+            `amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '中介费金额（分）',
+            `pay_method` varchar(32) DEFAULT NULL COMMENT '支付方式 WECHAT/ALIPAY',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '订单状态 PENDING/PROOF_SUBMITTED/PAID/REJECTED/CANCELED',
+            `proof_url` varchar(1024) DEFAULT NULL COMMENT '支付凭证URL',
+            `proof_note` varchar(512) DEFAULT NULL COMMENT '支付备注',
+            `paid_at` datetime(3) DEFAULT NULL COMMENT '确认到账时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_proposal_id` (`proposal_id`),
+            UNIQUE KEY `uniq_application_id` (`application_id`),
+            KEY `idx_room_id` (`room_id`),
+            KEY `idx_payer_uid` (`payer_uid`),
+            KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='中介费订单表';
+
+DROP TABLE IF EXISTS `payment_order`;
+CREATE TABLE `payment_order` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '支付订单ID',
+            `order_no` varchar(64) NOT NULL COMMENT '商户订单号（唯一）',
+            `user_id` bigint(20) NOT NULL COMMENT '支付用户ID',
+            `amount` bigint(20) NOT NULL COMMENT '支付金额（单位：分）',
+            `currency` varchar(8) NOT NULL DEFAULT 'CNY' COMMENT '币种',
+            `channel` varchar(32) NOT NULL COMMENT '支付渠道：ALIPAY, WECHAT',
+            `provider` varchar(32) NOT NULL DEFAULT 'YUNGOUOS' COMMENT '支付提供方：YUNGOUOS',
+            `status` varchar(32) NOT NULL COMMENT '订单状态：PENDING, SUCCESS, FAILED, CLOSED',
+            `transaction_id` varchar(64) DEFAULT NULL COMMENT '第三方交易流水号',
+            `provider_order_no` varchar(64) DEFAULT NULL COMMENT '第三方系统单号（如 YunGouOS orderNo）',
+            `context_id` bigint(20) NOT NULL COMMENT '业务上下文ID',
+            `context_type` varchar(32) NOT NULL COMMENT '业务上下文类型',
+            `subject` varchar(256) NOT NULL COMMENT '订单标题',
+            `body` varchar(1024) DEFAULT NULL COMMENT '订单描述',
+            `client_ip` varchar(64) DEFAULT NULL COMMENT '客户端IP',
+            `extra_params` text COMMENT '附加参数（JSON格式）',
+            `pay_data` text COMMENT '支付要素数据（JSON：二维码图片地址/支付链接等）',
+            `notify_count` int(11) NOT NULL DEFAULT 0 COMMENT '回调接收次数',
+            `last_notify_time` datetime(3) DEFAULT NULL COMMENT '最后一次回调接收时间',
+            `notify_verified` tinyint(1) NOT NULL DEFAULT 0 COMMENT '回调验签是否通过：0否 1是',
+            `event_sent` tinyint(1) NOT NULL DEFAULT 0 COMMENT '支付成功事件是否已投递：0否 1是',
+            `event_sent_time` datetime(3) DEFAULT NULL COMMENT '支付成功事件投递时间',
+            `event_send_fail_reason` varchar(256) DEFAULT NULL COMMENT '事件投递失败原因（用于排障）',
+            `success_time` datetime(3) DEFAULT NULL COMMENT '支付成功时间',
+            `expire_time` datetime(3) DEFAULT NULL COMMENT '订单过期时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uk_order_no` (`order_no`),
+            KEY `idx_user_id` (`user_id`),
+            KEY `idx_context` (`context_id`, `context_type`),
+            KEY `idx_create_time` (`create_time`),
+            KEY `idx_status_create_time` (`status`, `create_time`),
+            KEY `idx_event_sent` (`status`, `event_sent`, `update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付订单表';
+
+DROP TABLE IF EXISTS `tutor_application`;
+CREATE TABLE `tutor_application` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '申请id',
+            `sender_uid` bigint(20) NOT NULL COMMENT '发起方用户id',
+            `receiver_uid` bigint(20) NOT NULL COMMENT '接收方用户id',
+            `sender_role` varchar(16) NOT NULL COMMENT '发起方角色',
+            `receiver_role` varchar(16) NOT NULL COMMENT '接收方角色',
+            `context_type` varchar(16) NOT NULL COMMENT '上下文类型',
+            `context_id` bigint(20) NOT NULL COMMENT '上下文id',
+            `content` varchar(500) NOT NULL COMMENT '申请内容',
+            `client_request_id` varchar(64) DEFAULT NULL COMMENT '幂等键',
+            `status` varchar(16) NOT NULL COMMENT '状态',
+            `chat_access_status` varchar(32) NOT NULL COMMENT '聊天准入状态',
+            `room_id` bigint(20) DEFAULT NULL COMMENT '关联roomId',
+            `decided_at` datetime(3) DEFAULT NULL COMMENT '处理时间',
+            `receiver_read` tinyint(1) NOT NULL DEFAULT 0 COMMENT '接收方是否已读',
+            `receiver_read_time` datetime(3) DEFAULT NULL COMMENT '接收方已读时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_sender_client_req` (`sender_uid`, `client_request_id`),
+            KEY `idx_sender` (`sender_uid`),
+            KEY `idx_receiver` (`receiver_uid`),
+            KEY `idx_context` (`context_type`, `context_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='找家教申请表';
+
+DROP TABLE IF EXISTS `application_brokerage_order`;
+CREATE TABLE `application_brokerage_order` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '关联id',
+            `application_id` bigint(20) NOT NULL COMMENT '申请id',
+            `order_id` bigint(20) NOT NULL COMMENT '中介费订单id',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_application` (`application_id`),
+            KEY `idx_order` (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='申请与中介费订单关联表';
+
 DROP TABLE IF EXISTS `room_read_state`;
 CREATE TABLE `room_read_state` (
             `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '已读状态id',
@@ -336,305 +488,34 @@ CREATE TABLE `tutor_appointment` (
             KEY `idx_room_id` (`room_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约/邀约表';
 
+DROP TABLE IF EXISTS `tutor_review`;
+CREATE TABLE `tutor_review` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '评价id',
+            `appointment_id` bigint(20) UNSIGNED NOT NULL COMMENT '预约id（逻辑外键）',
+            `parent_id` bigint(20) UNSIGNED NOT NULL COMMENT '评价方 user_id（学生/家长/机构）',
+            `tutor_id` bigint(20) UNSIGNED NOT NULL COMMENT '被评价教师 user_id',
+            `rating` tinyint(4) NOT NULL COMMENT '评分 1~5',
+            `content` varchar(1000) DEFAULT NULL COMMENT '评价内容',
+            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0删除',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_appointment` (`appointment_id`),
+            KEY `idx_tutor_id` (`tutor_id`),
+            KEY `idx_parent_id` (`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教师评价表（预约完成后评价）';
 
--- ----------------------------
--- Records of user
--- ----------------------------
-INSERT INTO `user` VALUES (1, '用户5678', '13812345678', NULL, NULL, NULL, 2, NULL, NULL, NULL, 0, 1, NULL, '2025-11-30 12:06:31.429', '2025-11-30 12:06:31.429');
-INSERT INTO `user` VALUES (3, '用户6909', '15268836909', NULL, NULL, NULL, 2, NULL, NULL, NULL, 0, 2, NULL, '2025-11-30 22:00:46.260', '2025-11-30 22:00:46.260');
-
-SET FOREIGN_KEY_CHECKS = 1;
-
-
-SET NAMES utf8mb4;
-SET FOREIGN_KEY_CHECKS = 0;
-USE ai_tutor;
-
--- =========================
--- 1) 科目树（position_post）
--- parent_id=0 视为根节点；子科目挂在年级/类别下
--- =========================
-INSERT INTO position_post
-(id, parent_id, name, grade, description, sort, enable_status, create_time, update_time)
-VALUES
-(100, 0, '小学', '小学', '小学段科目', 1, 1, NOW(), NOW()),
-(200, 0, '初中', '初中', '初中段科目', 2, 1, NOW(), NOW()),
-(300, 0, '高中', '高中', '高中段科目', 3, 1, NOW(), NOW()),
-(400, 0, '兴趣', '兴趣', '素质/兴趣类课程', 4, 1, NOW(), NOW()),
-
-(101, 100, '小学数学', '小学', '计算、应用题、奥数启蒙', 11, 1, NOW(), NOW()),
-(102, 100, '小学语文', '小学', '阅读理解、作文、基础字词', 12, 1, NOW(), NOW()),
-(103, 100, '小学英语', '小学', '自然拼读、单词、口语', 13, 1, NOW(), NOW()),
-
-(201, 200, '初中数学', '初中', '代数、几何、函数', 21, 1, NOW(), NOW()),
-(202, 200, '初中英语', '初中', '词汇语法、阅读、写作', 22, 1, NOW(), NOW()),
-(203, 200, '初中物理', '初中', '力学、电学基础', 23, 1, NOW(), NOW()),
-(204, 200, '初中化学', '初中', '酸碱盐、化学方程式', 24, 1, NOW(), NOW()),
-(205, 200, '初中语文', '初中', '阅读、作文、文言文基础', 25, 1, NOW(), NOW()),
-
-(301, 300, '高中数学', '高中', '函数、导数、圆锥曲线', 31, 1, NOW(), NOW()),
-(302, 300, '高中英语', '高中', '阅读、完形、写作提分', 32, 1, NOW(), NOW()),
-(303, 300, '高中物理', '高中', '电磁学、力学综合', 33, 1, NOW(), NOW()),
-(304, 300, '高中化学', '高中', '有机、化学平衡', 34, 1, NOW(), NOW()),
-(305, 300, '高中语文', '高中', '现代文阅读、作文', 35, 1, NOW(), NOW()),
-
-(401, 400, '钢琴', '兴趣', '启蒙到考级，基本功/曲目', 41, 1, NOW(), NOW()),
-(402, 400, '吉他', '兴趣', '民谣弹唱、和弦与节奏', 42, 1, NOW(), NOW()),
-(403, 400, '编程(Python)', '兴趣', '入门语法、算法思维、项目', 43, 1, NOW(), NOW()),
-(404, 400, '书法', '兴趣', '硬笔/软笔，结构与章法', 44, 1, NOW(), NOW()),
-(405, 400, '美术', '兴趣', '素描/色彩，基础造型', 45, 1, NOW(), NOW())
-ON DUPLICATE KEY UPDATE
-parent_id=VALUES(parent_id),
-name=VALUES(name),
-grade=VALUES(grade),
-description=VALUES(description),
-sort=VALUES(sort),
-enable_status=VALUES(enable_status),
-update_time=VALUES(update_time);
-
--- =========================
--- 2) 用户（user）+ 老师资料（teacher_profile）+ 家长资料（student_profile）
--- user.user_type: 1教师 2家长；ref_id 指向对应 profile.id（逻辑外键）
--- =========================
-INSERT INTO `user`
-(id, name, phone, avatar, sex, open_id, active_status, last_opt_time, ip_info, item_id, status, user_type, ref_id, create_time, update_time)
-VALUES
-(10001, '张老师10001', '13900010001', 'https://i.pravatar.cc/150?img=12', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50001, DATE_SUB(NOW(3), INTERVAL 30 DAY), NOW(3)),
-(10002, '李老师10002', '13900010002', 'https://i.pravatar.cc/150?img=32', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50002, DATE_SUB(NOW(3), INTERVAL 18 DAY), NOW(3)),
-(10003, '王老师10003', '13900010003', 'https://i.pravatar.cc/150?img=22', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50003, DATE_SUB(NOW(3), INTERVAL 12 DAY), NOW(3)),
-(10004, '赵老师10004', '13900010004', 'https://i.pravatar.cc/150?img=45', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50004, DATE_SUB(NOW(3), INTERVAL 25 DAY), NOW(3)),
-(10005, '陈老师10005', '13900010005', 'https://i.pravatar.cc/150?img=55', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50005, DATE_SUB(NOW(3), INTERVAL 8 DAY), NOW(3)),
-(10006, '刘老师10006', '13900010006', 'https://i.pravatar.cc/150?img=14', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50006, DATE_SUB(NOW(3), INTERVAL 16 DAY), NOW(3)),
-(10007, '周老师10007', '13900010007', 'https://i.pravatar.cc/150?img=7',  1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50007, DATE_SUB(NOW(3), INTERVAL 20 DAY), NOW(3)),
-(10008, '吴老师10008', '13900010008', 'https://i.pravatar.cc/150?img=9',  2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50008, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(10009, '郑老师10009', '13900010009', 'https://i.pravatar.cc/150?img=16', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50009, DATE_SUB(NOW(3), INTERVAL 10 DAY), NOW(3)),
-(10010, '孙老师10010', '13900010010', 'https://i.pravatar.cc/150?img=18', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50010, DATE_SUB(NOW(3), INTERVAL 28 DAY), NOW(3)),
-(10011, '马老师10011', '13900010011', 'https://i.pravatar.cc/150?img=20', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50011, DATE_SUB(NOW(3), INTERVAL 14 DAY), NOW(3)),
-(10012, '胡老师10012', '13900010012', 'https://i.pravatar.cc/150?img=24', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 50012, DATE_SUB(NOW(3), INTERVAL 9 DAY), NOW(3)),
-
-(20001, '家长王20001', '13800020001', 'https://i.pravatar.cc/150?img=61', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60001, DATE_SUB(NOW(3), INTERVAL 40 DAY), NOW(3)),
-(20002, '家长李20002', '13800020002', 'https://i.pravatar.cc/150?img=62', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60002, DATE_SUB(NOW(3), INTERVAL 33 DAY), NOW(3)),
-(20003, '家长赵20003', '13800020003', 'https://i.pravatar.cc/150?img=63', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60003, DATE_SUB(NOW(3), INTERVAL 22 DAY), NOW(3)),
-(20004, '家长周20004', '13800020004', 'https://i.pravatar.cc/150?img=64', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60004, DATE_SUB(NOW(3), INTERVAL 19 DAY), NOW(3)),
-(20005, '家长陈20005', '13800020005', 'https://i.pravatar.cc/150?img=65', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60005, DATE_SUB(NOW(3), INTERVAL 12 DAY), NOW(3)),
-(20006, '家长刘20006', '13800020006', 'https://i.pravatar.cc/150?img=66', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60006, DATE_SUB(NOW(3), INTERVAL 10 DAY), NOW(3)),
-(20007, '家长吴20007', '13800020007', 'https://i.pravatar.cc/150?img=67', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60007, DATE_SUB(NOW(3), INTERVAL 9 DAY), NOW(3)),
-(20008, '家长郑20008', '13800020008', 'https://i.pravatar.cc/150?img=68', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60008, DATE_SUB(NOW(3), INTERVAL 7 DAY), NOW(3)),
-(20009, '家长孙20009', '13800020009', 'https://i.pravatar.cc/150?img=69', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60009, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(20010, '家长马20010', '13800020010', 'https://i.pravatar.cc/150?img=70', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 60010, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3))
-ON DUPLICATE KEY UPDATE
-phone=VALUES(phone),
-avatar=VALUES(avatar),
-sex=VALUES(sex),
-active_status=VALUES(active_status),
-last_opt_time=VALUES(last_opt_time),
-status=VALUES(status),
-user_type=VALUES(user_type),
-ref_id=VALUES(ref_id),
-update_time=VALUES(update_time);
-
-INSERT INTO teacher_profile
-(id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, certificate_urls, status, create_time, update_time)
-VALUES
-(50001, 10001, '张晨', '北大 本科', '初中数学,高中数学', 4, 180.00, '擅长提分与错题体系化，注重解题思路与复盘。', '["https://example.com/cert/teacher/50001-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 30 DAY), NOW()),
-(50002, 10002, '李薇', '师范 硕士', '初中英语,高中英语', 6, 220.00, '阅读写作双线提升，强调词汇与语法在语境中掌握。', '["https://example.com/cert/teacher/50002-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 18 DAY), NOW()),
-(50003, 10003, '王磊', '985 本科', '初中物理,高中物理', 5, 240.00, '物理模型化讲解，善于把复杂题拆解成步骤。', '["https://example.com/cert/teacher/50003-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 12 DAY), NOW()),
-(50004, 10004, '赵婷', '师范 本科', '初中化学,高中化学', 3, 200.00, '化学方程式与题型训练结合，重视基础与规范书写。', '["https://example.com/cert/teacher/50004-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 25 DAY), NOW()),
-(50005, 10005, '陈浩', '北邮 本科', '编程(Python)', 2, 160.00, '从零到一做小项目，培养算法思维与代码习惯。', '["https://example.com/cert/teacher/50005-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(50006, 10006, '刘敏', '央音 本科', '钢琴', 7, 260.00, '钢琴启蒙与考级，强调节奏与手型基本功。', '["https://example.com/cert/teacher/50006-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 16 DAY), NOW()),
-(50007, 10007, '周航', '师范 本科', '小学数学,初中数学', 4, 150.00, '耐心细致，善于帮助孩子建立自信与学习习惯。', '["https://example.com/cert/teacher/50007-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 20 DAY), NOW()),
-(50008, 10008, '吴楠', '外语 硕士', '小学英语,初中英语', 5, 190.00, '自然拼读+分级阅读，口语表达循序渐进。', '["https://example.com/cert/teacher/50008-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(50009, 10009, '郑凯', '美院 本科', '美术', 3, 180.00, '素描造型基础训练，兼顾创意与观察力。', '["https://example.com/cert/teacher/50009-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NOW()),
-(50010, 10010, '孙颖', '师范 本科', '小学语文,初中语文', 6, 210.00, '阅读理解与作文专项，积累素材与表达结构。', '["https://example.com/cert/teacher/50010-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 28 DAY), NOW()),
-(50011, 10011, '马超', '理工 本科', '高中数学', 5, 260.00, '高考数学提分，擅长压轴题思路梳理。', '["https://example.com/cert/teacher/50011-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 14 DAY), NOW()),
-(50012, 10012, '胡静', '书法协会', '书法', 8, 200.00, '硬笔规范与软笔入门，结构与章法训练。', '["https://example.com/cert/teacher/50012-1.jpg"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW())
-ON DUPLICATE KEY UPDATE
-real_name=VALUES(real_name),
-education=VALUES(education),
-subject=VALUES(subject),
-experience_years=VALUES(experience_years),
-rate_per_hour=VALUES(rate_per_hour),
-introduction=VALUES(introduction),
-certificate_urls=VALUES(certificate_urls),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
-INSERT INTO student_profile
-(id, user_id, real_name, age, address, demand_description, budget, status, create_time, update_time)
-VALUES
-(60001, 20001, '王女士', 10, '北京市海淀区', '孩子基础一般，希望提升应用题与计算准确率。', 150.00, 1, DATE_SUB(NOW(3), INTERVAL 40 DAY), NOW(3)),
-(60002, 20002, '李先生', 13, '北京市朝阳区', '想系统补英语词汇语法，目标期末提升。', 180.00, 1, DATE_SUB(NOW(3), INTERVAL 33 DAY), NOW(3)),
-(60003, 20003, '赵女士', 15, '北京市西城区', '物理电学薄弱，需要针对性练题。', 220.00, 1, DATE_SUB(NOW(3), INTERVAL 22 DAY), NOW(3)),
-(60004, 20004, '周先生', 8,  '北京市丰台区', '语文阅读理解差，想提高总结与表达。', 140.00, 1, DATE_SUB(NOW(3), INTERVAL 19 DAY), NOW(3)),
-(60005, 20005, '陈女士', 12, '北京市昌平区', '数学几何不牢，想建立知识框架。', 180.00, 1, DATE_SUB(NOW(3), INTERVAL 12 DAY), NOW(3)),
-(60006, 20006, '刘先生', 9,  '北京市通州区', '孩子学钢琴准备考级，需要每周固定练习指导。', 260.00, 1, DATE_SUB(NOW(3), INTERVAL 10 DAY), NOW(3)),
-(60007, 20007, '吴女士', 14, '北京市海淀区', '化学方程式不熟，希望夯实基础。', 200.00, 1, DATE_SUB(NOW(3), INTERVAL 9 DAY), NOW(3)),
-(60008, 20008, '郑先生', 16, '北京市朝阳区', '冲刺高考数学，想做专题突破。', 280.00, 1, DATE_SUB(NOW(3), INTERVAL 7 DAY), NOW(3)),
-(60009, 20009, '孙女士', 11, '北京市石景山区', '想学Python做项目，培养兴趣与逻辑。', 160.00, 1, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(60010, 20010, '马先生', 10, '北京市东城区', '孩子写字不规范，想练硬笔书法。', 200.00, 1, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3))
-ON DUPLICATE KEY UPDATE
-real_name=VALUES(real_name),
-age=VALUES(age),
-address=VALUES(address),
-demand_description=VALUES(demand_description),
-budget=VALUES(budget),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
--- =========================
--- 3) 老师服务贴（teacher_job_posting） status=1 上架
--- mode: online/offline/both；city 用北京为主（方便首页筛 city）
--- =========================
-INSERT INTO teacher_job_posting
-(id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time, max_students, status, create_time, update_time)
-VALUES
-(70001, 10001, 201, '初中数学一对一提分（函数/几何）', '按章节+题型训练，配套错题本与周测。', 180.00, 'online',  '北京', '["Tue 19-21","Sat 10-12"]', 1, 1, DATE_SUB(NOW(), INTERVAL 12 DAY), NOW()),
-(70002, 10001, 301, '高中数学系统复盘（导数/圆锥曲线）', '梳理知识网络，专项突破压轴题。', 260.00, 'online',  '北京', '["Wed 19-21","Sun 14-16"]', 1, 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW()),
-(70003, 10002, 202, '初中英语阅读写作提升', '词汇语法在语境中掌握，写作模板+真题演练。', 220.00, 'online',  '北京', '["Mon 19-21","Thu 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NOW()),
-(70004, 10002, 302, '高中英语写作专项（提分）', '审题-结构-表达三步法，改作文到位。', 240.00, 'online',  '北京', '["Sat 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 7 DAY), NOW()),
-(70005, 10003, 203, '初中物理电学专项', '电路分析与题型归纳，做题更稳。', 240.00, 'online',  '北京', '["Tue 20-22","Sun 10-12"]', 1, 1, DATE_SUB(NOW(), INTERVAL 11 DAY), NOW()),
-(70006, 10003, 303, '高中物理力学综合', '受力分析+能量守恒体系化训练。', 260.00, 'online',  '北京', '["Wed 20-22"]', 1, 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(70007, 10004, 204, '初中化学基础夯实', '酸碱盐与化学方程式规范训练。', 200.00, 'online',  '北京', '["Mon 20-22"]', 1, 1, DATE_SUB(NOW(), INTERVAL 13 DAY), NOW()),
-(70008, 10004, 304, '高中化学有机入门', '结构-性质-反应路线，配套练习。', 230.00, 'online',  '北京', '["Fri 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(70009, 10005, 403, 'Python入门+小项目（零基础）', '从语法到项目：爬虫/数据处理/小游戏。', 160.00, 'online',  '北京', '["Sat 14-16","Sun 14-16"]', 1, 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(70010, 10005, 403, 'Python算法与刷题入门', '循环/递归/搜索/排序，培养代码思维。', 180.00, 'online',  '北京', '["Wed 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-(70011, 10006, 401, '钢琴启蒙（节奏/手型/识谱）', '以兴趣为导向，打好基本功。', 260.00, 'offline', '北京', '["Sat 10-12","Sun 10-12"]', 1, 1, DATE_SUB(NOW(), INTERVAL 16 DAY), NOW()),
-(70012, 10006, 401, '钢琴考级辅导（1-6级）', '曲目+视奏+乐理，制定练琴计划。', 320.00, 'offline', '北京', '["Wed 18-20"]', 1, 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(70013, 10007, 101, '小学数学计算与应用题', '夯实基础，提升正确率与解题步骤。', 150.00, 'both',   '北京', '["Tue 18-20","Thu 18-20"]', 1, 1, DATE_SUB(NOW(), INTERVAL 20 DAY), NOW()),
-(70014, 10007, 201, '初中数学培优（中等偏上）', '专题训练+错题归纳，冲刺更高分。', 180.00, 'online', '北京', '["Sat 09-11"]', 1, 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
-(70015, 10008, 103, '小学英语自然拼读+口语', '从拼读规则到阅读表达，轻松开口。', 160.00, 'online', '北京', '["Mon 18-20"]', 1, 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(70016, 10008, 202, '初中英语词汇语法专项', '高频词+核心语法，搭配真题练习。', 190.00, 'online', '北京', '["Thu 20-22"]', 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(70017, 10009, 405, '美术素描基础（静物/结构）', '从线条到结构，提升观察与表达。', 180.00, 'offline', '北京', '["Sat 14-16"]', 1, 1, DATE_SUB(NOW(), INTERVAL 10 DAY), NOW()),
-(70018, 10010, 102, '小学语文阅读与作文', '素材积累+结构表达，写作不再难。', 180.00, 'online', '北京', '["Wed 18-20"]', 1, 1, DATE_SUB(NOW(), INTERVAL 28 DAY), NOW()),
-(70019, 10010, 205, '初中语文阅读理解提升', '方法论+题型训练，提升答题规范。', 210.00, 'online', '北京', '["Sun 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(70020, 10011, 301, '高中数学冲刺（压轴题思路）', '分类突破，训练思维链路与书写规范。', 280.00, 'online', '北京', '["Sat 19-21","Sun 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 14 DAY), NOW()),
-(70021, 10012, 404, '硬笔书法规范训练', '字形结构与章法，纠正握笔姿势。', 200.00, 'both',  '北京', '["Tue 19-20","Fri 19-20"]', 1, 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW()),
-
--- 再补一些服务贴，让首页更“热闹”
-(70022, 10001, 201, '初中数学基础补弱（同步+练习）', '同步巩固+错题复盘，稳步提升。', 170.00, 'online', '北京', '["Mon 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(70023, 10002, 202, '初中英语口语陪练（发音/对话）', '场景化对话，提升表达与自信。', 180.00, 'online', '北京', '["Wed 18-19","Fri 18-19"]', 1, 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-(70024, 10003, 203, '初中物理力学入门', '从概念到题型，打好基础。', 200.00, 'online', '北京', '["Thu 19-21"]', 1, 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-(70025, 10004, 204, '初中化学计算题专项', '方程式配平+计算题规范步骤。', 210.00, 'online', '北京', '["Sun 14-16"]', 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(70026, 10007, 101, '小学数学思维启蒙', '趣味题训练思维，培养数学兴趣。', 160.00, 'online', '北京', '["Sat 10-12"]', 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(70027, 10008, 103, '小学英语分级阅读', '分级阅读+复述表达，提升语感。', 170.00, 'online', '北京', '["Sun 10-12"]', 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(70028, 10010, 205, '初中语文作文专项（审题立意）', '审题-结构-素材，写作提升快。', 220.00, 'online', '北京', '["Tue 20-22"]', 1, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW()),
-(70029, 10011, 301, '高中数学基础巩固（必修）', '知识点清单化复盘+练习巩固。', 240.00, 'online', '北京', '["Thu 20-22"]', 1, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW()),
-(70030, 10005, 403, 'Python数据分析入门', 'pandas+可视化，做小数据项目。', 200.00, 'online', '北京', '["Sat 16-18"]', 1, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW())
-ON DUPLICATE KEY UPDATE
-tutor_id=VALUES(tutor_id),
-subject_id=VALUES(subject_id),
-title=VALUES(title),
-description=VALUES(description),
-price_per_hour=VALUES(price_per_hour),
-mode=VALUES(mode),
-city=VALUES(city),
-available_time=VALUES(available_time),
-max_students=VALUES(max_students),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
--- =========================
--- 4) 家长需求贴（student_job_posting） status=1 发布中
--- =========================
-INSERT INTO student_job_posting
-(id, parent_id, subject_id, subject_name, student_gender, title, description, child_age, class_mode, city, address, budget_min, budget_max, schedule, status, create_time, update_time)
-VALUES
-(80001, 20001, 101, '小学数学', 'male', '小学三年级数学家教（补基础）', '主要是计算和应用题，想把错误率降下来。', 10, 'online',  '北京', '北京市海淀区', 120.00, 160.00, '["Tue 19-21","Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 9 DAY), NOW()),
-(80002, 20002, 202, '初中英语', 'female', '初二英语词汇语法提升', '阅读理解做题慢，词汇量不够，希望系统补齐。', 13, 'online', '北京', '北京市朝阳区', 160.00, 220.00, '["Mon 19-21","Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 8 DAY), NOW()),
-(80003, 20003, 203, '初中物理', 'male', '初三物理电学专项冲刺', '电路题总丢分，希望针对题型训练。', 15, 'online', '北京', '北京市西城区', 180.00, 260.00, '["Wed 19-21","Sun 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 7 DAY), NOW()),
-(80004, 20004, 102, '小学语文', 'female', '小学语文阅读理解与作文', '阅读理解抓不住重点，作文结构混乱。', 8, 'online',  '北京', '北京市丰台区', 120.00, 180.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 6 DAY), NOW()),
-(80005, 20005, 201, '初中数学', 'male', '初一数学几何补弱', '几何证明题无从下手，需要方法。', 12, 'online',  '北京', '北京市昌平区', 160.00, 220.00, '["Tue 20-22"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
-(80006, 20006, 401, '钢琴', 'female', '钢琴考级辅导（每周固定）', '准备考级，希望老师能制定练琴计划。', 9, 'offline', '北京', '北京市通州区', 240.00, 360.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 5 DAY), NOW()),
-(80007, 20007, 204, '初中化学', 'male', '初中化学基础夯实', '方程式和计算题薄弱，需要系统练习。', 14, 'online', '北京', '北京市海淀区', 160.00, 240.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(80008, 20008, 301, '高中数学', 'female', '高二数学专题突破（导数/数列）', '冲刺高分，希望做专题体系化训练。', 16, 'online', '北京', '北京市朝阳区', 220.00, 320.00, '["Sat 19-21","Sun 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 4 DAY), NOW()),
-(80009, 20009, 403, '编程(Python)', 'male', 'Python入门（兴趣+项目）', '希望做小项目培养兴趣，最好能有作业反馈。', 11, 'online', '北京', '北京市石景山区', 140.00, 220.00, '["Wed 19-21","Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-(80010, 20010, 404, '书法', 'female', '硬笔书法纠正（字形结构）', '握笔姿势不对，写字不工整，需要纠正。', 10, 'both', '北京', '北京市东城区', 160.00, 240.00, '["Fri 19-20","Sun 10-11"]', 1, DATE_SUB(NOW(), INTERVAL 3 DAY), NOW()),
-
--- 再补一些需求贴
-(80011, 20001, 103, '小学英语', 'male', '小学英语口语提升', '不敢开口，希望多对话练习。', 10, 'online', '北京', '北京市海淀区', 120.00, 180.00, '["Mon 18-19","Thu 18-19"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80012, 20002, 205, '初中语文', 'female', '初中语文阅读理解提高', '答题不规范，希望掌握方法。', 13, 'online', '北京', '北京市朝阳区', 150.00, 220.00, '["Sun 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80013, 20003, 304, '高中化学', 'male', '高中化学有机专项', '有机反应路线记不住，需要梳理。', 15, 'online', '北京', '北京市西城区', 200.00, 280.00, '["Sat 10-12"]', 1, DATE_SUB(NOW(), INTERVAL 2 DAY), NOW()),
-(80014, 20008, 302, '高中英语', 'female', '高中英语写作提分', '写作得分低，希望系统提升。', 16, 'online', '北京', '北京市朝阳区', 200.00, 300.00, '["Thu 19-21"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW()),
-(80015, 20009, 405, '美术', 'male', '美术素描基础训练', '想系统学素描，提升造型能力。', 11, 'offline', '北京', '北京市石景山区', 160.00, 240.00, '["Sat 14-16"]', 1, DATE_SUB(NOW(), INTERVAL 1 DAY), NOW())
-ON DUPLICATE KEY UPDATE
-parent_id=VALUES(parent_id),
-subject_id=VALUES(subject_id),
-subject_name=VALUES(subject_name),
-student_gender=VALUES(student_gender),
-title=VALUES(title),
-description=VALUES(description),
-child_age=VALUES(child_age),
-class_mode=VALUES(class_mode),
-city=VALUES(city),
-address=VALUES(address),
-budget_min=VALUES(budget_min),
-budget_max=VALUES(budget_max),
-schedule=VALUES(schedule),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
--- =========================
--- 5) 少量会话与消息（room/message）用于 IM 联调
--- =========================
-INSERT INTO room
-(id, teacher_profile_id, student_profile_id, active_time, last_msg_id, status, create_time, update_time)
-VALUES
-(90001, 50001, 60001, NOW(3), 91003, 1, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(90002, 50002, 60002, NOW(3), 91006, 1, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3)),
-(90003, 50003, 60003, NOW(3), 91009, 1, DATE_SUB(NOW(3), INTERVAL 4 DAY), NOW(3)),
-(90004, 50006, 60006, NOW(3), 91012, 1, DATE_SUB(NOW(3), INTERVAL 3 DAY), NOW(3)),
-(90005, 50005, 60009, NOW(3), 91015, 1, DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3))
-ON DUPLICATE KEY UPDATE
-active_time=VALUES(active_time),
-last_msg_id=VALUES(last_msg_id),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
-INSERT INTO message
-(id, room_id, from_uid, to_uid, content, reply_msg_id, status, gap_count, type, extra, create_time, update_time)
-VALUES
-(91001, 90001, 20001, 10001, '老师您好，孩子最近应用题总出错，想从基础开始补。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(91002, 90001, 10001, 20001, '好的，我建议先做一次小测，定位薄弱点，再按题型训练。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(91003, 90001, 20001, 10001, '可以的，那我们先约一次试课吗？', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-
-(91004, 90002, 20002, 10002, '孩子英语阅读慢，词汇量不够，想系统提升。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3)),
-(91005, 90002, 10002, 20002, '没问题，我这边会按词族+语法点安排，配套阅读材料。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3)),
-(91006, 90002, 20002, 10002, '太好了，我们下周一晚上可以上课。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 5 DAY), NOW(3)),
-
-(91007, 90003, 20003, 10003, '电学电路题总错，感觉没思路。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 4 DAY), NOW(3)),
-(91008, 90003, 10003, 20003, '先把串并联与等效电阻打牢，再做典型题型。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 4 DAY), NOW(3)),
-(91009, 90003, 20003, 10003, '好的，那先按您说的来。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 4 DAY), NOW(3)),
-
-(91010, 90004, 20006, 10006, '孩子钢琴考级想冲一冲，练琴效率不高。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 3 DAY), NOW(3)),
-(91011, 90004, 10006, 20006, '我会给练琴计划和节奏训练方法，每周复盘。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 3 DAY), NOW(3)),
-(91012, 90004, 20006, 10006, '好的，周六上午可以上课。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 3 DAY), NOW(3)),
-
-(91013, 90005, 20009, 10005, '想学Python做点小项目，有推荐的路线吗？', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3)),
-(91014, 90005, 10005, 20009, '可以从语法+小项目开始，比如小游戏/爬虫/数据处理。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3)),
-(91015, 90005, 20009, 10005, '好的，那我们先从小游戏开始。', NULL, 0, NULL, 1, NULL, DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3))
-ON DUPLICATE KEY UPDATE
-content=VALUES(content),
-status=VALUES(status),
-type=VALUES(type),
-update_time=VALUES(update_time);
-
--- =========================
--- 6) 少量预约（tutor_appointment）用于闭环联调
--- status: 1待确认 2已确认 4已取消 5已完成
--- =========================
-INSERT INTO tutor_appointment
-(id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, subject_id, class_mode, city, address, start_time, duration_minutes, status, created_by, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time)
-VALUES
-(92001, 20001, 10001, 80001, 70001, 101, 'online',  '北京', '北京市海淀区', DATE_ADD(NOW(3), INTERVAL 2 DAY), 60, 1, 20001, NULL, NULL, NULL, '想先做一次试课', DATE_SUB(NOW(3), INTERVAL 1 DAY), NOW(3)),
-(92002, 20002, 10002, 80002, 70003, 202, 'online',  '北京', '北京市朝阳区', DATE_ADD(NOW(3), INTERVAL 3 DAY), 60, 2, 20002, NULL, NULL, NULL, '阅读写作同步提升', DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3)),
-(92003, 20006, 10006, 80006, 70011, 401, 'offline', '北京', '北京市通州区', DATE_ADD(NOW(3), INTERVAL 4 DAY), 60, 1, 20006, NULL, NULL, NULL, '考级辅导', DATE_SUB(NOW(3), INTERVAL 2 DAY), NOW(3)),
-(92004, 20009, 10005, 80009, 70009, 403, 'online',  '北京', '北京市石景山区', DATE_ADD(NOW(3), INTERVAL 1 DAY), 60, 5, 20009, NULL, NULL, NULL, '已完成一次课', DATE_SUB(NOW(3), INTERVAL 6 DAY), NOW(3)),
-(92005, 20003, 10003, 80003, 70005, 203, 'online',  '北京', '北京市西城区', DATE_ADD(NOW(3), INTERVAL 5 DAY), 60, 4, 20003, NULL, NULL, 20003, '时间冲突先取消', DATE_SUB(NOW(3), INTERVAL 3 DAY), NOW(3))
-ON DUPLICATE KEY UPDATE
-status=VALUES(status),
-start_time=VALUES(start_time),
-duration_minutes=VALUES(duration_minutes),
-remark=VALUES(remark),
-update_time=VALUES(update_time);
+DROP TABLE IF EXISTS `sys_admin_user`;
+CREATE TABLE `sys_admin_user` (
+  `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '管理员ID',
+  `username` varchar(50) NOT NULL COMMENT '用户名',
+  `password` varchar(100) NOT NULL COMMENT '加密密码',
+  `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
+  `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_username` (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='后台管理员表';
 
 SET FOREIGN_KEY_CHECKS = 1;

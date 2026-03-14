@@ -3,19 +3,33 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 const HomePage = () => import('@/pages/HomePage.vue')
 const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
+const SettingsPage = () => import('@/pages/SettingsPage.vue')
+const UpdatePhonePage = () => import('@/pages/UpdatePhonePage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
+const StudentMineJobDetailPage = () => import('@/pages/student/StudentMineJobDetailPage.vue')
 const StudentEditJobPage = () => import('@/pages/student/StudentEditJobPage.vue')
 const StudentFavoritesPage = () => import('@/pages/student/StudentFavoritesPage.vue')
+const StudentTutorsPage = () => import('@/pages/student/StudentTutorsPage.vue')
 const TutorJobsPage = () => import('@/pages/tutor/TutorJobsPage.vue')
 const TutorJobDetailPage = () => import('@/pages/tutor/TutorJobDetailPage.vue')
 const TutorFavoritesPage = () => import('@/pages/tutor/TutorFavoritesPage.vue')
 const TutorOnboardingBasicPage = () => import('@/pages/tutor/TutorOnboardingBasicPage.vue')
+const TutorOnboardingProfilePage = () => import('@/pages/tutor/TutorOnboardingProfilePage.vue')
 const ChatListPage = () => import('@/pages/chat/ChatListPage.vue')
 const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
+const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
+const OrgAuthPage = () => import('@/pages/org/OrgAuthPage.vue')
+const OrgChangePasswordPage = () => import('@/pages/org/OrgChangePasswordPage.vue')
+const OrgPostPage = () => import('@/pages/org/OrgPostPage.vue')
+const OrgTutorsPage = () => import('@/pages/org/OrgTutorsPage.vue')
+const OrgFavoritesPage = () => import('@/pages/org/OrgFavoritesPage.vue')
+const OrgMineJobsPage = () => import('@/pages/org/OrgMineJobsPage.vue')
+const OrgMineJobDetailPage = () => import('@/pages/org/OrgMineJobDetailPage.vue')
+const OrgPublicProfilePage = () => import('@/pages/org/OrgPublicProfilePage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -56,9 +70,64 @@ export const router = createRouter({
       props: { role: 'STUDENT' },
     },
     {
+      path: '/auth/org',
+      name: 'authOrg',
+      component: OrgAuthPage,
+    },
+    {
+      path: '/org/change-password',
+      name: 'orgChangePassword',
+      component: OrgChangePasswordPage,
+    },
+    {
+      path: '/org/tutors',
+      name: 'orgTutors',
+      component: OrgTutorsPage,
+    },
+    {
+      path: '/org/post',
+      name: 'orgPost',
+      component: OrgPostPage,
+    },
+    {
+      path: '/org/jobs/mine',
+      name: 'orgMineJobs',
+      component: OrgMineJobsPage,
+    },
+    {
+      path: '/org/favorites',
+      name: 'orgFavorites',
+      component: OrgFavoritesPage,
+    },
+    {
+      path: '/org/jobs/:id',
+      name: 'orgMineJobDetail',
+      component: OrgMineJobDetailPage,
+    },
+    {
+      path: '/org/jobs/:id/edit',
+      name: 'orgEditJob',
+      component: StudentEditJobPage,
+    },
+    {
+      path: '/organization/:orgUserId',
+      name: 'orgPublicProfile',
+      component: OrgPublicProfilePage,
+    },
+    {
       path: '/me',
       name: 'me',
       component: MePage,
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsPage,
+    },
+    {
+      path: '/settings/phone',
+      name: 'updatePhone',
+      component: UpdatePhonePage,
     },
     {
       path: '/student/post',
@@ -76,6 +145,11 @@ export const router = createRouter({
       component: StudentMineJobsPage,
     },
     {
+      path: '/student/jobs/:id',
+      name: 'studentMineJobDetail',
+      component: StudentMineJobDetailPage,
+    },
+    {
       path: '/student/jobs/:id/edit',
       name: 'studentEditJob',
       component: StudentEditJobPage,
@@ -86,6 +160,11 @@ export const router = createRouter({
       component: StudentFavoritesPage,
     },
     {
+      path: '/student/tutors',
+      name: 'studentTutors',
+      component: StudentTutorsPage,
+    },
+    {
       path: '/tutor/jobs',
       name: 'tutorJobs',
       component: TutorJobsPage,
@@ -94,6 +173,11 @@ export const router = createRouter({
       path: '/tutor/onboarding/basic',
       name: 'tutorOnboardingBasic',
       component: TutorOnboardingBasicPage,
+    },
+    {
+      path: '/tutor/onboarding/profile',
+      name: 'tutorOnboardingProfile',
+      component: TutorOnboardingProfilePage,
     },
     {
       path: '/tutor/jobs/:id',
@@ -127,6 +211,11 @@ export const router = createRouter({
       name: 'brokeragePay',
       component: BrokeragePayPage,
     },
+    {
+      path: '/pay/cashier',
+      name: 'cashierPay',
+      component: CashierPayPage,
+    },
   ],
 })
 
@@ -137,31 +226,37 @@ router.beforeEach((to) => {
   if (loggedIn && to.path.startsWith('/auth/')) {
     if (userType === 1) return { path: '/tutor/jobs' }
     if (userType === 2) return { path: '/student/post' }
+    if (userType === 3) return { path: '/org/jobs/mine' }
     return { path: '/' }
   }
 
   const needAuth =
     to.path === '/me' ||
+    to.path.startsWith('/settings') ||
     to.path === '/schedule' ||
     to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||
     to.path.startsWith('/tutor/') ||
+    to.path.startsWith('/org/') ||
     to.path.startsWith('/chat')
 
   if (needAuth && !loggedIn) {
     if (to.path.startsWith('/tutor/')) return { path: '/auth/tutor' }
+    if (to.path.startsWith('/org/')) return { path: '/auth/org' }
     return { path: '/auth/student' }
   }
 
   if (loggedIn && userType != null) {
     if (to.path.startsWith('/tutor/') && userType !== 1) return { path: '/student/post' }
     if (to.path.startsWith('/student/') && userType !== 2) return { path: '/tutor/jobs' }
+    if (to.path.startsWith('/org/') && userType !== 3) return { path: '/' }
   }
 
   if (loggedIn && userType === 1 && to.path.startsWith('/tutor/')) {
     const completed = localStorage.getItem(STORAGE_TUTOR_BASIC_COMPLETED_KEY)
     if (to.path.startsWith('/tutor/onboarding')) {
-      if (completed === '1') return { path: '/tutor/jobs' }
+      if (to.path.startsWith('/tutor/onboarding/basic') && completed === '1') return { path: '/tutor/jobs' }
+      if (to.path.startsWith('/tutor/onboarding/profile') && completed === '0') return { path: '/tutor/onboarding/basic' }
     } else {
       if (completed === '0') return { path: '/tutor/onboarding/basic' }
     }

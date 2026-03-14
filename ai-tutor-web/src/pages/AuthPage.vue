@@ -81,7 +81,8 @@ function validateCode(v: string): string | null {
 function persistNextAtMap() {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAtMap.value))
-  } catch {
+  } catch (e) {
+    void e
   }
 }
 

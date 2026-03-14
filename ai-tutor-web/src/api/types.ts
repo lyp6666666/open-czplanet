@@ -128,6 +128,7 @@ export interface HotDemandCardVO {
   addressSimple: string
   childAge: number
   scheduleText: string
+  publisherIdentity?: string
   parent: { userId: number; displayName: string; avatar: string }
   tags: string[]
 }
@@ -149,11 +150,52 @@ export interface HotTutorCardVO {
   }>
 }
 
+export interface ParentTutorCardVO {
+  userId: number
+  displayName: string
+  avatar: string | null
+  city: string | null
+  education: string | null
+  experienceYears: number | null
+  ratePerHour: string | null
+  teachingMode: string | null
+  subjectTags: string[]
+  highlights: string[]
+  introduction: string | null
+  highestEduSchool?: string | null
+  eduVerifyStatus?: number | null
+}
+
 export interface FooterLinksVO {
   links: Array<{ name: string; url: string }>
 }
 
 export type UserRoleEnum = 'TEACHER' | 'STUDENT'
+
+export interface OrganizationProfile {
+  id: number
+  userId: number
+  orgName: string
+  intro: string | null
+  contactName: string | null
+  contactPhone: string | null
+  address: string | null
+  licenseNo: string | null
+  splitPlatformPercent: number
+  splitOrgPercent: number
+  status: number
+  createTime: string
+  updateTime: string
+}
+
+export interface OrgLoginVO {
+  id: number
+  name: string
+  userType: number
+  token: string
+  mustChangePassword: boolean
+  organizationProfile: OrganizationProfile
+}
 
 export interface LoginUserVO {
   id: number
@@ -175,9 +217,13 @@ export interface TeacherProfile {
   experienceYears: number | null
   ratePerHour: string | null
   introduction: string | null
+  city?: string | null
+  highestEduSchool?: string | null
+  teachingMode?: string | null
   defaultGreeting?: string | null
   certificateUrls: string | null
   basicCompleted?: number | null
+  resumeCompleted?: number | null
   realnameVerifyStatus?: number | null
   realnameVerifyMethod?: string | null
   realnameVerifyIdFrontUrl?: string | null
@@ -219,6 +265,11 @@ export interface UserMeVO {
   userType: number
   teacherProfile?: TeacherProfile | null
   studentProfile?: StudentProfile | null
+  organizationProfile?: OrganizationProfile | null
+}
+
+export interface UserSettingsVO {
+  applicationGreeting: string
 }
 
 export interface UserSimpleVO {
@@ -233,6 +284,23 @@ export interface UserCardVO {
   teacherProfile: TeacherProfile | null
   studentProfile: StudentProfile | null
   jobPosting: StudentJobPosting | null
+  studentHistory?: StudentJobPosting[]
+  teacherHistory?: TutorAppointment[]
+}
+
+export interface TutorAppointment {
+  id: number
+  parentId: number
+  tutorId: number
+  title: string
+  subjectId: number
+  classMode: string
+  city: string
+  address: string
+  startTime: string
+  durationMinutes: number
+  status: number
+  createTime: string
 }
 
 export interface StudentJobPosting {
@@ -259,6 +327,7 @@ export interface StudentJobPosting {
   educationRequirement: string | null
   publisherIdentity: string | null
   schedule: string | null
+  bizStatus?: number | null
   status: number
   createTime: string
   updateTime: string
@@ -290,6 +359,39 @@ export interface CursorPageResp<T> {
   list: T[]
 }
 
+export type TutorApplicationStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
+export type TutorApplicationChatAccessStatus = 'NONE' | 'PAYMENT_REQUIRED' | 'CHAT_ENABLED'
+
+export interface TutorApplicationVO {
+  id: number
+  senderUid: number
+  receiverUid: number
+  senderRole: 'TEACHER' | 'STUDENT'
+  receiverRole: 'TEACHER' | 'STUDENT'
+  contextType: 'DEMAND' | 'TUTOR'
+  contextId: number
+  content: string
+  status: TutorApplicationStatus
+  chatAccessStatus: TutorApplicationChatAccessStatus
+  paymentPayerRole: 'TEACHER'
+  orderId: number | null
+  roomId: number | null
+  receiverRead: boolean | null
+  decidedAt: string | null
+  createTime: string
+}
+
+export interface TutorApplicationUnreadResp {
+  unreadCount: number
+}
+
+export interface TutorApplicationEnterResp {
+  paymentRequired: boolean
+  waitingForTeacherPayment: boolean
+  orderId: number | null
+  roomId: number | null
+}
+
 export interface ChatMessageResp {
   fromUser: { uid: number }
   message: { id: number; roomId: number; sendTime: string; body: unknown }
@@ -297,6 +399,7 @@ export interface ChatMessageResp {
 
 export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'UNKNOWN'
 export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNKNOWN'
+export type TutorApplicationCardStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 
 export interface ScheduleEventVO {
   id: number
@@ -312,6 +415,28 @@ export interface ScheduleEventVO {
 
 export type ChatMessageBody =
   | { type: 'text'; content: string }
+  | {
+      type: 'tutor_application'
+      applicationId: number
+      content: string
+      status: TutorApplicationCardStatus
+      creatorUserId: number
+      contextType: 'DEMAND' | 'TUTOR'
+      contextId: number
+    }
+  | { type: 'tutor_application_status'; applicationId: number; status: TutorApplicationCardStatus; actorUserId: number }
+  | {
+      type: 'end_chat_request'
+      requestId: number | null
+      status: string | null
+      creatorUserId: number | null
+    }
+  | {
+      type: 'end_chat_status'
+      requestId: number | null
+      status: string | null
+      actorUserId: number | null
+    }
   | {
       type: 'lesson_request'
       eventId: number
@@ -358,6 +483,18 @@ export type ChatMessageBody =
       proposalId: number | null
       orderId: number | null
       status: string | null
+    }
+  | {
+      type: 'brokerage_refund_request'
+      requestId: number | null
+      status: string | null
+      creatorUserId: number | null
+    }
+  | {
+      type: 'brokerage_refund_status'
+      requestId: number | null
+      status: string | null
+      actorUserId: number | null
     }
   | { type: 'system'; content?: string; [k: string]: unknown }
 

@@ -3,6 +3,7 @@ package com.ai.tutor.videocallimservice.chat.service;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
@@ -12,6 +13,8 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
@@ -40,6 +43,10 @@ public class CollaborationProposalService {
     private TeacherProfileLiteMapper teacherProfileLiteMapper;
     @Resource
     private StudentProfileLiteMapper studentProfileLiteMapper;
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+    @Resource
+    private StudentJobPostingLiteMapper studentJobPostingLiteMapper;
     @Resource
     private ChatService chatService;
     @Resource
@@ -104,7 +111,17 @@ public class CollaborationProposalService {
         ThrowUtils.throwIf(!uid.equals(teacherUid) && !uid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
 
         CollaborationProposal existing = collaborationProposalMapper.selectLatestByRoomId(req.getRoomId());
-        ThrowUtils.throwIf(existing != null, ErrorCode.OPERATION_ERROR, "该会话已发起过合作提案");
+        if (existing != null) {
+            String status = existing.getStatus();
+            if (CollaborationProposalStatus.REJECTED.name().equals(status)) {
+            } else if (CollaborationProposalStatus.PENDING.name().equals(status)) {
+                ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "对方尚未处理上一次提案，可修改提案后重新发送");
+            } else if (CollaborationProposalStatus.ACCEPTED.name().equals(status)) {
+                ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "该会话已同意过合作提案，无法再次发起");
+            } else {
+                ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "该会话已发起过合作提案");
+            }
+        }
 
         Long toUid = uid.equals(teacherUid) ? studentUid : teacherUid;
         LocalDateTime now = LocalDateTime.now();
@@ -134,6 +151,42 @@ public class CollaborationProposalService {
 
         ChatMessageReq msgReq = ChatMessageReq.builder()
                 .roomId(req.getRoomId())
+                .msgType(8)
+                .body(body)
+                .build();
+        return chatService.sendMsg(msgReq, uid);
+    }
+
+    public Long updateAndSend(Long proposalId, CreateCollaborationProposalReq req, Long uid) {
+        ThrowUtils.throwIf(proposalId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
+
+        CollaborationProposal proposal = collaborationProposalMapper.selectById(proposalId);
+        ThrowUtils.throwIf(proposal == null, ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(!uid.equals(proposal.getFromUid()), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(!CollaborationProposalStatus.PENDING.name().equals(proposal.getStatus()), ErrorCode.OPERATION_ERROR, "仅待确认提案可修改");
+        ThrowUtils.throwIf(req.getRoomId() == null || !req.getRoomId().equals(proposal.getRoomId()), ErrorCode.PARAMS_ERROR);
+
+        int updated = collaborationProposalMapper.updateContent(
+                proposalId,
+                uid,
+                req.getPricePerHour(),
+                req.getClassTime(),
+                req.getFrequencyPerWeek()
+        );
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+
+        SystemMsgReq body = new SystemMsgReq();
+        body.setBizType("COLLAB_PROPOSAL");
+        body.setEventId(proposalId);
+        body.setTitle("家教合作");
+        body.setStatus(CollaborationProposalStatus.PENDING.name());
+        body.setCreatorUserId(uid);
+        body.setPricePerHour(req.getPricePerHour());
+        body.setClassTime(req.getClassTime());
+        body.setFrequencyPerWeek(req.getFrequencyPerWeek());
+
+        ChatMessageReq msgReq = ChatMessageReq.builder()
+                .roomId(proposal.getRoomId())
                 .msgType(8)
                 .body(body)
                 .build();
@@ -186,6 +239,13 @@ public class CollaborationProposalService {
         int updated = collaborationProposalMapper.updateStatus(proposalId, next.name(), uid, now);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
 
+        if (CollaborationProposalStatus.ACCEPTED.equals(next) && proposal.getRoomId() != null) {
+            TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(proposal.getRoomId());
+            if (application != null && "DEMAND".equalsIgnoreCase(application.getContextType()) && application.getContextId() != null) {
+                studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 4);
+            }
+        }
+
         SystemMsgReq body = new SystemMsgReq();
         body.setBizType("COLLAB_PROPOSAL_STATUS");
         body.setEventId(proposalId);
@@ -200,6 +260,9 @@ public class CollaborationProposalService {
                 .build();
         Long statusMsgId = chatService.sendMsg(msgReq, uid);
         if (CollaborationProposalStatus.ACCEPTED.equals(next)) {
+            if (brokerageOrderService.hasPaidOrderInRoom(proposal.getRoomId())) {
+                return statusMsgId;
+            }
             BrokerageOrderVO order = brokerageOrderService.getOrCreateByProposal(proposalId, uid);
             brokerageOrderService.sendBrokerageRequired(proposal.getRoomId(), proposalId, order, uid);
         }

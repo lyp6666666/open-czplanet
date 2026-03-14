@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { CITY_ENTRIES, DEFAULT_HOT_CITIES, type CityEntry } from './cities'
 
 const props = defineProps<{
   open: boolean
   modelValue: string
   hotCities?: string[]
+  allowNational?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -25,6 +26,7 @@ const entries = computed(() => {
   for (const it of CITY_ENTRIES) {
     const name = String(it.name || '').trim()
     if (!name) continue
+    if (props.allowNational === false && name === '全国') continue
     if (dedup.has(name)) continue
     dedup.set(name, {
       name,
@@ -45,14 +47,13 @@ const hot = computed(() => {
   // Use passed hotCities or default, ensuring uniqueness
   const base = [...(props.hotCities || []), ...DEFAULT_HOT_CITIES]
   const list = Array.from(new Set(base)).filter(Boolean)
-  
-  // Ensure '全国' is always at the top
-  const nationalIdx = list.indexOf('全国')
-  if (nationalIdx > -1) {
-    list.splice(nationalIdx, 1)
+  if (props.allowNational === false) {
+    return list.filter((x) => x !== '全国')
   }
+
+  const nationalIdx = list.indexOf('全国')
+  if (nationalIdx > -1) list.splice(nationalIdx, 1)
   list.unshift('全国')
-  
   return list
 })
 

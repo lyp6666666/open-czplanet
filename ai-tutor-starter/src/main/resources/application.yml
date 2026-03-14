@@ -2,6 +2,23 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+  cloud:
+    nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
   application:
     name: videoCall-IM-service
   datasource:
@@ -33,6 +50,11 @@ spring:
           # 连接池中最大连接数，负数表示没有限制
           max-active: 20
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
 
@@ -44,48 +66,6 @@ jwt:
     - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
   expiration: 24h
   issuer: ai-tutor
-
-home:
-  guest:
-    bannersUseMinio: true
-    banners:
-      carousel:
-        - id: carousel-1
-          title: 家教直聘
-          subtitle: 快速匹配合适老师，先聊再约课
-          imageUrl: /banners/carousel-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-2
-          title: 初中数学提分
-          subtitle: 一对一讲解 + 习题巩固，循序渐进
-          imageUrl: /banners/carousel-2.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: carousel-3
-          title: 英语口语陪练
-          subtitle: 沉浸式对话纠音，表达更自信
-          imageUrl: /banners/carousel-3.svg
-          link:
-            type: ROUTE
-            url: /
-      cards:
-        - id: card-1
-          title: 新手指南
-          subtitle: 快速了解发布需求与挑选家教
-          imageUrl: /banners/card-1.svg
-          link:
-            type: ROUTE
-            url: /
-        - id: card-2
-          title: 在线沟通
-          subtitle: 先聊再约课，沟通更高效
-          imageUrl: /banners/card-2.svg
-          link:
-            type: ROUTE
-            url: /
 
 storage:
   minio:
@@ -99,11 +79,59 @@ storage:
     allowedAvatarUrlPrefixes:
       - http://127.0.0.1:9000/ai-tutor-assets
   upload:
-    maxSizeBytes: 5242880
-    avatarMaxSizeBytes: 2097152
+    maxSizeBytes: 20971520
+    avatarMaxSizeBytes: 5242880
     allowedContentTypes:
       - image/jpeg
       - image/png
       - image/webp
       - image/gif
       - image/svg+xml
+
+springdoc:
+  packages-to-scan: com.ai.tutor
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+admin:
+  jwt:
+    secrets:
+      - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
+    expiration: 24h
+    issuer: ai-tutor-admin
+
+# 本地开发 Mock 配置（如果 Nacos 中未配置，将使用此处的默认值）
+wechat:
+  miniapp:
+    appid: ${WX_MINI_APPID:wx_mock_appid}
+    secret: ${WX_MINI_SECRET:mock_secret}
+    mock-enabled: ${WX_MOCK_ENABLED:true}
+
+payment:
+  wechat:
+    appId: ${WX_PAY_APPID:wx_mock_appid}
+    miniappId: ${WX_MINI_APPID:wx_mock_appid}
+    mchId: ${WX_PAY_MCHID:mock_mch_id}
+    mock-enabled: ${PAYMENT_MOCK_ENABLED:true}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    nacos:
+      config:
+        namespace: 3066af4f-57ee-4f4d-80fe-0d2a4e791f7d
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  cloud:
+    nacos:
+      config:
+        namespace: be1662a5-65d2-4be8-92ef-31001b7fa427

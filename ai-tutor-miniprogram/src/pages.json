@@ -1,0 +1,96 @@
+{
+	"pages": [
+		{
+			"path": "pages/home/index",
+			"style": {
+				"navigationBarTitleText": "AI Tutor"
+			}
+		},
+        {
+            "path": "pages/me/index",
+            "style": {
+                "navigationBarTitleText": "Me"
+            }
+        },
+        {
+            "path": "pages/tutor/detail",
+            "style": {
+                "navigationBarTitleText": "Tutor Detail"
+            }
+        },
+        {
+            "path": "pages/post/index",
+            "style": {
+                "navigationBarTitleText": "Post Demand"
+            }
+        },
+        {
+            "path": "pages/my-jobs/index",
+            "style": {
+                "navigationBarTitleText": "My Demands"
+            }
+        },
+        {
+            "path": "pages/job/detail",
+            "style": {
+                "navigationBarTitleText": "Job Detail"
+            }
+        },
+        {
+            "path": "pages/chat/list",
+            "style": {
+                "navigationBarTitleText": "Messages"
+            }
+        },
+        {
+            "path": "pages/chat/room",
+            "style": {
+                "navigationBarTitleText": "Chat"
+            }
+        },
+        {
+            "path": "pages/tutor/onboarding/index",
+            "style": {
+                "navigationBarTitleText": "Tutor Onboarding"
+            }
+        },
+        {
+            "path": "pages/tutor/status",
+            "style": {
+                "navigationBarTitleText": "Application Status"
+            }
+        }
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "AI Tutor",
+		"navigationBarBackgroundColor": "#F8F8F8",
+		"backgroundColor": "#F8F8F8"
+	},
+    "tabBar": {
+        "color": "#7A7E83",
+        "selectedColor": "#007aff",
+        "borderStyle": "black",
+        "backgroundColor": "#ffffff",
+        "list": [
+            {
+                "pagePath": "pages/home/index",
+                "text": "Home",
+                "iconPath": "static/home.png",
+                "selectedIconPath": "static/home-active.png"
+            },
+            {
+                "pagePath": "pages/chat/list",
+                "text": "Messages",
+                "iconPath": "static/home.png",
+                "selectedIconPath": "static/home-active.png"
+            },
+            {
+                "pagePath": "pages/me/index",
+                "text": "Me",
+                "iconPath": "static/user.png",
+                "selectedIconPath": "static/user-active.png"
+            }
+        ]
+    }
+}

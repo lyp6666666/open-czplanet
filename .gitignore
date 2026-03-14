@@ -45,6 +45,16 @@ build/
 .dbg/
 debug.md
 
+.logs/
+**/.logs/
+*.log
+
+.private/
+
+**/src/main/resources/application-dev.yml
+
 Dockerfile/mysql-data/
 Dockerfile/redis-data/
 Dockerfile/minio-data/
+
+common-used.md

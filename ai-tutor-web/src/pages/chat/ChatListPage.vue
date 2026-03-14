@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
 import { userApi } from '@/api/user'
 import type { ChatRoomItemResp, UserSimpleVO } from '@/api/types'
+import { useAuthStore } from '@/stores/auth'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+const chatRealtime = useChatRealtimeStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -19,11 +23,71 @@ const isLast = ref(false)
 const userMap = ref<Record<number, UserSimpleVO>>({})
 const search = ref('')
 
+type StreamMsgEvent = {
+  msgId: number
+  roomId: number
+  fromUid: number
+  toUid: number
+  sendTime: unknown
+  body: unknown
+}
+
+function upsertRoomFromEvent(ev: StreamMsgEvent) {
+  const myUid = auth.user?.id
+  if (!myUid) return
+  const otherUid = ev.fromUid === myUid ? ev.toUid : ev.fromUid
+  const prevUnread = chatRealtime.roomUnread[ev.roomId] || 0
+  const sendTimeMs =
+    typeof ev.sendTime === 'number'
+      ? ev.sendTime
+      : typeof ev.sendTime === 'string'
+          ? Number(ev.sendTime)
+          : Number.NaN
+  const updated: ChatRoomItemResp = {
+    roomId: ev.roomId,
+    otherUid,
+    lastMsgId: ev.msgId,
+    lastMsgBody: ev.body,
+    unreadCount: prevUnread,
+    activeTime: Number.isFinite(sendTimeMs) ? new Date(sendTimeMs).toISOString() : new Date().toISOString(),
+  }
+  const idx = rooms.value.findIndex((r) => r.roomId === ev.roomId)
+  if (idx >= 0) {
+    const next = rooms.value.slice()
+    next.splice(idx, 1)
+    rooms.value = [updated, ...next]
+  } else {
+    rooms.value = [updated, ...rooms.value]
+    void enrichUsers([updated])
+  }
+}
+
+watch(
+  () => chatRealtime.roomUnread,
+  (map) => {
+    rooms.value = rooms.value.map((r) => {
+      const u = map[r.roomId]
+      if (typeof u === 'number' && u !== r.unreadCount) {
+        return { ...r, unreadCount: u }
+      }
+      return r
+    })
+  },
+  { deep: true },
+)
+
+function effectiveUnread(roomId: number, fallback: number) {
+  const v = chatRealtime.roomUnread[roomId]
+  return typeof v === 'number' ? v : fallback
+}
+
 function lastMsgText(raw: unknown): string {
   if (!raw) return ''
   if (typeof raw === 'string') return raw
   if (typeof raw === 'object') {
     const any = raw as Record<string, unknown>
+    const t = typeof any.type === 'string' ? any.type.trim() : ''
+    if (t === 'brokerage_refund_request' || t === 'brokerage_refund_status') return '[退款申请]'
     if (typeof any.content === 'string') return any.content
   }
   try {
@@ -31,6 +95,11 @@ function lastMsgText(raw: unknown): string {
   } catch {
     return String(raw)
   }
+}
+
+function avatarOf(uid: number): string {
+  const v = userMap.value[uid]?.avatar
+  return typeof v === 'string' ? v.trim() : ''
 }
 
 async function enrichUsers(list: ChatRoomItemResp[]) {
@@ -63,6 +132,13 @@ async function loadMore() {
 }
 
 function openRoom(roomId: number, otherUid: number) {
+  const room = rooms.value.find((r) => r.roomId === roomId)
+  if (room?.lastMsgId) {
+    void chatRealtime.ackRoomRead(roomId, room.lastMsgId)
+  }
+  // Immediately clear local unread state
+  chatRealtime.clearRoomUnread(roomId)
+  chatRealtime.setActiveRoom(roomId)
   void router.push({ name: 'chatRoom', params: { roomId }, query: { otherUid: String(otherUid) } })
 }
 
@@ -85,14 +161,26 @@ const filteredRooms = computed(() => {
 
 onMounted(() => {
   void loadMore()
+  if (chatRealtime.lastEvent) {
+    upsertRoomFromEvent(chatRealtime.lastEvent)
+  }
 })
+
+watch(
+  () => chatRealtime.lastEvent,
+  (ev) => {
+    if (ev) upsertRoomFromEvent(ev)
+  },
+)
 </script>
 
 <template>
   <div class="workbench">
     <aside class="left card">
       <div class="left-head">
-        <div class="title">消息</div>
+        <div class="row">
+          <div class="title">消息</div>
+        </div>
         <input v-model="search" class="search" placeholder="搜索会话" />
       </div>
 
@@ -100,7 +188,7 @@ onMounted(() => {
 
       <div v-if="!hasAny && !loading" class="empty">
         <div class="empty-title">暂无会话</div>
-        <div class="empty-desc">从需求详情点击“立即沟通”即可开始聊天</div>
+        <div class="empty-desc">发起家教申请后即可进入会话，申请通过并支付后可聊天</div>
       </div>
 
       <div v-else class="items">
@@ -112,11 +200,19 @@ onMounted(() => {
           :class="{ active: activeRoomId === r.roomId }"
           @click="openRoom(r.roomId, r.otherUid)"
         >
-          <div class="avatar">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</div>
+          <span v-if="effectiveUnread(r.roomId, r.unreadCount) > 0" class="unread-badge">{{
+            effectiveUnread(r.roomId, r.unreadCount) > 99 ? '99+' : effectiveUnread(r.roomId, r.unreadCount)
+          }}</span>
+          <div class="avatar">
+            <img v-if="avatarOf(r.otherUid)" :src="avatarOf(r.otherUid)" alt="" />
+            <span v-else class="avatar-fallback">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</span>
+          </div>
           <div class="main">
             <div class="row1">
               <div class="name">{{ userMap[r.otherUid]?.name || `用户${r.otherUid}` }}</div>
-              <div class="time">{{ r.activeTime ? String(r.activeTime).slice(0, 19).replace('T', ' ') : '' }}</div>
+              <div class="meta">
+                <span class="time">{{ r.activeTime ? String(r.activeTime).slice(0, 19).replace('T', ' ') : '' }}</span>
+              </div>
             </div>
             <div class="row2">{{ lastMsgText(r.lastMsgBody) }}</div>
           </div>
@@ -136,7 +232,7 @@ onMounted(() => {
         <component :is="Component" v-if="Component" />
         <div v-else class="placeholder card">
           <div class="placeholder-title">选择一个会话开始沟通</div>
-          <div class="placeholder-desc">也可以从需求列表点击“立即沟通”自动进入</div>
+          <div class="placeholder-desc">发起家教申请后即可进入会话，申请通过并支付后可聊天</div>
         </div>
       </RouterView>
     </section>
@@ -149,6 +245,9 @@ onMounted(() => {
   grid-template-columns: 340px 1fr;
   gap: 12px;
   align-items: stretch;
+  height: calc(100vh - var(--app-topbar-height, 56px) - 50px);
+  height: calc(100dvh - var(--app-topbar-height, 56px) - 50px);
+  min-height: 0;
 }
 
 .left {
@@ -156,11 +255,19 @@ onMounted(() => {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 12px;
-  min-height: 640px;
+  height: 100%;
+  min-height: 0;
 }
 
 .left-head {
   display: grid;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 10px;
 }
 
@@ -173,9 +280,12 @@ onMounted(() => {
   display: grid;
   gap: 8px;
   align-content: start;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .item {
+  position: relative;
   display: grid;
   grid-template-columns: 44px 1fr;
   gap: 12px;
@@ -186,6 +296,25 @@ onMounted(() => {
   background: #fff;
   cursor: pointer;
   text-align: left;
+}
+
+.unread-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 77, 79, 0.95);
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 16px;
+  border: 2px solid #fff;
 }
 
 .item.active {
@@ -202,6 +331,18 @@ onMounted(() => {
   place-items: center;
   font-weight: 900;
   color: var(--text);
+  overflow: hidden;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-fallback {
+  font-weight: 900;
 }
 
 .row1 {
@@ -209,6 +350,12 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .name {
@@ -278,7 +425,8 @@ onMounted(() => {
 }
 
 .right {
-  min-height: 640px;
+  height: 100%;
+  min-height: 0;
 }
 
 .placeholder {
@@ -303,12 +451,6 @@ onMounted(() => {
 @media (max-width: 980px) {
   .workbench {
     grid-template-columns: 1fr;
-  }
-  .left {
-    min-height: auto;
-  }
-  .right {
-    min-height: auto;
   }
 }
 </style>

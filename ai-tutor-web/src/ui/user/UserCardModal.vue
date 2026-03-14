@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+import { applicationApi } from '@/api/application'
 import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import { userApi } from '@/api/user'
 import type { UserCardVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   open: boolean
@@ -20,11 +23,24 @@ const error = ref<string | null>(null)
 const card = ref<UserCardVO | null>(null)
 
 const auth = useAuthStore()
+const router = useRouter()
+const settings = useSettingsStore()
+
+const avatarLoaded = ref(false)
+let avatarProbeId = 0
 
 const title = computed(() => {
   const user = card.value?.user
   if (!user) return ''
   return user.name || `用户${user.id}`
+})
+
+const avatarSrc = computed(() => {
+  const v = String(card.value?.user?.avatar || '').trim()
+  if (!v) return ''
+  const low = v.toLowerCase()
+  if (low === 'null' || low === 'undefined') return ''
+  return v
 })
 
 const identityLabel = computed(() => {
@@ -37,6 +53,9 @@ const identityLabel = computed(() => {
 const canFavoriteTutor = computed(() => auth.user?.userType === 2 && card.value?.user?.userType === 1)
 const favorited = ref(false)
 const favoriteBusy = ref(false)
+
+const applyBusy = ref(false)
+const applyError = ref<string | null>(null)
 
 function close() {
   emit('close')
@@ -55,6 +74,22 @@ function fmtBudget(min: string | null, max: string | null) {
   if (a) return `${a} 元/小时起`
   if (b) return `${b} 元/小时以内`
   return ''
+}
+
+function fmtJobStatus(s: number) {
+  if (s === 1) return '发布中'
+  if (s === 0) return '已关闭'
+  return '未知'
+}
+
+function fmtApptStatus(s: number) {
+  if (s === 1) return '待确认'
+  if (s === 2) return '已接单'
+  if (s === 3) return '改期中'
+  if (s === 4) return '已取消'
+  if (s === 5) return '已完成'
+  if (s === 6) return '已拒绝'
+  return '未知'
 }
 
 watch(
@@ -80,6 +115,26 @@ watch(
   { immediate: true },
 )
 
+watch(
+  avatarSrc,
+  (src) => {
+    avatarLoaded.value = false
+    if (!src) return
+    const probeId = (avatarProbeId += 1)
+    const img = new Image()
+    img.onload = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = true
+    }
+    img.onerror = () => {
+      if (probeId !== avatarProbeId) return
+      avatarLoaded.value = false
+    }
+    img.src = src
+  },
+  { immediate: true },
+)
+
 async function onToggleFavoriteTutor() {
   const uid = props.uid
   if (!uid || !canFavoriteTutor.value || favoriteBusy.value) return
@@ -98,6 +153,44 @@ async function onToggleFavoriteTutor() {
     favoriteBusy.value = false
   }
 }
+
+function genClientRequestId() {
+  const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
+  if (g) return g
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function startTutorApplication() {
+  if (!canFavoriteTutor.value || applyBusy.value) return
+  const targetUid = card.value?.user?.id
+  const tutorId = card.value?.teacherProfile?.id
+  if (!targetUid || !tutorId) return
+  applyBusy.value = true
+  applyError.value = null
+  try {
+    if (!settings.loaded) {
+      try {
+        await settings.load()
+      } catch {
+        void 0
+      }
+    }
+    const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    const msg = await applicationApi.startChat({
+      receiverUid: targetUid,
+      contextType: 'TUTOR',
+      contextId: tutorId,
+      content,
+      clientRequestId: genClientRequestId(),
+    })
+    emit('close')
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(targetUid) } })
+  } catch (e) {
+    applyError.value = e instanceof Error ? e.message : '发送申请失败'
+  } finally {
+    applyBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -105,7 +198,7 @@ async function onToggleFavoriteTutor() {
     <div class="modal card">
       <div class="m-head">
         <div class="u">
-          <img v-if="card?.user?.avatar" class="u-avatar" :src="card.user.avatar" alt="" />
+          <img v-if="avatarSrc && avatarLoaded" class="u-avatar" :src="avatarSrc" alt="" />
           <div v-else class="u-avatar fallback">{{ title.slice(0, 1) }}</div>
           <div class="u-main">
             <div class="u-name">
@@ -152,20 +245,53 @@ async function onToggleFavoriteTutor() {
           <div v-if="fmt(card.studentProfile.demandDescription)" class="desc">{{ fmt(card.studentProfile.demandDescription) }}</div>
         </div>
 
-        <div v-if="card.jobPosting" class="sec">
-          <div class="sec-title">岗位信息</div>
-          <div class="kv">
-            <div v-if="fmt(card.jobPosting.title)" class="row"><span class="k">标题</span><span class="v">{{ fmt(card.jobPosting.title) }}</span></div>
-            <div v-if="fmtBudget(card.jobPosting.budgetMin, card.jobPosting.budgetMax)" class="row">
-              <span class="k">预算</span><span class="v">{{ fmtBudget(card.jobPosting.budgetMin, card.jobPosting.budgetMax) }}</span>
+        <div v-if="card.studentHistory && card.studentHistory.length > 0" class="sec">
+          <div class="sec-title">历史需求</div>
+          <div class="history-list">
+            <div v-for="job in card.studentHistory" :key="job.id" class="history-item">
+              <div class="h-row1">
+                <span class="h-title">{{ job.title }}</span>
+                <span class="h-status" :class="{ active: job.status === 1 }">{{ fmtJobStatus(job.status) }}</span>
+              </div>
+              <div class="h-row2">
+                <span>{{ job.subjectName }}</span>
+                <span>{{ job.classMode === 'online' ? '线上' : job.city }}</span>
+                <span>{{ fmtBudget(job.budgetMin, job.budgetMax) }}</span>
+              </div>
             </div>
-            <div v-if="fmt(card.jobPosting.classMode)" class="row"><span class="k">授课方式</span><span class="v">{{ fmt(card.jobPosting.classMode) }}</span></div>
-            <div v-if="fmt(card.jobPosting.city)" class="row"><span class="k">城市</span><span class="v">{{ fmt(card.jobPosting.city) }}</span></div>
-            <div v-if="fmt(card.jobPosting.address)" class="row"><span class="k">地点</span><span class="v">{{ fmt(card.jobPosting.address) }}</span></div>
-            <div v-if="fmt(card.jobPosting.availableTime)" class="row"><span class="k">时间</span><span class="v">{{ fmt(card.jobPosting.availableTime) }}</span></div>
-            <div v-if="fmt(card.jobPosting.gradeCode)" class="row"><span class="k">年级</span><span class="v">{{ fmt(card.jobPosting.gradeCode) }}</span></div>
           </div>
-          <div v-if="fmt(card.jobPosting.description)" class="desc">{{ fmt(card.jobPosting.description) }}</div>
+        </div>
+
+        <div v-if="card.teacherHistory && card.teacherHistory.length > 0" class="sec">
+          <div class="sec-title">历史接单</div>
+          <div class="history-list">
+            <div v-for="apt in card.teacherHistory" :key="apt.id" class="history-item">
+              <div class="h-row1">
+                <span class="h-title">{{ apt.title || '无标题课程' }}</span>
+                <span class="h-status done">{{ fmtApptStatus(apt.status) }}</span>
+              </div>
+              <div class="h-row2">
+                <span>{{ apt.startTime ? apt.startTime.replace('T', ' ').slice(0, 16) : '' }}</span>
+                <span>{{ apt.durationMinutes }}分钟</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="card.teacherProfile" class="sec">
+          <div class="sec-title">评价</div>
+          <div class="empty-eval">暂无评价</div>
+        </div>
+
+        <div v-if="canFavoriteTutor" class="sec">
+          <div class="sec-title">发起申请</div>
+          <div v-if="applyError" class="hint error">{{ applyError }}</div>
+          <div class="apply-actions">
+            <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="startTutorApplication">
+              {{ applyBusy ? '发送中...' : '发起家教申请' }}
+            </button>
+            <button class="btn" type="button" :disabled="applyBusy" @click="router.push({ name: 'settings' })">设置问候语</button>
+          </div>
         </div>
       </template>
     </div>
@@ -191,6 +317,31 @@ async function onToggleFavoriteTutor() {
   gap: 12px;
   max-height: min(78vh, 720px);
   overflow: auto;
+}
+
+.apply {
+  display: grid;
+  gap: 10px;
+}
+
+.apply-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.txt {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.apply-ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .m-head {
@@ -332,5 +483,64 @@ async function onToggleFavoriteTutor() {
   padding: 10px 12px;
   border-radius: 12px;
   word-break: break-word;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-item {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.h-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.h-title {
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.h-status {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(31, 35, 41, 0.05);
+}
+
+.h-status.active {
+  color: #00bebd;
+  background: rgba(0, 190, 189, 0.08);
+}
+
+.h-status.done {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.08);
+}
+
+.h-row2 {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.empty-eval {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 10px;
+  text-align: center;
+  background: rgba(31, 35, 41, 0.03);
+  border-radius: 8px;
 }
 </style>

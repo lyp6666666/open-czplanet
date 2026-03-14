@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 public class BrokerageOrder {
     private Long id;
     private Long proposalId;
+    private Long applicationId;
     private Long roomId;
     private Long payerUid;
     private Long amountFen;

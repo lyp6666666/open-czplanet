@@ -6,6 +6,10 @@ import cn.hutool.core.collection.CollectionUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
+import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
+import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.CursorPageBaseReq;
@@ -13,22 +17,27 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.strategy.AbstractMsgHandler;
 import com.ai.tutor.videocallimservice.chat.service.strategy.MsgHandlerFactory;
 import com.ai.tutor.videocallimservice.common.event.MessageSendEvent;
 import com.ai.tutor.videocallimservice.common.util.CursorUtils;
+import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
+import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 
 @Service
@@ -44,6 +53,18 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Autowired
     private RoomMapper roomMapper;
+
+    @Autowired
+    private TutorApplicationMapper tutorApplicationMapper;
+
+    @Autowired
+    private TeacherProfileLiteMapper teacherProfileLiteMapper;
+
+    @Autowired
+    private StudentProfileLiteMapper studentProfileLiteMapper;
+
+    @Value("${tutor-application.skip-payment-check:false}")
+    private boolean skipPaymentCheck;
 
     @Override
     public CursorPageBaseResp<ChatMessageResp> getMsgPage(ChatMessagePageReq request, Long receiveUid) {
@@ -70,13 +91,77 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Override
     public Long sendMsg(ChatMessageReq request, Long uid) {
-        //todo 校验是否能发送消息
+        assertCanSend(request, uid);
         //根据消息类型，得到专门处理该消息的处理器
         AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
         Long msgId = msgHandler.checkAndSaveMsg(request, uid);
         roomMapper.updateAfterSend(request.getRoomId(), msgId);
+        if (Integer.valueOf(8).equals(request.getMsgType())) {
+            String bizType = extractBizType(request.getBody());
+            if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
+                roomMapper.closeRoom(request.getRoomId());
+            }
+        }
         applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
         return msgId;
+    }
+
+    private void assertCanSend(ChatMessageReq request, Long uid) {
+        ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
+        Integer msgType = request.getMsgType();
+        Long roomId = request.getRoomId();
+        ThrowUtils.throwIf(msgType == null || roomId == null, ErrorCode.PARAMS_ERROR);
+
+        boolean unlocked = isChatEnabled(roomId);
+        if (Integer.valueOf(1).equals(msgType)) {
+            ThrowUtils.throwIf(!unlocked, ErrorCode.OPERATION_ERROR, "当前仅可发送家教申请，申请通过并完成支付后再聊天");
+            return;
+        }
+        if (!Integer.valueOf(8).equals(msgType)) {
+            ThrowUtils.throwIf(!unlocked, ErrorCode.OPERATION_ERROR, "当前仅可发送家教申请，申请通过并完成支付后再聊天");
+            return;
+        }
+
+        String bizType = extractBizType(request.getBody());
+        if (!unlocked) {
+            boolean allowed = "TUTOR_APPLICATION".equals(bizType) || "TUTOR_APPLICATION_STATUS".equals(bizType) || "BROKERAGE_REQUIRED".equals(bizType) || "CONTACT_UNLOCKED".equals(bizType);
+            ThrowUtils.throwIf(!allowed, ErrorCode.OPERATION_ERROR, "当前仅可发送家教申请");
+        }
+    }
+
+    private boolean isChatEnabled(Long roomId) {
+        Room room = roomMapper.selectById(roomId);
+        if (room == null || room.getStatus() == null || room.getStatus() != 1) {
+            return false;
+        }
+        Long teacherUid = room.getTeacherProfileId() == null ? null : teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
+        Long studentUid = room.getStudentProfileId() == null ? null : studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId());
+        if (teacherUid == null || studentUid == null) {
+            return false;
+        }
+        TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(teacherUid, studentUid);
+        if (application == null) {
+            return false;
+        }
+        String access = application.getChatAccessStatus();
+        if (skipPaymentCheck && TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access)) {
+            return true;
+        }
+        return TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access);
+    }
+
+    private static String extractBizType(Object body) {
+        if (body instanceof SystemMsgReq) {
+            SystemMsgReq req = (SystemMsgReq) body;
+            return req.getBizType() == null ? "" : req.getBizType().trim().toUpperCase();
+        }
+        if (body instanceof Map) {
+            Map<?, ?> map = (Map<?, ?>) body;
+            Object v = map.get("bizType");
+            if (v == null) v = map.get("biz_type");
+            return v == null ? "" : String.valueOf(v).trim().toUpperCase();
+        }
+        return "";
     }
 
 

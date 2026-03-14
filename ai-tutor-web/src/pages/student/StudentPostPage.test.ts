@@ -8,12 +8,17 @@ import StudentPostPage from './StudentPostPage.vue'
 
 const mocks = vi.hoisted(() => ({
   createDemand: vi.fn(),
+  toastShow: vi.fn(),
 }))
 
 vi.mock('@/api/jobs', () => ({
   jobsApi: {
     createDemand: mocks.createDemand,
   },
+}))
+
+vi.mock('@/stores/toast', () => ({
+  useToastStore: () => ({ show: mocks.toastShow }),
 }))
 
 function createTestRouter() {
@@ -29,6 +34,7 @@ function createTestRouter() {
 describe('StudentPostPage', () => {
   it('blocks publish when offline without address', async () => {
     mocks.createDemand.mockReset()
+    mocks.toastShow.mockReset()
     const router = createTestRouter()
     await router.push('/student/post')
     await router.isReady()
@@ -40,19 +46,22 @@ describe('StudentPostPage', () => {
 
     await wrapper.find('select').setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('数学')
-    await wrapper.findAll('select')[3]!.setValue('offline')
-    await wrapper.findAll('select')[3]!.setValue('offline')
+    await wrapper.find('input[type="checkbox"][value="数学"]').setValue(true)
+    await wrapper.findAll('select')[2]!.setValue('offline')
+    await wrapper.findAll('select')[2]!.setValue('offline')
+
+    await wrapper.findAll('textarea')[0]!.setValue('孩子基础一般，希望补习巩固。')
 
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('上门辅导必须填写城市与上课地址')
+    expect(mocks.toastShow).toHaveBeenCalledWith('上门辅导必须填写城市与上课地址', 'error')
     expect(mocks.createDemand).not.toHaveBeenCalled()
   })
 
   it('submits required fields and calls createDemand', async () => {
     mocks.createDemand.mockReset()
+    mocks.toastShow.mockReset()
     mocks.createDemand.mockResolvedValue(3001)
 
     const router = createTestRouter()
@@ -66,9 +75,11 @@ describe('StudentPostPage', () => {
 
     await wrapper.findAll('select')[0]!.setValue('male')
     await wrapper.findAll('select')[1]!.setValue('JUNIOR1')
-    await wrapper.findAll('select')[2]!.setValue('数学')
-    await wrapper.findAll('select')[3]!.setValue('online')
-    await wrapper.find('textarea').setValue('希望老师重点讲解函数与几何。')
+    await wrapper.find('input[type="checkbox"][value="数学"]').setValue(true)
+    await wrapper.findAll('select')[2]!.setValue('online')
+    await wrapper.findAll('textarea')[0]!.setValue('希望老师重点讲解函数与几何。')
+    await wrapper.findAll('textarea')[1]!.setValue('希望老师有耐心，教学经验丰富。')
+    await wrapper.find('input[type="number"]').setValue('100')
 
     await wrapper.findAll('button').find((b) => b.text().trim() === '发布')!.trigger('click')
     await flushPromises()
@@ -85,6 +96,9 @@ describe('StudentPostPage', () => {
       gradeCode: 'JUNIOR1',
       stageCode: 'JUNIOR',
       teacherGenderPreference: 'both',
+      frequencyPerWeek: 2,
+      budgetMin: 100,
+      budgetMax: 100,
     })
   })
 })

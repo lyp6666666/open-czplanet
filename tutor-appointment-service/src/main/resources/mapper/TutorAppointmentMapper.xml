@@ -71,6 +71,14 @@
           AND status = 1
     </update>
 
+    <update id="completeIfAccepted">
+        UPDATE tutor_appointment
+        SET status = 5,
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 2
+    </update>
+
     <update id="rejectIfPending">
         UPDATE tutor_appointment
         SET status = 6,

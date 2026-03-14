@@ -34,6 +34,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns("/user/loginOrRegister", "/user/sendcode")
                 // 未登录可访问的首页接口（Guest Home）
                 .excludePathPatterns("/api/v1/public/**")
+                // 支付回调（第三方平台调用，不携带用户 token）
+                .excludePathPatterns("/payment/notify/**")
+                // 管理端接口由 ai-tutor-admin 模块单独鉴权
+                .excludePathPatterns("/api/admin/**")
                 // swagger-ui 静态资源
                 .excludePathPatterns(
                 "/swagger-ui/**",

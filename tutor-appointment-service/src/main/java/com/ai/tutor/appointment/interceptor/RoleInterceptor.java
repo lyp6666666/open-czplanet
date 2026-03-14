@@ -64,6 +64,10 @@ public class RoleInterceptor implements HandlerInterceptor {
             require(role, UserRoleEnum.STUDENT);
         }
 
+        if (uri.startsWith("/api/v1/org/")) {
+            require(role, UserRoleEnum.ORG);
+        }
+
         return true;
     }
 

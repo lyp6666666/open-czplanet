@@ -107,10 +107,11 @@ export function formatScheduleItem(raw: string): string {
 
 export function formatScheduleText(raw: string | null | undefined): string {
   if (!raw) return ''
-  const t = raw.trim()
+  let t = raw.trim()
   if (!t) return ''
 
-  if (t.startsWith('[') && t.endsWith(']')) {
+  for (let i = 0; i < 2; i++) {
+    if (!(t.startsWith('[') && t.endsWith(']')) && !(t.startsWith('"') && t.endsWith('"'))) break
     try {
       const parsed: unknown = JSON.parse(t)
       if (Array.isArray(parsed)) {
@@ -120,9 +121,16 @@ export function formatScheduleText(raw: string | null | undefined): string {
           .filter(Boolean)
         return parts.join('；')
       }
-    } catch (e) {
-      void e
+      if (typeof parsed === 'string') {
+        const next = parsed.trim()
+        if (!next || next === t) break
+        t = next
+        continue
+      }
+    } catch {
+      break
     }
+    break
   }
 
   const parts = t
@@ -134,4 +142,19 @@ export function formatScheduleText(raw: string | null | undefined): string {
 
   if (parts.length > 1) return parts.join('；')
   return formatScheduleItem(t)
+}
+
+export function formatDemandBizStatus(bizStatus: number | null | undefined, publishStatus?: number | null): string {
+  const v = bizStatus == null ? null : Number(bizStatus)
+  if (v == null || !Number.isFinite(v)) {
+    if (publishStatus === 0) return '已关闭'
+    return '匹配中'
+  }
+  if (v === 1) return '匹配中'
+  if (v === 2) return '待支付解锁'
+  if (v === 3) return '沟通中'
+  if (v === 4) return '合作中'
+  if (v === 5) return '已结课'
+  if (v === 6) return '已关闭'
+  return '匹配中'
 }

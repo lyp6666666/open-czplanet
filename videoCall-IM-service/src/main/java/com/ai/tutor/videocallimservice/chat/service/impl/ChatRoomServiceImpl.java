@@ -5,6 +5,8 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.enums.MessageTypeEnum;
+import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomPageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatRoomStartReq;
@@ -13,6 +15,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatRoomItemResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
@@ -24,6 +27,7 @@ import com.ai.tutor.utils.RequestHolder;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,31 +64,43 @@ public class ChatRoomServiceImpl implements ChatRoomService {
     @Resource
     private ChatService chatService;
 
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+
+    @Value("${tutor-application.gating-enabled:true}")
+    private boolean tutorApplicationGatingEnabled;
+
+    @Value("${tutor-application.skip-payment-check:false}")
+    private boolean skipPaymentCheck;
+
     @Override
     public Long getOrCreateRoomWithUser(Long targetUid, Long uid) {
         ThrowUtils.throwIf(uid == null || targetUid == null, ErrorCode.PARAMS_ERROR);
-        ThrowUtils.throwIf(uid.equals(targetUid), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(uid.equals(targetUid), ErrorCode.PARAMS_ERROR, "不能与自己发起聊天");
 
+        assertNotBlockedByApplication(uid, targetUid);
         requireActiveUser(uid);
         requireActiveUser(targetUid);
 
         Integer role = RequestHolder.get() == null ? null : RequestHolder.get().getRole();
-        ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR, "用户角色缺失");
 
         Long teacherProfileId;
         Long studentProfileId;
         if (Integer.valueOf(1).equals(role)) {
             teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(uid);
+            ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "教师资料未初始化，请先完成教师端入驻");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(targetUid);
+            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是学生账号，无法建立会话");
         } else if (Integer.valueOf(2).equals(role)) {
             teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(targetUid);
+            ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法建立会话");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(uid);
+            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "学生资料未初始化，请先完成学生端注册");
         } else {
-            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR);
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "用户角色不合法");
             return null;
         }
-
-        ThrowUtils.throwIf(teacherProfileId == null || studentProfileId == null, ErrorCode.PARAMS_ERROR);
 
         Room existing = roomMapper.selectByTeacherAndStudent(teacherProfileId, studentProfileId);
         if (existing != null) {
@@ -170,7 +186,6 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         }
         Map<Long, Long> unreadMap = new HashMap<>();
         if (!roomIds.isEmpty()) {
-            tryInitRoomReadStateTable();
             try {
                 messageMapper.listUnreadCounts(roomIds, uid).forEach(it -> unreadMap.put(it.getRoomId(), it.getUnreadCount()));
             } catch (Exception ignored) {
@@ -232,24 +247,19 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         return Date.from(time.atZone(ZoneId.systemDefault()).toInstant());
     }
 
-    private void tryInitRoomReadStateTable() {
-        try {
-            jdbcTemplate.execute(
-                    "CREATE TABLE IF NOT EXISTS `room_read_state` ("
-                            + " `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '已读状态id',"
-                            + " `room_id` bigint(20) NOT NULL COMMENT '会话id',"
-                            + " `uid` bigint(20) NOT NULL COMMENT '用户id',"
-                            + " `last_read_msg_id` bigint(20) DEFAULT NULL COMMENT '最后已读消息id',"
-                            + " `last_read_time` datetime(3) DEFAULT NULL COMMENT '最后已读时间',"
-                            + " `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),"
-                            + " `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),"
-                            + " PRIMARY KEY (`id`),"
-                            + " UNIQUE KEY `uniq_room_uid` (`room_id`, `uid`),"
-                            + " KEY `idx_uid` (`uid`),"
-                            + " KEY `idx_room_id` (`room_id`)"
-                            + " ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话已读状态表'"
-            );
-        } catch (Exception ignored) {
+    private void assertNotBlockedByApplication(Long uid, Long targetUid) {
+        if (!tutorApplicationGatingEnabled) {
+            return;
+        }
+        if (skipPaymentCheck) {
+            return;
+        }
+        TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(uid, targetUid);
+        if (application == null) {
+            return;
+        }
+        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(application.getChatAccessStatus())) {
+            return;
         }
     }
 }

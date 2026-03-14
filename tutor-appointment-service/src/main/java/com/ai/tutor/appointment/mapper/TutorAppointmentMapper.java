@@ -32,6 +32,8 @@ public interface TutorAppointmentMapper {
      */
     int rejectIfPending(@Param("id") Long id);
 
+    int completeIfAccepted(@Param("id") Long id);
+
     List<TutorAppointment> listByUser(@Param("uid") Long uid,
                                      @Param("status") Integer status,
                                      @Param("cursor") Long cursor,

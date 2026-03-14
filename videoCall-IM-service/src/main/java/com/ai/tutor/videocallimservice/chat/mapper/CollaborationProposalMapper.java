@@ -15,4 +15,9 @@ public interface CollaborationProposalMapper {
                      @Param("status") String status,
                      @Param("actorUid") Long actorUid,
                      @Param("actionTime") LocalDateTime actionTime);
+    int updateContent(@Param("id") Long id,
+                      @Param("fromUid") Long fromUid,
+                      @Param("pricePerHour") String pricePerHour,
+                      @Param("classTime") String classTime,
+                      @Param("frequencyPerWeek") Integer frequencyPerWeek);
 }

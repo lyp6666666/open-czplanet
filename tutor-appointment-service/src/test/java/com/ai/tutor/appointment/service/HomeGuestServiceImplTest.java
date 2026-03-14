@@ -42,6 +42,9 @@ class HomeGuestServiceImplTest {
     @Autowired
     private HomeGuestService homeGuestService;
 
+    @Autowired
+    private SubjectQueryService subjectQueryService;
+
     @BeforeEach
     void setUp() {
         jdbcTemplate.execute("DELETE FROM teacher_job_posting");
@@ -78,6 +81,18 @@ class HomeGuestServiceImplTest {
     @Test
     void suggestShouldReturnSubjectAndPostings() {
         HomeGuestVOs.SearchSuggestVO vo = homeGuestService.suggest("数学", "北京", 10);
+        assertThat(vo.getList()).isNotEmpty();
+        assertThat(vo.getList().stream().anyMatch(i -> "subject".equals(i.getType()))).isTrue();
+        assertThat(vo.getList().stream().anyMatch(i -> "service".equals(i.getType()))).isTrue();
+        assertThat(vo.getList().stream().anyMatch(i -> "demand".equals(i.getType()))).isTrue();
+    }
+
+    @Test
+    void suggestShouldSupportFuzzyWhenQueryIsLongerThanData() {
+        List<SubjectTreeNodeVO> subjects = subjectQueryService.searchEnabledByKeyword("初中数学一对一老师", 50);
+        assertThat(subjects.stream().anyMatch(s -> "数学".equals(s.getName()))).isTrue();
+
+        HomeGuestVOs.SearchSuggestVO vo = homeGuestService.suggest("初中数学一对一老师", "北京", 10);
         assertThat(vo.getList()).isNotEmpty();
         assertThat(vo.getList().stream().anyMatch(i -> "subject".equals(i.getType()))).isTrue();
         assertThat(vo.getList().stream().anyMatch(i -> "service".equals(i.getType()))).isTrue();

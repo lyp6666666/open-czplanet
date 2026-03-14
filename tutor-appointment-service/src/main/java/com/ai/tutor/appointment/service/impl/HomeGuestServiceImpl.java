@@ -115,9 +115,32 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         int serviceLimit = Math.max(0, remain / 2);
         int demandLimit = Math.max(0, remain - serviceLimit);
 
+        List<String> tokens = buildFuzzyTokens(keyword, 12);
         List<HomeGuestVOs.SearchSuggestVO.SuggestItem> items = new ArrayList<>();
 
         List<PositionPost> subjects = safeGet(() -> positionPostMapper.searchEnabledByKeyword(keyword, subjectLimit), List.of());
+        if (subjects.size() < subjectLimit && !tokens.isEmpty()) {
+            Set<Long> seen = subjects.stream().map(PositionPost::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+            for (String t : tokens) {
+                if (t == null || t.isBlank() || t.equals(keyword)) {
+                    continue;
+                }
+                List<PositionPost> more = safeGet(() -> positionPostMapper.searchEnabledByKeyword(t, subjectLimit), List.of());
+                for (PositionPost it : more) {
+                    if (it == null || it.getId() == null || seen.contains(it.getId())) {
+                        continue;
+                    }
+                    subjects.add(it);
+                    seen.add(it.getId());
+                    if (subjects.size() >= subjectLimit) {
+                        break;
+                    }
+                }
+                if (subjects.size() >= subjectLimit) {
+                    break;
+                }
+            }
+        }
         for (PositionPost s : subjects) {
             Map<String, Object> payload = new HashMap<>();
             payload.put("subjectId", s.getId());
@@ -131,6 +154,28 @@ public class HomeGuestServiceImpl implements HomeGuestService {
 
         if (serviceLimit > 0) {
             List<TeacherJobPosting> services = safeGet(() -> teacherJobPostingMapper.searchPublishedByTitle(keyword, serviceLimit), List.of());
+            if (services.size() < serviceLimit && !tokens.isEmpty()) {
+                Set<Long> seen = services.stream().map(TeacherJobPosting::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+                for (String t : tokens) {
+                    if (t == null || t.isBlank() || t.equals(keyword)) {
+                        continue;
+                    }
+                    List<TeacherJobPosting> more = safeGet(() -> teacherJobPostingMapper.searchPublishedByTitle(t, serviceLimit), List.of());
+                    for (TeacherJobPosting it : more) {
+                        if (it == null || it.getId() == null || seen.contains(it.getId())) {
+                            continue;
+                        }
+                        services.add(it);
+                        seen.add(it.getId());
+                        if (services.size() >= serviceLimit) {
+                            break;
+                        }
+                    }
+                    if (services.size() >= serviceLimit) {
+                        break;
+                    }
+                }
+            }
             for (TeacherJobPosting p : services) {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("serviceId", p.getId());
@@ -145,6 +190,28 @@ public class HomeGuestServiceImpl implements HomeGuestService {
 
         if (demandLimit > 0) {
             List<StudentJobPosting> demands = safeGet(() -> studentJobPostingMapper.searchPublishedByTitle(keyword, demandLimit), List.of());
+            if (demands.size() < demandLimit && !tokens.isEmpty()) {
+                Set<Long> seen = demands.stream().map(StudentJobPosting::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+                for (String t : tokens) {
+                    if (t == null || t.isBlank() || t.equals(keyword)) {
+                        continue;
+                    }
+                    List<StudentJobPosting> more = safeGet(() -> studentJobPostingMapper.searchPublishedByTitle(t, demandLimit), List.of());
+                    for (StudentJobPosting it : more) {
+                        if (it == null || it.getId() == null || seen.contains(it.getId())) {
+                            continue;
+                        }
+                        demands.add(it);
+                        seen.add(it.getId());
+                        if (demands.size() >= demandLimit) {
+                            break;
+                        }
+                    }
+                    if (demands.size() >= demandLimit) {
+                        break;
+                    }
+                }
+            }
             for (StudentJobPosting p : demands) {
                 Map<String, Object> payload = new HashMap<>();
                 payload.put("demandId", p.getId());
@@ -443,7 +510,8 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                     p.getCity(),
                     simplifyAddress(p.getAddress()),
                     p.getChildAge(),
-                    scheduleText(p.getSchedule()),
+                    scheduleText(StrUtil.isNotBlank(p.getAvailableTime()) ? p.getAvailableTime() : p.getSchedule()),
+                    p.getPublisherIdentity(),
                     parentVo,
                     tags
             ));
@@ -466,31 +534,12 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         boolean allowOnlineFallback = mode == null || mode.trim().isEmpty() || "both".equalsIgnoreCase(mode.trim());
 
         List<HomeHotTutorAggRow> rows;
-        if (req.getCursor() == null && effectiveCity != null) {
+        boolean cityHybrid = effectiveCity != null && allowOnlineFallback;
+        if (cityHybrid) {
             rows = safeGet(
-                    () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, null, req.getPageSize()),
+                    () -> teacherJobPostingMapper.listHotTutorsCityHybrid(subjectId, effectiveCity, req.getCursor(), req.getPageSize()),
                     List.of()
             );
-            if (allowOnlineFallback && rows.size() < req.getPageSize()) {
-                int need = req.getPageSize() - rows.size();
-                List<HomeHotTutorAggRow> fallback = safeGet(
-                        () -> teacherJobPostingMapper.listHotTutors(subjectId, null, "online", null, Math.max(req.getPageSize() * 2, need)),
-                        List.of()
-                );
-                Set<Long> seen = rows.stream().map(HomeHotTutorAggRow::getTutorId).filter(Objects::nonNull).collect(Collectors.toSet());
-                List<HomeHotTutorAggRow> merged = new ArrayList<>(rows);
-                for (HomeHotTutorAggRow it : fallback) {
-                    if (it == null || it.getTutorId() == null || seen.contains(it.getTutorId())) {
-                        continue;
-                    }
-                    merged.add(it);
-                    seen.add(it.getTutorId());
-                    if (merged.size() >= req.getPageSize()) {
-                        break;
-                    }
-                }
-                rows = merged;
-            }
         } else {
             rows = safeGet(
                     () -> teacherJobPostingMapper.listHotTutors(subjectId, effectiveCity, mode, req.getCursor(), req.getPageSize()),
@@ -537,11 +586,27 @@ public class HomeGuestServiceImpl implements HomeGuestService {
             }
             highlights.add("响应快");
 
+            String displayCity = null;
+            if (profile != null && profile.getCity() != null && !profile.getCity().trim().isEmpty()) {
+                displayCity = profile.getCity().trim();
+            }
+            if (displayCity == null || displayCity.isBlank()) {
+                for (TeacherJobPosting s : tutorToServices.getOrDefault(tutorId, List.of())) {
+                    if (s != null && s.getCity() != null && !s.getCity().trim().isEmpty()) {
+                        displayCity = s.getCity().trim();
+                        break;
+                    }
+                }
+            }
+            if (displayCity == null || displayCity.isBlank()) {
+                displayCity = CityCatalog.national();
+            }
+
             list.add(new HomeGuestVOs.HotTutorCardVO(
                     tutorId,
                     buildTutorDisplayName(profile, user),
                     user == null ? null : user.getAvatar(),
-                    effectiveCity == null ? CityCatalog.national() : effectiveCity,
+                    displayCity,
                     profile == null ? null : profile.getEducation(),
                     profile == null ? null : profile.getExperienceYears(),
                     profile == null ? null : profile.getRatePerHour(),
@@ -808,7 +873,7 @@ public class HomeGuestServiceImpl implements HomeGuestService {
                 tags.add("预算≥" + min);
             }
         }
-        String schedule = scheduleText(p.getSchedule());
+        String schedule = scheduleText(StrUtil.isNotBlank(p.getAvailableTime()) ? p.getAvailableTime() : p.getSchedule());
         if (StrUtil.isNotBlank(schedule)) {
             tags.add(schedule);
         }
@@ -856,9 +921,6 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         String s = schedule.trim();
         if (s.isBlank()) {
             return null;
-        }
-        if (s.length() > 20) {
-            return s.substring(0, 20) + "...";
         }
         return s;
     }
@@ -923,5 +985,43 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         } catch (Exception e) {
             return fallback;
         }
+    }
+
+    private static List<String> buildFuzzyTokens(String raw, int maxTokens) {
+        if (raw == null) {
+            return List.of();
+        }
+        String s = raw.trim();
+        if (s.isEmpty() || maxTokens <= 0) {
+            return List.of();
+        }
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        String compact = s.replaceAll("\\s+", "");
+        String[] parts = s.split("\\s+");
+        for (String p : parts) {
+            if (p == null) {
+                continue;
+            }
+            String v = p.trim();
+            if (v.length() >= 2) {
+                out.add(v);
+                if (out.size() >= maxTokens) {
+                    return new ArrayList<>(out);
+                }
+            }
+        }
+
+        Set<String> stop = Set.of("老师", "家教", "辅导", "一对", "对一", "上门", "线上", "线下");
+        for (int i = 0; i + 1 < compact.length(); i++) {
+            String tok = compact.substring(i, i + 2);
+            if (stop.contains(tok)) {
+                continue;
+            }
+            out.add(tok);
+            if (out.size() >= maxTokens) {
+                break;
+            }
+        }
+        return new ArrayList<>(out);
     }
 }

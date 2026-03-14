@@ -42,6 +42,8 @@ public class MinioProperties {
      */
     private String publicBaseUrl;
 
+    private String defaultAvatarObjectKey = "avatars/default.svg";
+
     /**
      * 启动时是否自动创建 bucket（仅建议在 dev 环境开启）。
      */
@@ -53,4 +55,3 @@ public class MinioProperties {
      */
     private List<String> allowedAvatarUrlPrefixes = new ArrayList<>();
 }
-

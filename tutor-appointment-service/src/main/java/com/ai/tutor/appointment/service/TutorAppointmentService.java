@@ -18,6 +18,8 @@ public interface TutorAppointmentService {
 
     void cancel(Long id, String remark, Long uid);
 
+    void complete(Long id, Long uid);
+
     TutorAppointment detail(Long id, Long uid);
 
     CursorPageResponse<TutorAppointment> mine(Long uid, Integer status, CursorPageRequest request);

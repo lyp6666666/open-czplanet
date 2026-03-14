@@ -20,6 +20,8 @@ public interface RoomMapper {
 
     int updateAfterSend(@Param("roomId") Long roomId, @Param("lastMsgId") Long lastMsgId);
 
+    int closeRoom(@Param("roomId") Long roomId);
+
     List<Room> listByTeacherProfileId(@Param("teacherProfileId") Long teacherProfileId,
                                       @Param("cursor") Long cursor,
                                       @Param("pageSize") Integer pageSize);

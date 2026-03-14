@@ -32,6 +32,15 @@ public class CollaborationProposalController {
         return ResultUtils.success(chatService.getMsgResp(msgId, uid));
     }
 
+    @PutMapping("/proposal/{proposalId}")
+    @Operation(summary = "修改合作提案")
+    public BaseResponse<ChatMessageResp> update(@PathVariable("proposalId") Long proposalId,
+                                                @Valid @RequestBody CreateCollaborationProposalReq req) {
+        Long uid = RequestHolder.get().getUid();
+        Long msgId = collaborationProposalService.updateAndSend(proposalId, req, uid);
+        return ResultUtils.success(chatService.getMsgResp(msgId, uid));
+    }
+
     @PostMapping("/proposal/{proposalId}/response")
     @Operation(summary = "响应合作提案")
     public BaseResponse<ChatMessageResp> respond(@PathVariable("proposalId") Long proposalId,

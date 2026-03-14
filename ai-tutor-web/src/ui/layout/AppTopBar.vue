@@ -1,21 +1,37 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { useCityStore } from '@/stores/city'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const chatRealtime = useChatRealtimeStore()
+const cityStore = useCityStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
-const displayName = computed(() => auth.me?.teacherProfile?.realName || auth.user?.name || '未登录')
+const isOrg = computed(() => auth.user?.userType === 3)
+const canChat = computed(() => auth.user?.userType === 1 || auth.user?.userType === 2)
+const displayName = computed(() => {
+  if (!auth.isLoggedIn) return '未登录'
+  const t = (auth.me?.teacherProfile?.realName || '').trim()
+  if (t) return t
+  const n = (auth.user?.name || '').trim()
+  if (n) return n
+  return '未填写姓名'
+})
+const unread = computed(() => chatRealtime.totalUnread)
 
-const city = ref(localStorage.getItem('ai_tutor_city') || '北京')
-watch(city, (v) => localStorage.setItem('ai_tutor_city', v))
+const city = computed({
+  get: () => cityStore.city,
+  set: (v: string) => cityStore.setCity(v),
+})
 
 const cities = computed(() => {
   const base = [city.value, '北京', '上海', '广州', '深圳', '杭州']
@@ -31,6 +47,7 @@ const menuOpen = ref(false)
 const cityModalOpen = ref(false)
 const switchModalOpen = ref(false)
 const greetingModalOpen = ref(false)
+const avatarLoadFailed = ref(false)
 const greetingText = ref('')
 const greetingBusy = ref(false)
 const greetingError = ref<string | null>(null)
@@ -91,9 +108,41 @@ function confirmSwitch() {
 
 function onLogout() {
   closeMenu()
+  const t = auth.user?.userType
   auth.logout()
-  void router.push('/')
+  void router.push(t === 3 ? '/auth/org' : '/')
 }
+
+watch(
+  () => auth.token,
+  () => {
+    chatRealtime.stop()
+    if (!canChat.value) {
+      chatRealtime.totalUnread = 0
+      chatRealtime.roomUnread = {}
+      return
+    }
+    void chatRealtime.refreshUnreadFromServer()
+    void chatRealtime.start()
+  },
+)
+
+watch(
+  () => auth.user?.avatar,
+  () => {
+    avatarLoadFailed.value = false
+  },
+)
+
+onMounted(() => {
+  if (!canChat.value) return
+  void chatRealtime.refreshUnreadFromServer()
+  void chatRealtime.start()
+})
+
+onBeforeUnmount(() => {
+  chatRealtime.stop()
+})
 </script>
 
 <template>
@@ -134,7 +183,21 @@ function onLogout() {
               课程安排
             </button>
           </template>
+          <template v-else-if="isOrg">
+            <button class="tab" :class="{ active: route.path.startsWith('/org/tutors') }" type="button" @click="go('/org/tutors')">
+              找教师
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/org/post') }" type="button" @click="go('/org/post')">
+              发布需求
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/org/jobs') }" type="button" @click="go('/org/jobs/mine')">
+              我的需求
+            </button>
+          </template>
           <template v-else>
+            <button class="tab" :class="{ active: route.path.startsWith('/student/tutors') }" type="button" @click="go('/student/tutors')">
+              找教师
+            </button>
             <button class="tab" :class="{ active: route.path.startsWith('/student/post') }" type="button" @click="go('/student/post')">
               发布需求
             </button>
@@ -158,20 +221,32 @@ function onLogout() {
 
       <div class="right">
         <template v-if="isLoggedIn">
-          <button class="link" type="button" @click="go('/chat')">消息</button>
+          <button v-if="canChat" class="link link-msg" type="button" @click="go('/chat')">
+            <span class="link-msg-text">消息</span>
+            <span v-if="unread > 0" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
+          </button>
           <button v-if="isTeacher" class="link" type="button" @click="go('/me')">简历</button>
+          <button v-else-if="isOrg" class="link" type="button" @click="go('/org/change-password')">修改密码</button>
           <button v-else class="link" type="button" @click="go('/me')">我的</button>
 
           <div class="user" @click.stop="toggleMenu">
-            <img v-if="auth.user?.avatar" class="avatar" :src="auth.user.avatar" alt="avatar" />
+            <img
+              v-if="auth.user?.avatar && !avatarLoadFailed"
+              class="avatar"
+              :src="auth.user.avatar"
+              alt="avatar"
+              @error="avatarLoadFailed = true"
+            />
             <div v-else class="avatar fallback">{{ userInitial }}</div>
             <div class="name">{{ displayName }}</div>
           </div>
 
           <div v-if="menuOpen" class="menu card" @click.stop>
-            <button class="menu-item" type="button" @click="go('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
+            <button v-else class="menu-item" type="button" @click="go('/org/change-password'); closeMenu()">修改密码</button>
             <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
-            <button class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
+            <button class="menu-item" type="button" @click="go('/settings'); closeMenu()">设置</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
             <button class="menu-item danger" type="button" @click="onLogout">退出登录</button>
           </div>
         </template>
@@ -218,6 +293,35 @@ function onLogout() {
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+}
+
+.link-msg {
+  position: relative;
+}
+
+.link-msg-text {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 77, 79, 0.95);
+  color: #fff;
+  font-weight: 900;
+  font-size: 11px;
+  line-height: 16px;
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
 }
 
 .inner {
