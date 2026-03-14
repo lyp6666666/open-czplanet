@@ -9,87 +9,87 @@
         {
             "path": "pages/me/index",
             "style": {
-                "navigationBarTitleText": "Me"
+                "navigationBarTitleText": "我的"
             }
         },
         {
             "path": "pages/tutor/detail",
             "style": {
-                "navigationBarTitleText": "Tutor Detail"
+                "navigationBarTitleText": "导师详情"
             }
         },
         {
             "path": "pages/post/index",
             "style": {
-                "navigationBarTitleText": "Post Demand"
+                "navigationBarTitleText": "发布需求"
             }
         },
         {
             "path": "pages/my-jobs/index",
             "style": {
-                "navigationBarTitleText": "My Demands"
+                "navigationBarTitleText": "我的需求"
             }
         },
         {
             "path": "pages/job/detail",
             "style": {
-                "navigationBarTitleText": "Job Detail"
+                "navigationBarTitleText": "需求详情"
             }
         },
         {
             "path": "pages/chat/list",
             "style": {
-                "navigationBarTitleText": "Messages"
+                "navigationBarTitleText": "消息"
             }
         },
         {
             "path": "pages/chat/room",
             "style": {
-                "navigationBarTitleText": "Chat"
+                "navigationBarTitleText": "聊天"
             }
         },
         {
             "path": "pages/tutor/onboarding/index",
             "style": {
-                "navigationBarTitleText": "Tutor Onboarding"
+                "navigationBarTitleText": "家教入驻"
             }
         },
         {
             "path": "pages/tutor/status",
             "style": {
-                "navigationBarTitleText": "Application Status"
+                "navigationBarTitleText": "申请状态"
             }
         }
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "AI Tutor",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
+		"navigationBarBackgroundColor": "#ffffff",
+		"backgroundColor": "#f6f7fb"
 	},
     "tabBar": {
-        "color": "#7A7E83",
-        "selectedColor": "#007aff",
+        "color": "#646a73",
+        "selectedColor": "#00bebd",
         "borderStyle": "black",
         "backgroundColor": "#ffffff",
         "list": [
             {
                 "pagePath": "pages/home/index",
-                "text": "Home",
-                "iconPath": "static/home.png",
-                "selectedIconPath": "static/home-active.png"
+                "text": "首页",
+                "iconPath": "static/tabbar/home.png",
+                "selectedIconPath": "static/tabbar/home-active.png"
             },
             {
                 "pagePath": "pages/chat/list",
-                "text": "Messages",
-                "iconPath": "static/home.png",
-                "selectedIconPath": "static/home-active.png"
+                "text": "消息",
+                "iconPath": "static/tabbar/message.png",
+                "selectedIconPath": "static/tabbar/message-active.png"
             },
             {
                 "pagePath": "pages/me/index",
-                "text": "Me",
-                "iconPath": "static/user.png",
-                "selectedIconPath": "static/user-active.png"
+                "text": "我的",
+                "iconPath": "static/tabbar/me.png",
+                "selectedIconPath": "static/tabbar/me-active.png"
             }
         ]
     }

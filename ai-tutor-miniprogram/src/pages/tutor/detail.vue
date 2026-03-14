@@ -1,73 +1,162 @@
 <template>
-  <view class="container" v-if="tutor">
-    <view class="header">
-      <image class="avatar" :src="tutor.user.avatar || '/static/logo.png'" mode="aspectFill"></image>
-      <text class="name">{{ tutor.user.name }}</text>
+  <view class="page">
+    <view v-if="loading" class="loading">
+      <text class="loading-text">加载中...</text>
     </view>
-    <view class="section">
-      <text class="label">Subject</text>
-      <text class="value">{{ tutor.teacherProfile?.subject || 'N/A' }}</text>
-    </view>
-    <view class="section">
-      <text class="label">Education</text>
-      <text class="value">{{ tutor.teacherProfile?.education || 'N/A' }}</text>
-    </view>
-    <view class="section">
-      <text class="label">Introduction</text>
-      <text class="value">{{ tutor.teacherProfile?.introduction || 'No introduction provided.' }}</text>
-    </view>
-    <button type="default" class="contact-btn" @click="handleContact" style="margin-bottom: 10px;">Contact Tutor</button>
-    <button type="primary" class="book-btn" @click="openBookingModal">Book Appointment</button>
 
-    <!-- Booking Modal -->
-    <view v-if="showBookingModal" class="modal-mask" @click="closeBookingModal">
-      <view class="modal-content" @click.stop>
-        <view class="modal-header">
-          <text class="modal-title">Book Appointment</text>
-          <text class="close-btn" @click="closeBookingModal">×</text>
+    <view v-else-if="tutor" class="content">
+      <view class="card profile">
+        <view class="head">
+          <image class="avatar" :src="resolveImageUrl(tutor.user.avatar)" mode="aspectFill"></image>
+          <view class="head-main">
+            <view class="name-row">
+              <text class="name">{{ tutor.user.name || '老师' }}</text>
+              <text class="role-tag">家教</text>
+            </view>
+            <view class="badges" v-if="badges.length">
+              <text v-for="b in badges" :key="b" class="badge">{{ b }}</text>
+            </view>
+            <view class="tags" v-if="subjectTags.length">
+              <text v-for="t in subjectTags" :key="t" class="tag">{{ t }}</text>
+            </view>
+          </view>
+          <view class="price" v-if="priceText">
+            <text class="price-num">{{ priceText }}</text>
+          </view>
         </view>
+
+        <view class="meta">
+          <text v-if="tutor.teacherProfile?.city" class="meta-item">{{ tutor.teacherProfile.city }}</text>
+          <text v-if="teachingModeText" class="meta-item">{{ teachingModeText }}</text>
+          <text v-if="tutor.teacherProfile?.highestEduSchool" class="meta-item">{{ tutor.teacherProfile.highestEduSchool }}</text>
+          <text v-if="tutor.teacherProfile?.education" class="meta-item">{{ tutor.teacherProfile.education }}</text>
+          <text v-if="tutor.teacherProfile?.experienceYears != null" class="meta-item">{{ tutor.teacherProfile.experienceYears }} 年教龄</text>
+        </view>
+      </view>
+
+      <view class="card sec">
+        <text class="sec-title">基本信息</text>
+        <view class="kv">
+          <text class="k">擅长科目</text>
+          <text class="v">{{ tutor.teacherProfile?.subject || '暂无' }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">学历</text>
+          <text class="v">{{ tutor.teacherProfile?.education || '暂无' }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">所在城市</text>
+          <text class="v">{{ tutor.teacherProfile?.city || '暂无' }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">授课方式</text>
+          <text class="v">{{ teachingModeText || '暂无' }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">课时费用</text>
+          <text class="v">{{ priceText || '暂无' }}</text>
+        </view>
+      </view>
+
+      <view class="card sec">
+        <text class="sec-title">个人简介</text>
+        <text class="desc">{{ tutor.teacherProfile?.introduction || '暂无简介' }}</text>
+      </view>
+
+      <view class="ops">
+        <u-button type="default" shape="circle" @click="handleContact">联系老师</u-button>
+        <u-button type="primary" color="#00bebd" shape="circle" @click="openBookingModal">预约课程</u-button>
+      </view>
+    </view>
+
+    <view v-else class="loading">
+      <text class="loading-text">暂无数据</text>
+    </view>
+
+    <view v-if="showBookingModal" class="mask" @click="closeBookingModal">
+      <view class="modal card" @click.stop>
+        <view class="modal-head">
+          <text class="modal-title">预约课程</text>
+          <view class="modal-close" @click="closeBookingModal">
+            <u-icon name="close" size="18" color="#646a73"></u-icon>
+          </view>
+        </view>
+
         <view class="modal-body">
           <view class="form-item">
-            <text class="label">Date</text>
+            <text class="label">日期</text>
             <picker mode="date" :value="bookingDate" start="2023-01-01" end="2030-12-31" @change="onDateChange">
-              <view class="picker-value">{{ bookingDate || 'Select Date' }}</view>
+              <view class="picker-value">{{ bookingDate || '请选择日期' }}</view>
             </picker>
           </view>
           <view class="form-item">
-            <text class="label">Time</text>
+            <text class="label">时间</text>
             <picker mode="time" :value="bookingTime" start="00:00" end="23:59" @change="onTimeChange">
-              <view class="picker-value">{{ bookingTime || 'Select Time' }}</view>
+              <view class="picker-value">{{ bookingTime || '请选择时间' }}</view>
             </picker>
           </view>
           <view class="form-item">
-            <text class="label">Remark</text>
-            <input class="input" v-model="bookingRemark" placeholder="Enter remark" />
+            <text class="label">备注</text>
+            <input class="input" v-model="bookingRemark" placeholder="可填写上课需求/说明（选填）" />
           </view>
         </view>
+
         <view class="modal-footer">
-          <button type="primary" @click="handleBook">Confirm & Pay</button>
+          <u-button type="primary" color="#00bebd" shape="circle" @click="handleBook">确认并支付</u-button>
         </view>
       </view>
     </view>
   </view>
-  <view v-else class="loading">
-    <text>Loading...</text>
-  </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { request } from '@/utils/request';
+import { request, resolveImageUrl } from '@/utils/request';
 import { chatApi } from '@/api/chat';
 import { useUserStore } from '@/stores/user';
 
 const userStore = useUserStore();
 const tutor = ref<any>(null);
+const loading = ref(false);
 const showBookingModal = ref(false);
 const bookingDate = ref('');
 const bookingTime = ref('');
 const bookingRemark = ref('');
+
+const subjectTags = computed(() => {
+  const raw = String(tutor.value?.teacherProfile?.subject || '').trim();
+  if (!raw) return [];
+  return raw
+    .split(/[,，、/|\\s]+/g)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+});
+
+const teachingModeText = computed(() => {
+  const v = String(tutor.value?.teacherProfile?.teachingMode || '').trim().toUpperCase();
+  if (!v) return '';
+  if (v === 'ONLINE') return '线上';
+  if (v === 'OFFLINE') return '线下';
+  if (v === 'BOTH') return '线上/线下';
+  return '';
+});
+
+const priceText = computed(() => {
+  const v = tutor.value?.teacherProfile?.ratePerHour;
+  if (v === null || v === undefined || v === '') return '';
+  return `${v} 元/小时`;
+});
+
+const badges = computed(() => {
+  const arr: string[] = [];
+  const rn = Number(tutor.value?.realnameVerifyStatus);
+  const edu = Number(tutor.value?.eduVerifyStatus);
+  if (rn === 2) arr.push('实名认证');
+  if (edu === 2) arr.push('学历认证');
+  return arr;
+});
 
 onLoad(async (options: any) => {
   if (options.id) {
@@ -77,14 +166,16 @@ onLoad(async (options: any) => {
 
 const fetchDetail = async (id: string) => {
   try {
+    loading.value = true;
     const res: any = await request({
-      url: `/user/card?uid=${id}`,
-      loading: true
+      url: `/user/card?uid=${id}`
     });
     tutor.value = res;
   } catch (error) {
     console.error(error);
-    uni.showToast({ title: 'Failed to load details', icon: 'none' });
+    uni.showToast({ title: '加载失败', icon: 'none' });
+  } finally {
+    loading.value = false;
   }
 };
 
@@ -95,16 +186,18 @@ const handleContact = async () => {
         const roomId: any = await chatApi.getOrCreateRoom(targetUid);
         if (roomId) {
             uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
+        } else {
+            uni.showToast({ title: '进入会话失败', icon: 'none' });
         }
     } catch (error) {
         console.error(error);
-        uni.showToast({ title: 'Failed to start chat', icon: 'none' });
+        uni.showToast({ title: '发起聊天失败', icon: 'none' });
     }
 };
 
 const openBookingModal = () => {
     if (!userStore.isLoggedIn) {
-        uni.showToast({ title: 'Please login first', icon: 'none' });
+        uni.showToast({ title: '请先登录', icon: 'none' });
         setTimeout(() => {
             uni.switchTab({ url: '/pages/me/index' });
         }, 1500);
@@ -127,51 +220,44 @@ const onTimeChange = (e: any) => {
 
 const handleBook = async () => {
   if (!bookingDate.value || !bookingTime.value) {
-      uni.showToast({ title: 'Please select date and time', icon: 'none' });
+      uni.showToast({ title: '请选择日期和时间', icon: 'none' });
       return;
   }
 
   try {
-    const startTime = `${bookingDate.value}T${bookingTime.value}:00`; // ISO format partially
-
-    // 1. Create Appointment
-    // Note: Assuming API expects this format. If not, adjust.
-    // Also hardcoding some required fields for MVP
+    const startTime = `${bookingDate.value}T${bookingTime.value}:00`;
     const apptRes: any = await request({
         url: '/appointment/create',
         method: 'POST',
         data: {
             targetUid: tutor.value.user.id,
-            subjectId: 1, // Hardcoded for MVP as we don't have subject list
-            startTime: startTime, // Backend expects LocalDateTime, string in ISO format usually works
+            subjectId: 1,
+            startTime: startTime,
             durationMinutes: 60,
             classMode: 'ONLINE',
-            city: 'Online',
-            address: 'Online',
+            city: '线上',
+            address: '线上',
             remark: bookingRemark.value
         },
         loading: true
     });
 
-    const appointmentId = apptRes; // Assuming returns Long id directly or {id: ...} - check service
-
-    // 2. Create Direct Order
+    const appointmentId = apptRes;
     const orderRes: any = await request({
       url: '/chat/brokerage/order/direct',
       method: 'POST',
       data: {
-        amountFen: 1, // Test amount: 0.01 CNY
-        subject: `Book Tutor ${tutor.value?.user?.name || ''}`,
+        amountFen: 1,
+        subject: `预约家教 ${tutor.value?.user?.name || ''}`,
         appointmentId: appointmentId
       },
       loading: true
     });
 
     if (!orderRes || !orderRes.id) {
-        throw new Error('Create order failed');
+        throw new Error('创建订单失败');
     }
 
-    // 3. Create Payment
     const payRes: any = await request({
       url: '/payment/create',
       method: 'POST',
@@ -184,22 +270,19 @@ const handleBook = async () => {
       loading: true
     });
 
-    // 4. Request Payment
     if (payRes && payRes.payParams) {
         const params = payRes.payParams;
         
-        // Mock 支付处理
         if (params.mock) {
             uni.showModal({
-                title: 'Mock Payment',
-                content: 'Simulate successful payment?',
+                title: '模拟支付',
+                content: '是否模拟支付成功？',
                 success: (res) => {
                     if (res.confirm) {
-                        uni.showToast({ title: 'Payment Success (Mock)', icon: 'success' });
+                        uni.showToast({ title: '支付成功（模拟）', icon: 'success' });
                         closeBookingModal();
-                        // 可以在这里调用后端 Mock 回调接口（如果需要）
                     } else {
-                        uni.showToast({ title: 'Payment Cancelled (Mock)', icon: 'none' });
+                        uni.showToast({ title: '已取消（模拟）', icon: 'none' });
                     }
                 }
             });
@@ -215,143 +298,304 @@ const handleBook = async () => {
             paySign: params.paySign,
             success: function (res: any) {
                 console.log('success:' + JSON.stringify(res));
-                uni.showToast({ title: 'Payment Success', icon: 'success' });
+                uni.showToast({ title: '支付成功', icon: 'success' });
                 closeBookingModal();
             },
             fail: function (err: any) {
                 console.log('fail:' + JSON.stringify(err));
-                uni.showToast({ title: 'Payment Failed', icon: 'none' });
+                uni.showToast({ title: '支付失败', icon: 'none' });
             }
         } as any);
     } else {
-        throw new Error('No payment params returned');
+        throw new Error('支付参数缺失');
     }
 
   } catch (error: any) {
     console.error(error);
-    uni.showToast({ title: error.message || 'Booking Failed', icon: 'none' });
+    uni.showToast({ title: error.message || '预约失败', icon: 'none' });
   }
 };
 </script>
 
 <style lang="scss" scoped>
-.container {
-  padding: 20px;
-  background-color: #fff;
+.page {
   min-height: 100vh;
+  background: var(--bg);
 }
-/* ... existing styles ... */
-.modal-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+
+.content {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
+}
+
+.profile {
+  padding: 18px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.head {
   display: flex;
-  justify-content: center;
+  gap: 12px;
   align-items: center;
-  z-index: 999;
 }
-.modal-content {
-  width: 80%;
-  background-color: #fff;
-  border-radius: 10px;
-  padding: 20px;
+
+.head-main {
+  flex: 1;
+  min-width: 0;
 }
-.modal-header {
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: #f0f0f0;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
+}
+
+.name-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  gap: 10px;
+  min-width: 0;
 }
-.modal-title {
+
+.name {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 900;
+  color: var(--text);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.close-btn {
-  font-size: 24px;
-  color: #999;
+
+.role-tag {
+  font-size: 12px;
+  color: var(--primary);
+  background: rgba(0, 190, 189, 0.12);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 900;
 }
-.form-item {
-  margin-bottom: 15px;
-  .label {
-    display: block;
-    margin-bottom: 5px;
-    font-size: 14px;
-    color: #666;
-  }
-  .picker-value {
-    border: 1px solid #ddd;
-    padding: 10px;
-    border-radius: 5px;
-  }
-  .input {
-    border: 1px solid #ddd;
-    padding: 10px;
-    border-radius: 5px;
-  }
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
 }
-.modal-footer {
-  margin-top: 20px;
+
+.meta-item {
+  padding: 4px 10px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
 }
-/* Ensure existing styles are preserved or re-declared if overwritten */
-.header {
+
+.badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 10px;
+  line-height: 16px;
+  color: #0a78ff;
+  background: rgba(10, 120, 255, 0.1);
+  border: 1px solid rgba(10, 120, 255, 0.25);
+  padding: 0 8px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--primary);
+  background: rgba(0, 190, 189, 0.12);
+  border: 1px solid rgba(0, 190, 189, 0.25);
+  padding: 0 8px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.price {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f0f0f0;
-  
-  .avatar {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    margin-bottom: 15px;
-    background-color: #f0f0f0;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  }
-  .name {
-    font-size: 22px;
-    font-weight: bold;
-    color: #333;
-  }
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
 }
-.section {
-  margin-bottom: 20px;
-  .label {
-    font-size: 14px;
-    color: #999;
-    margin-bottom: 8px;
-    display: block;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  .value {
-    font-size: 16px;
-    color: #333;
-    line-height: 1.6;
-  }
+
+.price-num {
+  color: #ff4d4f;
+  font-weight: 900;
+  font-size: 13px;
+  white-space: nowrap;
 }
-.book-btn {
-  margin-top: 10px;
-  width: 100%;
-  border-radius: 25px;
+
+.sec {
+  padding: 16px;
 }
-.contact-btn {
-  margin-top: 30px;
-  width: 100%;
-  border-radius: 25px;
-  background-color: #f0f0f0;
-  color: #333;
+
+.sec-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text);
+  margin-bottom: 12px;
+  display: block;
 }
+
+.kv {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(31, 35, 41, 0.08);
+}
+
+.kv:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.k {
+  width: 84px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.v {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  flex: 1;
+}
+
+.desc {
+  background: rgba(31, 35, 41, 0.04);
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.ops {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .loading {
+  padding-top: 120px;
   display: flex;
   justify-content: center;
+}
+
+.loading-text {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.modal {
+  width: min(560px, 100%);
+  padding: 16px;
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.modal-head {
+  display: flex;
   align-items: center;
-  height: 100vh;
-  color: #999;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.form-item {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.picker-value {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  color: var(--text);
+  background: #fff;
+}
+
+.input {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  background: #fff;
+  color: var(--text);
+}
+
+.modal-footer {
+  margin-top: 6px;
 }
 </style>

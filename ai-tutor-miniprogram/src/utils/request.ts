@@ -1,8 +1,16 @@
-// src/utils/request.ts
+const normalizeBaseUrl = (raw: unknown): string | null => {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return null;
+  return s.endsWith('/') ? s.slice(0, -1) : s;
+};
 
-// Base URL - change this to your backend IP/Domain
-// For local dev with WeChat Mini Program, use your machine's LAN IP if testing on phone, or localhost for simulator
-const BASE_URL = 'http://localhost:8080';
+export const BASE_URL =
+  normalizeBaseUrl((import.meta as any).env?.VITE_API_BASE_URL) ??
+  normalizeBaseUrl(uni.getStorageSync('ai_tutor_api_base_url')) ??
+  'http://localhost:8080';
+
+let redirectingToLogin = false;
 
 interface RequestOptions {
   url: string;
@@ -12,20 +20,49 @@ interface RequestOptions {
   loading?: boolean;
 }
 
+const cleanData = (data: any) => {
+  if (!data || typeof data !== 'object') return data;
+  const cleaned: any = {};
+  Object.keys(data).forEach(key => {
+    const v = data[key];
+    if (v === null || v === undefined) return;
+    if (typeof v === 'string') {
+      const s = v.trim();
+      if (s.length === 0) return;
+      if (s === 'null' || s === 'undefined') return;
+      cleaned[key] = s;
+      return;
+    }
+    cleaned[key] = v;
+  });
+  return cleaned;
+};
+
+export const resolveImageUrl = (path?: string) => {
+  if (!path) return '/static/avatars/default-avatar.png';
+  if (path.startsWith('https://i.pravatar.cc/') || path.startsWith('http://i.pravatar.cc/')) {
+    return '/static/avatars/default-avatar.png';
+  }
+  if (path.startsWith('http')) return path;
+  if (path.endsWith('.svg')) return '/static/avatars/default-avatar.png';
+  if (path.startsWith('/avatars/')) return '/static/avatars/default-avatar.png';
+  if (path.startsWith('/')) return BASE_URL + path;
+  return BASE_URL + '/' + path;
+};
+
 export const request = (options: RequestOptions): Promise<any> => {
   return new Promise((resolve, reject) => {
-    // Show loading if requested
+    let isLoadingShown = false;
     if (options.loading) {
       uni.showLoading({
-        title: 'Loading...',
+        title: '加载中...',
         mask: true
       });
+      isLoadingShown = true;
     }
 
-    // Get token from storage
     const token = uni.getStorageSync('token');
     
-    // Construct headers
     const header = {
       'content-type': 'application/json',
       ...options.header
@@ -35,52 +72,95 @@ export const request = (options: RequestOptions): Promise<any> => {
       header['Authorization'] = `Bearer ${token}`;
     }
 
+    const cleanedData = cleanData(options.data);
+
     uni.request({
       url: BASE_URL + options.url,
       method: options.method || 'GET',
-      data: options.data,
+      data: cleanedData,
       header: header,
       success: (res: any) => {
-        // Handle HTTP status codes
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          // Assuming standard response format: { code: 0, data: ..., msg: ... }
-          // If backend returns code !== 0, it's a business error
           const data = res.data;
           if (data.code === 0 || data.code === 200) {
             resolve(data.data);
           } else {
+            if (data.code === 40100 || data.code === 401) {
+              uni.removeStorageSync('token');
+              if (isLoadingShown) {
+                uni.hideLoading();
+                isLoadingShown = false;
+              }
+              
+              uni.showToast({
+                title: data.message || data.msg || '请先登录',
+                icon: 'none'
+              });
+              
+              if (!redirectingToLogin) {
+                redirectingToLogin = true;
+                setTimeout(() => {
+                  uni.switchTab({ url: '/pages/me/index' });
+                  setTimeout(() => {
+                    redirectingToLogin = false;
+                  }, 800);
+                }, 200);
+              }
+              reject(data);
+              return;
+            }
+            
+            if (isLoadingShown) {
+                uni.hideLoading();
+                isLoadingShown = false;
+            }
             uni.showToast({
-              title: data.msg || 'Error',
+              title: data.msg || data.message || '请求错误',
               icon: 'none'
             });
             reject(data);
           }
         } else if (res.statusCode === 401) {
-          // Unauthorized
           uni.removeStorageSync('token');
+          if (isLoadingShown) {
+            uni.hideLoading();
+            isLoadingShown = false;
+          }
           uni.showToast({
-            title: 'Session expired, please login again',
+            title: '登录已过期，请重新登录',
             icon: 'none'
           });
-          // Redirect to login logic if needed
+          setTimeout(() => {
+            uni.switchTab({ url: '/pages/me/index' });
+          }, 500);
+          reject(res);
         } else {
+          if (isLoadingShown) {
+            uni.hideLoading();
+            isLoadingShown = false;
+          }
           uni.showToast({
-            title: `Error: ${res.statusCode}`,
+            title: `错误: ${res.statusCode}`,
             icon: 'none'
           });
           reject(res);
         }
       },
       fail: (err) => {
+        if (isLoadingShown) {
+            uni.hideLoading();
+            isLoadingShown = false;
+        }
         uni.showToast({
-          title: 'Network Error',
+          title: '网络错误',
           icon: 'none'
         });
         reject(err);
       },
       complete: () => {
-        if (options.loading) {
+        if (isLoadingShown) {
           uni.hideLoading();
+          isLoadingShown = false;
         }
       }
     });

@@ -1,38 +1,68 @@
 <template>
   <view class="container">
     <view v-if="userStore.isLoggedIn" class="user-info">
-      <image class="avatar" :src="userStore.userInfo?.avatar || '/static/logo.png'" mode="aspectFill"></image>
-      <text class="nickname">{{ userStore.userInfo?.name || 'User' }}</text>
-      <text class="role-tag">{{ userStore.currentRole === 'student' ? 'Parent/Student' : 'Tutor' }}</text>
+      <image class="avatar" :src="resolveImageUrl(userStore.userInfo?.avatar)" mode="aspectFill"></image>
+      <text class="nickname">{{ userStore.userInfo?.name || '用户' }}</text>
+      <text class="role-tag">{{ userStore.currentRole === 'student' ? '家长/学生' : '家教' }}</text>
       
-      <button type="default" @click="handleSwitchRole" style="margin-top: 20px; width: 200px;">
-        Switch to {{ userStore.currentRole === 'student' ? 'Tutor' : 'Student' }}
-      </button>
-      
-      <button v-if="userStore.currentRole === 'student'" type="default" @click="goToMyJobs" style="margin-top: 20px; width: 200px;">
-        My Demands
-      </button>
+      <view class="action-list">
+        <view class="action-item" @click="handleSwitchRole">
+          <text>切换到 {{ userStore.currentRole === 'student' ? '家教版' : '学生版' }}</text>
+          <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
+        </view>
+        
+        <view v-if="userStore.currentRole === 'student'" class="action-item" @click="goToMyJobs">
+          <text>我的需求</text>
+          <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
+        </view>
 
-      <button type="warn" @click="handleLogout" style="margin-top: 20px; width: 200px;">Logout</button>
+        <view class="action-item" @click="handleLogout">
+          <text style="color: #dd524d;">退出登录</text>
+        </view>
+      </view>
     </view>
-    <view v-else class="login-container">
-      <text class="login-tip">Please login to continue</text>
-      <button type="primary" @click="handleLogin" style="margin-top: 20px; width: 200px;">WeChat Login</button>
+    
+    <view v-else class="login-wrapper">
+      <LoginCard 
+        @login="handleLogin" 
+        @wechat-login="handleWechatLogin"
+        @send-code="handleSendCode"
+      />
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { useUserStore } from '@/stores/user';
+import LoginCard from '@/components/LoginCard.vue';
+import { resolveImageUrl } from '@/utils/request';
 
 const userStore = useUserStore();
 
-const handleLogin = async () => {
+const handleSendCode = async (phone: string) => {
   try {
-    await userStore.login();
-    uni.showToast({ title: 'Login Success', icon: 'success' });
+    await userStore.sendSmsCode(phone);
+    uni.showToast({ title: '验证码已发送', icon: 'success' });
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '发送失败', icon: 'none' });
+  }
+};
+
+const handleLogin = async (data: { phone: string; code: string; role: 'student' | 'tutor' }) => {
+  try {
+    await userStore.loginBySms(data.phone, data.code, data.role);
+    uni.showToast({ title: '登录成功', icon: 'success' });
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '登录失败', icon: 'none' });
+  }
+};
+
+const handleWechatLogin = async () => {
+  try {
+    await userStore.login(); 
+    uni.showToast({ title: '登录成功', icon: 'success' });
   } catch (error: any) {
-    uni.showToast({ title: error.message || 'Login Failed', icon: 'none' });
+    uni.showToast({ title: error.message || '登录失败', icon: 'none' });
   }
 };
 
@@ -56,37 +86,75 @@ const goToMyJobs = () => {
 <style lang="scss" scoped>
 .container {
   padding: 20px;
+  min-height: 100vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  background-color: var(--bg);
 }
+
+.login-wrapper {
+  width: 100%;
+}
+
 .user-info {
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 30px 20px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
+  width: 100%;
+  box-sizing: border-box;
+  
   .avatar {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     background-color: #f0f0f0;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
+  
   .nickname {
     font-size: 18px;
-    margin-bottom: 20px;
-    font-weight: bold;
+    margin-bottom: 4px;
+    font-weight: 900;
+    color: #1f2329;
   }
-}
-.login-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  .login-tip {
-    font-size: 16px;
-    color: #666;
-    margin-bottom: 20px;
+  
+  .role-tag {
+    font-size: 12px;
+    color: #00bebd;
+    background: rgba(0, 190, 189, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-bottom: 24px;
+  }
+  
+  .action-list {
+    width: 100%;
+    
+    .action-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+      font-size: 14px;
+      color: #1f2329;
+      
+      &:last-child {
+        border-bottom: none;
+      }
+      
+      &:active {
+        opacity: 0.7;
+      }
+    }
   }
 }
 </style>

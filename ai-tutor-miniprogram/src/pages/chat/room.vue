@@ -10,7 +10,7 @@
     </scroll-view>
     <view class="input-area">
         <input class="input" v-model="inputText" placeholder="Type a message..." confirm-type="send" @confirm="send" />
-        <button class="send-btn" size="mini" type="primary" @click="send">Send</button>
+        <u-button class="send-btn" size="mini" type="primary" @click="send">Send</u-button>
     </view>
   </view>
 </template>

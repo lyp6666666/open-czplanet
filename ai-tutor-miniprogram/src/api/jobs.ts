@@ -31,5 +31,12 @@ export const jobsApi = {
       url: `/api/v1/parent/jobs/${id}`,
       method: 'GET'
     });
+  },
+  // 需求详情（教师端视图，包含发布者信息）
+  getDemandView(id: number) {
+    return request({
+      url: `/api/v1/parent/jobs/${id}/view`,
+      method: 'GET'
+    });
   }
 };

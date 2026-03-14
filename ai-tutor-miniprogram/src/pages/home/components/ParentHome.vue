@@ -1,18 +1,33 @@
 <template>
   <view class="container">
-    <view class="search-bar">
-      <input class="search-input" type="text" v-model="keyword" placeholder="Search tutors..." @confirm="onSearch" />
+    <view v-if="!userStore.isLoggedIn" class="empty-state">
+      <text class="tip">登录后查看家教</text>
+      <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin">去登录</u-button>
     </view>
-    <view class="tutor-list">
-      <view v-for="tutor in tutorList" :key="tutor.userId" class="tutor-card" @click="goToDetail(tutor.userId)">
-        <image class="avatar" :src="tutor.avatar || '/static/logo.png'" mode="aspectFill"></image>
-        <view class="info">
-          <text class="name">{{ tutor.displayName }}</text>
-          <view class="tags">
-            <text class="tag" v-for="(tag, index) in (tutor.subjectTags || [])" :key="index">{{ tag }}</text>
+    <view v-else>
+      <view class="search-bar">
+        <u-icon name="search" color="#646a73" size="20"></u-icon>
+        <input class="search-input" type="text" v-model="keyword" placeholder="搜索家教..." @confirm="onSearch" />
+      </view>
+      
+      <view class="tutor-list">
+        <view v-for="tutor in tutorList" :key="tutor.userId" class="tutor-card" @click="goToDetail(tutor.userId)">
+          <image class="avatar" :src="resolveImageUrl(tutor.avatar)" mode="aspectFill"></image>
+          <view class="info">
+            <view class="header">
+              <text class="name">{{ tutor.displayName }}</text>
+              <text class="price" v-if="tutor.price">{{ tutor.price }}</text>
+            </view>
+            <view class="tags">
+              <text class="tag" v-for="(tag, index) in (tutor.subjectTags || [])" :key="index">{{ tag }}</text>
+            </view>
+            <text class="intro">{{ tutor.introduction }}</text>
           </view>
-          <text class="intro">{{ tutor.introduction }}</text>
         </view>
+      </view>
+      <view v-if="tutorList.length === 0" class="empty-list">
+        <text class="empty-text">暂无家教数据</text>
+        <u-button type="primary" color="#00bebd" shape="circle" @click="fetchTutors">刷新</u-button>
       </view>
     </view>
   </view>
@@ -20,11 +35,25 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { request } from '@/utils/request';
+import { request, resolveImageUrl } from '@/utils/request';
+import { useUserStore } from '@/stores/user';
 
+const userStore = useUserStore();
 const keyword = ref('');
 const tutorList = ref<any[]>([]);
-const cursor = ref<string | null>(null);
+const cursor = ref<number | null>(null);
+
+const normalizeCursor = (v: unknown): number | null => {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s || s === 'null' || s === 'undefined') return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
 
 const fetchTutors = async () => {
   try {
@@ -32,19 +61,18 @@ const fetchTutors = async () => {
       url: '/api/v1/parent/tutors/page',
       data: {
         q: keyword.value,
-        cursor: cursor.value,
-        limit: 10
+        cursor: normalizeCursor(cursor.value),
+        pageSize: 10
       },
       loading: true
     });
-    // Response structure: { items: [], nextCursor: '...' }
-    if (res && res.items) {
+    if (res && Array.isArray(res.list)) {
       if (cursor.value) {
-          tutorList.value = [...tutorList.value, ...res.items];
+        tutorList.value = [...tutorList.value, ...res.list];
       } else {
-          tutorList.value = res.items;
+        tutorList.value = res.list;
       }
-      cursor.value = res.nextCursor;
+      cursor.value = normalizeCursor(res.nextCursor);
     }
   } catch (error) {
     console.error(error);
@@ -61,69 +89,132 @@ const goToDetail = (id: number) => {
   uni.navigateTo({ url: `/pages/tutor/detail?id=${id}` });
 };
 
+const goLogin = () => {
+  uni.switchTab({ url: '/pages/me/index' });
+};
+
 onMounted(() => {
-  fetchTutors();
+  if (userStore.isLoggedIn) {
+    fetchTutors();
+  }
 });
 </script>
 
 <style lang="scss" scoped>
 .container {
-  padding: 10px;
+  padding: 16px;
 }
-.search-bar {
-  margin-bottom: 15px;
-  .search-input {
-    background-color: #f5f5f5;
-    padding: 10px;
-    border-radius: 20px;
-    font-size: 14px;
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  
+  .tip {
+    font-size: 16px;
+    color: var(--muted);
+    margin-bottom: 24px;
   }
 }
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 0 16px;
+  height: 44px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  
+  .search-input {
+    flex: 1;
+    margin-left: 10px;
+    font-size: 14px;
+    color: var(--text);
+  }
+}
+
+.tutor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px 20px;
+  .empty-text {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+}
+
 .tutor-card {
   display: flex;
-  padding: 15px;
-  background-color: #fff;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  padding: 16px;
+  background-color: var(--card);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(31, 35, 41, 0.08);
+  border: 1px solid var(--border);
   
   .avatar {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    margin-right: 15px;
+    margin-right: 16px;
     background-color: #f0f0f0;
     flex-shrink: 0;
   }
+  
   .info {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     
-    .name {
-      font-weight: bold;
-      font-size: 16px;
-      margin-bottom: 5px;
-      color: #333;
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      
+      .name {
+        font-weight: 900;
+        font-size: 16px;
+        color: var(--text);
+      }
+      
+      .price {
+        font-size: 14px;
+        color: #ff4d4f;
+        font-weight: 700;
+      }
     }
+    
     .tags {
       display: flex;
       flex-wrap: wrap;
-      margin-bottom: 5px;
+      margin-bottom: 8px;
+      gap: 6px;
+      
       .tag {
-        font-size: 12px;
-        color: #007aff;
-        background-color: #e6f2ff;
-        padding: 2px 6px;
-        border-radius: 4px;
-        margin-right: 5px;
-        margin-bottom: 5px;
+        font-size: 11px;
+        color: var(--primary);
+        background-color: rgba(0, 190, 189, 0.1);
+        padding: 2px 8px;
+        border-radius: 6px;
       }
     }
+    
     .intro {
-      font-size: 12px;
-      color: #999;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
       display: -webkit-box;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;

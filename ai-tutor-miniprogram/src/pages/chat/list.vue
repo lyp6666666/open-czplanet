@@ -1,21 +1,27 @@
 <template>
   <view class="container">
-    <view class="chat-list">
+    <view v-if="!userStore.isLoggedIn" class="empty-state">
+      <text class="tip">登录后查看消息</text>
+      <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin" customStyle="width: 160px;">去登录</u-button>
+    </view>
+    
+    <view v-else-if="roomList.length === 0" class="empty-state">
+      <text class="tip">暂无消息</text>
+    </view>
+    
+    <view v-else class="chat-list">
       <view v-for="room in roomList" :key="room.roomId" class="chat-item" @click="enterRoom(room.roomId)">
-        <image class="avatar" :src="room.targetAvatar || '/static/logo.png'" mode="aspectFill"></image>
+        <image class="avatar" :src="resolveImageUrl(room.targetAvatar)" mode="aspectFill"></image>
         <view class="content">
-            <view class="top">
-                <text class="name">{{ room.targetName }}</text>
-                <text class="time">{{ formatTime(room.lastMsgTime) }}</text>
-            </view>
-            <view class="bottom">
-                <text class="msg">{{ room.lastMsgContent }}</text>
-                <view v-if="room.unreadCount > 0" class="badge">{{ room.unreadCount }}</view>
-            </view>
+          <view class="header">
+            <text class="name">{{ room.targetName }}</text>
+            <text class="time">{{ formatTime(room.lastMsgTime) }}</text>
+          </view>
+          <view class="footer">
+            <text class="msg">{{ room.lastMsgContent }}</text>
+            <view v-if="room.unreadCount > 0" class="badge">{{ room.unreadCount > 99 ? '99+' : room.unreadCount }}</view>
+          </view>
         </view>
-      </view>
-      <view v-if="roomList.length === 0" class="empty">
-          <text>No messages yet.</text>
       </view>
     </view>
   </view>
@@ -25,7 +31,10 @@
 import { ref, onUnmounted } from 'vue';
 import { chatApi } from '@/api/chat';
 import { onShow, onHide } from '@dcloudio/uni-app';
+import { useUserStore } from '@/stores/user';
+import { resolveImageUrl } from '@/utils/request';
 
+const userStore = useUserStore();
 const roomList = ref<any[]>([]);
 let timer: any = null;
 
@@ -55,6 +64,7 @@ const formatTime = (ts: number) => {
 };
 
 const startPolling = () => {
+    if (!userStore.isLoggedIn) return;
     fetchRooms();
     timer = setInterval(fetchRooms, 5000);
 };
@@ -77,70 +87,108 @@ onHide(() => {
 onUnmounted(() => {
     stopPolling();
 });
+
+const goLogin = () => {
+  uni.switchTab({ url: '/pages/me/index' });
+};
 </script>
 
 <style lang="scss" scoped>
 .container {
   min-height: 100vh;
-  background-color: #fff;
+  background-color: var(--bg);
 }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 100px;
+  
+  .tip {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+}
+
+.chat-list {
+  background-color: #ffffff;
+}
+
 .chat-item {
+  display: flex;
+  padding: 16px;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+  align-items: center;
+  
+  &:active {
+    background-color: #f9f9f9;
+  }
+  
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin-right: 12px;
+    background-color: #f0f0f0;
+    flex-shrink: 0;
+  }
+  
+  .content {
+    flex: 1;
     display: flex;
-    padding: 15px;
-    border-bottom: 1px solid #f0f0f0;
+    flex-direction: column;
+    overflow: hidden;
     
-    .avatar {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        margin-right: 15px;
-        background-color: #f0f0f0;
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+      
+      .name {
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--text);
+      }
+      
+      .time {
+        font-size: 11px;
+        color: var(--muted);
+      }
     }
-    .content {
+    
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      .msg {
+        font-size: 13px;
+        color: var(--muted);
         flex: 1;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        margin-right: 10px;
+      }
+      
+      .badge {
+        background-color: #ff4d4f;
+        color: #fff;
+        font-size: 10px;
+        height: 16px;
+        min-width: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
         display: flex;
-        flex-direction: column;
+        align-items: center;
         justify-content: center;
-        
-        .top {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            .name {
-                font-weight: bold;
-                font-size: 16px;
-            }
-            .time {
-                font-size: 12px;
-                color: #999;
-            }
-        }
-        .bottom {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            .msg {
-                font-size: 14px;
-                color: #666;
-                flex: 1;
-                overflow: hidden;
-                white-space: nowrap;
-                text-overflow: ellipsis;
-                margin-right: 10px;
-            }
-            .badge {
-                background-color: #ff5500;
-                color: #fff;
-                font-size: 10px;
-                padding: 2px 6px;
-                border-radius: 10px;
-            }
-        }
+        font-weight: 700;
+      }
     }
-}
-.empty {
-    text-align: center;
-    color: #999;
-    padding-top: 50px;
+  }
 }
 </style>

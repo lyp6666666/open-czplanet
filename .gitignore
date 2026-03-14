@@ -58,3 +58,8 @@ Dockerfile/redis-data/
 Dockerfile/minio-data/
 
 common-used.md
+
+### WeChat Mini Program (uni-app) ###
+ai-tutor-miniprogram/project.private.config.json
+ai-tutor-miniprogram/dist/
+ai-tutor-miniprogram/unpackage/

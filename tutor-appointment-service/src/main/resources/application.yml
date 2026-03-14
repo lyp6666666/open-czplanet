@@ -93,8 +93,8 @@ storage:
 
 wechat:
   miniapp:
-    appid: ${WX_MINI_APPID:wx123456}
-    secret: ${WX_MINI_SECRET:secret123456}
+    appid: ${WX_MINI_APPID:wxdf6f9ab1c246c63a}
+    secret: ${WX_MINI_SECRET:}
     token: ${WX_MINI_TOKEN:}
     aesKey: ${WX_MINI_AESKEY:}
     msgDataFormat: JSON

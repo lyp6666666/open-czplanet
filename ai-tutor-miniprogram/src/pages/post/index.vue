@@ -30,7 +30,7 @@
         <textarea class="textarea" v-model="form.description" placeholder="Requirements..." />
       </view>
     </view>
-    <button type="primary" class="submit-btn" @click="submit">Post Demand</button>
+    <u-button type="primary" class="submit-btn" @click="submit">Post Demand</u-button>
   </view>
 </template>
 

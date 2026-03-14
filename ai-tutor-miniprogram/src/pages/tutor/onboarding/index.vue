@@ -1,94 +1,96 @@
 <template>
   <view class="container">
+    <view class="hero">
+      <text class="hero-title">家教入驻</text>
+      <text class="hero-sub">完善资料后可浏览需求并发起沟通</text>
+    </view>
+
     <view class="steps-header">
         <view class="step-item" :class="{ active: currentStep >= 0 }">
             <text class="num">1</text>
-            <text class="text">Basic</text>
+            <text class="text">基本信息</text>
         </view>
         <view class="line"></view>
         <view class="step-item" :class="{ active: currentStep >= 1 }">
             <text class="num">2</text>
-            <text class="text">Teaching</text>
+            <text class="text">授课信息</text>
         </view>
         <view class="line"></view>
         <view class="step-item" :class="{ active: currentStep >= 2 }">
             <text class="num">3</text>
-            <text class="text">Edu</text>
+            <text class="text">教育信息</text>
         </view>
     </view>
 
-    <view class="form-content">
-        <!-- Step 1: Basic Info -->
+    <view class="card form-content">
         <view v-show="currentStep === 0">
             <view class="form-item">
-                <text class="label">Avatar</text>
+                <text class="label">头像</text>
                 <view class="avatar-uploader" @click="chooseAvatar">
-                    <image v-if="form.avatar" :src="form.avatar" mode="aspectFill" class="avatar-img"></image>
+                    <image v-if="form.avatar" :src="resolveImageUrl(form.avatar)" mode="aspectFill" class="avatar-img"></image>
                     <view v-else class="placeholder">+</view>
                 </view>
             </view>
             <view class="form-item">
-                <text class="label">Real Name</text>
-                <input class="input" v-model="form.realName" placeholder="Your real name" />
+                <text class="label">真实姓名</text>
+                <input class="input" v-model="form.realName" placeholder="请输入真实姓名" />
             </view>
             <view class="form-item">
-                <text class="label">City</text>
-                <input class="input" v-model="form.city" placeholder="Current city" />
+                <text class="label">所在城市</text>
+                <input class="input" v-model="form.city" placeholder="请输入所在城市" />
             </view>
             <view class="form-item">
-                <text class="label">Introduction</text>
-                <textarea class="textarea" v-model="form.introduction" placeholder="Self introduction..." />
+                <text class="label">自我介绍</text>
+                <textarea class="textarea" v-model="form.introduction" placeholder="请简单介绍一下自己..." />
             </view>
         </view>
 
-        <!-- Step 2: Teaching Info -->
         <view v-show="currentStep === 1">
             <view class="form-item">
-                <text class="label">Subject</text>
-                <input class="input" v-model="form.subject" placeholder="e.g. Math, English" />
+                <text class="label">擅长科目</text>
+                <input class="input" v-model="form.subject" placeholder="例如：数学、英语" />
             </view>
             <view class="form-item">
-                <text class="label">Experience (Years)</text>
+                <text class="label">授课年限（年）</text>
                 <input class="input" type="number" v-model.number="form.experienceYears" />
             </view>
             <view class="form-item">
-                <text class="label">Hourly Rate (¥)</text>
+                <text class="label">课时费（元/小时）</text>
                 <input class="input" type="number" v-model="form.ratePerHour" />
             </view>
             <view class="form-item">
-                <text class="label">Teaching Mode</text>
+                <text class="label">授课方式</text>
                 <radio-group @change="onModeChange">
-                    <label class="radio"><radio value="ONLINE" :checked="form.teachingMode === 'ONLINE'" />Online</label>
-                    <label class="radio"><radio value="OFFLINE" :checked="form.teachingMode === 'OFFLINE'" />Offline</label>
-                    <label class="radio"><radio value="BOTH" :checked="form.teachingMode === 'BOTH'" />Both</label>
+                    <label class="radio"><radio value="ONLINE" :checked="form.teachingMode === 'ONLINE'" />线上</label>
+                    <label class="radio"><radio value="OFFLINE" :checked="form.teachingMode === 'OFFLINE'" />线下</label>
+                    <label class="radio"><radio value="BOTH" :checked="form.teachingMode === 'BOTH'" />均可</label>
                 </radio-group>
             </view>
         </view>
 
-        <!-- Step 3: Education -->
         <view v-show="currentStep === 2">
             <view class="form-item">
-                <text class="label">School</text>
-                <input class="input" v-model="form.highestEduSchool" placeholder="University name" />
+                <text class="label">毕业院校</text>
+                <input class="input" v-model="form.highestEduSchool" placeholder="请输入学校名称" />
             </view>
             <view class="form-item">
-                <text class="label">Degree</text>
-                <input class="input" v-model="form.education" placeholder="e.g. Bachelor, Master" />
+                <text class="label">学历</text>
+                <input class="input" v-model="form.education" placeholder="例如：本科、硕士" />
             </view>
             <view class="form-item">
-                <text class="label">Certificates (Optional)</text>
+                <text class="label">证书（选填）</text>
                 <view class="cert-uploader" @click="uploadCert">
-                    <text v-if="!certUrl">Upload Image</text>
-                    <text v-else>Uploaded (1 file)</text>
+                    <text v-if="!certUrl">上传图片</text>
+                    <text v-else>已上传（1 张）</text>
                 </view>
             </view>
         </view>
     </view>
 
     <view class="footer">
-        <button class="btn prev" v-if="currentStep > 0" @click="prev">Previous</button>
-        <button class="btn next" type="primary" v-if="currentStep < 2" @click="next">Next</button>
-        <button class="btn submit" type="primary" v-if="currentStep === 2" @click="submit">Submit</button>
+        <u-button class="btn prev" v-if="currentStep > 0" shape="circle" @click="prev">上一步</u-button>
+        <u-button class="btn next" type="primary" color="#00bebd" shape="circle" v-if="currentStep < 2" @click="next">下一步</u-button>
+        <u-button class="btn submit" type="primary" color="#00bebd" shape="circle" v-if="currentStep === 2" @click="submit">提交</u-button>
     </view>
   </view>
 </template>
@@ -98,13 +100,14 @@ import { ref, reactive } from 'vue';
 import { userApi } from '@/api/user';
 import { tutorApi } from '@/api/tutor';
 import { useUserStore } from '@/stores/user';
+import { BASE_URL, resolveImageUrl } from '@/utils/request';
 
 const userStore = useUserStore();
 const currentStep = ref(0);
 const certUrl = ref('');
 
 const form = reactive({
-    avatar: userStore.userInfo?.avatar || '',
+    avatar: (userStore.userInfo?.avatar && !String(userStore.userInfo.avatar).includes('pravatar.cc') && !String(userStore.userInfo.avatar).endsWith('.svg')) ? userStore.userInfo.avatar : '',
     realName: '',
     city: '',
     introduction: '',
@@ -126,7 +129,7 @@ const chooseAvatar = () => {
         count: 1,
         success: (res) => {
             const filePath = res.tempFilePaths[0];
-            uploadFile(filePath, (url) => {
+            uploadFile(filePath, 'avatar', (url) => {
                 form.avatar = url;
             });
         }
@@ -138,7 +141,7 @@ const uploadCert = () => {
         count: 1,
         success: (res) => {
             const filePath = res.tempFilePaths[0];
-            uploadFile(filePath, (url) => {
+            uploadFile(filePath, 'other', (url) => {
                 certUrl.value = url;
                 form.certificateUrls = JSON.stringify([url]);
             });
@@ -146,27 +149,28 @@ const uploadCert = () => {
     });
 };
 
-const uploadFile = (filePath: string, cb: (url: string) => void) => {
+const uploadFile = (filePath: string, biz: 'avatar' | 'other', cb: (url: string) => void) => {
     const token = uni.getStorageSync('token');
-    uni.showLoading({ title: 'Uploading...' });
+    uni.showLoading({ title: '上传中...', mask: true });
     uni.uploadFile({
-        url: 'http://localhost:8080/api/v1/common/upload', // TODO: Use config or environment variable
+        url: `${BASE_URL}/api/v1/assets/upload`,
         filePath: filePath,
         name: 'file',
+        formData: { biz },
         header: {
             'Authorization': 'Bearer ' + token
         },
         success: (uploadFileRes) => {
             const data = JSON.parse(uploadFileRes.data);
             if (data.code === 0) {
-                cb(data.data); // Assuming data.data is the URL
+                cb(data.data?.url);
             } else {
-                uni.showToast({ title: 'Upload failed', icon: 'none' });
+                uni.showToast({ title: data.msg || data.message || '上传失败', icon: 'none' });
             }
         },
         fail: (err) => {
             console.error(err);
-            uni.showToast({ title: 'Upload error', icon: 'none' });
+            uni.showToast({ title: '上传失败', icon: 'none' });
         },
         complete: () => {
             uni.hideLoading();
@@ -176,13 +180,13 @@ const uploadFile = (filePath: string, cb: (url: string) => void) => {
 
 const next = () => {
     if (currentStep.value === 0) {
-        if (!form.realName || !form.city) {
-            uni.showToast({ title: 'Please fill required fields', icon: 'none' });
+        if (!form.avatar || !form.realName || !form.city) {
+            uni.showToast({ title: '请完善头像、姓名与城市', icon: 'none' });
             return;
         }
     } else if (currentStep.value === 1) {
         if (!form.subject || !form.ratePerHour) {
-            uni.showToast({ title: 'Please fill required fields', icon: 'none' });
+            uni.showToast({ title: '请完善科目与课时费', icon: 'none' });
             return;
         }
     }
@@ -195,7 +199,7 @@ const prev = () => {
 
 const submit = async () => {
     if (!form.highestEduSchool || !form.education) {
-        uni.showToast({ title: 'Please fill required fields', icon: 'none' });
+        uni.showToast({ title: '请完善学校与学历', icon: 'none' });
         return;
     }
 
@@ -227,11 +231,11 @@ const submit = async () => {
                 const urls = JSON.parse(form.certificateUrls);
                 await tutorApi.submitEducation(urls);
             } catch (e) {
-                console.warn('Verification submit failed', e);
+                console.warn('学历认证提交失败', e);
             }
         }
 
-        uni.showToast({ title: 'Submitted Successfully', icon: 'success' });
+        uni.showToast({ title: '已提交', icon: 'success' });
         
         // Refresh user info to update status
         await userStore.refreshUserInfo();
@@ -242,25 +246,54 @@ const submit = async () => {
 
     } catch (error: any) {
         console.error(error);
-        uni.showToast({ title: error.message || 'Submit Failed', icon: 'none' });
+        uni.showToast({ title: error.message || '提交失败', icon: 'none' });
     }
 };
 </script>
 
 <style lang="scss" scoped>
 .container {
-    padding: 20px;
-    background-color: #fff;
+    padding: 16px;
+    background-color: var(--bg);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
+
+.hero {
+    padding: 6px 4px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.hero-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--text);
+}
+
+.hero-sub {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
+}
+
 .steps-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
-    padding: 0 10px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(31, 35, 41, 0.08);
+    border-radius: 16px;
     
     .step-item {
         display: flex;
@@ -270,103 +303,128 @@ const submit = async () => {
         &.active {
             opacity: 1;
             .num {
-                background-color: #007aff;
+                background-color: var(--primary);
                 color: #fff;
-                border-color: #007aff;
+                border-color: var(--primary);
             }
             .text {
-                color: #007aff;
+                color: var(--primary);
             }
         }
         .num {
             width: 30px;
             height: 30px;
             border-radius: 50%;
-            border: 1px solid #999;
+            border: 1px solid rgba(31, 35, 41, 0.22);
             display: flex;
             justify-content: center;
             align-items: center;
             margin-bottom: 5px;
             font-size: 14px;
+            font-weight: 900;
+            background: #fff;
         }
         .text {
             font-size: 12px;
+            color: var(--muted);
+            font-weight: 800;
         }
     }
     .line {
         flex: 1;
         height: 1px;
-        background-color: #ddd;
+        background-color: rgba(31, 35, 41, 0.12);
         margin: 0 10px;
-        margin-bottom: 15px;
     }
 }
 .form-content {
-    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 .form-item {
-    margin-bottom: 20px;
-    .label {
-        display: block;
-        margin-bottom: 8px;
-        font-size: 14px;
-        color: #333;
-        font-weight: bold;
-    }
-    .input {
-        border: 1px solid #eee;
-        padding: 10px;
-        border-radius: 5px;
-        font-size: 14px;
-    }
-    .textarea {
-        border: 1px solid #eee;
-        padding: 10px;
-        border-radius: 5px;
-        font-size: 14px;
-        width: 100%;
-        height: 100px;
-    }
-    .avatar-uploader {
-        width: 80px;
-        height: 80px;
-        background-color: #f5f5f5;
-        border-radius: 50%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: hidden;
-        .avatar-img {
-            width: 100%;
-            height: 100%;
-        }
-        .placeholder {
-            font-size: 30px;
-            color: #ccc;
-        }
-    }
-    .cert-uploader {
-        padding: 20px;
-        background-color: #f5f5f5;
-        text-align: center;
-        border-radius: 5px;
-        color: #666;
-    }
-    .radio {
-        margin-right: 15px;
-        font-size: 14px;
-    }
-}
-.footer {
     display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
-    .btn {
-        width: 45%;
-        border-radius: 25px;
-        &.submit {
-            width: 100%;
-        }
-    }
+    flex-direction: column;
+    gap: 8px;
+}
+
+.label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 900;
+}
+
+.input {
+    height: 44px;
+    background: #ffffff;
+    border: 1px solid rgba(31, 35, 41, 0.12);
+    border-radius: 12px;
+    padding: 0 12px;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.textarea {
+    min-height: 96px;
+    background: #ffffff;
+    border: 1px solid rgba(31, 35, 41, 0.12);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.6;
+}
+
+.avatar-uploader {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: rgba(31, 35, 41, 0.04);
+    border: 1px dashed rgba(31, 35, 41, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avatar-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+
+.placeholder {
+    font-size: 28px;
+    color: rgba(31, 35, 41, 0.28);
+    font-weight: 900;
+}
+
+.cert-uploader {
+    height: 44px;
+    border-radius: 12px;
+    border: 1px dashed rgba(31, 35, 41, 0.18);
+    background: rgba(31, 35, 41, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.radio {
+    font-size: 14px;
+    color: var(--text);
+    margin-right: 12px;
+}
+
+.footer {
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    flex: 1;
 }
 </style>

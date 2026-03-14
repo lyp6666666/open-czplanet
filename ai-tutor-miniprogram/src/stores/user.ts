@@ -132,6 +132,30 @@ export const useUserStore = defineStore('user', {
       uni.removeStorageSync('userInfo');
       uni.removeStorageSync('currentRole');
     },
+    sendSmsCode(phone: string) {
+      return request({
+        url: '/user/sendcode',
+        method: 'POST',
+        data: { phone },
+        loading: true
+      });
+    },
+    async loginBySms(phone: string, code: string, role: 'student' | 'tutor' = 'student') {
+      const userRoleEnum = role === 'tutor' ? 'TEACHER' : 'STUDENT';
+      const res: any = await request({
+        url: '/user/loginOrRegister',
+        method: 'POST',
+        data: { phone, code, userRoleEnum },
+        loading: true
+      });
+      if (res && res.token) {
+        this.setToken(res.token);
+        this.setUserInfo(res);
+        this.refreshUserInfo();
+        return res;
+      }
+      throw new Error('No token returned');
+    },
     login() {
       return new Promise((resolve, reject) => {
         uni.login({
