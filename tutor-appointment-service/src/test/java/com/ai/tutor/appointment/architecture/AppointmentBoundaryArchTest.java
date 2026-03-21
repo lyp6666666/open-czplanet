@@ -1,11 +1,13 @@
 package com.ai.tutor.appointment.architecture;
 
-import com.ai.tutor.appointment.controller.UserController;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
-import java.util.Arrays;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,19 +15,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AppointmentBoundaryArchTest {
 
     @Test
-    void userControllerShouldNotDependOnMapperTypes() {
-        List<String> mapperDependencies = Arrays.stream(UserController.class.getDeclaredFields())
-                .filter(this::containsMapperDependency)
-                .map(field -> field.getName() + " -> " + field.getGenericType().getTypeName())
-                .collect(Collectors.toList());
+    void controllersShouldNotDependOnMapperTypes() throws IOException {
+        Path controllerRoot = Path.of("src/main/java/com/ai/tutor/appointment/controller");
+        try (Stream<Path> pathStream = Files.walk(controllerRoot)) {
+            List<String> mapperDependencies = pathStream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.toString().endsWith("Controller.java"))
+                    .filter(path -> !path.getFileName().toString().startsWith("Internal"))
+                    .filter(this::containsMapperImport)
+                    .map(controllerRoot::relativize)
+                    .map(Path::toString)
+                    .collect(Collectors.toList());
 
-        assertTrue(mapperDependencies.isEmpty(),
-                () -> "UserController must not depend on mapper types: " + mapperDependencies);
+            assertTrue(mapperDependencies.isEmpty(),
+                    () -> "Controllers must not depend on mapper types: " + mapperDependencies);
+        }
     }
 
-    private boolean containsMapperDependency(Field field) {
-        String rawTypeName = field.getType().getName();
-        String genericTypeName = field.getGenericType().getTypeName();
-        return rawTypeName.contains(".mapper.") || genericTypeName.contains(".mapper.");
+    private boolean containsMapperImport(Path controllerFile) {
+        try {
+            return Files.readString(controllerFile, StandardCharsets.UTF_8)
+                    .contains(".mapper.");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read file: " + controllerFile, e);
+        }
     }
 }
