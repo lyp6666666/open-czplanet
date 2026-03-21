@@ -2,7 +2,8 @@ package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
-import com.ai.tutor.appointment.model.vo.UserMeVO;
+import com.ai.tutor.appointment.model.vo.UserCardVO;
+import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.UserReadService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.UserSettingsService;
@@ -28,9 +29,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = UserControllerMeTest.TestConfig.class)
+@SpringBootTest(classes = UserControllerCardTest.TestConfig.class)
 @AutoConfigureMockMvc
-class UserControllerMeTest {
+class UserControllerCardTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -47,24 +48,29 @@ class UserControllerMeTest {
     private MinioProperties minioProperties;
 
     @Test
-    void meShouldReturnDefaultGreetingForTeacher() throws Exception {
+    void cardShouldReturnTeacherProfile() throws Exception {
         TeacherProfile profile = new TeacherProfile();
         profile.setUserId(1001L);
-        profile.setDefaultGreeting("你好");
-        UserMeVO meVO = UserMeVO.builder()
-                .id(1001L)
-                .name("张老师")
-                .phone("13800006909")
-                .userType(UserRoleEnum.TEACHER.getValue())
+        profile.setDefaultGreeting("你好，欢迎咨询");
+        UserCardVO card = UserCardVO.builder()
+                .user(UserSimpleVO.builder()
+                        .id(1001L)
+                        .name("李老师")
+                        .avatar("/avatars/default-avatar.svg")
+                        .userType(UserRoleEnum.TEACHER.getValue())
+                        .build())
                 .teacherProfile(profile)
                 .build();
-        when(userReadService.getMe(1001L)).thenReturn(meVO);
+        when(userReadService.getUserCard(1000L, 1001L)).thenReturn(card);
 
-        mockMvc.perform(get("/user/me").requestAttr("uid", "1001"))
+        mockMvc.perform(get("/user/card")
+                        .requestAttr("uid", "1000")
+                        .param("uid", "1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.teacherProfile.defaultGreeting").value("你好"));
-        verify(userReadService).getMe(1001L);
+                .andExpect(jsonPath("$.data.user.id").value(1001))
+                .andExpect(jsonPath("$.data.teacherProfile.defaultGreeting").value("你好，欢迎咨询"));
+        verify(userReadService).getUserCard(1000L, 1001L);
     }
 
     @SpringBootConfiguration
