@@ -46,11 +46,14 @@
   └─ shared               // 模块内通用（最小化）
 ```
 
-统一约束：
+统一约束（编译期依赖契约）：
 
-1. `api -> application -> domain -> infrastructure` 单向依赖。
-2. `api/application/domain` 禁止直接依赖 `..mapper..`。
-3. 跨领域访问必须通过领域接口（application/domain contract），不允许直连他域 `infrastructure`。
+1. `api` 仅依赖 `application`（以及本域 DTO/VO），不依赖 `domain/infrastructure/mapper`。
+2. `application` 依赖 `domain` 与端口接口（port），不依赖任何 `mapper`。
+3. `domain` 不依赖 `api/application/infrastructure`，只保留纯领域规则与模型。
+4. `infrastructure` 依赖 `domain`（以及端口接口）来实现持久化与外部适配。
+5. 运行时调用链可体现为：`api -> application -> domain(port) -> infrastructure(adapter)`。
+6. 跨领域访问必须通过目标领域公开的应用服务/端口契约，不允许直连他域 `infrastructure` 与 `mapper`。
 
 ## 4. 表归属与写入主责
 
@@ -85,6 +88,7 @@
   - `application_brokerage_order`
 
 规则：上述“写入主责”是强约束。非主责领域不得直接写该表。
+其中“写”定义为：`insert / update / delete / soft-delete / upsert / status-change / batch-write`。
 
 ## 5. 领域依赖方向
 
@@ -98,6 +102,27 @@
 
 1. `deal -> conversation` 允许（例如读取会话基础信息）。
 2. `conversation -> deal` 禁止直接依赖；若需要成交能力，使用 `DealAccessPolicy` 等领域接口或门面调用。
+
+## 5.3 依赖规则矩阵（用于 ArchUnit 落地）
+
+### appointment
+
+| 调用方 | identity | marketplace | booking |
+|---|---|---|---|
+| identity | Allow（同域） | Forbidden（除契约外） | Forbidden（除契约外） |
+| marketplace | Allow（仅契约） | Allow（同域） | Forbidden（除契约外） |
+| booking | Allow（仅契约） | Allow（仅契约） | Allow（同域） |
+
+说明：`Allow（仅契约）` 指只能依赖目标域的 `application/domain port`，禁止依赖目标域 `infrastructure/mapper`。
+
+### IM
+
+| 调用方 | conversation | deal |
+|---|---|---|
+| conversation | Allow（同域） | Forbidden（除契约外） |
+| deal | Allow（仅契约） | Allow（同域） |
+
+说明：IM 中 `conversation -> deal` 默认禁止，例外必须通过明确契约并在规则中白名单声明。
 
 ## 6. 组件拆分与迁移路径
 
@@ -137,7 +162,7 @@
 
 1. 建立新分层骨架和桥接适配器（先可编译、可运行）。
 2. 控制器依赖切换到 application service。
-3. application/domain 改为依赖领域接口与仓储接口。
+3. application 改为依赖领域接口与仓储端口；infrastructure 实现这些端口。
 4. 清理残留 `controller/service -> mapper` 直连。
 5. 最后收口命名与包结构，删除临时桥接代码。
 
@@ -155,11 +180,15 @@
 每个模块新增 `architecture/*BoundaryArchTest.java`，覆盖至少以下规则：
 
 1. `controller` 不得依赖 `..mapper..`。
-2. 分层依赖必须满足 `api -> application -> domain -> infrastructure`。
+2. 分层依赖必须满足以下编译期约束：
+   - `api` 不能依赖 `domain/infrastructure/mapper`
+   - `application` 不能依赖 `mapper`
+   - `domain` 不能依赖 `api/application/infrastructure`
+   - `infrastructure` 不允许被 `api/application/domain` 反向依赖
 3. appointment：
-   - `booking/marketplace` 不得依赖 `identity.infrastructure`
+   - 按“appointment 依赖规则矩阵”逐项校验，尤其禁止跨域直连 `*.infrastructure` 与 `..mapper..`
 4. IM：
-   - `conversation` 不得依赖 `deal.infrastructure`
+   - 按“IM 依赖规则矩阵”逐项校验，尤其 `conversation` 不得依赖 `deal.infrastructure` 与 `deal.mapper`
 
 ## 8.2 行为回归测试（重点接口）
 
@@ -220,4 +249,3 @@ CI 并行执行：
 2. 本阶段不改外部 API 契约。
 3. 本阶段不引入分布式事务。
 4. 本阶段不处理 `payment/admin` 全量重构，仅保持现有契约兼容。
-
