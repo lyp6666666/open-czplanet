@@ -1,8 +1,10 @@
 package com.ai.tutor.appointment.interceptor;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
+import com.ai.tutor.utils.RequestHolder;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
@@ -10,8 +12,6 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
 public class RoleInterceptor implements HandlerInterceptor {
-
-    private static final String ATTRIBUTE_ROLE = "role";
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -26,10 +26,12 @@ public class RoleInterceptor implements HandlerInterceptor {
         if (uri.startsWith("/swagger-resources/") || uri.startsWith("/webjars/")) return true;
         if (uri.equals("/favicon.ico") || uri.equals("/error") || uri.equals("/actuator/httpexchanges")) return true;
 
-        UserRoleEnum role = (UserRoleEnum) request.getAttribute(ATTRIBUTE_ROLE);
-        if (role == null) {
+        RequestInfo info = RequestHolder.get();
+        if (info == null || info.getRole() == null) {
             return true;
         }
+
+        UserRoleEnum role = UserRoleEnum.fromValue(info.getRole());
 
         String method = request.getMethod();
         if (method == null) {
