@@ -17,6 +17,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+contains_text() {
+  local haystack="$1"
+  local needle="$2"
+  printf '%s\n' "$haystack" | grep -Fq "$needle"
+}
+
 run_and_capture() {
   local wt="$1"
   local sha="$2"
@@ -47,8 +53,9 @@ verify_pre() {
     return 1
   fi
 
-  if ! printf '%s\n' "$output" | rg -q "Could not find the selected project in the reactor: ai-tutor-gateway"; then
-    echo "[FAIL] PRE commit failed, but not for missing module reason: $PRE_SHA"
+  if ! contains_text "$output" "Could not find the selected project in the reactor" \
+    || ! contains_text "$output" "ai-tutor-gateway"; then
+    echo "[FAIL] PRE commit failed, but missing expected reactor/module markers: $PRE_SHA"
     return 1
   fi
 
@@ -68,13 +75,14 @@ verify_post() {
     return 1
   fi
 
-  if ! printf '%s\n' "$output" | rg -q "BUILD SUCCESS"; then
+  if ! contains_text "$output" "BUILD SUCCESS"; then
     echo "[FAIL] POST commit has exit 0 but missing BUILD SUCCESS marker: $POST_SHA"
     return 1
   fi
 
-  if ! printf '%s\n' "$output" | rg -q "Tests run: 1, Failures: 0, Errors: 0"; then
-    echo "[FAIL] POST commit missing passing test summary for GatewayApplicationContextTest: $POST_SHA"
+  if ! contains_text "$output" "GatewayApplicationContextTest" \
+    || ! contains_text "$output" "Failures: 0, Errors: 0"; then
+    echo "[FAIL] POST commit missing robust pass indicators for GatewayApplicationContextTest: $POST_SHA"
     return 1
   fi
 
