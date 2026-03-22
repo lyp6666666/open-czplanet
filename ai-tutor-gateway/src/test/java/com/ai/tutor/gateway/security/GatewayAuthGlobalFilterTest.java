@@ -30,6 +30,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
@@ -68,6 +69,15 @@ class GatewayAuthGlobalFilterTest {
     }
 
     @Test
+    void shouldRejectInvalidToken() {
+        webTestClient.get()
+                .uri("/chat/room/page?pageSize=10")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer invalid.jwt.token")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
     void shouldInjectHeadersForValidToken() {
         String token = tokenWithClaims(206L, 1);
 
@@ -87,6 +97,7 @@ class GatewayAuthGlobalFilterTest {
         assertNotNull(body);
         assertEquals("206", body.get("uid"));
         assertEquals("1", body.get("role"));
+        assertNull(body.get("auth"));
 
         String ts = body.get("ts");
         assertNotNull(ts);
@@ -94,7 +105,7 @@ class GatewayAuthGlobalFilterTest {
 
         String sign = body.get("sign");
         assertNotNull(sign);
-        String expected = signService.sign(206L, 1, timestamp, "GET", "/chat/room/page");
+        String expected = signService.sign(206L, 1, timestamp, "GET", "/chat/room/page?pageSize=10");
         assertEquals(expected, sign);
     }
 
@@ -134,6 +145,7 @@ class GatewayAuthGlobalFilterTest {
             body.put("role", headers.getFirst("X-Role"));
             body.put("ts", headers.getFirst("X-Ts"));
             body.put("sign", headers.getFirst("X-Auth-Sign"));
+            body.put("auth", headers.getFirst(HttpHeaders.AUTHORIZATION));
             return ServerResponse.ok().bodyValue(body);
         }
     }

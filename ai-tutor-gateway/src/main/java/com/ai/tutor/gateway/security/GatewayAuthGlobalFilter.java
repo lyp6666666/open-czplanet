@@ -50,10 +50,19 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
 
         long ts = System.currentTimeMillis();
         String method = request.getMethod() == null ? "" : request.getMethod().name();
-        String sign = signService.sign(identity.uid(), identity.role(), ts, method, path);
+        String rawPath = request.getURI().getRawPath();
+        if (rawPath == null || rawPath.isEmpty()) {
+            rawPath = path;
+        }
+        String rawQuery = request.getURI().getRawQuery();
+        String signTarget = (rawQuery == null || rawQuery.isEmpty())
+                ? rawPath
+                : rawPath + "?" + rawQuery;
+        String sign = signService.sign(identity.uid(), identity.role(), ts, method, signTarget);
 
         ServerHttpRequest mutated = request.mutate()
                 .headers(headers -> {
+                    headers.remove(HttpHeaders.AUTHORIZATION);
                     headers.remove("X-Uid");
                     headers.remove("X-Role");
                     headers.remove("X-Ts");
