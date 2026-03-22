@@ -18,8 +18,6 @@ import java.util.Objects;
 @Component
 public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
 
-    private static final String ADMIN_PATH_PATTERN = "/api/admin/**";
-
     private final JwtClaimsService jwtClaimsService;
     private final GatewaySignService signService;
     private final GatewaySignProperties signProperties;
@@ -38,7 +36,7 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
-        if (isAdminBypass(path) || isWhitelisted(path)) {
+        if (isWhitelisted(path)) {
             return chain.filter(exchange);
         }
 
@@ -92,13 +90,6 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
             }
         }
         return false;
-    }
-
-    private boolean isAdminBypass(String path) {
-        if (path == null || path.isEmpty()) {
-            return false;
-        }
-        return pathMatcher.match(ADMIN_PATH_PATTERN, path);
     }
 
     private Mono<Void> unauthorized(ServerHttpResponse response) {
