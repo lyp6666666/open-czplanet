@@ -41,7 +41,7 @@
 
 ## 4. 目标架构
 
-## 4.1 组件视图
+### 4.1 组件视图
 
 1. `ai-tutor-gateway`（新增）  
 职责：入口网关、JWT 校验、用户身份注入、路由转发、签名生成。
@@ -61,7 +61,7 @@
 5. Nacos  
 职责：配置中心 + 注册中心（服务注册发现、动态路由配置可选）。
 
-## 4.2 请求主链路（用户侧）
+### 4.2 请求主链路（用户侧）
 
 1. 客户端请求网关，携带 `Authorization: Bearer <jwt>`。
 2. 网关校验 JWT 并解析：`userId`、`role`（code）。
@@ -74,7 +74,7 @@
 5. 业务服务统一验签 + 时窗校验，通过后写入 `RequestHolder`。
 6. 控制器/服务层继续按既有方式读取 `RequestHolder.get().getUid()/getRole()`。
 
-## 4.3 服务间调用链路（Feign）
+### 4.3 服务间调用链路（Feign）
 
 1. 服务 A 发起 Feign 调用服务 B（服务名发现）。
 2. Feign 拦截器读取当前线程 `RequestHolder` 身份并注入同样签名头。
@@ -82,23 +82,26 @@
 
 ## 5. 路由与路径兼容设计
 
-## 5.1 前端路径保持不变
+### 5.1 前端路径保持不变
 
 前端仍请求原路径；路由在网关内部完成。
 
-## 5.2 首版路由建议
+### 5.2 首版路由建议
 
 1. `tutor-appointment-service`
    - `/user/**`
-   - `/api/v1/**`
+   - `/api/**`（排除 `/api/admin/**`）
    - `/appointment/**`
    - `/org/**`
 2. `videoCall-IM-service`
    - `/chat/**`
 3. `payment-service`
    - `/payment/**`
+4. `ai-tutor-admin`
+   - 本期默认不纳入用户侧统一鉴权链路，可保持独立入口；
+   - 若需经过网关，仅做直通路由，不复用本期用户 JWT 解析与身份注入逻辑。
 
-## 5.3 网关白名单（不验 JWT）
+### 5.3 网关白名单（不验 JWT）
 
 1. `/user/loginOrRegister`
 2. `/user/sendcode`
@@ -110,14 +113,14 @@
 
 ## 6. 身份与签名协议
 
-## 6.1 头协议
+### 6.1 头协议
 
 1. `X-Uid`: Long
 2. `X-Role`: Integer（1/2/3）
 3. `X-Ts`: 毫秒时间戳
 4. `X-Auth-Sign`: HMAC-SHA256 签名值（hex 或 base64，统一一种）
 
-## 6.2 签名原文
+### 6.2 签名原文
 
 建议原文：
 
@@ -125,14 +128,14 @@
 
 说明：method/path 纳入签名，避免头在不同 API 间被重放复用。
 
-## 6.3 验签规则
+### 6.3 验签规则
 
 1. 必填头完整，否则拒绝。
 2. `|now - ts| <= allowedSkewMs`（默认 60000ms）。
 3. 按同一密钥重算签名，常量时间比较。
 4. 失败返回 401/403。
 
-## 6.4 密钥管理
+### 6.4 密钥管理
 
 1. 配置键建议：`gateway.sign.secret`。
 2. 所有参与方（gateway + 业务服务）通过 Nacos 下发同一密钥。
@@ -140,7 +143,7 @@
 
 ## 7. 模块与代码改造设计
 
-## 7.1 新增模块：`ai-tutor-gateway`
+### 7.1 新增模块：`ai-tutor-gateway`
 
 依赖建议：
 
@@ -155,7 +158,7 @@
 2. 路由配置：静态 yml + Nacos 动态配置（可二选一逐步演进）。
 3. 统一日志：traceId + uid + routeId。
 
-## 7.2 `ai-tutor-common` 增强
+### 7.2 `ai-tutor-common` 增强
 
 新增公共能力（建议命名）：
 
@@ -165,7 +168,7 @@
 4. `FeignIdentityRequestInterceptor`（服务间透传并签名）
 5. `GatewayIdentityAutoConfiguration`（可开关）
 
-## 7.3 业务服务改造
+### 7.3 业务服务改造
 
 appointment / im / payment：
 
@@ -175,7 +178,7 @@ appointment / im / payment：
 4. 替换跨服务 `RestTemplate` 调用为 Feign 客户端。
 5. 保持 Controller/Service 主业务逻辑尽量不变（降低回归风险）。
 
-## 7.4 Admin 服务策略
+### 7.4 Admin 服务策略
 
 `ai-tutor-admin` 继续使用当前独立鉴权，不参与本期用户侧统一模型。
 
@@ -195,12 +198,12 @@ appointment / im / payment：
 
 ## 9. OpenFeign 设计
 
-## 9.1 调用策略
+### 9.1 调用策略
 
 1. 以服务名声明 Feign Client（如 `name = "videoCall-IM-service"`）。
 2. 禁止继续使用 `http://localhost:xxxx` 形式 base-url 作为主路径。
 
-## 9.2 身份透传
+### 9.2 身份透传
 
 1. Feign 请求拦截器从 `RequestHolder` 读取 uid/role。
 2. 构造 `X-Uid/X-Role/X-Ts/X-Auth-Sign`。
@@ -208,45 +211,45 @@ appointment / im / payment：
 
 ## 10. 迁移计划（分阶段）
 
-## 10.1 Phase A：基础设施
+### 10.1 Phase A：基础设施
 
 1. 新增 `ai-tutor-gateway` 骨架与路由。
 2. common 增加签名与验签组件。
 3. 各业务服务启用 Nacos discovery（先不切流）。
 
-## 10.2 Phase B：鉴权切换
+### 10.2 Phase B：鉴权切换
 
 1. 网关启用 JWT 校验与身份头注入。
 2. 业务服务启用签名验签拦截器。
 3. 下游原 JWT 拦截器改为禁用（或仅保留 admin）。
 
-## 10.3 Phase C：调用切换
+### 10.3 Phase C：调用切换
 
 1. 替换 appointment -> im、payment -> im 等远程调用到 Feign。
 2. 移除旧 `RestTemplate base-url` 主路径。
 
-## 10.4 Phase D：运行模式收敛
+### 10.4 Phase D：运行模式收敛
 
 1. 生产/预发切换为“网关 + 多服务独立进程”。
 2. `ai-tutor-starter` 退为本地开发兼容或后续下线。
 
 ## 11. 测试与验收
 
-## 11.1 功能回归
+### 11.1 功能回归
 
 1. 登录、验证码、公共首页接口。
 2. 聊天主链路（建房、发消息、会话列表、已读）。
 3. 支付下单与回调。
 4. 服务间 facade 行为一致性。
 
-## 11.2 安全验证
+### 11.2 安全验证
 
 1. 无 JWT 请求网关应被拒绝（白名单除外）。
 2. 伪造 `X-Uid/X-Role` 直打业务服务应被拒绝。
 3. 过期 `X-Ts` 应被拒绝。
 4. 篡改 method/path 后签名应不通过。
 
-## 11.3 观测要求
+### 11.3 观测要求
 
 1. 网关日志含路由命中、uid、traceId。
 2. 服务日志含验签结果（脱敏后）与 traceId 传递。
@@ -254,13 +257,13 @@ appointment / im / payment：
 
 ## 12. 风险与回滚
 
-## 12.1 主要风险
+### 12.1 主要风险
 
 1. 路由配置遗漏导致接口不可达。
 2. 时钟偏差导致误拒绝。
 3. 某些内部调用未透传身份导致 401/403。
 
-## 12.2 回滚策略
+### 12.2 回滚策略
 
 1. 网关保留开关：可临时旁路鉴权（仅应急环境）。
 2. 服务保留短期开关：兼容旧链路（灰度期可用）。
@@ -274,4 +277,3 @@ appointment / im / payment：
 2. 用户侧身份治理集中化。
 3. 微服务运行形态清晰（彻底脱离聚合进程依赖）。
 4. 服务间调用标准化，便于后续扩展与治理。
-
