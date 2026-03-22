@@ -5,7 +5,6 @@ import com.ai.tutor.utils.RequestHolder;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 
-import java.net.URI;
 import java.util.Objects;
 
 public class FeignIdentityRequestInterceptor implements RequestInterceptor {
@@ -34,23 +33,17 @@ public class FeignIdentityRequestInterceptor implements RequestInterceptor {
     }
 
     private String resolveRequestTarget(RequestTemplate template) {
-        String url = template.url();
-        if (url == null) {
-            return "";
+        String path = template.path();
+        if (path == null || path.isEmpty()) {
+            path = "/";
         }
-        try {
-            URI uri = URI.create(url);
-            String path = uri.getRawPath();
-            if (path == null || path.isEmpty()) {
-                path = "";
-            }
-            String query = uri.getRawQuery();
-            if (query == null || query.isEmpty()) {
-                return path;
-            }
-            return path + "?" + query;
-        } catch (IllegalArgumentException ex) {
-            return url;
+        String queryLine = template.queryLine();
+        if (queryLine == null || queryLine.isEmpty()) {
+            return path;
         }
+        if (queryLine.charAt(0) == '?') {
+            return path + queryLine;
+        }
+        return path + "?" + queryLine;
     }
 }

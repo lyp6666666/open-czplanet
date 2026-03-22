@@ -60,7 +60,13 @@ public class GatewayIdentityInterceptor implements HandlerInterceptor {
 
         String method = request.getMethod();
         String requestTarget = resolveRequestTarget(request);
-        if (!signatureUtils.verify(uid, role, ts, method, requestTarget, signHeader.trim())) {
+        boolean verified;
+        try {
+            verified = signatureUtils.verify(uid, role, ts, method, requestTarget, signHeader.trim());
+        } catch (RuntimeException ex) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        if (!verified) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
 

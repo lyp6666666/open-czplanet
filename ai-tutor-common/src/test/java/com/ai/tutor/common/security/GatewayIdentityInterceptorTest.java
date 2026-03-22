@@ -62,6 +62,19 @@ class GatewayIdentityInterceptorTest {
         assertEquals(1, req.getAttribute(RequestHolder.ATTRIBUTE_ROLE));
     }
 
+    @Test
+    void shouldFailClosedWhenSignatureVerificationThrows() {
+        IdentitySignProperties badProperties = new IdentitySignProperties();
+        badProperties.setSecret("short-secret");
+        IdentitySignatureUtils badUtils = new IdentitySignatureUtils(badProperties);
+        GatewayIdentityInterceptor badInterceptor = new GatewayIdentityInterceptor(badProperties, badUtils);
+        long ts = System.currentTimeMillis();
+        MockHttpServletRequest req = signedRequest(ts, "irrelevant");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertThrows(BusinessException.class, () -> badInterceptor.preHandle(req, resp, new Object()));
+    }
+
     private MockHttpServletRequest signedRequest(long ts, String sign) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/test");
         request.addHeader("X-Uid", "206");
