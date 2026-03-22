@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,6 +29,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = YungouosPaymentController.class)
+@ContextConfiguration(classes = {
+        YungouosPaymentController.class,
+        YungouosPaymentControllerTest.TestRequestHolderFilter.class
+})
 @Import(YungouosPaymentControllerTest.TestRequestHolderFilter.class)
 public class YungouosPaymentControllerTest {
 
