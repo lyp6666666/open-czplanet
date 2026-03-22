@@ -31,7 +31,12 @@ public class RoleInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        UserRoleEnum role = UserRoleEnum.fromValue(info.getRole());
+        UserRoleEnum role;
+        try {
+            role = UserRoleEnum.fromValue(info.getRole());
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限访问该资源");
+        }
 
         String method = request.getMethod();
         if (method == null) {

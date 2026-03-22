@@ -39,4 +39,38 @@ class RoleInterceptorTest {
                 () -> interceptor.preHandle(request, response, new Object()));
         assertEquals(ErrorCode.NO_AUTH_ERROR.getCode(), exception.getCode());
     }
+
+    @Test
+    void shouldRejectWhenRoleValueUnknown() {
+        RoleInterceptor interceptor = new RoleInterceptor();
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        when(request.getRequestURI()).thenReturn("/api/v1/parent/jobs");
+        when(request.getMethod()).thenReturn("POST");
+
+        RequestInfo info = new RequestInfo();
+        info.setRole(99);
+        RequestHolder.set(info);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> interceptor.preHandle(request, response, new Object()));
+        assertEquals(ErrorCode.NO_AUTH_ERROR.getCode(), exception.getCode());
+    }
+
+    @Test
+    void shouldAllowWhenRoleMatches() {
+        RoleInterceptor interceptor = new RoleInterceptor();
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        HttpServletResponse response = mock(HttpServletResponse.class);
+
+        when(request.getRequestURI()).thenReturn("/api/v1/parent/jobs");
+        when(request.getMethod()).thenReturn("POST");
+
+        RequestInfo info = new RequestInfo();
+        info.setRole(UserRoleEnum.STUDENT.getValue());
+        RequestHolder.set(info);
+
+        interceptor.preHandle(request, response, new Object());
+    }
 }
