@@ -1,3 +1,20 @@
 spring:
   application:
     name: ai-tutor-gateway
+
+gateway:
+  jwt:
+    issuer: ai-tutor
+    secrets:
+      - ${GATEWAY_JWT_SECRET:test-jwt-secret-1234567890-test-jwt-secret-1234567890}
+  sign:
+    secret: ${GATEWAY_SIGN_SECRET:0123456789abcdef0123456789abcdef}
+    clock-skew-ms: 60000
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
+      - /actuator/**
