@@ -98,4 +98,31 @@ class JwtClaimsServiceTest {
         );
         assertTrue(exception.getMessage().toLowerCase().contains("unknown role"));
     }
+
+    @Test
+    void shouldRejectAllBlankSecretsConfiguration() {
+        GatewayJwtProperties properties = new GatewayJwtProperties();
+        properties.setIssuer(ISSUER);
+        properties.setSecrets(Arrays.asList(" ", "\t", ""));
+        JwtClaimsService service = new JwtClaimsService(properties);
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", 111L);
+        claims.put("role", 1);
+        String token = tokenWithClaims(claims);
+
+        JwtClaimsService.JwtClaimsException exception = assertThrows(
+                JwtClaimsService.JwtClaimsException.class,
+                () -> service.parseToken(token)
+        );
+        assertTrue(exception.getMessage().toLowerCase().contains("not configured"));
+    }
+
+    @Test
+    void shouldNormalizeNullSecretsToEmptyList() {
+        GatewayJwtProperties properties = new GatewayJwtProperties();
+        properties.setSecrets(null);
+
+        assertEquals(0, properties.getSecrets().size());
+    }
 }

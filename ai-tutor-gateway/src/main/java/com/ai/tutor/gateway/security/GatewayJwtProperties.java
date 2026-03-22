@@ -19,7 +19,11 @@ public class GatewayJwtProperties {
     }
 
     public void setSecrets(List<String> secrets) {
-        this.secrets = secrets;
+        if (secrets == null) {
+            this.secrets = new ArrayList<>();
+        } else {
+            this.secrets = secrets;
+        }
     }
 
     public String getIssuer() {

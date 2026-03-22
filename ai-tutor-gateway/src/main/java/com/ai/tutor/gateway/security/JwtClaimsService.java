@@ -51,6 +51,9 @@ public class JwtClaimsService {
         if (secrets == null || secrets.isEmpty()) {
             throw new JwtClaimsException("JWT secrets not configured");
         }
+        if (!hasUsableSecret(secrets)) {
+            throw new JwtClaimsException("JWT secrets not configured (all blank)");
+        }
 
         JwtException lastException = null;
         String issuer = properties.getIssuer();
@@ -139,6 +142,15 @@ public class JwtClaimsService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private boolean hasUsableSecret(List<String> secrets) {
+        for (String secret : secrets) {
+            if (!isBlank(secret)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static final class JwtIdentity {

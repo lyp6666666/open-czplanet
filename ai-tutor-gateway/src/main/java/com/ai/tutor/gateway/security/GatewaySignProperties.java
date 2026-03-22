@@ -37,6 +37,10 @@ public class GatewaySignProperties {
     }
 
     public void setWhitelistPaths(List<String> whitelistPaths) {
-        this.whitelistPaths = whitelistPaths;
+        if (whitelistPaths == null) {
+            this.whitelistPaths = new ArrayList<>();
+        } else {
+            this.whitelistPaths = whitelistPaths;
+        }
     }
 }

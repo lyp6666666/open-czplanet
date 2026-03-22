@@ -13,6 +13,7 @@ import java.util.Objects;
 public class GatewaySignService {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final int MIN_SECRET_BYTES = 32;
 
     private final GatewaySignProperties properties;
 
@@ -25,11 +26,17 @@ public class GatewaySignService {
         if (secret == null || secret.trim().isEmpty()) {
             throw new IllegalStateException("Sign secret not configured");
         }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException("Sign secret too short (min 32 bytes)");
+        }
         if (method == null || method.trim().isEmpty()) {
             throw new IllegalArgumentException("HTTP method is required");
         }
         if (path == null || path.isEmpty()) {
             throw new IllegalArgumentException("Path is required");
+        }
+        if (path.indexOf('\n') >= 0 || path.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException("Path contains invalid CR/LF characters");
         }
         String normalizedMethod = method.trim().toUpperCase(Locale.ROOT);
         String payload = uid + "\n" + role + "\n" + ts + "\n" + normalizedMethod + "\n" + path;
