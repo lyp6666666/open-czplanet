@@ -1,6 +1,10 @@
 spring:
   application:
     name: videoCall-IM-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -37,6 +41,23 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
+
+server:
+  port: ${SERVER_PORT:8082}
+
+security:
+  gateway-identity:
+    enabled: true
+
+gateway:
+  sign:
+    secret: ${GATEWAY_SIGN_SECRET:}
+    clock-skew-ms: 60000
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**
 
 rocketmq:
   name-server: 127.0.0.1:9876
