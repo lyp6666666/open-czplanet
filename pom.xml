@@ -28,6 +28,7 @@
     <module>ai-tutor-starter</module>
     <module>ai-tutor-admin</module>
     <module>payment-service</module>
+    <module>ai-tutor-gateway</module>
   </modules>
 
   <!-- 统一依赖版本管理 -->
