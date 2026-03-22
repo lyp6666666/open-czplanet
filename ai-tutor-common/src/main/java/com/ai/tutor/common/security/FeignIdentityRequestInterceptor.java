@@ -5,7 +5,13 @@ import com.ai.tutor.utils.RequestHolder;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
 public class FeignIdentityRequestInterceptor implements RequestInterceptor {
 
@@ -37,13 +43,58 @@ public class FeignIdentityRequestInterceptor implements RequestInterceptor {
         if (path == null || path.isEmpty()) {
             path = "/";
         }
-        String queryLine = template.queryLine();
-        if (queryLine == null || queryLine.isEmpty()) {
+        Map<String, Collection<String>> queries = template.queries();
+        if (queries == null || queries.isEmpty()) {
             return path;
         }
-        if (queryLine.charAt(0) == '?') {
-            return path + queryLine;
+        LinkedHashMap<String, Collection<String>> sorted = canonicalizeQueries(queries);
+        template.queries(null);
+        template.queries(sorted);
+        String queryString = buildQueryString(sorted);
+        if (queryString.isEmpty()) {
+            return path;
         }
-        return path + "?" + queryLine;
+        return path + "?" + queryString;
+    }
+
+    private LinkedHashMap<String, Collection<String>> canonicalizeQueries(Map<String, Collection<String>> queries) {
+        TreeMap<String, Collection<String>> sortedKeys = new TreeMap<>(queries);
+        LinkedHashMap<String, Collection<String>> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Collection<String>> entry : sortedKeys.entrySet()) {
+            String key = entry.getKey();
+            if (key == null) {
+                continue;
+            }
+            List<String> values = new ArrayList<>();
+            Collection<String> rawValues = entry.getValue();
+            if (rawValues != null) {
+                for (String value : rawValues) {
+                    if (value != null) {
+                        values.add(value);
+                    }
+                }
+                values.sort(String::compareTo);
+            }
+            result.put(key, values);
+        }
+        return result;
+    }
+
+    private String buildQueryString(LinkedHashMap<String, Collection<String>> queries) {
+        StringBuilder builder = new StringBuilder();
+        for (Map.Entry<String, Collection<String>> entry : queries.entrySet()) {
+            String key = entry.getKey();
+            Collection<String> values = entry.getValue();
+            if (values == null || values.isEmpty()) {
+                continue;
+            }
+            for (String value : values) {
+                if (builder.length() > 0) {
+                    builder.append('&');
+                }
+                builder.append(key).append('=').append(value);
+            }
+        }
+        return builder.toString();
     }
 }
