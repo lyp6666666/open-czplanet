@@ -68,3 +68,8 @@ brokerage:
 
 tutor-application:
   skip-payment-check: false
+
+integration:
+  appointment:
+    remote:
+      enabled: true
