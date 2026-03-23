@@ -50,3 +50,8 @@ payment:
     notify-url: ${PAYMENT_YUNGOUOS_NOTIFY_URL:}
     return-url: ${PAYMENT_YUNGOUOS_RETURN_URL:}
     native-pay-type: ${PAYMENT_YUNGOUOS_NATIVE_PAY_TYPE:2}
+
+integration:
+  brokerage:
+    remote:
+      enabled: true
