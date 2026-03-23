@@ -63,6 +63,11 @@ gateway:
       - /api/v1/public/**
       - /payment/notify/**
 
+integration:
+  im:
+    remote:
+      enabled: true
+
 springdoc:
   packages-to-scan: com.ai.tutor.appointment.controller
   api-docs:
