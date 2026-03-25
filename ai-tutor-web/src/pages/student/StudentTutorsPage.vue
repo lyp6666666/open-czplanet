@@ -6,7 +6,8 @@ import { applicationApi } from '@/api/application'
 import { chatApi } from '@/api/chat'
 import { favoritesTutorsApi } from '@/api/favoritesTutors'
 import { parentTutorsApi } from '@/api/parentTutors'
-import type { ChatMessageResp, ChatRoomItemResp, ParentTutorCardVO, UserCardVO } from '@/api/types'
+import type { ChatMessageResp, ChatRoomItemResp, ParentTutorCardVO, StudentJobPosting, UserCardVO } from '@/api/types'
+import { jobsApi } from '@/api/jobs'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { useCityStore } from '@/stores/city'
@@ -24,6 +25,8 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const canUseStudentActions = computed(() => auth.user?.userType === 2)
+const canApplyToTutor = computed(() => auth.user?.userType === 2 || auth.user?.userType === 3)
+const isOrg = computed(() => auth.user?.userType === 3)
 
 const q = ref('')
 const mode = ref<string>('')
@@ -67,6 +70,9 @@ const openKey = ref<'' | 'mode' | 'subject' | 'rate'>('')
 
 const checkedFavoriteIds = new Set<number>()
 const favoriteMap = ref<Record<number, boolean>>({})
+
+const orgDemands = ref<StudentJobPosting[]>([])
+const orgDemandId = ref<number | null>(null)
 
 const modeLabel = computed(() => {
   if (!mode.value) return '不限'
@@ -215,6 +221,21 @@ async function loadMore() {
   }
 }
 
+async function loadOrgDemands() {
+  if (!auth.isLoggedIn) return
+  if (!isOrg.value) return
+  try {
+    const page = await jobsApi.mineOrgDemands({ pageSize: 50, cursor: null })
+    const items = page.list || []
+    orgDemands.value = items
+    if (orgDemandId.value == null && items.length > 0) {
+      orgDemandId.value = items[0]?.id ?? null
+    }
+  } catch {
+    void 0
+  }
+}
+
 async function refresh() {
   list.value = []
   cursor.value = null
@@ -292,7 +313,7 @@ async function shouldReuseExistingChat(otherUid: number): Promise<{ roomId: numb
 }
 
 async function openApply() {
-  if (!canUseStudentActions.value) return
+  if (!canApplyToTutor.value) return
   if (applyBusy.value) return
   const targetUid = detail.value?.user?.id
   const tutorId = detail.value?.teacherProfile?.id
@@ -317,10 +338,15 @@ async function openApply() {
       }
     }
     const content = (settings.applicationGreeting || DEFAULT_APPLICATION_GREETING).trim() || DEFAULT_APPLICATION_GREETING
+    if (isOrg.value && !orgDemandId.value) {
+      applyTipText.value = '请先发布一条机构需求后再向教师发起申请'
+      applyTipOpen.value = true
+      return
+    }
     const msg = await applicationApi.startChat({
       receiverUid: targetUid,
-      contextType: 'TUTOR',
-      contextId: tutorId,
+      contextType: isOrg.value ? 'ORG_POSTING' : 'TUTOR',
+      contextId: isOrg.value ? orgDemandId.value! : tutorId,
       content,
       clientRequestId: genClientRequestId(),
     })
@@ -368,6 +394,7 @@ onMounted(() => {
     q.value = raw.trim()
   }
   void refresh()
+  void loadOrgDemands()
 })
 </script>
 
@@ -487,10 +514,14 @@ onMounted(() => {
               {{ detail.teacherProfile.realName || detail.user.name || `教师${detail.user.id}` }}
               <span v-if="detail.teacherProfile.eduVerifyStatus === 2" class="verified-badge">学信网认证</span>
             </div>
-            <div v-if="canUseStudentActions" class="detail-ops">
-              <button class="btn" type="button" @click="onToggleFavorite(detail.user.id)">
+            <div v-if="canApplyToTutor" class="detail-ops">
+              <button v-if="canUseStudentActions" class="btn" type="button" @click="onToggleFavorite(detail.user.id)">
                 {{ favoriteMap[detail.user.id] ? '已收藏' : '收藏' }}
               </button>
+              <select v-if="isOrg" v-model.number="orgDemandId" class="input sm">
+                <option v-if="orgDemands.length === 0" :value="null">暂无需求</option>
+                <option v-for="d in orgDemands" :key="d.id" :value="d.id">{{ d.title }}</option>
+              </select>
               <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="openApply">
                 {{ applyBusy ? '发送中...' : '发起申请' }}
               </button>

@@ -366,9 +366,9 @@ export interface TutorApplicationVO {
   id: number
   senderUid: number
   receiverUid: number
-  senderRole: 'TEACHER' | 'STUDENT'
-  receiverRole: 'TEACHER' | 'STUDENT'
-  contextType: 'DEMAND' | 'TUTOR'
+  senderRole: 'TEACHER' | 'STUDENT' | 'ORG'
+  receiverRole: 'TEACHER' | 'STUDENT' | 'ORG'
+  contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'
   contextId: number
   content: string
   status: TutorApplicationStatus

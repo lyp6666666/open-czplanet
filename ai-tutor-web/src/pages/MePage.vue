@@ -117,6 +117,21 @@ const studentAddress = ref('')
 const studentDemandDescription = ref('')
 const studentBudget = ref<number | null>(null)
 
+const studentProfileMissing = computed(() => {
+  if (isTeacher.value) return []
+  const missing: string[] = []
+  if (!avatarSrc.value) missing.push('头像')
+  if (!studentRealName.value.trim()) missing.push('姓名')
+  if (!studentDemandDescription.value.trim()) missing.push('孩子描述')
+  return missing
+})
+
+const studentProfileNudgeText = computed(() => {
+  if (isTeacher.value) return ''
+  if (studentProfileMissing.value.length === 0) return '你的主页资料已较完善，老师更愿意通过申请并主动匹配你。'
+  return `这些信息会在老师查看你的主页时展示，建议完善：${studentProfileMissing.value.join('、')}。完善后更容易通过申请并获得老师主动匹配。`
+})
+
 async function load() {
   if (!auth.isLoggedIn) return
   loading.value = true
@@ -482,6 +497,7 @@ onMounted(() => {
 
       <div class="sec">
         <div class="sec-title">{{ isTeacher ? '教师资料' : '学生资料' }}</div>
+        <div v-if="!isTeacher" class="hint">{{ studentProfileNudgeText }}</div>
         <div class="grid" v-if="isTeacher">
           <label class="field">
             <div class="label-row">

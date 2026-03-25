@@ -14,7 +14,7 @@ public class CreateTutorApplicationReq {
     private Long receiverUid;
 
     @NotBlank
-    @Schema(description = "业务上下文类型：DEMAND/TUTOR")
+    @Schema(description = "业务上下文类型：DEMAND/TUTOR/ORG_POSTING")
     private String contextType;
 
     @NotNull

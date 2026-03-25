@@ -13,6 +13,7 @@ type TabKey = 'received' | 'sent'
 const router = useRouter()
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.user?.userType === 1)
+const isOrg = computed(() => auth.user?.userType === 3)
 
 const tab = ref<TabKey>('received')
 
@@ -187,6 +188,8 @@ function openDetail(id: number) {
 function exitCenter() {
   if (isTeacher.value) {
     void router.push({ name: 'tutorJobs' })
+  } else if (isOrg.value) {
+    void router.push({ name: 'orgMineJobs' })
   } else {
     void router.push({ name: 'studentPost' })
   }
@@ -244,7 +247,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="row2">{{ it.content }}</div>
         <div class="row3">
-          <span>{{ it.contextType === 'DEMAND' ? '需求' : '教员' }} · {{ it.contextId }}</span>
+          <span>{{ it.contextType === 'DEMAND' ? '需求' : it.contextType === 'ORG_POSTING' ? '机构需求' : '教员' }} · {{ it.contextId }}</span>
           <span>{{ String(it.createTime).slice(0, 19).replace('T', ' ') }}</span>
         </div>
       </button>

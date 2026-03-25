@@ -2,7 +2,7 @@ import { http } from './http'
 import type { ChatMessageResp, CursorPageResp, TutorApplicationEnterResp, TutorApplicationUnreadResp, TutorApplicationVO } from './types'
 
 export const applicationApi = {
-  create(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR'; contextId: number; content: string; clientRequestId?: string | null }) {
+  create(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string | null }) {
     return http.post<unknown, TutorApplicationVO>('/chat/application', {
       receiverUid: params.receiverUid,
       contextType: params.contextType,
@@ -12,7 +12,7 @@ export const applicationApi = {
     })
   },
 
-  startChat(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR'; contextId: number; content: string; clientRequestId?: string | null }) {
+  startChat(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string | null }) {
     return http.post<unknown, ChatMessageResp>('/chat/application/start-chat', {
       receiverUid: params.receiverUid,
       contextType: params.contextType,

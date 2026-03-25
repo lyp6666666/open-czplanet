@@ -30,6 +30,7 @@
     <update id="updateStudentProfile">
         UPDATE student_profile
         <set>
+            update_time = now(),
             <if test="studentExtInfo.realName != null">
                 real_name = #{studentExtInfo.realName},
             </if>

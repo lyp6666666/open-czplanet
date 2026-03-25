@@ -10,6 +10,7 @@ import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { normalizeAvatarUrl } from '@/utils/avatar'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
@@ -62,6 +63,7 @@ const isLast = ref(false)
 const messages = ref<ChatMessageResp[]>([])
 const msgsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
+const avatarBroken = ref<Record<number, boolean>>({})
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const myUser = computed<UserSimpleVO | null>(() => {
@@ -94,8 +96,15 @@ function userName(uid: number): string {
 }
 
 function userAvatar(uid: number): string {
+  if (avatarBroken.value[uid]) return ''
   const v = uid === myUid.value ? myUser.value?.avatar : uid === otherUid.value ? otherUser.value?.avatar : getUser(uid)?.avatar
-  return typeof v === 'string' ? v.trim() : ''
+  return normalizeAvatarUrl(v)
+}
+
+function markAvatarBroken(uid: number) {
+  if (!uid) return
+  if (avatarBroken.value[uid]) return
+  avatarBroken.value = { ...avatarBroken.value, [uid]: true }
 }
 
 const lessonActionBusy = ref<Record<number, boolean>>({})
@@ -904,7 +913,7 @@ watch(
           <div v-if="it.kind === 'time'" class="time-divider">{{ it.text }}</div>
           <div v-else class="msg" :class="{ me: it.m.fromUser.uid === myUid }">
             <button class="avatar" type="button" :class="{ clickable: it.m.fromUser.uid !== myUid }" @click="openCard(it.m.fromUser.uid)">
-              <img v-if="userAvatar(it.m.fromUser.uid)" :src="userAvatar(it.m.fromUser.uid)" alt="" />
+              <img v-if="userAvatar(it.m.fromUser.uid)" :src="userAvatar(it.m.fromUser.uid)" alt="" @error="markAvatarBroken(it.m.fromUser.uid)" />
               <span v-else class="avatar-fallback">{{ userName(it.m.fromUser.uid).slice(0, 1) }}</span>
             </button>
             <div class="content">

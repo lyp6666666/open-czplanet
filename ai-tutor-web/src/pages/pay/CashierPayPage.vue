@@ -121,7 +121,7 @@ async function refreshStatus() {
       stopPoll()
       return
     }
-  } catch (e) {
+  } catch {
     //
   }
 }
@@ -455,4 +455,3 @@ onUnmounted(() => {
   }
 }
 </style>
-

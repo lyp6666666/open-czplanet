@@ -64,7 +64,7 @@
       </view>
 
       <view class="ops">
-        <u-button type="default" shape="circle" @click="handleContact">联系老师</u-button>
+        <u-button type="default" shape="circle" @click="handleContact">发起申请</u-button>
         <u-button type="primary" color="#00bebd" shape="circle" @click="openBookingModal">预约课程</u-button>
       </view>
     </view>
@@ -106,6 +106,30 @@
         </view>
       </view>
     </view>
+
+    <view v-if="showApplyModal" class="mask" @click="closeApplyModal">
+      <view class="modal card" @click.stop>
+        <view class="modal-head">
+          <text class="modal-title">向老师发起申请</text>
+          <view class="modal-close" @click="closeApplyModal">
+            <u-icon name="close" size="18" color="#646a73"></u-icon>
+          </view>
+        </view>
+
+        <view class="modal-body">
+          <view class="form-item">
+            <text class="label">申请语</text>
+            <textarea class="textarea" v-model="applyContent" placeholder="请简单描述你的需求，便于老师判断是否通过"></textarea>
+          </view>
+        </view>
+
+        <view class="modal-footer">
+          <u-button type="primary" color="#00bebd" shape="circle" :disabled="applyBusy" @click="handleApply">
+            {{ applyBusy ? '发送中...' : '发送申请' }}
+          </u-button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -123,6 +147,9 @@ const showBookingModal = ref(false);
 const bookingDate = ref('');
 const bookingTime = ref('');
 const bookingRemark = ref('');
+const showApplyModal = ref(false);
+const applyContent = ref('您好老师，我这边有一个家教需求，方便聊聊吗？');
+const applyBusy = ref(false);
 
 const subjectTags = computed(() => {
   const raw = String(tutor.value?.teacherProfile?.subject || '').trim();
@@ -180,19 +207,57 @@ const fetchDetail = async (id: string) => {
 };
 
 const handleContact = async () => {
-    if (!tutor.value) return;
-    try {
-        const targetUid = tutor.value.user.id;
-        const roomId: any = await chatApi.getOrCreateRoom(targetUid);
-        if (roomId) {
-            uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
-        } else {
-            uni.showToast({ title: '进入会话失败', icon: 'none' });
-        }
-    } catch (error) {
-        console.error(error);
-        uni.showToast({ title: '发起聊天失败', icon: 'none' });
+  if (!userStore.isLoggedIn) {
+    uni.showToast({ title: '请先登录', icon: 'none' });
+    setTimeout(() => {
+      uni.switchTab({ url: '/pages/me/index' });
+    }, 800);
+    return;
+  }
+  if (!tutor.value) return;
+  showApplyModal.value = true;
+};
+
+const closeApplyModal = () => {
+  if (applyBusy.value) return;
+  showApplyModal.value = false;
+};
+
+const handleApply = async () => {
+  if (!tutor.value) return;
+  if (applyBusy.value) return;
+  const targetUid = tutor.value.user?.id;
+  const tutorId = tutor.value.teacherProfile?.id;
+  const content = String(applyContent.value || '').trim();
+  if (!targetUid || !tutorId) return;
+  if (!content) {
+    uni.showToast({ title: '请填写申请语', icon: 'none' });
+    return;
+  }
+  applyBusy.value = true;
+  try {
+    const clientRequestId = `mp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const msg: any = await chatApi.startChatByApplication({
+      receiverUid: targetUid,
+      contextType: 'TUTOR',
+      contextId: tutorId,
+      content,
+      clientRequestId,
+    });
+    const roomId = msg?.message?.roomId;
+    if (roomId) {
+      showApplyModal.value = false;
+      uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
+      return;
     }
+    uni.showToast({ title: '申请已发送', icon: 'success' });
+    showApplyModal.value = false;
+  } catch (error) {
+    console.error(error);
+    uni.showToast({ title: '发送申请失败', icon: 'none' });
+  } finally {
+    applyBusy.value = false;
+  }
 };
 
 const openBookingModal = () => {
@@ -593,6 +658,17 @@ const handleBook = async () => {
   padding: 0 12px;
   background: #fff;
   color: var(--text);
+}
+
+.textarea {
+  min-height: 88px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--text);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .modal-footer {

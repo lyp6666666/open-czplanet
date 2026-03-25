@@ -58,6 +58,59 @@ class ChatRoomServiceImplStartChatTest {
     }
 
     @Test
+    void getOrCreateRoomShouldAllowOrgToChatWithTeacher() {
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        MessageMapper messageMapper = mock(MessageMapper.class);
+        ChatService chatService = mock(ChatService.class);
+        ImUserMapper imUserMapper = mock(ImUserMapper.class);
+        TeacherProfileLiteMapper teacherProfileLiteMapper = mock(TeacherProfileLiteMapper.class);
+        StudentProfileLiteMapper studentProfileLiteMapper = mock(StudentProfileLiteMapper.class);
+
+        ImUser org = new ImUser();
+        org.setId(3001L);
+        org.setUserType(3);
+        org.setRefId(30L);
+        org.setStatus(0);
+
+        ImUser teacher = new ImUser();
+        teacher.setId(1001L);
+        teacher.setUserType(1);
+        teacher.setRefId(10L);
+        teacher.setStatus(0);
+
+        when(imUserMapper.selectById(3001L)).thenReturn(org);
+        when(imUserMapper.selectById(1001L)).thenReturn(teacher);
+        when(teacherProfileLiteMapper.selectIdByUserId(1001L)).thenReturn(10L);
+        when(studentProfileLiteMapper.selectIdByUserId(3001L)).thenReturn(30L);
+
+        when(roomMapper.selectByTeacherAndStudent(10L, 30L)).thenReturn(null);
+        doAnswer(inv -> {
+            Room r = inv.getArgument(0, Room.class);
+            r.setId(200L);
+            return 1;
+        }).when(roomMapper).insert(any(Room.class));
+
+        ChatRoomServiceImpl service = new ChatRoomServiceImpl();
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(service, "messageMapper", messageMapper);
+        ReflectionTestUtils.setField(service, "chatService", chatService);
+        ReflectionTestUtils.setField(service, "imUserMapper", imUserMapper);
+        ReflectionTestUtils.setField(service, "teacherProfileLiteMapper", teacherProfileLiteMapper);
+        ReflectionTestUtils.setField(service, "studentProfileLiteMapper", studentProfileLiteMapper);
+
+        RequestInfo info = new RequestInfo();
+        info.setUid(3001L);
+        ReflectionTestUtils.setField(info, "role", 3);
+        RequestHolder.set(info);
+        try {
+            Long roomId = service.getOrCreateRoomWithUser(1001L, 3001L);
+            assertThat(roomId).isEqualTo(200L);
+        } finally {
+            RequestHolder.remove();
+        }
+    }
+
+    @Test
     void startChatShouldRejectRoleMismatchWithFriendlyMessage() {
         RoomMapper roomMapper = mock(RoomMapper.class);
         MessageMapper messageMapper = mock(MessageMapper.class);

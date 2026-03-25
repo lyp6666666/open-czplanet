@@ -25,6 +25,8 @@ import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.StudentJobPostingLiteMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
+import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
+import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -47,6 +49,12 @@ public class TutorApplicationService {
     private static final Logger log = LoggerFactory.getLogger(TutorApplicationService.class);
     private static final int DAILY_CREATE_LIMIT = 5;
     private static final int LESSON_HOURS = 2;
+    private static final String ROLE_TEACHER = "TEACHER";
+    private static final String ROLE_STUDENT = "STUDENT";
+    private static final String ROLE_ORG = "ORG";
+    private static final String CONTEXT_DEMAND = "DEMAND";
+    private static final String CONTEXT_TUTOR = "TUTOR";
+    private static final String CONTEXT_ORG_POSTING = "ORG_POSTING";
 
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
@@ -65,6 +73,12 @@ public class TutorApplicationService {
     @Resource
     private SseSessionManager sseSessionManager;
 
+    @Resource
+    private TeacherProfileLiteMapper teacherProfileLiteMapper;
+
+    @Resource
+    private StudentProfileLiteMapper studentProfileLiteMapper;
+
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
 
@@ -80,10 +94,24 @@ public class TutorApplicationService {
         Integer role = RequestHolder.get() == null ? null : RequestHolder.get().getRole();
         ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
         String senderRole = normalizeRole(role);
-        String receiverRole = Integer.valueOf(1).equals(role) ? "STUDENT" : "TEACHER";
+        String receiverRole = Integer.valueOf(1).equals(role) ? ROLE_STUDENT : ROLE_TEACHER;
 
         String contextType = trim(req.getContextType()).toUpperCase();
-        ThrowUtils.throwIf(!"DEMAND".equals(contextType) && !"TUTOR".equals(contextType), ErrorCode.PARAMS_ERROR);
+        if (ROLE_TEACHER.equals(senderRole)) {
+            ThrowUtils.throwIf(!CONTEXT_DEMAND.equals(contextType), ErrorCode.PARAMS_ERROR);
+            Long receiverStudentProfileId = studentProfileLiteMapper == null ? null : studentProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
+            ThrowUtils.throwIf(receiverStudentProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是学生账号，无法发起申请");
+        } else if (ROLE_STUDENT.equals(senderRole)) {
+            ThrowUtils.throwIf(!CONTEXT_TUTOR.equals(contextType), ErrorCode.PARAMS_ERROR);
+            Long receiverTeacherProfileId = teacherProfileLiteMapper == null ? null : teacherProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
+            ThrowUtils.throwIf(receiverTeacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法发起申请");
+        } else if (ROLE_ORG.equals(senderRole)) {
+            ThrowUtils.throwIf(!CONTEXT_ORG_POSTING.equals(contextType), ErrorCode.PARAMS_ERROR, "机构发起申请必须绑定岗位/需求");
+            Long receiverTeacherProfileId = teacherProfileLiteMapper == null ? null : teacherProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
+            ThrowUtils.throwIf(receiverTeacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法发起申请");
+        } else {
+            ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "用户角色不合法");
+        }
         ThrowUtils.throwIf(req.getContextId() == null, ErrorCode.PARAMS_ERROR);
 
         String clientRequestId = trimNullable(req.getClientRequestId());
@@ -245,7 +273,7 @@ public class TutorApplicationService {
         TutorApplication latest = tutorApplicationMapper.selectById(applicationId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
         ensureRoom(latest, uid);
-        if ("DEMAND".equalsIgnoreCase(latest.getContextType()) && latest.getContextId() != null) {
+        if ((CONTEXT_DEMAND.equalsIgnoreCase(latest.getContextType()) || CONTEXT_ORG_POSTING.equalsIgnoreCase(latest.getContextType())) && latest.getContextId() != null) {
             studentJobPostingLiteMapper.updateBizStatus(latest.getContextId(), 2);
         }
         Long orderId = getOrCreateBrokerageOrderForApplication(latest);
@@ -367,7 +395,7 @@ public class TutorApplicationService {
         tutorApplicationMapper.updateChatAccessStatus(applicationId, TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
         TutorApplication application = tutorApplicationMapper.selectById(applicationId);
         if (application != null) {
-            if ("DEMAND".equalsIgnoreCase(application.getContextType()) && application.getContextId() != null) {
+            if ((CONTEXT_DEMAND.equalsIgnoreCase(application.getContextType()) || CONTEXT_ORG_POSTING.equalsIgnoreCase(application.getContextType())) && application.getContextId() != null) {
                 studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 3);
             }
             log.info("tutor_application_paid applicationId={} senderUid={} receiverUid={}", applicationId, application.getSenderUid(), application.getReceiverUid());
@@ -455,7 +483,8 @@ public class TutorApplicationService {
         if (application == null) {
             return defaultAmountFen;
         }
-        if (!"DEMAND".equals(application.getContextType()) || application.getContextId() == null) {
+        String ctx = application.getContextType();
+        if (!(CONTEXT_DEMAND.equals(ctx) || CONTEXT_ORG_POSTING.equals(ctx)) || application.getContextId() == null) {
             return defaultAmountFen;
         }
         StudentJobPostingLite demand = studentJobPostingLiteMapper.selectById(application.getContextId());
@@ -532,15 +561,16 @@ public class TutorApplicationService {
 
     private static Long resolveTeacherUid(TutorApplication application) {
         ThrowUtils.throwIf(application == null, ErrorCode.PARAMS_ERROR);
-        if ("TEACHER".equals(application.getSenderRole())) {
+        if (ROLE_TEACHER.equals(application.getSenderRole())) {
             return application.getSenderUid();
         }
         return application.getReceiverUid();
     }
 
     private static String normalizeRole(Integer role) {
-        if (Integer.valueOf(1).equals(role)) return "TEACHER";
-        if (Integer.valueOf(2).equals(role)) return "STUDENT";
+        if (Integer.valueOf(1).equals(role)) return ROLE_TEACHER;
+        if (Integer.valueOf(2).equals(role)) return ROLE_STUDENT;
+        if (Integer.valueOf(3).equals(role)) return ROLE_ORG;
         ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR);
         return null;
     }

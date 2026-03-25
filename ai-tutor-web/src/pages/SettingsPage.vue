@@ -184,19 +184,19 @@ onMounted(() => {
         <!-- 3. 业务设置 (仅教师端显示打招呼语设置，或者双端都显示根据需求，目前保留原逻辑双端都可设) -->
         <section class="card">
           <div class="card-header">
-            <span>默认问候语</span>
+            <span>默认申请语</span>
             <div class="header-actions">
               <button class="btn-text" type="button" :disabled="loading" @click="onReset">恢复默认</button>
               <button class="btn-primary-sm" type="button" :disabled="loading" @click="onSave">保存</button>
             </div>
           </div>
           <div class="greeting-box">
-            <div class="greeting-tip">发起申请时会自动填充，可在发送前临时修改。</div>
+            <div class="greeting-tip">发起家教申请时会自动填充，可在发送前临时修改。</div>
             <textarea
               v-model="greeting"
               class="textarea"
               rows="4"
-              placeholder="请输入默认打招呼语..."
+              placeholder="请输入默认申请语..."
               :disabled="loading"
             />
           </div>

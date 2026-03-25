@@ -92,11 +92,11 @@ public class ChatRoomServiceImpl implements ChatRoomService {
             ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "教师资料未初始化，请先完成教师端入驻");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(targetUid);
             ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是学生账号，无法建立会话");
-        } else if (Integer.valueOf(2).equals(role)) {
+        } else if (Integer.valueOf(2).equals(role) || Integer.valueOf(3).equals(role)) {
             teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(targetUid);
             ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法建立会话");
             studentProfileId = studentProfileLiteMapper.selectIdByUserId(uid);
-            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "学生资料未初始化，请先完成学生端注册");
+            ThrowUtils.throwIf(studentProfileId == null, ErrorCode.OPERATION_ERROR, "资料未初始化，请联系管理员");
         } else {
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "用户角色不合法");
             return null;
@@ -172,7 +172,7 @@ public class ChatRoomServiceImpl implements ChatRoomService {
             Long teacherProfileId = teacherProfileLiteMapper.selectIdByUserId(uid);
             ThrowUtils.throwIf(teacherProfileId == null, ErrorCode.PARAMS_ERROR);
             rooms = roomMapper.listByTeacherProfileId(teacherProfileId, request.getCursor(), pageSize);
-        } else if (Integer.valueOf(2).equals(role)) {
+        } else if (Integer.valueOf(2).equals(role) || Integer.valueOf(3).equals(role)) {
             Long studentProfileId = studentProfileLiteMapper.selectIdByUserId(uid);
             ThrowUtils.throwIf(studentProfileId == null, ErrorCode.PARAMS_ERROR);
             rooms = roomMapper.listByStudentProfileId(studentProfileId, request.getCursor(), pageSize);

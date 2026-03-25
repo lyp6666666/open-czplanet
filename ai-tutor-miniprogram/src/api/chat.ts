@@ -32,5 +32,19 @@ export const chatApi = {
       method: 'POST',
       data: { targetUid }
     });
+  },
+  startChatByApplication(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string }) {
+    return request({
+      url: '/chat/application/start-chat',
+      method: 'POST',
+      data: params
+    });
+  },
+  decideApplication(applicationId: number, action: 'ACCEPT' | 'REJECT') {
+    return request({
+      url: `/chat/application/${applicationId}/decision-message`,
+      method: 'POST',
+      data: { action }
+    });
   }
 };

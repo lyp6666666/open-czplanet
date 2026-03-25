@@ -7,6 +7,7 @@ import { userApi } from '@/api/user'
 import type { ChatRoomItemResp, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { normalizeAvatarUrl } from '@/utils/avatar'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,6 +23,7 @@ const isLast = ref(false)
 
 const userMap = ref<Record<number, UserSimpleVO>>({})
 const search = ref('')
+const avatarBroken = ref<Record<number, boolean>>({})
 
 type StreamMsgEvent = {
   msgId: number
@@ -98,8 +100,15 @@ function lastMsgText(raw: unknown): string {
 }
 
 function avatarOf(uid: number): string {
+  if (avatarBroken.value[uid]) return ''
   const v = userMap.value[uid]?.avatar
-  return typeof v === 'string' ? v.trim() : ''
+  return normalizeAvatarUrl(v)
+}
+
+function markAvatarBroken(uid: number) {
+  if (!uid) return
+  if (avatarBroken.value[uid]) return
+  avatarBroken.value = { ...avatarBroken.value, [uid]: true }
 }
 
 async function enrichUsers(list: ChatRoomItemResp[]) {
@@ -204,7 +213,7 @@ watch(
             effectiveUnread(r.roomId, r.unreadCount) > 99 ? '99+' : effectiveUnread(r.roomId, r.unreadCount)
           }}</span>
           <div class="avatar">
-            <img v-if="avatarOf(r.otherUid)" :src="avatarOf(r.otherUid)" alt="" />
+            <img v-if="avatarOf(r.otherUid)" :src="avatarOf(r.otherUid)" alt="" @error="markAvatarBroken(r.otherUid)" />
             <span v-else class="avatar-fallback">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</span>
           </div>
           <div class="main">
