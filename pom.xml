@@ -28,6 +28,7 @@
     <module>ai-tutor-starter</module>
     <module>ai-tutor-admin</module>
     <module>payment-service</module>
+    <module>ai-tutor-gateway</module>
   </modules>
 
   <!-- 统一依赖版本管理 -->
@@ -86,6 +87,15 @@
         <groupId>com.alibaba.cloud</groupId>
         <artifactId>spring-cloud-alibaba-dependencies</artifactId>
         <version>${spring.cloud.alibaba.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
+      <!-- Spring Cloud -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring.cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>

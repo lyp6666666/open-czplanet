@@ -9,22 +9,15 @@ import com.ai.tutor.appointment.model.dto.user.UpdatePhoneRequest;
 import com.ai.tutor.appointment.model.dto.user.UpdatePhoneV2Request;
 import com.ai.tutor.appointment.model.dto.user.UserLoginRequest;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
-import com.ai.tutor.appointment.mapper.StudentProfileMapper;
-import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
-import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
-import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
-import com.ai.tutor.appointment.mapper.UserMapper;
-import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
-import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.model.vo.UserCardVO;
 import com.ai.tutor.appointment.model.vo.UserMeVO;
 import com.ai.tutor.appointment.model.vo.UserSettingsVO;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
+import com.ai.tutor.appointment.service.UserReadService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
-import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.common.BaseResponse;
@@ -34,12 +27,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -53,51 +43,11 @@ public class UserController {
     @Resource
     private UserService userService;
     @Resource
-    private UserMapper userMapper;
-    @Resource
-    private TeacherProfileMapper teacherProfileMapper;
-    @Resource
-    private StudentProfileMapper studentProfileMapper;
-    @Resource
-    private OrganizationProfileMapper organizationProfileMapper;
-    @Resource
-    private StudentJobPostingMapper studentJobPostingMapper;
-    @Resource
-    private ObjectProvider<TutorAppointmentMapper> tutorAppointmentMapperProvider;
-    @Resource
     private UserSettingsService userSettingsService;
-
     @Resource
-    private MinioProperties minioProperties;
+    private UserReadService userReadService;
 
     private static final Pattern PHONE_PATTERN = Pattern.compile("^1\\d{10}$");
-    private static final String DEFAULT_AVATAR_PATH = "/avatars/default-avatar.svg";
-
-    private String resolveDefaultAvatarUrl() {
-        if (minioProperties != null && minioProperties.isEnabled()) {
-            String publicBaseUrl = minioProperties.getPublicBaseUrl();
-            String objectKey = minioProperties.getDefaultAvatarObjectKey();
-            if (publicBaseUrl != null && !publicBaseUrl.trim().isEmpty() && objectKey != null && !objectKey.trim().isEmpty()) {
-                String base = publicBaseUrl.trim();
-                String key = objectKey.trim();
-                if (key.startsWith("/")) {
-                    key = key.substring(1);
-                }
-                if (base.endsWith("/")) {
-                    return base + key;
-                }
-                return base + "/" + key;
-            }
-        }
-        return DEFAULT_AVATAR_PATH;
-    }
-
-    private String normalizeAvatar(String avatar) {
-        if (avatar != null && !avatar.trim().isEmpty()) {
-            return avatar;
-        }
-        return resolveDefaultAvatarUrl();
-    }
 
     /**
      *  获取验证码
@@ -166,46 +116,13 @@ public class UserController {
         String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
         ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
         Long userId = Long.parseLong(uidStr);
-        User user = userMapper.selectById(userId);
-        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
-
-        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
-        UserMeVO.UserMeVOBuilder builder = UserMeVO.builder()
-                .id(user.getId())
-                .name(user.getName())
-                .phone(user.getPhone())
-                .avatar(normalizeAvatar(user.getAvatar()))
-                .sex(user.getSex())
-                .userType(user.getUserType());
-        if (role == UserRoleEnum.TEACHER) {
-            builder.teacherProfile(teacherProfileMapper.selectByUserId(userId));
-        } else if (role == UserRoleEnum.STUDENT) {
-            builder.studentProfile(studentProfileMapper.selectByUserId(userId));
-        } else if (role == UserRoleEnum.ORG) {
-            builder.organizationProfile(organizationProfileMapper.selectByUserId(userId));
-        }
-        return ResultUtils.success(builder.build());
+        return ResultUtils.success(userReadService.getMe(userId));
     }
 
     @GetMapping("/batch")
     @Operation(summary = "批量获取用户基础信息", description = "用于会话列表/聊天等场景的昵称头像补齐")
     public BaseResponse<List<UserSimpleVO>> batch(@RequestParam(value = "ids", required = false) List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            return ResultUtils.success(Collections.emptyList());
-        }
-        List<User> users = userMapper.selectByIds(ids);
-        if (users == null || users.isEmpty()) {
-            return ResultUtils.success(Collections.emptyList());
-        }
-        List<UserSimpleVO> result = users.stream()
-                .map(u -> UserSimpleVO.builder()
-                        .id(u.getId())
-                        .name(u.getName())
-                        .avatar(normalizeAvatar(u.getAvatar()))
-                        .userType(u.getUserType())
-                        .build())
-                .collect(Collectors.toList());
-        return ResultUtils.success(result);
+        return ResultUtils.success(userReadService.batch(ids));
     }
 
     @GetMapping("/card")
@@ -214,32 +131,8 @@ public class UserController {
         String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
         ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
         ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
-
-        User user = userMapper.selectById(uid);
-        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
-
-        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
-        UserCardVO.UserCardVOBuilder builder = UserCardVO.builder()
-                .user(UserSimpleVO.builder()
-                        .id(user.getId())
-                        .name(user.getName())
-                        .avatar(normalizeAvatar(user.getAvatar()))
-                        .userType(user.getUserType())
-                        .build());
-
-        if (role == UserRoleEnum.TEACHER) {
-            builder.teacherProfile(teacherProfileMapper.selectByUserId(uid));
-            TutorAppointmentMapper appt = tutorAppointmentMapperProvider == null ? null : tutorAppointmentMapperProvider.getIfAvailable();
-            if (appt != null) {
-                builder.teacherHistory(appt.listByUser(uid, 5, null, 20));
-            }
-        } else if (role == UserRoleEnum.STUDENT) {
-            builder.studentProfile(studentProfileMapper.selectByUserId(uid));
-            builder.jobPosting(studentJobPostingMapper.selectLatestPublishedByParentId(uid));
-            builder.studentHistory(studentJobPostingMapper.listByParentId(uid, null, 20));
-        }
-
-        return ResultUtils.success(builder.build());
+        Long currentUserId = Long.parseLong(uidStr);
+        return ResultUtils.success(userReadService.getUserCard(currentUserId, uid));
     }
 
     @PostMapping("/updateUserPhone")
@@ -294,9 +187,8 @@ public class UserController {
         String uidStr = (String) request.getAttribute(com.ai.tutor.utils.RequestHolder.ATTRIBUTE_UID);
         ThrowUtils.throwIf(uidStr == null, ErrorCode.NOT_LOGIN_ERROR);
         Long userId = Long.parseLong(uidStr);
-        User user = userMapper.selectById(userId);
-        ThrowUtils.throwIf(user == null, ErrorCode.NOT_FOUND_ERROR);
-        String code = smsService.sendCode(user.getPhone(), RedisKeyPrefix.USER_PHONE.getPrefix());
+        String phone = userReadService.getPhoneByUserId(userId);
+        String code = smsService.sendCode(phone, RedisKeyPrefix.USER_PHONE.getPrefix());
         return ResultUtils.success(code);
     }
 
@@ -333,8 +225,7 @@ public class UserController {
         String v = newPhone.trim();
         ThrowUtils.throwIf(v.isEmpty() || !PHONE_PATTERN.matcher(v).matches(), ErrorCode.PARAMS_ERROR, "手机号格式不合法");
 
-        User occupied = userMapper.selectByPhone(v);
-        ThrowUtils.throwIf(occupied != null && !occupied.getId().equals(userId), ErrorCode.OPERATION_ERROR, "手机号已被占用");
+        userReadService.ensurePhoneNotOccupiedByOther(v, userId);
 
         String code = smsService.sendCode(v, RedisKeyPrefix.USER_PHONE.getPrefix());
         return ResultUtils.success(code);

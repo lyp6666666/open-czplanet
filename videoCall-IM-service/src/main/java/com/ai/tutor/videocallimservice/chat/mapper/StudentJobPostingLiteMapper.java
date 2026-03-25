@@ -6,7 +6,8 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface StudentJobPostingLiteMapper {
+
     StudentJobPostingLite selectById(@Param("id") Long id);
 
-    int updateBizStatus(@Param("id") Long id, @Param("bizStatus") Integer bizStatus);
+    int updateBizStatus(@Param("id") Long id, @Param("status") Integer status);
 }

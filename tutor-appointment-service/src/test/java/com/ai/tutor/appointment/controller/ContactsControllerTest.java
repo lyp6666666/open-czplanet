@@ -1,8 +1,7 @@
 package com.ai.tutor.appointment.controller;
 
-import com.ai.tutor.appointment.mapper.UserMapper;
-import com.ai.tutor.appointment.model.entity.User;
-import com.ai.tutor.common.integration.ImFacade;
+import com.ai.tutor.appointment.model.vo.UserSimpleVO;
+import com.ai.tutor.appointment.service.ContactQueryService;
 import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.utils.RequestHolder;
 import org.junit.jupiter.api.AfterEach;
@@ -23,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,10 +39,7 @@ class ContactsControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private ImFacade imFacade;
-
-    @MockBean
-    private UserMapper userMapper;
+    private ContactQueryService contactQueryService;
 
     @BeforeEach
     void setUp() {
@@ -60,62 +56,41 @@ class ContactsControllerTest {
 
     @Test
     void recentShouldReturnUsers() throws Exception {
-        when(imFacade.listRecentContactUids(eq(1001L), eq(2))).thenReturn(List.of(1002L, 1003L));
-        User u1 = new User();
-        u1.setId(1002L);
-        u1.setName("张三");
-        u1.setUserType(2);
-        User u2 = new User();
-        u2.setId(1003L);
-        u2.setName("李四");
-        u2.setUserType(1);
-        when(userMapper.selectByIds(anyList())).thenReturn(List.of(u1, u2));
+        UserSimpleVO u1 = UserSimpleVO.builder().id(1002L).name("张三").userType(2).build();
+        UserSimpleVO u2 = UserSimpleVO.builder().id(1003L).name("李四").userType(1).build();
+        when(contactQueryService.recentContacts(1001L, 2)).thenReturn(List.of(u1, u2));
 
         mockMvc.perform(get("/api/v1/contacts/recent").param("limit", "2"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].id").value(1002))
                 .andExpect(jsonPath("$.data[1].id").value(1003));
+        verify(contactQueryService).recentContacts(1001L, 2);
     }
 
     @Test
     void searchShouldMatchPathAndReturnUsers() throws Exception {
-        User u = new User();
-        u.setId(1002L);
-        u.setName("张三");
-        u.setUserType(2);
-        when(userMapper.searchByKeyword(eq("张"), eq(10))).thenReturn(List.of(u));
+        UserSimpleVO u = UserSimpleVO.builder().id(1002L).name("张三").userType(2).build();
+        when(contactQueryService.searchContacts(1001L, 1, "张", 10)).thenReturn(List.of(u));
 
         mockMvc.perform(get("/api/v1/contacts/search").param("q", "张").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].name").value("张三"));
+        verify(contactQueryService).searchContacts(1001L, 1, "张", 10);
     }
 
     @Test
     void searchShouldFilterSelfAndNonTargetRole() throws Exception {
-        User self = new User();
-        self.setId(1001L);
-        self.setName("我自己");
-        self.setUserType(1);
-
-        User otherTeacher = new User();
-        otherTeacher.setId(1004L);
-        otherTeacher.setName("另一个老师");
-        otherTeacher.setUserType(1);
-
-        User student = new User();
-        student.setId(1002L);
-        student.setName("张三");
-        student.setUserType(2);
-
-        when(userMapper.searchByKeyword(eq("1"), eq(50))).thenReturn(List.of(self, otherTeacher, student));
+        UserSimpleVO student = UserSimpleVO.builder().id(1002L).name("张三").userType(2).build();
+        when(contactQueryService.searchContacts(1001L, 1, "1", 50)).thenReturn(List.of(student));
 
         mockMvc.perform(get("/api/v1/contacts/search").param("q", "1").param("limit", "50"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].id").value(1002));
+        verify(contactQueryService).searchContacts(1001L, 1, "1", 50);
     }
 
     @SpringBootConfiguration

@@ -1,14 +1,10 @@
 package com.ai.tutor.appointment.controller;
 
-import com.ai.tutor.appointment.mapper.UserMapper;
-import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.service.ContactQueryService;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.common.BaseResponse;
-import com.ai.tutor.common.integration.ImFacade;
-import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
-import com.ai.tutor.utils.ThrowUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
@@ -17,9 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 联系人接口（供“创建日程/选择授课对象”使用）。
@@ -36,59 +30,21 @@ import java.util.stream.Collectors;
 public class ContactsController {
 
     @Resource
-    private ImFacade imFacade;
-
-    @Resource
-    private UserMapper userMapper;
+    private ContactQueryService contactQueryService;
 
     @GetMapping("/recent")
     @Operation(summary = "最近联系人（来自会话列表）")
     public BaseResponse<List<UserSimpleVO>> recent(@RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
         Long uid = RequestHolder.get().getUid();
-        int safeLimit = Math.min(Math.max(limit == null ? 50 : limit, 1), 200);
-        List<Long> otherUids = imFacade.listRecentContactUids(uid, safeLimit);
-        if (otherUids == null || otherUids.isEmpty()) {
-            return ResultUtils.success(Collections.emptyList());
-        }
-        List<User> users = userMapper.selectByIds(otherUids);
-        if (users == null || users.isEmpty()) {
-            return ResultUtils.success(Collections.emptyList());
-        }
-        List<UserSimpleVO> result = users.stream()
-                .map(u -> UserSimpleVO.builder()
-                        .id(u.getId())
-                        .name(u.getName())
-                        .avatar(u.getAvatar())
-                        .userType(u.getUserType())
-                        .build())
-                .collect(Collectors.toList());
-        return ResultUtils.success(result);
+        return ResultUtils.success(contactQueryService.recentContacts(uid, limit));
     }
 
     @GetMapping("/search")
     @Operation(summary = "搜索联系人（昵称/手机号）")
     public BaseResponse<List<UserSimpleVO>> search(@RequestParam("q") String q,
                                                    @RequestParam(value = "limit", required = false, defaultValue = "50") Integer limit) {
-        ThrowUtils.throwIf(q == null || q.isBlank(), ErrorCode.PARAMS_ERROR);
         Long uid = RequestHolder.get() == null ? null : RequestHolder.get().getUid();
         Integer role = RequestHolder.get() == null ? null : RequestHolder.get().getRole();
-        final Integer expectUserType = Integer.valueOf(1).equals(role) ? 2 : (Integer.valueOf(2).equals(role) ? 1 : null);
-        int safeLimit = Math.min(Math.max(limit == null ? 50 : limit, 1), 200);
-        List<User> users = userMapper.searchByKeyword(q.trim(), safeLimit);
-        if (users == null || users.isEmpty()) {
-            return ResultUtils.success(Collections.emptyList());
-        }
-        List<UserSimpleVO> result = users.stream()
-                .filter(u -> u != null)
-                .filter(u -> uid == null || u.getId() == null || !u.getId().equals(uid))
-                .filter(u -> expectUserType == null || (u.getUserType() != null && u.getUserType().equals(expectUserType)))
-                .map(u -> UserSimpleVO.builder()
-                        .id(u.getId())
-                        .name(u.getName())
-                        .avatar(u.getAvatar())
-                        .userType(u.getUserType())
-                        .build())
-                .collect(Collectors.toList());
-        return ResultUtils.success(result);
+        return ResultUtils.success(contactQueryService.searchContacts(uid, role, q, limit));
     }
 }

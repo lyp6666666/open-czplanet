@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
+import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
@@ -187,6 +188,34 @@ public class BrokerageOrderService {
         }
         BrokerageOrder paid = brokerageOrderMapper.selectPaidByRoomId(roomId);
         return paid != null;
+    }
+
+    public BrokerageOrderPayInfo getPayableOrder(Long brokerageOrderId, Long uid) {
+        ThrowUtils.throwIf(brokerageOrderId == null || uid == null, ErrorCode.PARAMS_ERROR);
+
+        BrokerageOrder order = brokerageOrderMapper.selectById(brokerageOrderId);
+        ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
+        ThrowUtils.throwIf(!uid.equals(order.getPayerUid()), ErrorCode.NO_AUTH_ERROR);
+
+        if (BrokerageOrderStatus.PAID.name().equals(order.getStatus())) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "订单已支付");
+        }
+        if (BrokerageOrderStatus.CANCELED.name().equals(order.getStatus())) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "订单已取消");
+        }
+        if (!BrokerageOrderStatus.PENDING.name().equals(order.getStatus())) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "订单当前状态不可支付");
+        }
+
+        BrokerageOrderPayInfo info = new BrokerageOrderPayInfo();
+        info.setOrderId(order.getId());
+        info.setPayerUid(order.getPayerUid());
+        info.setAmountFen(order.getAmountFen());
+        info.setStatus(order.getStatus());
+        info.setSubject("信息费支付");
+        info.setBody("对接咨询费支付");
+        info.setApplicationId(order.getApplicationId());
+        return info;
     }
 
     public BrokerageOrderVO getById(Long orderId, Long uid) {

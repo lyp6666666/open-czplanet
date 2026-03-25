@@ -63,3 +63,4 @@ common-used.md
 ai-tutor-miniprogram/project.private.config.json
 ai-tutor-miniprogram/dist/
 ai-tutor-miniprogram/unpackage/
+.worktrees/

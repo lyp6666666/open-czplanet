@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: ai-tutor-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+    gateway:
+      routes:
+        - id: appointment-user-route
+          uri: lb://tutor-appointment-service
+          predicates:
+            - Path=/user/**
+        - id: appointment-api-route
+          uri: lb://tutor-appointment-service
+          predicates:
+            - Path=/api/**
+        - id: appointment-domain-route
+          uri: lb://tutor-appointment-service
+          predicates:
+            - Path=/appointment/**,/org/**
+        - id: im-chat-route
+          uri: lb://videoCall-IM-service
+          predicates:
+            - Path=/chat/**
+        - id: payment-route
+          uri: lb://payment-service
+          predicates:
+            - Path=/payment/**
+
+server:
+  port: ${SERVER_PORT:8080}
+
+gateway:
+  jwt:
+    issuer: ai-tutor
+    secrets:
+      - ${GATEWAY_JWT_SECRET:}
+  sign:
+    secret: ${GATEWAY_SIGN_SECRET:}
+    clock-skew-ms: 60000
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**

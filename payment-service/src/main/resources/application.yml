@@ -1,0 +1,57 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: payment-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+
+security:
+  gateway-identity:
+    enabled: true
+
+gateway:
+  sign:
+    secret: ${GATEWAY_SIGN_SECRET:}
+    clock-skew-ms: 60000
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**
+
+payment:
+  enabled: ${PAYMENT_ENABLED:true}
+  eventRetryDelayMs: ${PAYMENT_EVENT_RETRY_DELAY_MS:60000}
+  alipay:
+    appId: ${ALIPAY_APP_ID:}
+    privateKey: ${ALIPAY_PRIVATE_KEY:}
+    alipayPublicKey: ${ALIPAY_PUBLIC_KEY:}
+    notifyUrl: ${ALIPAY_NOTIFY_URL:}
+    gatewayUrl: ${ALIPAY_GATEWAY_URL:https://openapi.alipay.com/gateway.do}
+  wechat:
+    appId: ${WX_PAY_APPID:}
+    miniappId: ${WX_MINI_APPID:}
+    mchId: ${WX_PAY_MCHID:}
+    apiV3Key: ${WX_PAY_API_V3_KEY:}
+    privateKeyPath: ${WX_PAY_PRIVATE_KEY_PATH:}
+    certificateSerialNo: ${WX_PAY_CERT_SERIAL_NO:}
+    notifyUrl: ${WX_PAY_NOTIFY_URL:}
+    mock-enabled: ${PAYMENT_MOCK_ENABLED:false}
+  yungouos:
+    appId: ${PAYMENT_YUNGOUOS_APP_ID:}
+    appKey: ${PAYMENT_YUNGOUOS_APP_KEY:}
+    base-url: ${PAYMENT_YUNGOUOS_BASE_URL:https://api.pay.yungouos.com}
+    wechat-mch-id: ${PAYMENT_YUNGOUOS_WECHAT_MCH_ID:}
+    alipay-mch-id: ${PAYMENT_YUNGOUOS_ALIPAY_MCH_ID:}
+    notify-url: ${PAYMENT_YUNGOUOS_NOTIFY_URL:}
+    return-url: ${PAYMENT_YUNGOUOS_RETURN_URL:}
+    native-pay-type: ${PAYMENT_YUNGOUOS_NATIVE_PAY_TYPE:2}
+
+integration:
+  brokerage:
+    remote:
+      enabled: true

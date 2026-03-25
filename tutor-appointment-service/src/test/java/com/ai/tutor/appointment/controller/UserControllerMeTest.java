@@ -1,13 +1,9 @@
 package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
-import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
-import com.ai.tutor.appointment.mapper.StudentProfileMapper;
-import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
-import com.ai.tutor.appointment.mapper.UserMapper;
-import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
-import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.model.vo.UserMeVO;
+import com.ai.tutor.appointment.service.UserReadService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.UserSettingsService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
@@ -26,6 +22,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,15 +40,7 @@ class UserControllerMeTest {
     @MockBean
     private UserService userService;
     @MockBean
-    private UserMapper userMapper;
-    @MockBean
-    private TeacherProfileMapper teacherProfileMapper;
-    @MockBean
-    private StudentProfileMapper studentProfileMapper;
-    @MockBean
-    private OrganizationProfileMapper organizationProfileMapper;
-    @MockBean
-    private StudentJobPostingMapper studentJobPostingMapper;
+    private UserReadService userReadService;
     @MockBean
     private UserSettingsService userSettingsService;
     @MockBean
@@ -59,22 +48,23 @@ class UserControllerMeTest {
 
     @Test
     void meShouldReturnDefaultGreetingForTeacher() throws Exception {
-        User user = new User();
-        user.setId(1001L);
-        user.setUserType(UserRoleEnum.TEACHER.getValue());
-        user.setName("张老师");
-        user.setPhone("13800006909");
-        when(userMapper.selectById(1001L)).thenReturn(user);
-
         TeacherProfile profile = new TeacherProfile();
         profile.setUserId(1001L);
         profile.setDefaultGreeting("你好");
-        when(teacherProfileMapper.selectByUserId(1001L)).thenReturn(profile);
+        UserMeVO meVO = UserMeVO.builder()
+                .id(1001L)
+                .name("张老师")
+                .phone("13800006909")
+                .userType(UserRoleEnum.TEACHER.getValue())
+                .teacherProfile(profile)
+                .build();
+        when(userReadService.getMe(1001L)).thenReturn(meVO);
 
         mockMvc.perform(get("/user/me").requestAttr("uid", "1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.teacherProfile.defaultGreeting").value("你好"));
+        verify(userReadService).getMe(1001L);
     }
 
     @SpringBootConfiguration
