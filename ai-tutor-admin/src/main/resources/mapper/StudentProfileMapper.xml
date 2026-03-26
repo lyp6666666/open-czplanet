@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.admin.mapper.StudentProfileMapper">
+
+    <resultMap id="StudentProfileMap" type="com.ai.tutor.admin.model.entity.StudentProfile">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="real_name" property="realName"/>
+        <result column="age" property="age"/>
+        <result column="address" property="address"/>
+        <result column="demand_description" property="demandDescription"/>
+        <result column="budget" property="budget"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.admin.model.entity.StudentProfile"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO student_profile (
+            user_id, real_name, age, address, demand_description, budget, status, create_time, update_time
+        ) VALUES (
+            #{userId}, #{realName}, #{age}, #{address}, #{demandDescription}, #{budget}, #{status}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <select id="selectByUserId" parameterType="long" resultMap="StudentProfileMap">
+        SELECT *
+        FROM student_profile
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <update id="updateStudentProfile">
+        UPDATE student_profile
+        <set>
+            <if test="studentExtInfo.realName != null">
+                real_name = #{studentExtInfo.realName},
+            </if>
+            <if test="studentExtInfo.age != null">
+                age = #{studentExtInfo.age},
+            </if>
+            <if test="studentExtInfo.address != null">
+                address = #{studentExtInfo.address},
+            </if>
+            <if test="studentExtInfo.demandDescription != null">
+                demand_description = #{studentExtInfo.demandDescription},
+            </if>
+            <if test="studentExtInfo.budget != null">
+                budget = #{studentExtInfo.budget},
+            </if>
+            <if test="studentExtInfo.status != null">
+                status = #{studentExtInfo.status},
+            </if>
+            update_time = now()
+        </set>
+        WHERE user_id = #{userId}
+    </update>
+
+</mapper>

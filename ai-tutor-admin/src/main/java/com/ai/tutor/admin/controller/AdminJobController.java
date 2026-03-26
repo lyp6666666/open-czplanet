@@ -1,9 +1,9 @@
 package com.ai.tutor.admin.controller;
 
 import com.ai.tutor.admin.model.dto.RejectJobRequest;
+import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminJobService;
-import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.ResultUtils;
 import io.swagger.v3.oas.annotations.Operation;

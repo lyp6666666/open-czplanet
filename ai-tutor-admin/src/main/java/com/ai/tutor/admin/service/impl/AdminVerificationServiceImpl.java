@@ -1,9 +1,9 @@
 package com.ai.tutor.admin.service.impl;
 
 import com.ai.tutor.admin.mapper.AdminVerificationMapper;
+import com.ai.tutor.admin.model.entity.TeacherProfile;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminVerificationService;
-import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;

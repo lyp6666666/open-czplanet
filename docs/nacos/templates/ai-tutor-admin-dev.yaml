@@ -1,0 +1,14 @@
+# 管理端后端配置（DEV）
+# DataId: ai-tutor-admin-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 管理端多数配置是“业务逻辑 + DB”，一般不需要太多 Nacos 配置
+# - 如果有需要动态调节的开关（例如风控、白名单），可以统一放这里
+
+# 示例：预留一个管理端功能开关（如无此需求可删除）
+admin:
+  feature:
+    # 是否开启某些管理端实验功能
+    experimentalEnabled: false
+

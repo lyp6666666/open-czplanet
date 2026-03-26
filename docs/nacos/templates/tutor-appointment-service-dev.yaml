@@ -1,0 +1,32 @@
+# 预约服务配置（DEV）
+# DataId: tutor-appointment-service-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 微信/短信等第三方配置建议放到对应的“功能域 DataId”（例如 ai-tutor-sms-dev.yaml）
+# - 这里主要放该服务特有的开关与参数
+
+security:
+  gateway-identity:
+    # 是否启用“只信任来自网关的请求”能力（生产建议 true）
+    enabled: true
+
+integration:
+  im:
+    remote:
+      # 是否启用远程调用 IM 服务（生产建议 true；本地可按需关闭）
+      enabled: true
+
+# 微信小程序（如你们希望把它放服务专用 DataId，也可以放这里）
+wechat:
+  miniapp:
+    # 小程序 appid（DEV/PROD 不同）
+    appid: "<TODO:WX_MINI_APPID>"
+    # 小程序 secret（敏感）
+    secret: "<TODO:WX_MINI_SECRET>"
+    token: "<TODO:WX_MINI_TOKEN>"
+    aesKey: "<TODO:WX_MINI_AESKEY>"
+    msgDataFormat: JSON
+    # 是否开启微信相关 mock（仅 DEV 建议 true）
+    mock-enabled: true
+

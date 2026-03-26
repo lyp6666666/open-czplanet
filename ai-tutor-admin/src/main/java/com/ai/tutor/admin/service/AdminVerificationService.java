@@ -1,7 +1,7 @@
 package com.ai.tutor.admin.service;
 
 import com.ai.tutor.admin.model.vo.PageResult;
-import com.ai.tutor.appointment.model.entity.TeacherProfile;
+import com.ai.tutor.admin.model.entity.TeacherProfile;
 
 public interface AdminVerificationService {
     PageResult<TeacherProfile> listPendingVerifications(int page, int size);

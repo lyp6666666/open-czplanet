@@ -1,0 +1,22 @@
+# 短信配置（DEV）
+# DataId: ai-tutor-sms-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 当前短信实现使用 Spug Push（https://push.spug.cc）作为短信/通知通道
+# - token 为敏感信息，必须只存 Nacos（不要提交 Git）
+
+sms:
+  # 是否启用真实发送
+  # - true：真正调用短信通道
+  # - false：只写入 Redis/本地缓存，方便联调（生产不建议使用 false，除非明确知道后果）
+  realSendEnabled: true
+
+  spug:
+    # Spug Push 基础地址（一般无需修改）
+    baseUrl: "https://push.spug.cc"
+    # 推送 token（敏感）
+    token: "<TODO:SMS_SPUG_TOKEN>"
+    # 发送方名称（展示在推送内容里）
+    senderName: "推送助手"
+

@@ -1,6 +1,5 @@
 package com.ai.tutor.admin.model.vo;
 
-import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import lombok.Builder;
 import lombok.Data;
 

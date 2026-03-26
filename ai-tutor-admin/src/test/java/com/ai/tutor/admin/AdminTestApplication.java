@@ -15,8 +15,8 @@ import com.ai.tutor.admin.service.AdminOrganizationService;
 import com.ai.tutor.admin.service.AdminUserManageService;
 import com.ai.tutor.admin.service.AdminVerificationService;
 import com.ai.tutor.admin.model.entity.PaymentOrderRecord;
-import com.ai.tutor.appointment.model.entity.StudentJobPosting;
-import com.ai.tutor.appointment.model.entity.TeacherProfile;
+import com.ai.tutor.admin.model.entity.StudentJobPosting;
+import com.ai.tutor.admin.model.entity.TeacherProfile;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 

@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,7 +26,7 @@ import java.util.List;
 public class PaymentSuccessEventRetryJob {
 
     private final PaymentOrderService paymentOrderService;
-    private final RocketMQTemplate rocketMQTemplate;
+    private final ObjectProvider<RocketMQTemplate> rocketMQTemplateProvider;
 
     @Scheduled(fixedDelayString = "${payment.eventRetryDelayMs:60000}")
     public void run() {
@@ -38,6 +39,11 @@ public class PaymentSuccessEventRetryJob {
                 .last("limit 200"));
 
         if (list == null || list.isEmpty()) {
+            return;
+        }
+
+        RocketMQTemplate rocketMQTemplate = rocketMQTemplateProvider.getIfAvailable();
+        if (rocketMQTemplate == null) {
             return;
         }
 
@@ -66,4 +72,3 @@ public class PaymentSuccessEventRetryJob {
         }
     }
 }
-

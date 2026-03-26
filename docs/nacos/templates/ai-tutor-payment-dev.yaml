@@ -1,0 +1,40 @@
+# 支付域公共配置（DEV）
+# DataId: ai-tutor-payment-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - payment-service 已 import：ai-tutor-payment.yaml 与 ai-tutor-payment-dev.yaml
+# - 你可以选择把所有支付相关配置都放在这里（推荐），让 payment-service-dev.yaml 更轻
+# - 仍然建议：服务“运行开关/重试间隔”等保留在 payment-service-dev.yaml；三方密钥/回调统一放这里
+
+payment:
+  # 是否启用真实支付能力（DEV 常用 mock）
+  enabled: true
+
+  alipay:
+    appId: "<TODO:ALIPAY_APP_ID>"
+    privateKey: "<TODO:ALIPAY_PRIVATE_KEY>"
+    alipayPublicKey: "<TODO:ALIPAY_PUBLIC_KEY>"
+    notifyUrl: "<TODO:ALIPAY_NOTIFY_URL>"
+    gatewayUrl: "https://openapi.alipay.com/gateway.do"
+
+  wechat:
+    appId: "<TODO:WX_PAY_APPID>"
+    miniappId: "<TODO:WX_MINI_APPID>"
+    mchId: "<TODO:WX_PAY_MCHID>"
+    apiV3Key: "<TODO:WX_PAY_API_V3_KEY>"
+    privateKeyPath: "<TODO:WX_PAY_PRIVATE_KEY_PATH>"
+    certificateSerialNo: "<TODO:WX_PAY_CERT_SERIAL_NO>"
+    notifyUrl: "<TODO:WX_PAY_NOTIFY_URL>"
+    mock-enabled: false
+
+  yungouos:
+    appId: "<TODO:PAYMENT_YUNGOUOS_APP_ID>"
+    appKey: "<TODO:PAYMENT_YUNGOUOS_APP_KEY>"
+    base-url: "https://api.pay.yungouos.com"
+    wechat-mch-id: "<TODO:PAYMENT_YUNGOUOS_WECHAT_MCH_ID>"
+    alipay-mch-id: "<TODO:PAYMENT_YUNGOUOS_ALIPAY_MCH_ID>"
+    notify-url: "<TODO:PAYMENT_YUNGOUOS_NOTIFY_URL>"
+    return-url: "<TODO:PAYMENT_YUNGOUOS_RETURN_URL>"
+    native-pay-type: 2
+

@@ -1,7 +1,0 @@
-spring:
-  cloud:
-    nacos:
-      config:
-        server-addr: 106.52.179.248:8848
-        group: DEFAULT_GROUP
-        namespace: REPLACE_WITH_PROD_NAMESPACE_ID

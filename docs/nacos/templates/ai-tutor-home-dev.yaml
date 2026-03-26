@@ -1,0 +1,103 @@
+# 首页运营配置（DEV）
+# DataId: ai-tutor-home-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 对应后端配置类：home.guest.*（HomeGuestProperties）
+# - “不配也能跑”：后端对缺失字段有默认值；此模板提供可参考的完整结构与注释
+# - cities 字段用于“按城市投放”，为空代表全量投放
+
+home:
+  guest:
+    # 默认城市（定位失败或客户端未传 city 时使用）
+    defaultCity: "全国"
+
+    # 是否允许切换城市（决定前端是否展示城市选择器入口）
+    citySelectable: true
+
+    # 搜索框
+    search:
+      # 占位提示
+      placeholder: "搜索科目/老师/需求，例如：初中数学"
+      # 默认搜索模式：both / tutor / demand（以你们前端实现为准）
+      defaultMode: "both"
+
+    # 顶部导航（未登录）
+    nav:
+      - key: "tutor"
+        name: "找老师"
+        link: "/tutors"
+      - key: "demand"
+        name: "找需求"
+        link: "/demands"
+
+    # 登录/注册入口（未登录）
+    authEntry:
+      loginText: "登录/注册"
+      link: "/login"
+
+    # 热搜词（未登录首页）
+    hotWords:
+      - word: "初中数学"
+        # type：keyword / subject / tutor ...（以你们前端约定为准）
+        type: "keyword"
+        cities: []
+      - word: "小学英语"
+        type: "keyword"
+        cities: []
+
+    # Banner：轮播 + 卡片
+    banners:
+      # 轮播图
+      carousel:
+        - id: "carousel-1"
+          title: "一对一上门辅导"
+          subtitle: "匹配附近老师，支持试听"
+          # 如果 bannersUseMinio=true，这里写 objectKey（例如 banners/carousel-1.svg）
+          # 如果 bannersUseMinio=false，这里写完整 URL 或静态路径
+          imageUrl: "banners/carousel-1.svg"
+          link:
+            # ROUTE / URL
+            type: "ROUTE"
+            url: "/tutors"
+          cities: []
+      # 运营卡片
+      cards:
+        - id: "card-1"
+          title: "家教入驻"
+          subtitle: "认证后即可接单"
+          imageUrl: "banners/card-1.svg"
+          link:
+            type: "ROUTE"
+            url: "/login"
+          cities: []
+
+    # Banner 图片是否按 MinIO publicBaseUrl 拼装
+    # - true：imageUrl 配 objectKey，后端拼 publicBaseUrl
+    # - false：imageUrl 原样透传
+    bannersUseMinio: true
+
+    # 热门区 tab
+    hotTabs:
+      # 科目 tab 的默认上限（当 service/demand 未配置时，会按科目树生成）
+      subjectTabLimit: 8
+      # 热门服务 tab（可空，空则后端自动生成默认）
+      service:
+        - tabId: "math"
+          name: "数学"
+          subjectId: 1
+          cities: []
+      # 热门需求 tab（可空，空则后端自动生成默认）
+      demand:
+        - tabId: "english"
+          name: "英语"
+          subjectId: 2
+          cities: []
+
+    # 页脚链接
+    footerLinks:
+      - name: "关于我们"
+        url: "/about"
+      - name: "隐私政策"
+        url: "/privacy"
+

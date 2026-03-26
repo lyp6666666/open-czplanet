@@ -1,6 +1,6 @@
 # 后端启动说明
 
-本项目后端为 Maven 多模块 Spring Boot 工程，推荐启动聚合入口 `ai-tutor-starter`（会把 `tutor-appointment-service` 与 `videoCall-IM-service` 一起拉起到同一个进程里）。
+本项目后端为 Maven 多模块 Spring Boot 工程，采用微服务模式：网关与各服务独立启动，通过 Nacos 完成配置读取与服务注册发现。
 
 ## 0. Docker 安装（macOS）
 
@@ -131,40 +131,44 @@ CREATE TABLE IF NOT EXISTS collaboration_proposal (
 
 ## 3. 配置说明（按需修改）
 
-默认配置文件：
+默认配置文件（各服务保留本地兜底，同时支持从 Nacos 拉配置覆盖）：
 
-- 聚合启动：`ai-tutor-starter/src/main/resources/application.yml`
-- 单模块启动：`tutor-appointment-service/src/main/resources/application.yml`
-- IM 模块：`videoCall-IM-service/src/main/resources/application.yml`
+- 网关：`ai-tutor-gateway/src/main/resources/application.yml`
+- 预约：`tutor-appointment-service/src/main/resources/application.yml`
+- IM：`videoCall-IM-service/src/main/resources/application.yml`
+- 支付：`payment-service/src/main/resources/application.yml`
+- 管理端后端：`ai-tutor-admin/src/main/resources/application.yml`
 
 你通常需要关注：
 
 - `spring.datasource.*`（MySQL 连接）
 - `spring.data.redis.*`（Redis 连接）
 - `jwt.secrets`（可用环境变量 `JWT_SECRET_PRIMARY` 覆盖）
-- `server.port`（聚合启动默认 `8080`）
+- `server.port`（各服务默认端口见下文）
 
-## 4. 启动方式（推荐：聚合启动）
+## 4. 启动方式（推荐：一键启动全部服务）
 
-推荐在模块目录执行（避免父工程缺少 mainClass 导致的 `Unable to find a suitable main class` 报错）：
-
-```bash
-cd /Users/bytedance/lyp/project/huoyue/ai_platform/ai-tutor-starter
-sh ../mvnw -am spring-boot:run
-```
-
-如果你希望在项目根目录执行，也可以显式指定 mainClass：
+一键启动（会先启动 Docker 依赖，再启动网关 + 各服务）：
 
 ```bash
 cd /Users/bytedance/lyp/project/huoyue/ai_platform
-sh ./mvnw -pl ai-tutor-starter -am spring-boot:run -Dspring-boot.run.mainClass=com.ai.tutor.TutorStartApplication
+sh scripts/dev_all_up.sh
+```
+
+一键停止：
+
+```bash
+cd /Users/bytedance/lyp/project/huoyue/ai_platform
+sh scripts/dev_all_down.sh
 ```
 
 启动成功后默认端口：
 
-- 后端：`http://localhost:8080`
-- Swagger UI：`http://localhost:8080/swagger-ui.html`
-- OpenAPI JSON：`http://localhost:8080/v3/api-docs`
+- 网关：`http://localhost:18080`
+- 预约：`http://localhost:18081`
+- IM：`http://localhost:18082`
+- 支付：`http://localhost:18083`
+- 管理端后端：`http://localhost:18084`
 
 ## 4.1 MinIO 资源准备（首次必做）
 
@@ -202,37 +206,31 @@ bash scripts/minio_seed_defaults.sh
 用下面命令快速验证后端是否具备上传接口：
 
 ```bash
-curl -sS http://localhost:8080/api/v1/assets/upload
+curl -sS http://localhost:18080/api/v1/assets/upload
 ```
 
 预期返回类似：
 `{"code":40100,"data":null,"message":"缺少 Authorization: Bearer token"}`
 
 如果不是这个响应，请按顺序处理：
-1) 确保你启动的是 `ai-tutor-starter`（推荐）或 `tutor-appointment-service`，而不是其他进程占用了 8080
+1) 确保你启动的是 `ai-tutor-gateway` 或 `tutor-appointment-service`
 2) 重启后端进程（IDEA/终端都可）
 3) 再次执行上面的 curl 校验接口是否存在
 
-## 5. 启动方式（备选：单模块启动）
+## 5. 启动方式（备选：单服务启动）
 
-如果你只想启动家教业务模块（不聚合 IM 模块）：
+例如只启动预约服务：
 
 ```bash
-cd /Users/bytedance/lyp/project/huoyue/ai_platform
-sh ./mvnw -pl tutor-appointment-service -am spring-boot:run
+cd /Users/bytedance/lyp/project/huoyue/ai_platform/tutor-appointment-service
+SERVER_PORT=18081 SPRING_PROFILES_ACTIVE=dev sh ../mvnw -am spring-boot:run
 ```
-
-> 注意：`tutor-appointment-service` 默认未显式指定 `server.port`，会使用 Spring Boot 默认端口 8080。若你同时启动多个模块，请给不同进程指定不同端口，例如：
->
-> ```bash
-> sh ./mvnw -pl tutor-appointment-service -am spring-boot:run -Dspring-boot.run.arguments="--server.port=8081"
-> ```
 
 ## 6. 前后端联调
 
-前端默认把 `/api/*` 代理到 `http://localhost:8080`（见 `ai-tutor-web/vite.config.ts`）。
+前端默认把 `/api/*` 代理到 `http://localhost:18080`（见 `ai-tutor-web/vite.config.ts`）。
 
 因此联调顺序建议：
 
-1) 启动后端（8080）
+1) 启动后端（18080 网关）
 2) 启动前端（5173），打开首页 `http://localhost:5173/`

@@ -1,0 +1,38 @@
+server:
+  port: ${SERVER_PORT:18084}
+
+spring:
+  application:
+    name: ai-tutor-admin
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+  cloud:
+    nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+      discovery:
+        server-addr: 106.52.179.248:8848
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: Aa123456
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+
+springdoc:
+  packages-to-scan: com.ai.tutor.admin.controller
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

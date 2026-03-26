@@ -1,0 +1,78 @@
+# 公共配置（DEV）
+# DataId: ai-tutor-common-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 放“多服务共享 / 频繁调整 / 需要统一”的配置
+# - 不要放单服务独有的第三方 key（放到对应 service 的 *-dev.yaml）
+# - 不要把真实密钥提交到 Git；此模板用 <TODO> 占位
+
+# JWT（服务端签发/校验）
+jwt:
+  # issuer 必须与签发 token 时保持一致
+  issuer: ai-tutor
+  # 过期时间：Spring Boot Duration 写法，支持 24h/30m/15s
+  expiration: 24h
+  # 多密钥轮换：第一个为主密钥，后续可用于平滑轮换
+  secrets:
+    - "<TODO:JWT_SECRET_PRIMARY>"
+
+# 运营/运维类开关
+ops:
+  # 运营接口验签 token（为空代表不校验或使用默认策略，具体看代码实现）
+  verifyToken: "<TODO:OPS_VERIFY_TOKEN>"
+
+# 开发环境便捷开关
+dev:
+  # 是否在接口响应里暴露短信验证码（仅 DEV 建议开启；PROD 禁止开启）
+  exposeSmsCode: false
+
+# 对象存储（MinIO）
+storage:
+  minio:
+    # 是否启用 MinIO 存储实现（DEV 本地建议 true）
+    enabled: true
+    # MinIO API 地址（不要写 Console 地址 9001）
+    endpoint: http://127.0.0.1:9000
+    # 访问 key（DEV 可用默认值；PROD 必须更换）
+    accessKey: minioadmin
+    # 密钥（DEV 可用默认值；PROD 必须更换）
+    secretKey: minioadmin
+    # 存储桶
+    bucket: ai-tutor-assets
+    # 公网/前端访问资源的 base url（如果前面有网关/域名，这里应改为对应域名）
+    publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
+    # 默认头像对象 key（需确保桶里存在该对象）
+    defaultAvatarObjectKey: avatars/default.svg
+    # 启动时是否自动创建 bucket（DEV 可开；PROD 建议由运维预创建）
+    autoCreateBucket: true
+    # 允许的头像外链前缀（用于安全校验，防止恶意外链）
+    allowedAvatarUrlPrefixes:
+      - http://127.0.0.1:9000/ai-tutor-assets
+  upload:
+    # 普通上传最大字节数（20MB）
+    maxSizeBytes: 20971520
+    # 头像上传最大字节数（5MB）
+    avatarMaxSizeBytes: 5242880
+    # 允许上传的 Content-Type 白名单
+    allowedContentTypes:
+      - image/jpeg
+      - image/png
+      - image/webp
+      - image/gif
+      - image/svg+xml
+
+# 网关签名校验（各服务保持一致）
+gateway:
+  sign:
+    # 与网关的签名 secret 一致；用于服务端校验“来自网关的请求身份”
+    secret: "<TODO:GATEWAY_SIGN_SECRET>"
+    # 允许的时间偏移（毫秒）
+    clock-skew-ms: 60000
+    # 不需要签名校验的路径（应与网关保持一致/或为服务级别白名单）
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**
+

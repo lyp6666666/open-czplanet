@@ -1,8 +1,8 @@
 package com.ai.tutor.admin.model.vo;
 
-import com.ai.tutor.appointment.model.entity.StudentProfile;
-import com.ai.tutor.appointment.model.entity.TeacherProfile;
-import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.admin.model.entity.StudentProfile;
+import com.ai.tutor.admin.model.entity.TeacherProfile;
+import com.ai.tutor.admin.model.entity.User;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,4 +16,3 @@ public class AdminUserDetailVO {
 
     private StudentProfile studentProfile;
 }
-

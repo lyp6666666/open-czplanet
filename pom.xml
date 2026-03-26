@@ -25,7 +25,6 @@
     <module>videoCall-IM-service</module>
     <module>ai-tutor-common</module>
       <module>ai-tutor-mq</module>
-    <module>ai-tutor-starter</module>
     <module>ai-tutor-admin</module>
     <module>payment-service</module>
     <module>ai-tutor-gateway</module>
@@ -80,6 +79,12 @@
         <groupId>com.baomidou</groupId>
         <artifactId>mybatis-plus-boot-starter</artifactId>
         <version>3.5.7</version> <!-- Spring Boot 3.2.x 推荐版本 -->
+      </dependency>
+
+      <dependency>
+        <groupId>org.mybatis</groupId>
+        <artifactId>mybatis-spring</artifactId>
+        <version>3.0.5</version>
       </dependency>
 
       <!-- Spring Cloud Alibaba -->

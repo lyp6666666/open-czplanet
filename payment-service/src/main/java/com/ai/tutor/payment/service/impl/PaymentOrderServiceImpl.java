@@ -9,6 +9,8 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import cn.hutool.core.util.IdUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,8 +24,8 @@ import java.time.temporal.ChronoUnit;
 @Service
 public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, PaymentOrder> implements PaymentOrderService {
 
-    @jakarta.annotation.Resource
-    private org.apache.rocketmq.spring.core.RocketMQTemplate rocketMQTemplate;
+    @Autowired(required = false)
+    private RocketMQTemplate rocketMQTemplate;
 
     @Override
     public PaymentOrder getByOrderNo(String orderNo) {
@@ -60,7 +62,11 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                     event.setChannel(order.getChannel());
                     event.setProvider(order.getProvider());
                     event.setProviderOrderNo(order.getProviderOrderNo());
-                    rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                    if (rocketMQTemplate != null) {
+                        rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                    } else {
+                        log.warn("RocketMQTemplate 不存在，跳过支付成功事件投递. orderNo={}", orderNo);
+                    }
                 }
             } catch (Exception e) {
                 log.error("Failed to send payment success event for order {}", orderNo, e);
@@ -198,7 +204,11 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                     event.setChannel(order.getChannel());
                     event.setProvider(order.getProvider());
                     event.setProviderOrderNo(order.getProviderOrderNo());
-                    rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                    if (rocketMQTemplate != null) {
+                        rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                    } else {
+                        log.warn("RocketMQTemplate 不存在，跳过支付成功事件投递. orderNo={}", orderNo);
+                    }
                     markEventSent(orderNo);
                 }
             } catch (Exception e) {

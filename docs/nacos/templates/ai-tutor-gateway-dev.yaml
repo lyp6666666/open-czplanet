@@ -1,0 +1,27 @@
+# 网关配置（DEV）
+# DataId: ai-tutor-gateway-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 网关的 JWT secret / sign secret 都属于敏感配置，应只存 Nacos（不要提交 Git）
+# - routes 一般不建议放 Nacos（除非要动态路由）；本仓库 routes 在网关本地 yml 里维护
+
+gateway:
+  jwt:
+    # JWT 签发方标识（需和后端/前端约定一致）
+    issuer: ai-tutor
+    # JWT 密钥列表：支持多密钥（用于轮换）
+    secrets:
+      - "<TODO:GATEWAY_JWT_SECRET>"
+  sign:
+    # 网关侧的签名 secret（用于请求签名/验签）
+    secret: "<TODO:GATEWAY_SIGN_SECRET>"
+    # 允许的时间偏移（毫秒）
+    clock-skew-ms: 60000
+    # 放行路径：不需要签名校验
+    whitelist-paths:
+      - /user/loginOrRegister
+      - /user/sendcode
+      - /api/v1/public/**
+      - /payment/notify/**
+

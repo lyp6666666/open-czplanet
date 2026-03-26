@@ -1,12 +1,27 @@
 spring:
   application:
     name: tutor-appointment-service
+  profiles:
+    active: dev
   cloud:
     nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        server-addr: 106.52.179.248:8848
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
   config:
     import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-sms-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:file:./.private/tutor-appointment-service.yml
       - optional:file:../.private/tutor-appointment-service.yml
   datasource:
@@ -47,7 +62,7 @@ mybatis:
   mapper-locations: classpath:mapper/*.xml
 
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:18081}
 
 security:
   gateway-identity:

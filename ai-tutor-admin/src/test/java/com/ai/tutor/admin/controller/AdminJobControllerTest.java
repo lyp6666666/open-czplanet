@@ -2,10 +2,10 @@ package com.ai.tutor.admin.controller;
 
 import com.ai.tutor.admin.AdminTestApplication;
 import com.ai.tutor.admin.model.dto.RejectJobRequest;
+import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminJobService;
 import com.ai.tutor.admin.utils.JwtUtil;
-import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

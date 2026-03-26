@@ -1,7 +1,7 @@
 package com.ai.tutor.admin.service;
 
 import com.ai.tutor.admin.model.vo.PageResult;
-import com.ai.tutor.appointment.model.entity.StudentJobPosting;
+import com.ai.tutor.admin.model.entity.StudentJobPosting;
 
 public interface AdminJobService {
     PageResult<StudentJobPosting> listPendingJobs(int page, int size);

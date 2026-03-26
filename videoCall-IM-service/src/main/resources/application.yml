@@ -1,10 +1,25 @@
 spring:
   application:
     name: videoCall-IM-service
+  profiles:
+    active: dev
   cloud:
     nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        server-addr: 106.52.179.248:8848
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+  config:
+    import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -43,7 +58,7 @@ mybatis:
   mapper-locations: classpath:mapper/*.xml
 
 server:
-  port: ${SERVER_PORT:8082}
+  port: ${SERVER_PORT:18082}
 
 security:
   gateway-identity:

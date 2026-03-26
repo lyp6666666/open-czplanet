@@ -2,21 +2,21 @@
 
 ## 启动方式（统一入口）
 
-管理端随聚合启动模块一起启动：
+管理端后端服务独立启动：
 
 ```bash
-cd /Users/bytedance/lyp/project/huoyue/ai_platform
-./mvnw -pl ai-tutor-starter -am spring-boot:run
+cd /Users/bytedance/lyp/project/huoyue/ai_platform/ai-tutor-admin
+SERVER_PORT=18084 SPRING_PROFILES_ACTIVE=dev sh ../mvnw -am spring-boot:run
 ```
 
-默认端口为 `8080`（以 [application.yml](file:///Users/bytedance/lyp/project/huoyue/ai_platform/ai-tutor-starter/src/main/resources/application.yml) 为准）。
+默认端口为 `18084`（以 [application.yml](file:///Users/bytedance/lyp/project/huoyue/ai_platform/ai-tutor-admin/src/main/resources/application.yml) 为准）。
 
 ## 访问入口（URL）
 
-- 后端服务：`http://localhost:8080`
+- 后端服务：`http://localhost:18084`
 - 管理端前端：`http://localhost:5174/`（项目：`ai-tutor-admin-web`）
-- Swagger UI：`http://localhost:8080/swagger-ui.html`
-- OpenAPI JSON：`http://localhost:8080/v3/api-docs`
+- Swagger UI：`http://localhost:18084/swagger-ui.html`
+- OpenAPI JSON：`http://localhost:18084/v3/api-docs`
 - 管理端 API 前缀：`/api/admin`
 
 ## 管理端前端启动（推荐）

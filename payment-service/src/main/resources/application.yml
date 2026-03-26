@@ -1,13 +1,52 @@
 server:
-  port: ${SERVER_PORT:8083}
+  port: ${SERVER_PORT:18083}
 
 spring:
   application:
     name: payment-service
+  profiles:
+    active: dev
+  config:
+    import:
+      - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-payment-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
   cloud:
     nacos:
+      config:
+        server-addr: 106.52.179.248:8848
+        group: DEFAULT_GROUP
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
       discovery:
-        server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848}
+        server-addr: 106.52.179.248:8848
+        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: Aa123456
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 0
+      timeout: 1800000
+      password: "123456"
+      lettuce:
+        pool:
+          max-wait: -1
+          max-idle: 5
+          min-idle: 0
+          max-active: 20
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 
 security:
   gateway-identity:
@@ -55,3 +94,8 @@ integration:
   brokerage:
     remote:
       enabled: true
+
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    group: payment-service

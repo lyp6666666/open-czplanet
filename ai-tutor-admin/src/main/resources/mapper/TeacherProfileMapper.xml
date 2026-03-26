@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.admin.mapper.TeacherProfileMapper">
+
+    <resultMap id="TeacherInfoMap" type="com.ai.tutor.admin.model.entity.TeacherProfile">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="real_name" property="realName"/>
+        <result column="subject" property="subject"/>
+        <result column="education" property="education"/>
+        <result column="rate_per_hour" property="ratePerHour"/>
+        <result column="city" property="city"/>
+        <result column="realname_verify_status" property="realnameVerifyStatus"/>
+        <result column="realname_verify_time" property="realnameVerifyTime"/>
+        <result column="realname_verify_reject_reason" property="realnameRejectReason"/>
+        <result column="edu_verify_status" property="eduVerifyStatus"/>
+        <result column="edu_verify_time" property="eduVerifyTime"/>
+        <result column="edu_verify_reject_reason" property="eduRejectReason"/>
+        <result column="status" property="status"/>
+        <result column="update_time" property="updateTime"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.admin.model.entity.TeacherProfile"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO teacher_profile (
+            user_id, real_name, education, subject, rate_per_hour, city, status, create_time, update_time
+        ) VALUES (
+            #{userId}, #{realName}, #{education}, #{subject}, #{ratePerHour}, #{city}, #{status}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <update id="updateTeacherProfile">
+        UPDATE teacher_profile
+        <set>
+            <if test="teacherExtInfo.realName != null">
+                real_name = #{teacherExtInfo.realName},
+            </if>
+            <if test="teacherExtInfo.education != null">
+                education = #{teacherExtInfo.education},
+            </if>
+            <if test="teacherExtInfo.subject != null">
+                subject = #{teacherExtInfo.subject},
+            </if>
+            <if test="teacherExtInfo.ratePerHour != null">
+                rate_per_hour = #{teacherExtInfo.ratePerHour},
+            </if>
+            <if test="teacherExtInfo.city != null">
+                city = #{teacherExtInfo.city},
+            </if>
+            <if test="teacherExtInfo.status != null">
+                status = #{teacherExtInfo.status},
+            </if>
+            update_time = now()
+        </set>
+        WHERE user_id = #{userId}
+    </update>
+
+    <select id="selectByUserId" parameterType="long" resultMap="TeacherInfoMap">
+        SELECT *
+        FROM teacher_profile
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="listByUserIds" resultMap="TeacherInfoMap">
+        SELECT *
+        FROM teacher_profile
+        WHERE user_id IN
+        <foreach collection="userIds" item="uid" open="(" separator="," close=")">
+            #{uid}
+        </foreach>
+    </select>
+
+</mapper>

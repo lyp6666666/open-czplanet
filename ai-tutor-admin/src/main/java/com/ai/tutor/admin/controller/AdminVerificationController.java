@@ -1,9 +1,9 @@
 package com.ai.tutor.admin.controller;
 
 import com.ai.tutor.admin.model.dto.VerificationAuditRequest;
+import com.ai.tutor.admin.model.entity.TeacherProfile;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminVerificationService;
-import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.ResultUtils;
 import io.swagger.v3.oas.annotations.Operation;

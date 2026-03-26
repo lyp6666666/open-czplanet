@@ -26,18 +26,18 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 默认通过 Vite 代理把 `/api/*` 转发到后端：
 
-- 后端地址：`http://localhost:8080`
+- 后端地址：`http://localhost:18080`（网关）
 - 代理配置：`vite.config.ts`
 
 因此：
 
 - 后端不启动时，控制台可能出现 `proxy ECONNREFUSED`，属于正常现象
-- 启动后端（监听 8080）后，首页会自动请求本仓库的未登录首页接口（`/api/v1/public/...`）
+- 启动后端（网关监听 18080）后，首页会自动请求本仓库的未登录首页接口（`/api/v1/public/...`）
 
 如需指定固定后端地址（绕过代理），可通过环境变量配置：
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8080 npm run dev -- --host 0.0.0.0 --port 5173
+VITE_API_BASE_URL=http://localhost:18080 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
 ## 质量门禁
@@ -48,4 +48,3 @@ npm run lint
 npm test
 npm run build
 ```
-

@@ -1,0 +1,28 @@
+# IM 服务配置（DEV）
+# DataId: videoCall-IM-service-dev.yaml
+# Group: DEFAULT_GROUP
+
+security:
+  gateway-identity:
+    enabled: true
+
+integration:
+  appointment:
+    remote:
+      # 是否启用远程调用预约服务（生产建议 true；本地可按需关闭）
+      enabled: true
+
+brokerage:
+  # 佣金金额（分）
+  amount-fen: 19900
+  # 管理端 token（敏感，建议只在 Nacos 配）
+  admin-token: "<TODO:BROKERAGE_ADMIN_TOKEN>"
+
+tutor-application:
+  # 是否跳过支付校验（仅 DEV 排障可开，生产禁止）
+  skip-payment-check: false
+
+rocketmq:
+  # RocketMQ NameServer（如果你们有共享的 mq 配置，也可以放到 ai-tutor-common-dev.yaml）
+  name-server: 127.0.0.1:9876
+
