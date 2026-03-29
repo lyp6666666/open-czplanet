@@ -55,7 +55,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/sendcode")
-    @Operation(summary = "发送验证码", description = "根据手机号发送验证码（模拟）")
+    @Operation(summary = "发送验证码", description = "根据手机号发送验证码")
     @FrequencyControl(
             prefixKey = "sms:send:",   // Redis key 前缀
             target = FrequencyControl.Target.EL,  // 通过 EL 取手机号
@@ -75,7 +75,7 @@ public class UserController {
         ThrowUtils.throwIf(sendCodeRequest.getPhone() == null || sendCodeRequest.getPhone().isEmpty(), ErrorCode.PARAMS_ERROR);
         // 生成并发送验证码
         smsService.sendCode(sendCodeRequest.getPhone(), RedisKeyPrefix.SMS_CODE.getPrefix());
-        return ResultUtils.success("验证码发送成功(模拟)");
+        return ResultUtils.success("验证码发送成功");
     }
 
     /**

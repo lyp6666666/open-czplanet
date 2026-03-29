@@ -9,11 +9,14 @@ import com.ai.tutor.appointment.model.dto.user.*;
 import com.ai.tutor.appointment.model.entity.StudentProfile;
 import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.config.TestBackdoorTeacherProperties;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.SmsService;
+import com.ai.tutor.appointment.service.TestBackdoorSeedService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.WechatAuthService;
 import cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.appointment.storage.MinioProperties;
@@ -58,6 +61,15 @@ public class UserServiceImpl implements UserService {
     @Resource
     private MinioProperties minioProperties;
 
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
+
+    @Resource
+    private TestBackdoorTeacherProperties testBackdoorTeacherProperties;
+
+    @Resource
+    private TestBackdoorSeedService testBackdoorSeedService;
+
     private static final String DEFAULT_AVATAR_PATH = "/avatars/default-avatar.svg";
 
     private String resolveDefaultAvatarUrl() {
@@ -92,13 +104,45 @@ public class UserServiceImpl implements UserService {
         ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
 
+        if (testBackdoorTeacherProperties != null
+                && testBackdoorTeacherProperties.isEnabled()
+                && role == UserRoleEnum.TEACHER
+                && phone.trim().equals(testBackdoorTeacherProperties.getPhone())
+                && code.trim().equals(testBackdoorTeacherProperties.getCode())) {
+            User user = userMapper.selectByPhone(phone.trim());
+            if (user == null) {
+                testBackdoorSeedService.ensureSeed();
+                user = userMapper.selectByPhone(phone.trim());
+            }
+            ThrowUtils.throwIf(user == null || user.getId() == null, ErrorCode.NO_AUTH_ERROR, "后门账号未初始化");
+            ThrowUtils.throwIf(user.getUserType() == null || user.getUserType() != UserRoleEnum.TEACHER.getValue(), ErrorCode.NO_AUTH_ERROR, "后门账号角色异常");
+            String token = jwtUtil.generateToken(user.getId(), user.getPhone(), UserRoleEnum.TEACHER);
+            String key = RedisKeyPrefix.USER_TOKEN.key(user.getPhone());
+            try {
+                redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
+            } catch (Exception ignored) {
+            }
+            return LoginUserVO.builder()
+                    .id(user.getId())
+                    .name(user.getName())
+                    .phone(user.getPhone())
+                    .avatar(user.getAvatar() == null || user.getAvatar().trim().isEmpty() ? resolveDefaultAvatarUrl() : user.getAvatar())
+                    .sex(user.getSex())
+                    .userType(user.getUserType())
+                    .isNew(false)
+                    .token(token)
+                    .redirectRoomId(testBackdoorTeacherProperties.getRedirectRoomId())
+                    .redirectOtherUid(testBackdoorTeacherProperties.getRedirectOtherUid())
+                    .build();
+        }
+
         //1. 验证验证码是否正确
         boolean isValid = smsService.verifyCode(phone, code,RedisKeyPrefix.SMS_CODE.getPrefix());
         ThrowUtils.throwIf(!isValid, ErrorCode.INCORRECT_VERIFICATION_CODE, "验证码错误或已过期");
 
         //2. 查询手机号是否已存在账号（登录/注册同入口：存在则直接登录）
         User user = userMapper.selectByPhone(phone);
-        boolean isNew = user == null;
+        boolean isNew = false;
 
         // 机构账号不允许走手机号验证码登录，避免普通用户冒用或把机构账号误切换角色
         if (user != null && user.getUserType() != null && user.getUserType() == UserRoleEnum.ORG.getValue()) {
@@ -106,37 +150,28 @@ public class UserServiceImpl implements UserService {
         }
 
         if (user == null) {
-            User created = transactionTemplate.execute(status -> {
-                try {
-                    User u = new User();
-                    u.setName(null);
-                    u.setPhone(phone);
-                    u.setUserType(role.getValue());
-                    u.setStatus(0);
-                    u.setActiveStatus(2);
-                    u.setCreateTime(LocalDateTime.now());
-                    u.setUpdateTime(LocalDateTime.now());
-                    userMapper.insert(u);
-                    ensureProfile(u.getId(), phone, role);
-                    return u;
-                } catch (DuplicateKeyException e) {
-                    User existing = userMapper.selectByPhone(phone);
-                    if (existing != null) {
-                        ensureProfile(existing.getId(), phone, role);
-                        return existing;
-                    }
-                    ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
-                    return null;
-                }
-            });
-            ThrowUtils.throwIf(created == null, ErrorCode.SYSTEM_ERROR);
-            user = created;
+            CreateUserResult created = createOrGetExistingUser(phone, role);
+            ThrowUtils.throwIf(created == null || created.user == null, ErrorCode.SYSTEM_ERROR);
+            user = created.user;
+            isNew = created.createdNew;
         } else {
             Long userId = user.getId();
             transactionTemplate.execute(status -> {
                 ensureProfile(userId, phone, role);
                 return true;
             });
+        }
+
+        if (isNew && bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（每日新注册用户数，按角色）。
+             * - metric: ai_tutor_biz_user_register_total
+             * - labels: role=teacher|student|org（本接口仅 teacher/student；org 由管理端创建计入）
+             * - PromQL（按天）：sum by (role) (increase(ai_tutor_biz_user_register_total[1d]))
+             *
+             * 说明：仅在首次创建用户成功时计数（isNew=true），避免重复登录/重试导致重复计数。
+             */
+            bizKpiMetrics.incUserRegister(role.getCode());
         }
 
         user.setUserType(role.getValue());
@@ -162,6 +197,42 @@ public class UserServiceImpl implements UserService {
                 .isNew(isNew)
                 .token(token)
                 .build();
+    }
+
+    private static class CreateUserResult {
+        private final User user;
+        private final boolean createdNew;
+
+        private CreateUserResult(User user, boolean createdNew) {
+            this.user = user;
+            this.createdNew = createdNew;
+        }
+    }
+
+    private CreateUserResult createOrGetExistingUser(String phone, UserRoleEnum role) {
+        return transactionTemplate.execute(status -> {
+            try {
+                User u = new User();
+                u.setName(null);
+                u.setPhone(phone);
+                u.setUserType(role.getValue());
+                u.setStatus(0);
+                u.setActiveStatus(2);
+                u.setCreateTime(LocalDateTime.now());
+                u.setUpdateTime(LocalDateTime.now());
+                userMapper.insert(u);
+                ensureProfile(u.getId(), phone, role);
+                return new CreateUserResult(u, true);
+            } catch (DuplicateKeyException e) {
+                User existing = userMapper.selectByPhone(phone);
+                if (existing != null) {
+                    ensureProfile(existing.getId(), phone, role);
+                    return new CreateUserResult(existing, false);
+                }
+                ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
+                return null;
+            }
+        });
     }
 
     private void ensureProfile(Long userId, String phone, UserRoleEnum role) {

@@ -35,6 +35,9 @@ public class LoginUserVO implements Serializable {
     /** 微信 OpenID */
     private String openid;
 
+    private Long redirectRoomId;
+
+    private Long redirectOtherUid;
 
     private static final long serialVersionUID = 1L;
 }

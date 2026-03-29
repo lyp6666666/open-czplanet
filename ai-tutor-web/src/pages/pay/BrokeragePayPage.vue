@@ -227,7 +227,7 @@ onUnmounted(() => {
   <div class="wrap">
     <div class="head card">
       <button class="btn back" type="button" @click="back">返回</button>
-      <div class="name">中介费支付</div>
+      <div class="name">信息费支付</div>
       <div />
     </div>
 

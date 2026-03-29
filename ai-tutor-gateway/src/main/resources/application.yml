@@ -14,10 +14,10 @@ spring:
       config:
         server-addr: 106.52.179.248:8848
         group: DEFAULT_GROUP
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
       discovery:
         server-addr: 106.52.179.248:8848
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
     gateway:
       httpclient:
         pool:
@@ -43,20 +43,3 @@ spring:
           uri: lb://payment-service
           predicates:
             - Path=/payment/**
-
-server:
-  port: ${SERVER_PORT:18080}
-
-gateway:
-  jwt:
-    issuer: ai-tutor
-    secrets:
-      - ${GATEWAY_JWT_SECRET:}
-  sign:
-    secret: ${GATEWAY_SIGN_SECRET:}
-    clock-skew-ms: 60000
-    whitelist-paths:
-      - /user/loginOrRegister
-      - /user/sendcode
-      - /api/v1/public/**
-      - /payment/notify/**

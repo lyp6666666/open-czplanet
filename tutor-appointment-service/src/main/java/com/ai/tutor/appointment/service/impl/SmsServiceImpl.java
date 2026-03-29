@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.service.impl;
 import com.ai.tutor.appointment.config.SmsProperties;
 import com.ai.tutor.appointment.config.SmsSpugProperties;
 import com.ai.tutor.appointment.service.SmsService;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.enums.ErrorCode;
 import jakarta.annotation.Resource;
@@ -35,6 +36,9 @@ public class SmsServiceImpl implements SmsService {
 
     @Resource
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Resource
     private SmsSpugProperties smsSpugProperties;
@@ -79,6 +83,15 @@ public class SmsServiceImpl implements SmsService {
         } catch (Exception ignored) {
         }
         sendSms(phone, code);
+        if (bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（短信验证码发送次数）。
+             * - metric: ai_tutor_biz_sms_code_send_total
+             * - labels: 无
+             * - PromQL（按天）：sum(increase(ai_tutor_biz_sms_code_send_total[1d]))
+             */
+            bizKpiMetrics.incSmsCodeSend();
+        }
         log.info("SMS SEND SUCCESS - phone: {}, code: {}, prefix: {}", phone, code, prefix);
         return code;
     }

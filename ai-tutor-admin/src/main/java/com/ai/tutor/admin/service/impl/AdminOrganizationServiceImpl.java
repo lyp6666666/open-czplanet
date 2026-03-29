@@ -17,6 +17,7 @@ import com.ai.tutor.admin.model.vo.AdminOrganizationDetailVO;
 import com.ai.tutor.admin.model.vo.AdminOrganizationRowVO;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminOrganizationService;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
@@ -47,6 +48,9 @@ public class AdminOrganizationServiceImpl implements AdminOrganizationService {
 
     @Resource
     private AdminOrganizationManageMapper adminOrganizationManageMapper;
+
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Override
     @Transactional
@@ -92,6 +96,17 @@ public class AdminOrganizationServiceImpl implements AdminOrganizationService {
                 .build();
         userMapper.insert(user);
         ThrowUtils.throwIf(user.getId() == null, ErrorCode.SYSTEM_ERROR, "创建机构用户失败");
+        if (bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（每日新注册用户数：机构）。
+             * - metric: ai_tutor_biz_user_register_total
+             * - labels: role=org
+             * - PromQL（按天）：sum by (role) (increase(ai_tutor_biz_user_register_total[1d]))
+             *
+             * 说明：机构账号由管理端创建，本打点仅在创建成功后计数。
+             */
+            bizKpiMetrics.incUserRegister("org");
+        }
 
         StudentProfile sp = StudentProfile.builder()
                 .userId(user.getId())

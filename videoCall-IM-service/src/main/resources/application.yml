@@ -8,10 +8,10 @@ spring:
       config:
         server-addr: 106.52.179.248:8848
         group: DEFAULT_GROUP
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
       discovery:
         server-addr: 106.52.179.248:8848
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
   config:
     import:
       - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
@@ -20,71 +20,3 @@ spring:
       - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: root
-    password: Aa123456
-
-  data:
-    redis:
-      # Redis服务器地址
-      host: 127.0.0.1
-      # Redis服务器端口号
-      port: 6379
-      # 使用的数据库索引，默认是0
-      database: 0
-      # 连接超时时间
-      timeout: 1800000
-      # 设置密码
-      password: "123456"
-      lettuce:
-        pool:
-          # 最大阻塞等待时间，负数表示没有限制
-          max-wait: -1
-          # 连接池中的最大空闲连接
-          max-idle: 5
-          # 连接池中的最小空闲连接
-          min-idle: 0
-          # 连接池中最大连接数，负数表示没有限制
-          max-active: 20
-
-  servlet:
-    multipart:
-      max-file-size: 20MB
-      max-request-size: 20MB
-
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-
-server:
-  port: ${SERVER_PORT:18082}
-
-security:
-  gateway-identity:
-    enabled: true
-
-gateway:
-  sign:
-    secret: ${GATEWAY_SIGN_SECRET:}
-    clock-skew-ms: 60000
-    whitelist-paths:
-      - /user/loginOrRegister
-      - /user/sendcode
-      - /api/v1/public/**
-      - /payment/notify/**
-
-rocketmq:
-  name-server: 127.0.0.1:9876
-
-brokerage:
-  amount-fen: 19900
-  admin-token: ""
-
-tutor-application:
-  skip-payment-check: false
-
-integration:
-  appointment:
-    remote:
-      enabled: true

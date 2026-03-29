@@ -27,6 +27,7 @@ import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -72,6 +73,9 @@ public class TutorApplicationService {
 
     @Resource
     private SseSessionManager sseSessionManager;
+
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Resource
     private TeacherProfileLiteMapper teacherProfileLiteMapper;
@@ -169,6 +173,17 @@ public class TutorApplicationService {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
         }
         ThrowUtils.throwIf(application.getId() == null, ErrorCode.OPERATION_ERROR);
+        if (bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（每日申请沟通数量，按发起方）。
+             * - metric: ai_tutor_biz_comm_apply_total
+             * - labels: initiator=teacher|student|org
+             * - PromQL（按天）：sum by (initiator) (increase(ai_tutor_biz_comm_apply_total[1d]))
+             *
+             * 说明：仅在申请记录创建成功后计数，避免客户端幂等重试导致重复计数。
+             */
+            bizKpiMetrics.incCommApply(toRoleLower(application.getSenderRole()));
+        }
         log.info("tutor_application_created applicationId={} senderUid={} receiverUid={} contextType={} contextId={}",
                 application.getId(), application.getSenderUid(), application.getReceiverUid(), application.getContextType(), application.getContextId());
         sseSessionManager.sendToUid(application.getReceiverUid(), "application", Map.of(
@@ -252,9 +267,25 @@ public class TutorApplicationService {
         LocalDateTime now = LocalDateTime.now();
         if ("REJECT".equals(action)) {
             int updated = tutorApplicationMapper.decide(applicationId, uid, TutorApplicationStatus.REJECTED.name(), TutorApplicationChatAccessStatus.NONE.name(), now);
-            ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
             TutorApplication latest = tutorApplicationMapper.selectById(applicationId);
             ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
+            if (updated <= 0) {
+                if (TutorApplicationStatus.REJECTED.name().equals(latest.getStatus())) {
+                    return toVO(latest, null);
+                }
+                ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
+            }
+            if (bizKpiMetrics != null) {
+                /*
+                 * Grafana 业务 KPI 指标打点（每日申请沟通拒绝数量，按发起方）。
+                 * - metric: ai_tutor_biz_comm_apply_decision_total
+                 * - labels: initiator=teacher|student|org, decision=rejected
+                 * - PromQL（按天）：sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d]))
+                 *
+                 * 说明：仅在状态从 PENDING -> REJECTED 的更新成功路径计数（updated>0），保证幂等。
+                 */
+                bizKpiMetrics.incCommApplyDecision(toRoleLower(latest.getSenderRole()), "rejected");
+            }
             log.info("tutor_application_decided applicationId={} receiverUid={} status={}", latest.getId(), uid, latest.getStatus());
             sseSessionManager.sendToUid(latest.getSenderUid(), "application", Map.of(
                     "type", "DECIDED",
@@ -268,10 +299,26 @@ public class TutorApplicationService {
         }
 
         int updated = tutorApplicationMapper.decide(applicationId, uid, TutorApplicationStatus.ACCEPTED.name(), TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name(), now);
-        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
-
         TutorApplication latest = tutorApplicationMapper.selectById(applicationId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
+        if (updated <= 0) {
+            if (TutorApplicationStatus.ACCEPTED.name().equals(latest.getStatus())) {
+                Long orderId = resolveOrderId(applicationId);
+                return toVO(latest, orderId);
+            }
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
+        }
+        if (bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（每日申请沟通通过数量，按发起方）。
+             * - metric: ai_tutor_biz_comm_apply_decision_total
+             * - labels: initiator=teacher|student|org, decision=approved
+             * - PromQL（按天）：sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d]))
+             *
+             * 说明：仅在状态从 PENDING -> ACCEPTED 的更新成功路径计数（updated>0），保证幂等。
+             */
+            bizKpiMetrics.incCommApplyDecision(toRoleLower(latest.getSenderRole()), "approved");
+        }
         ensureRoom(latest, uid);
         if ((CONTEXT_DEMAND.equalsIgnoreCase(latest.getContextType()) || CONTEXT_ORG_POSTING.equalsIgnoreCase(latest.getContextType())) && latest.getContextId() != null) {
             studentJobPostingLiteMapper.updateBizStatus(latest.getContextId(), 2);
@@ -284,6 +331,17 @@ public class TutorApplicationService {
                 "status", latest.getStatus()
         ));
         return toVO(latest, orderId);
+    }
+
+    private static String toRoleLower(String role) {
+        if (role == null) {
+            return "unknown";
+        }
+        String v = role.trim().toUpperCase();
+        if (ROLE_TEACHER.equals(v)) return "teacher";
+        if (ROLE_STUDENT.equals(v)) return "student";
+        if (ROLE_ORG.equals(v)) return "org";
+        return "unknown";
     }
 
     public ChatMessageResp decideAndSendToChat(Long applicationId, DecideTutorApplicationReq req, Long uid) {
@@ -311,7 +369,7 @@ public class TutorApplicationService {
                 payBody.setAmountFen(order.getAmountFen());
                 payBody.setStatus(order.getStatus());
                 payBody.setCreatorUserId(order.getPayerUid());
-                chatService.sendMsg(ChatMessageReq.builder().roomId(roomId).msgType(8).body(payBody).build(), order.getPayerUid());
+                chatService.sendMsg(ChatMessageReq.builder().roomId(roomId).msgType(8).body(payBody).build(), uid);
             }
         }
 

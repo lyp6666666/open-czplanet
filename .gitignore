@@ -56,6 +56,8 @@ debug.md
 Dockerfile/mysql-data/
 Dockerfile/redis-data/
 Dockerfile/minio-data/
+Dockerfile/prometheus-data/
+Dockerfile/grafana-data/
 
 common-used.md
 
@@ -64,3 +66,5 @@ ai-tutor-miniprogram/project.private.config.json
 ai-tutor-miniprogram/dist/
 ai-tutor-miniprogram/unpackage/
 .worktrees/
+
+.pids/

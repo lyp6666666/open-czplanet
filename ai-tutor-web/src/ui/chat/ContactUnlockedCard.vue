@@ -14,7 +14,7 @@ const emit = defineEmits<{
 <template>
   <div class="cardx">
     <div class="h1">联系方式已解锁</div>
-    <div class="hint">平台已确认中介费支付，可查看对方联系方式。</div>
+    <div class="hint">平台已确认信息费支付，可查看对方联系方式。</div>
     <div v-if="canView" class="ops">
       <button class="btn btn-primary" type="button" @click="emit('view')">查看联系方式</button>
     </div>
@@ -48,4 +48,3 @@ const emit = defineEmits<{
   margin-top: 10px;
 }
 </style>
-

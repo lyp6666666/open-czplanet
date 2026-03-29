@@ -21,9 +21,9 @@ public interface AdminRefundMapper extends BaseMapper<BrokerageOrder> {
     @Select("SELECT * FROM brokerage_order WHERE id = #{id}")
     BrokerageOrder selectById(Long id);
 
-    @Update("UPDATE brokerage_order SET status = 'REFUNDED', update_time = NOW() WHERE id = #{id}")
+    @Update("UPDATE brokerage_order SET status = 'REFUNDED', update_time = NOW() WHERE id = #{id} AND status = 'DISPUTE'")
     int approveRefund(Long id);
 
-    @Update("UPDATE brokerage_order SET status = 'PAID', update_time = NOW() WHERE id = #{id}")
+    @Update("UPDATE brokerage_order SET status = 'PAID', update_time = NOW() WHERE id = #{id} AND status = 'DISPUTE'")
     int rejectRefund(Long id);
 }

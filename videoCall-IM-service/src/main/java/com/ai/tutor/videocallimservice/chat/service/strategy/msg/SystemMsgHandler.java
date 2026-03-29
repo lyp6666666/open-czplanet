@@ -232,7 +232,7 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             return "合作提案：" + s;
         }
         if ("BROKERAGE_REQUIRED".equals(bizType)) {
-            return "中介费支付";
+            return "信息费支付";
         }
         if ("CONTACT_UNLOCKED".equals(bizType)) {
             return "联系方式已解锁";

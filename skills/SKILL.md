@@ -173,6 +173,125 @@ sh ../mvnw -am spring-boot:run -Dspring-boot.run.arguments="--spring.cloud.nacos
 - 后端变更优先逐服务启动验证（Config 拉取 + Discovery 注册）
 - 修改完成必须执行该模块的 lint/typecheck/test（若项目提供）
 
+## Grafana 业务 KPI 看板（Prometheus）
+
+本仓库支持将关键业务事件以 Prometheus Metrics 的形式暴露，并在 Grafana 上构建“按天聚合”的实时看板。
+
+### 指标暴露（服务侧）
+
+相关服务暴露以下 endpoint（默认端口见“后端常用入口”）：
+
+- `tutor-appointment-service`：`GET /actuator/prometheus`
+  - 覆盖：新注册（教师/学生）、验证码发送
+- `videoCall-IM-service`：`GET /actuator/prometheus`
+  - 覆盖：申请沟通创建/通过/拒绝、信息费支付金额、达成合作次数
+- `ai-tutor-admin`：`GET /actuator/prometheus`
+  - 覆盖：新注册（机构，管理端创建）、退款次数与退款金额
+
+配置要点（已在各服务 `application.yml` 中默认开启）：
+
+- `management.endpoints.web.exposure.include: health,info,prometheus`
+- `management.endpoint.prometheus.enabled: true`
+
+### Prometheus 配置（scrape）
+
+Prometheus 通过 scrape 拉取 Metrics（不建议在线服务用 pushgateway 作为主链路）。
+
+示例 `prometheus.yml`（按实际部署地址替换 targets）：
+
+```yaml
+scrape_configs:
+  - job_name: ai-tutor
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - tutor-appointment-service:18081
+          - videoCall-IM-service:18082
+          - ai-tutor-admin:18084
+```
+
+### Grafana 配置（数据源 + 面板）
+
+- 新建 Prometheus 数据源，URL 指向 Prometheus（如 `http://prometheus:9090`）
+- 新建 Dashboard，按下面 PromQL 创建面板（时间范围建议 `Last 7 days` / `Last 30 days`）
+
+### Grafana 基本页面信息（本地 Docker Compose）
+
+本仓库已在 `Dockerfile/docker-compose.yml` 内集成 Prometheus + Grafana，并通过 provisioning 自动完成数据源与看板导入。
+
+启动命令（仅启动监控栈）：
+
+```bash
+docker compose -f Dockerfile/docker-compose.yml up -d prometheus grafana
+```
+
+页面入口：
+
+- Grafana：`http://localhost:3000`
+  - 默认账号密码：`admin / huoyue`
+  - 默认看板：`AI Tutor KPI`
+  - 默认文件夹：`AI Tutor`
+- Prometheus：`http://localhost:9090`
+  - Targets 检查页：`http://localhost:9090/targets`
+
+Prometheus 抓取目标（Mac 上 Docker 访问宿主机端口使用 `host.docker.internal`）：
+
+- `host.docker.internal:18081/actuator/prometheus`（tutor-appointment-service）
+- `host.docker.internal:18082/actuator/prometheus`（videoCall-IM-service）
+- `host.docker.internal:18084/actuator/prometheus`（ai-tutor-admin）
+
+常见问题排查（最小闭环）：
+
+- Grafana 看板没有曲线：先打开 `http://localhost:9090/targets` 确保对应 target 为 `UP`
+- Targets 为 `DOWN`：确认后端服务已启动且本机能访问 `http://localhost:18081/actuator/prometheus`（18082/18084 同理）
+- 指标没增长：需要先触发业务动作（注册/发验证码/发申请/审批/支付/退款等），PromQL 才会出现非 0 的按天 increase
+
+### 指标列表与 PromQL（按天聚合）
+
+说明：
+
+- 全部为 Counter（单调递增），按天口径统一使用 `increase(metric[1d])`
+- 金额类指标单位为“分”，在 PromQL 中 `/ 100` 转为“元”
+
+新注册用户数（教师/学生/机构）：
+
+- 总计：`sum(increase(ai_tutor_biz_user_register_total[1d]))`
+- 分角色：`sum by (role) (increase(ai_tutor_biz_user_register_total[1d]))`
+
+申请沟通数量（教师主动/学生主动）：
+
+- 总计：`sum(increase(ai_tutor_biz_comm_apply_total[1d]))`
+- 分发起方：`sum by (initiator) (increase(ai_tutor_biz_comm_apply_total[1d]))`
+
+申请沟通通过/拒绝数量（教师主动/学生主动）：
+
+- 通过总计：`sum(increase(ai_tutor_biz_comm_apply_decision_total{decision="approved"}[1d]))`
+- 拒绝总计：`sum(increase(ai_tutor_biz_comm_apply_decision_total{decision="rejected"}[1d]))`
+- 分发起方：`sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d]))`
+
+验证码发送次数：
+
+- `sum(increase(ai_tutor_biz_sms_code_send_total[1d]))`
+
+每日支付信息费总和（元）：
+
+- `sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) / 100`
+
+每日达成合作总次数：
+
+- `sum(increase(ai_tutor_biz_collaboration_success_total[1d]))`
+
+每日退款次数与退款总额（元）：
+
+- 退款次数：`sum(increase(ai_tutor_biz_refund_total[1d]))`
+- 退款总额：`sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) / 100`
+
+### 口径与注意事项
+
+- 低基数标签：禁止把 `userId/orderNo/phone` 等作为 label，避免 Prometheus 存储爆炸
+- 幂等：打点仅发生在“状态变更成功”的路径上（例如申请审批 update 成功、支付状态首次变更成功、退款从 DISPUTE 变更成功）
+- 安全：`/actuator/prometheus` 建议仅内网可访问或通过网关白名单限制
+
 ## Change Log（每次 AI 修改完成后追加）
 
 - 2026-03-25：创建 skill「ai-platform-context」，沉淀仓库结构与本地启动信息
@@ -183,3 +302,4 @@ sh ../mvnw -am spring-boot:run -Dspring-boot.run.arguments="--spring.cloud.nacos
 - 2026-03-25：将 discovery namespace 固定为 DEV（3066af4f-57ee-4f4d-80fe-0d2a4e791f7d），避免因 profile 不一致导致控制台看不到服务
 - 2026-03-25：移除 ai-tutor-starter，改为微服务独立启动，并新增一键启动/停止脚本
 - 2026-03-25：新增 Nacos 配置迁移指南与带注释模板（docs/nacos）
+- 2026-03-28：补充 Prometheus + Grafana 本地启动与 Grafana 页面入口说明，并提供默认看板（AI Tutor KPI）

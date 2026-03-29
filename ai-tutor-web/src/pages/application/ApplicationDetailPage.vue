@@ -35,7 +35,7 @@ function statusText(s: TutorApplicationVO['status']): string {
 }
 
 function accessText(v: TutorApplicationVO): string {
-  if (v.chatAccessStatus === 'PAYMENT_REQUIRED') return '待教师支付中介费'
+  if (v.chatAccessStatus === 'PAYMENT_REQUIRED') return '待教师支付信息费'
   if (v.chatAccessStatus === 'CHAT_ENABLED') return '可进入聊天'
   return ''
 }
@@ -87,12 +87,12 @@ async function enterChat() {
       if (res.orderId) {
         await router.push({ name: 'brokeragePay', query: { orderId: String(res.orderId), applicationId: String(id.value) } })
       } else {
-        opError.value = '需要先支付中介费'
+        opError.value = '需要先支付信息费'
       }
       return
     }
     if (res.waitingForTeacherPayment) {
-      opError.value = '请等待教师完成中介费支付'
+      opError.value = '请等待教师完成信息费支付'
       return
     }
     if (res.roomId) {

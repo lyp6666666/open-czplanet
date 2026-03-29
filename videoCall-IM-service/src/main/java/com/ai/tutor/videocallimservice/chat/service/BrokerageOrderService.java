@@ -7,6 +7,7 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.entity.ApplicationBrokerageOrder;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokeragePayMethod;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
@@ -19,8 +20,10 @@ import com.ai.tutor.videocallimservice.chat.mapper.ApplicationBrokerageOrderMapp
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -56,6 +59,12 @@ public class BrokerageOrderService {
 
     @Resource
     private TutorApplicationService tutorApplicationService;
+
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -324,14 +333,58 @@ public class BrokerageOrderService {
         BrokerageOrder order = brokerageOrderMapper.selectById(orderId);
         ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
 
+        boolean transitionedToPaid = false;
         if (!BrokerageOrderStatus.PAID.name().equals(order.getStatus())) {
             LocalDateTime now = paidAt == null ? LocalDateTime.now() : paidAt;
-            brokerageOrderMapper.markPaidWithMethod(orderId, now, normalizePayMethod(payMethod));
+            int updated = brokerageOrderMapper.markPaidWithMethod(orderId, now, normalizePayMethod(payMethod));
+            transitionedToPaid = updated > 0;
             order = brokerageOrderMapper.selectById(orderId);
             ThrowUtils.throwIf(order == null, ErrorCode.OPERATION_ERROR);
         }
 
+        if (transitionedToPaid && bizKpiMetrics != null) {
+            /*
+             * Grafana 业务 KPI 指标打点（信息费支付金额 & 达成合作次数）。
+             * - metric(金额): ai_tutor_biz_payment_info_fee_amount_cents_total（单位：分）
+             * - metric(合作): ai_tutor_biz_collaboration_success_total（按发起方 initiator）
+             * - PromQL（按天，金额元）：sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) / 100
+             * - PromQL（按天，合作数）：sum(increase(ai_tutor_biz_collaboration_success_total[1d]))
+             *
+             * 说明：仅在订单首次从非 PAID -> PAID 的状态迁移成功时计入（transitionedToPaid=true），避免 MQ 重放重复计数。
+             */
+            Long amountFen = order.getAmountFen();
+            if (amountFen != null && amountFen > 0) {
+                bizKpiMetrics.addPaymentInfoFeeAmountFen(amountFen);
+            }
+            bizKpiMetrics.incCollaborationSuccess(resolveInitiatorLower(order));
+        }
+
         afterPaid(order);
+    }
+
+    private String resolveInitiatorLower(BrokerageOrder order) {
+        if (order == null) {
+            return "unknown";
+        }
+        Long applicationId = order.getApplicationId();
+        if (applicationId != null && tutorApplicationMapper != null) {
+            TutorApplication app = tutorApplicationMapper.selectById(applicationId);
+            if (app != null) {
+                return toRoleLower(app.getSenderRole());
+            }
+        }
+        return "unknown";
+    }
+
+    private static String toRoleLower(String role) {
+        if (role == null) {
+            return "unknown";
+        }
+        String v = role.trim().toUpperCase();
+        if ("TEACHER".equals(v)) return "teacher";
+        if ("STUDENT".equals(v)) return "student";
+        if ("ORG".equals(v)) return "org";
+        return "unknown";
     }
 
     public void sendBrokerageRequired(Long roomId, Long proposalId, BrokerageOrderVO order, Long senderUid) {
@@ -340,7 +393,7 @@ public class BrokerageOrderService {
         body.setBizType("BROKERAGE_REQUIRED");
         body.setEventId(order.getId());
         body.setProposalId(proposalId);
-        body.setTitle("中介费支付");
+        body.setTitle("信息费支付");
         body.setStatus(order.getStatus());
         body.setCreatorUserId(order.getPayerUid());
         body.setAmountFen(order.getAmountFen());

@@ -8,10 +8,10 @@ spring:
       config:
         server-addr: 106.52.179.248:8848
         group: DEFAULT_GROUP
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
       discovery:
         server-addr: 106.52.179.248:8848
-        namespace: ${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}
+        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
   config:
     import:
       - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
@@ -24,34 +24,6 @@ spring:
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:file:./.private/tutor-appointment-service.yml
       - optional:file:../.private/tutor-appointment-service.yml
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/ai_tutor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-    username: root
-    password: Aa123456
-
-  data:
-    redis:
-      # Redis服务器地址
-      host: 127.0.0.1
-      # Redis服务器端口号
-      port: 6379
-      # 使用的数据库索引，默认是0
-      database: 0
-      # 连接超时时间
-      timeout: 1800000
-      # 设置密码
-      password: "123456"
-      lettuce:
-        pool:
-          # 最大阻塞等待时间，负数表示没有限制
-          max-wait: -1
-          # 连接池中的最大空闲连接
-          max-idle: 5
-          # 连接池中的最小空闲连接
-          min-idle: 0
-          # 连接池中最大连接数，负数表示没有限制
-          max-active: 20
 
   servlet:
     multipart:
@@ -60,28 +32,6 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-
-server:
-  port: ${SERVER_PORT:18081}
-
-security:
-  gateway-identity:
-    enabled: true
-
-gateway:
-  sign:
-    secret: ${GATEWAY_SIGN_SECRET:}
-    clock-skew-ms: 60000
-    whitelist-paths:
-      - /user/loginOrRegister
-      - /user/sendcode
-      - /api/v1/public/**
-      - /payment/notify/**
-
-integration:
-  im:
-    remote:
-      enabled: true
 
 springdoc:
   packages-to-scan: com.ai.tutor.appointment.controller
@@ -98,45 +48,11 @@ mybatis-plus:
   configuration:
     default-enum-type-handler: com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler
 
-jwt:
-  secrets:
-    - ${JWT_SECRET_PRIMARY:LypJwtSecretKey123LypJwtSecretKey123}
-  expiration: 24h
-  issuer: ai-tutor
-
-ops:
-  verifyToken: ${OPS_VERIFY_TOKEN:}
-
-dev:
-  exposeSmsCode: ${DEV_EXPOSE_SMS_CODE:false}
-
-storage:
-  minio:
-    enabled: true
-    endpoint: http://127.0.0.1:9000
-    accessKey: minioadmin
-    secretKey: minioadmin
-    bucket: ai-tutor-assets
-    publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
-    defaultAvatarObjectKey: avatars/default.svg
-    autoCreateBucket: true
-    allowedAvatarUrlPrefixes:
-      - http://127.0.0.1:9000/ai-tutor-assets
-  upload:
-    maxSizeBytes: 20971520
-    avatarMaxSizeBytes: 5242880
-    allowedContentTypes:
-      - image/jpeg
-      - image/png
-      - image/webp
-      - image/gif
-      - image/svg+xml
-
-wechat:
-  miniapp:
-    appid: ${WX_MINI_APPID:wxdf6f9ab1c246c63a}
-    secret: ${WX_MINI_SECRET:}
-    token: ${WX_MINI_TOKEN:}
-    aesKey: ${WX_MINI_AESKEY:}
-    msgDataFormat: JSON
-    mock-enabled: ${WX_MOCK_ENABLED:true} # 默认开启 Mock 以便自测
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

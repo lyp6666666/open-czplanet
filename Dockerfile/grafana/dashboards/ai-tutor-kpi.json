@@ -1,0 +1,102 @@
+{
+  "uid": "ai-tutor-kpi",
+  "title": "AI Tutor KPI",
+  "timezone": "Asia/Shanghai",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "每日新注册用户数（按角色）",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (role) (increase(ai_tutor_biz_user_register_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日申请沟通数量（按发起方）",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (initiator) (increase(ai_tutor_biz_comm_apply_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日申请沟通通过/拒绝（按发起方+决策）",
+      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日验证码发送次数",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_sms_code_send_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日支付信息费总额（元）",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) / 100"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日达成合作次数",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_collaboration_success_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日退款次数",
+      "gridPos": { "x": 12, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_refund_total[1d]))"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日退款总额（元）",
+      "gridPos": { "x": 18, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) / 100"
+        }
+      ]
+    }
+  ]
+}

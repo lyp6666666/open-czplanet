@@ -1002,7 +1002,7 @@ watch(
               <template v-else-if="isRefundRequestBody(it.m.body)">
                 <div class="refund-card">
                   <div class="h1">沟通已结束</div>
-                  <div class="hint">已提交退款申请，等待管理员审核通过后原路退回中介费</div>
+                  <div class="hint">已提交退款申请，等待管理员审核通过后原路退回信息费</div>
                   <div class="status">{{ refundStatusText(it.m.body.status) }}</div>
                 </div>
               </template>
