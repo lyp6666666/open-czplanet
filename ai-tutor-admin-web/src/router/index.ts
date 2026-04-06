@@ -29,7 +29,7 @@ export const router = createRouter({
       meta: { auth: true },
     },
     { path: '/refunds', name: 'refunds', component: RefundsPage, meta: { auth: true } },
-    { path: '/refunds/:orderId', name: 'refundDetail', component: RefundDetailPage, meta: { auth: true } },
+    { path: '/refunds/:requestId', name: 'refundDetail', component: RefundDetailPage, meta: { auth: true } },
     { path: '/users', name: 'users', component: UsersPage, meta: { auth: true } },
     { path: '/organizations', name: 'organizations', component: OrganizationsPage, meta: { auth: true } },
     { path: '/payments', name: 'paymentOrders', component: PaymentOrdersPage, meta: { auth: true } },

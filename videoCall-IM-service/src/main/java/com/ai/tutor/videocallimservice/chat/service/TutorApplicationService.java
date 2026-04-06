@@ -19,6 +19,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.TutorApplicationEnterResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.TutorApplicationUnreadResp;
+import com.ai.tutor.videocallimservice.chat.config.BrokerageInfoFeeHotConfig;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.TutorApplicationVO;
 import com.ai.tutor.videocallimservice.chat.mapper.ApplicationBrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
@@ -82,6 +83,12 @@ public class TutorApplicationService {
 
     @Resource
     private StudentProfileLiteMapper studentProfileLiteMapper;
+
+    @Resource
+    private CourseEnrollmentService courseEnrollmentService;
+
+    @Resource
+    private BrokerageInfoFeeHotConfig brokerageInfoFeeHotConfig;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -173,6 +180,9 @@ public class TutorApplicationService {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
         }
         ThrowUtils.throwIf(application.getId() == null, ErrorCode.OPERATION_ERROR);
+        if (courseEnrollmentService != null) {
+            courseEnrollmentService.ensureForApplication(application);
+        }
         if (bizKpiMetrics != null) {
             /*
              * Grafana 业务 KPI 指标打点（每日申请沟通数量，按发起方）。
@@ -324,6 +334,9 @@ public class TutorApplicationService {
             studentJobPostingLiteMapper.updateBizStatus(latest.getContextId(), 2);
         }
         Long orderId = getOrCreateBrokerageOrderForApplication(latest);
+        if (courseEnrollmentService != null) {
+            courseEnrollmentService.onApplicationAccepted(latest);
+        }
         log.info("tutor_application_decided applicationId={} receiverUid={} status={} orderId={}", latest.getId(), uid, latest.getStatus(), orderId);
         sseSessionManager.sendToUid(latest.getSenderUid(), "application", Map.of(
                 "type", "DECIDED",
@@ -453,6 +466,9 @@ public class TutorApplicationService {
         tutorApplicationMapper.updateChatAccessStatus(applicationId, TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
         TutorApplication application = tutorApplicationMapper.selectById(applicationId);
         if (application != null) {
+            if (courseEnrollmentService != null) {
+                courseEnrollmentService.onPaymentSuccess(application);
+            }
             if ((CONTEXT_DEMAND.equalsIgnoreCase(application.getContextType()) || CONTEXT_ORG_POSTING.equalsIgnoreCase(application.getContextType())) && application.getContextId() != null) {
                 studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 3);
             }
@@ -538,6 +554,11 @@ public class TutorApplicationService {
     }
 
     private long computeInfoFeeAmountFenForApplication(TutorApplication application) {
+        if (brokerageInfoFeeHotConfig != null && brokerageInfoFeeHotConfig.isUnifiedEnabled()) {
+            long v = brokerageInfoFeeHotConfig.getUnifiedAmountFen();
+            ThrowUtils.throwIf(v <= 0L, ErrorCode.OPERATION_ERROR, "统一信息费配置不合法");
+            return v;
+        }
         if (application == null) {
             return defaultAmountFen;
         }

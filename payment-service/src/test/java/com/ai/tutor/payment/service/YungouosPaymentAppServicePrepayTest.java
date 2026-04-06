@@ -23,6 +23,7 @@ public class YungouosPaymentAppServicePrepayTest {
     void prepay_wechat_returnsQrCodeUrl() {
         PaymentProperties props = new PaymentProperties();
         PaymentProperties.Yungouos cfg = props.getYungouos();
+        cfg.setAppId("TEST_APP");
         cfg.setAppKey("TEST_KEY");
         cfg.setWechatMchId("WX_MCH");
         cfg.setNotifyUrl("https://example.com/payment/notify/yungouos");
@@ -78,4 +79,3 @@ public class YungouosPaymentAppServicePrepayTest {
         assertEquals("http://img.example.com/q.png", resp.getQrCodeUrl());
     }
 }
-

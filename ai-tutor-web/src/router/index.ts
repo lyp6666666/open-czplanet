@@ -22,6 +22,7 @@ const ChatRoomPage = () => import('@/pages/chat/ChatRoomPage.vue')
 const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
 const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
+const MyCoursesPage = () => import('@/pages/course/MyCoursesPage.vue')
 const OrgAuthPage = () => import('@/pages/org/OrgAuthPage.vue')
 const OrgChangePasswordPage = () => import('@/pages/org/OrgChangePasswordPage.vue')
 const OrgPostPage = () => import('@/pages/org/OrgPostPage.vue')
@@ -215,6 +216,11 @@ export const router = createRouter({
       path: '/pay/cashier',
       name: 'cashierPay',
       component: CashierPayPage,
+    },
+    {
+      path: '/courses/my',
+      name: 'myCourses',
+      component: MyCoursesPage,
     },
   ],
 })

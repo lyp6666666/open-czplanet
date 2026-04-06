@@ -95,4 +95,15 @@ public interface PaymentOrderService extends IService<PaymentOrder> {
      * @return 是否更新成功
      */
     boolean markEventSendFailed(String orderNo, String reason);
+
+    /**
+     * 按业务上下文查询最近一笔支付成功的支付单。
+     *
+     * <p>用于退款等反向链路定位原支付单。</p>
+     *
+     * @param contextType 业务上下文类型
+     * @param contextId   业务上下文ID
+     * @return 最近一笔成功支付单；不存在返回 null
+     */
+    PaymentOrder getLatestSuccessByContext(String contextType, Long contextId);
 }

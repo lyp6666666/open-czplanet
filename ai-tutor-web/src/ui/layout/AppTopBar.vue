@@ -182,6 +182,9 @@ onBeforeUnmount(() => {
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
             </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/courses') }" type="button" @click="go('/courses/my')">
+              我的课程
+            </button>
           </template>
           <template v-else-if="isOrg">
             <button class="tab" :class="{ active: route.path.startsWith('/org/tutors') }" type="button" @click="go('/org/tutors')">
@@ -214,6 +217,9 @@ onBeforeUnmount(() => {
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
+            </button>
+            <button class="tab" :class="{ active: route.path.startsWith('/courses') }" type="button" @click="go('/courses/my')">
+              我的课程
             </button>
           </template>
         </nav>

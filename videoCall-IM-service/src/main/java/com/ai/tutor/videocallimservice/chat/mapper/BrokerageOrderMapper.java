@@ -42,4 +42,15 @@ public interface BrokerageOrderMapper {
      * @return 受影响行数
      */
     int cancel(@Param("id") Long id);
+
+    /**
+     * 进入退款审批流程（幂等/并发保护）。
+     *
+     * <p>仅允许从 PAID 状态进入，且 refund_locked=0 时才能更新成功。</p>
+     *
+     * @param id 订单ID
+     * @param nextStatus 目标状态（REFUND_REVIEW/TRIAL_REFUND_REVIEW）
+     * @return 受影响行数
+     */
+    int lockForRefund(@Param("id") Long id, @Param("nextStatus") String nextStatus);
 }

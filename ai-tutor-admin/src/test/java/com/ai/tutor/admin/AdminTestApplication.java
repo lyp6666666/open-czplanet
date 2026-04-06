@@ -11,12 +11,15 @@ import com.ai.tutor.admin.service.AdminDashboardService;
 import com.ai.tutor.admin.service.AdminJobService;
 import com.ai.tutor.admin.service.AdminPaymentRecordService;
 import com.ai.tutor.admin.service.AdminRefundService;
+import com.ai.tutor.admin.service.AdminRefundRequestService;
 import com.ai.tutor.admin.service.AdminOrganizationService;
 import com.ai.tutor.admin.service.AdminUserManageService;
 import com.ai.tutor.admin.service.AdminVerificationService;
 import com.ai.tutor.admin.model.entity.PaymentOrderRecord;
 import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.entity.TeacherProfile;
+import com.ai.tutor.admin.model.entity.RefundRequestRecord;
+import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
@@ -98,6 +101,34 @@ public class AdminTestApplication {
             @Override
             public PaymentOrderRecord detail(String orderNo) {
                 return null;
+            }
+        };
+    }
+
+    @Bean
+    public AdminRefundRequestService adminRefundRequestService() {
+        return new AdminRefundRequestService() {
+            @Override
+            public PageResult<RefundRequestRecord> list(int page, int size, String type, String status) {
+                return PageResult.<RefundRequestRecord>builder()
+                        .records(Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public RefundRequestDetailResponse detail(Long requestId) {
+                return null;
+            }
+
+            @Override
+            public void approve(Long requestId, Long adminUid, String note) {
+            }
+
+            @Override
+            public void reject(Long requestId, Long adminUid, String reason) {
             }
         };
     }

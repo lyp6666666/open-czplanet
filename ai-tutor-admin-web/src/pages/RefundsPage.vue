@@ -2,8 +2,8 @@
   <div class="card box">
     <div class="head">
       <div class="left">
-        <div class="title">退款纠纷处理</div>
-        <div class="sub">查看纠纷订单与聊天记录，支持同意/拒绝退款</div>
+        <div class="title">退款申请处理</div>
+        <div class="sub">查看退款申请、聊天记录与证据，支持同意/拒绝退款</div>
       </div>
       <div class="right">
         <button class="btn" type="button" :disabled="loading" @click="load">
@@ -18,11 +18,12 @@
       <table class="table">
         <thead>
           <tr>
-            <th style="width: 90px">订单ID</th>
+            <th style="width: 90px">申请ID</th>
+            <th style="width: 120px">类型</th>
             <th style="width: 120px">状态</th>
             <th style="width: 140px">金额(分)</th>
             <th style="width: 120px">会话ID</th>
-            <th>凭证</th>
+            <th>说明</th>
             <th style="width: 220px">操作</th>
           </tr>
         </thead>
@@ -31,12 +32,12 @@
             <td>
               <RouterLink class="link" :to="`/refunds/${row.id}`">{{ row.id }}</RouterLink>
             </td>
+            <td><span class="badge">{{ row.type || '-' }}</span></td>
             <td><span class="badge">{{ row.status || '-' }}</span></td>
-            <td>{{ row.amountFen ?? '-' }}</td>
+            <td>{{ row.refundAmountFen ?? '-' }}</td>
             <td>{{ row.roomId ?? '-' }}</td>
             <td>
-              <div class="cell-title">{{ row.proofNote || '-' }}</div>
-              <a v-if="row.proofUrl" class="cell-link" :href="row.proofUrl" target="_blank">打开凭证</a>
+              <div class="cell-title">{{ row.reason || '-' }}</div>
             </td>
             <td>
               <div class="actions">
@@ -50,8 +51,8 @@
             </td>
           </tr>
           <tr v-if="rows.length === 0 && !loading">
-            <td colspan="6">
-              <div class="empty">暂无纠纷订单</div>
+            <td colspan="7">
+              <div class="empty">暂无退款申请</div>
             </td>
           </tr>
         </tbody>
@@ -92,11 +93,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 
-import { approveRefund, listRefundDisputes, rejectRefund } from '@/api/refunds'
-import type { BrokerageOrder } from '@/api/types'
+import { approveRefundRequest, listRefundRequests, rejectRefundRequest } from '@/api/refunds'
+import type { RefundRequestRecord } from '@/api/types'
 import DialogModal from '@/ui/DialogModal.vue'
 
-const rows = ref<BrokerageOrder[]>([])
+const rows = ref<RefundRequestRecord[]>([])
 const total = ref(0)
 const page = ref(1)
 const size = ref(10)
@@ -111,7 +112,7 @@ async function load() {
   loading.value = true
   errorText.value = null
   try {
-    const res = await listRefundDisputes(page.value, size.value)
+    const res = await listRefundRequests({ page: page.value, size: size.value })
     rows.value = res.records
     total.value = Number(res.total || 0)
   } catch (e) {
@@ -125,7 +126,7 @@ async function onApprove(id: number) {
   if (busyId.value != null) return
   busyId.value = id
   try {
-    await approveRefund(id)
+    await approveRefundRequest(id)
     await load()
   } catch (e) {
     errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '操作失败'
@@ -165,7 +166,7 @@ async function submitReject() {
   rejectSubmitting.value = true
   rejectError.value = null
   try {
-    await rejectRefund({ orderId: id, reason })
+    await rejectRefundRequest(id, { reason })
     closeReject()
     await load()
   } catch (e) {
@@ -273,4 +274,3 @@ onMounted(load)
   color: rgba(0, 190, 189, 1);
 }
 </style>
-

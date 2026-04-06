@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.integration.controller;
 
 import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.event.PaymentSuccessEvent;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
 import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.enums.ErrorCode;
@@ -94,6 +95,21 @@ public class InternalFacadeController {
         Long requesterUid = requireUid();
         ThrowUtils.throwIf(!requesterUid.equals(uid), ErrorCode.NO_AUTH_ERROR);
         return ResultUtils.success(brokerageOrderService.getPayableOrder(orderId, uid));
+    }
+
+    @PostMapping("/payment/success")
+    public BaseResponse<Boolean> onPaymentSuccess(@RequestBody PaymentSuccessEvent event) {
+        requireUid();
+        ThrowUtils.throwIf(event == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(event.getContextId() == null, ErrorCode.PARAMS_ERROR);
+
+        String ctx = event.getContextType() == null ? "" : event.getContextType().trim().toUpperCase();
+        if (!"BROKERAGE_ORDER".equals(ctx)) {
+            return ResultUtils.success(false);
+        }
+
+        brokerageOrderService.onPaymentSuccess(event.getContextId(), event.getSuccessTime(), event.getChannel());
+        return ResultUtils.success(true);
     }
 
     private static int normalizeLimit(Integer limit) {

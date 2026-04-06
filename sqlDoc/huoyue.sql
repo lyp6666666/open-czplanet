@@ -352,10 +352,12 @@ CREATE TABLE `brokerage_order` (
             `payer_uid` bigint(20) UNSIGNED NOT NULL COMMENT '付款人uid（教师）',
             `amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '中介费金额（分）',
             `pay_method` varchar(32) DEFAULT NULL COMMENT '支付方式 WECHAT/ALIPAY',
-            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '订单状态 PENDING/PROOF_SUBMITTED/PAID/REJECTED/CANCELED',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '订单状态 PENDING/PROOF_SUBMITTED/PAID/REFUND_REVIEW/TRIAL_REFUND_REVIEW/REFUNDED/REJECTED/CANCELED',
             `proof_url` varchar(1024) DEFAULT NULL COMMENT '支付凭证URL',
             `proof_note` varchar(512) DEFAULT NULL COMMENT '支付备注',
             `paid_at` datetime(3) DEFAULT NULL COMMENT '确认到账时间',
+            `refund_locked` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否进入退款流程（0否 1是）',
+            `refunded_amount_fen` bigint(20) UNSIGNED NOT NULL DEFAULT 0 COMMENT '已退款金额（分），支持部分退款追溯',
             `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
             `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
             PRIMARY KEY (`id`),
@@ -363,7 +365,8 @@ CREATE TABLE `brokerage_order` (
             UNIQUE KEY `uniq_application_id` (`application_id`),
             KEY `idx_room_id` (`room_id`),
             KEY `idx_payer_uid` (`payer_uid`),
-            KEY `idx_status` (`status`)
+            KEY `idx_status` (`status`),
+            KEY `idx_brokerage_order_refund_locked` (`refund_locked`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='中介费订单表';
 
 DROP TABLE IF EXISTS `payment_order`;
@@ -404,6 +407,25 @@ CREATE TABLE `payment_order` (
             KEY `idx_event_sent` (`status`, `event_sent`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付订单表';
 
+DROP TABLE IF EXISTS `payment_refund`;
+CREATE TABLE `payment_refund` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '退款记录id',
+            `refund_no` varchar(64) NOT NULL COMMENT '平台退款单号（唯一）',
+            `payment_order_no` varchar(64) NOT NULL COMMENT '支付订单号',
+            `provider` varchar(32) NOT NULL DEFAULT 'YUNGOUOS' COMMENT '支付提供方（YUNGOUOS）',
+            `provider_refund_no` varchar(64) DEFAULT NULL COMMENT '第三方退款单号',
+            `refund_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '退款金额（分）',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '退款状态 PENDING/SUCCESS/FAILED',
+            `request_id` bigint(20) UNSIGNED NOT NULL COMMENT '业务幂等键（refund_request.id）',
+            `fail_reason` varchar(1024) DEFAULT NULL COMMENT '失败原因（排障用）',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_refund_no` (`refund_no`),
+            UNIQUE KEY `uniq_request_id` (`request_id`),
+            KEY `idx_payment_refund_payment_order_status` (`payment_order_no`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付退款表（原路退款审计与幂等）';
+
 DROP TABLE IF EXISTS `tutor_application`;
 CREATE TABLE `tutor_application` (
             `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '申请id',
@@ -441,6 +463,53 @@ CREATE TABLE `application_brokerage_order` (
             UNIQUE KEY `uniq_application` (`application_id`),
             KEY `idx_order` (`order_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='申请与中介费订单关联表';
+
+DROP TABLE IF EXISTS `course_enrollment`;
+CREATE TABLE `course_enrollment` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '课程视图id',
+            `application_id` bigint(20) UNSIGNED NOT NULL COMMENT '申请单id（唯一）',
+            `room_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '会话id',
+            `proposal_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '合作提案id',
+            `teacher_uid` bigint(20) UNSIGNED NOT NULL COMMENT '教师uid',
+            `student_uid` bigint(20) UNSIGNED NOT NULL COMMENT '学生uid',
+            `status` varchar(32) NOT NULL COMMENT '课程状态 APPLYING/WAIT_PAY/COMMUNICATING/REFUND_REVIEW/REFUNDED/TRIALING/TRIAL_REFUND_REVIEW/TEACHING/FINISHED',
+            `trial_start_at` datetime(3) DEFAULT NULL COMMENT '试课开始时间',
+            `trial_end_at` datetime(3) DEFAULT NULL COMMENT '试课结束时间（开始+7天）',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_course_application` (`application_id`),
+            KEY `idx_course_teacher_status` (`teacher_uid`, `status`),
+            KEY `idx_course_student_status` (`student_uid`, `status`),
+            KEY `idx_course_room` (`room_id`),
+            KEY `idx_course_proposal` (`proposal_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='我的课程视图表（聚合申请/支付/合作/退款/试课状态）';
+
+DROP TABLE IF EXISTS `refund_request`;
+CREATE TABLE `refund_request` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '退款申请id',
+            `brokerage_order_id` bigint(20) UNSIGNED NOT NULL COMMENT '信息费订单id',
+            `course_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '课程视图id（试课退款使用）',
+            `room_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '会话id（聊天退款使用）',
+            `applicant_uid` bigint(20) UNSIGNED NOT NULL COMMENT '申请人uid',
+            `applicant_role` varchar(32) NOT NULL COMMENT '申请人角色 TEACHER/STUDENT',
+            `type` varchar(32) NOT NULL COMMENT '退款类型 CHAT_INFO_FEE/TRIAL_INFO_FEE',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '申请状态 PENDING/APPROVED/REJECTED',
+            `reason` varchar(1024) DEFAULT NULL COMMENT '退款原因/说明',
+            `evidence_images_json` text COMMENT '证据图片URL数组（JSON）',
+            `refund_percent` int(11) NOT NULL COMMENT '退款比例（100/60）',
+            `refund_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '申请退款金额（分）',
+            `admin_uid` bigint(20) UNSIGNED DEFAULT NULL COMMENT '审核管理员uid',
+            `admin_note` varchar(1024) DEFAULT NULL COMMENT '审核备注/拒绝原因',
+            `decided_at` datetime(3) DEFAULT NULL COMMENT '审核时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_refund_request_status_type_time` (`status`, `type`, `create_time`),
+            KEY `idx_refund_request_brokerage_status` (`brokerage_order_id`, `status`),
+            KEY `idx_refund_request_room` (`room_id`),
+            KEY `idx_refund_request_course` (`course_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款申请表（聊天退款/试课退款）';
 
 DROP TABLE IF EXISTS `room_read_state`;
 CREATE TABLE `room_read_state` (

@@ -20,6 +20,13 @@ public class PaymentProperties {
     private Boolean enabled = true;
 
     /**
+     * 内部接口调用令牌（用于绕过网关签名校验的白名单接口进行二次鉴权）
+     *
+     * <p>使用场景：管理端审核通过后调用 payment-service 发起原路退款。</p>
+     */
+    private String internalToken;
+
+    /**
      * 支付宝配置
      */
     private Alipay alipay = new Alipay();
@@ -143,6 +150,8 @@ public class PaymentProperties {
          * 同步跳转地址（return_url），可选
          */
         private String returnUrl;
+
+        private String returnPageUrl = "http://localhost:5173/";
 
         /**
          * 扫码支付二维码返回类型：

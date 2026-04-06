@@ -48,6 +48,13 @@ public class YungouosPaymentConfigValidator {
             }
             throw new IllegalStateException("缺少支付配置：payment.yungouos.appKey");
         }
+        if (!StringUtils.hasText(config.getAppId())) {
+            if (!prod) {
+                log.warn("缺少支付配置：payment.yungouos.appId（非生产环境将跳过校验）");
+                return;
+            }
+            throw new IllegalStateException("缺少支付配置：payment.yungouos.appId");
+        }
         if (!StringUtils.hasText(config.getWechatMchId()) && !StringUtils.hasText(config.getAlipayMchId())) {
             if (!prod) {
                 log.warn("缺少支付配置：payment.yungouos.wechatMchId 或 payment.yungouos.alipayMchId（非生产环境将跳过校验）");
@@ -61,6 +68,14 @@ public class YungouosPaymentConfigValidator {
                 return;
             }
             throw new IllegalStateException("缺少支付配置：payment.yungouos.notifyUrl");
+        }
+        String nativePayType = config.getNativePayType() == null ? null : config.getNativePayType().trim();
+        if (!"1".equals(nativePayType) && !"2".equals(nativePayType)) {
+            if (!prod) {
+                log.warn("支付配置不合法：payment.yungouos.nativePayType 仅支持 1/2（非生产环境将跳过校验）");
+                return;
+            }
+            throw new IllegalStateException("支付配置不合法：payment.yungouos.nativePayType 仅支持 1/2");
         }
     }
 }

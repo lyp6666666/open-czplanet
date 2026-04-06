@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper">
+
+    <resultMap id="baseMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment">
+        <id column="id" property="id"/>
+        <result column="application_id" property="applicationId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="proposal_id" property="proposalId"/>
+        <result column="teacher_uid" property="teacherUid"/>
+        <result column="student_uid" property="studentUid"/>
+        <result column="status" property="status"/>
+        <result column="trial_start_at" property="trialStartAt"/>
+        <result column="trial_end_at" property="trialEndAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO course_enrollment
+        (
+            application_id,
+            room_id,
+            proposal_id,
+            teacher_uid,
+            student_uid,
+            status,
+            trial_start_at,
+            trial_end_at,
+            create_time,
+            update_time
+        )
+        VALUES
+        (
+            #{applicationId},
+            #{roomId},
+            #{proposalId},
+            #{teacherUid},
+            #{studentUid},
+            #{status},
+            #{trialStartAt},
+            #{trialEndAt},
+            #{createTime},
+            #{updateTime}
+        )
+    </insert>
+
+    <select id="selectByApplicationId" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            trial_start_at, trial_end_at, create_time, update_time
+        FROM course_enrollment
+        WHERE application_id = #{applicationId}
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            trial_start_at, trial_end_at, create_time, update_time
+        FROM course_enrollment
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectLatestByRoomId" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            trial_start_at, trial_end_at, create_time, update_time
+        FROM course_enrollment
+        WHERE room_id = #{roomId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="listByTeacher" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            trial_start_at, trial_end_at, create_time, update_time
+        FROM course_enrollment
+        WHERE teacher_uid = #{teacherUid}
+        ORDER BY update_time DESC, id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="listByStudent" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            trial_start_at, trial_end_at, create_time, update_time
+        FROM course_enrollment
+        WHERE student_uid = #{studentUid}
+        ORDER BY update_time DESC, id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <update id="updateStatus">
+        UPDATE course_enrollment
+        SET
+            status = #{nextStatus},
+            <if test="proposalId != null">
+                proposal_id = #{proposalId},
+            </if>
+            <if test="trialStartAt != null">
+                trial_start_at = #{trialStartAt},
+            </if>
+            <if test="trialEndAt != null">
+                trial_end_at = #{trialEndAt},
+            </if>
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = #{expectedStatus}
+    </update>
+
+    <update id="updateRoomId">
+        UPDATE course_enrollment
+        SET
+            room_id = #{roomId},
+            update_time = NOW()
+        WHERE application_id = #{applicationId}
+          AND (room_id IS NULL OR room_id = 0)
+    </update>
+
+</mapper>

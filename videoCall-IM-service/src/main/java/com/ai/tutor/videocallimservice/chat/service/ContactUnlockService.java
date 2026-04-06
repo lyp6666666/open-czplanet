@@ -41,8 +41,12 @@ public class ContactUnlockService {
         Long teacherUid = teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
         Long studentUid = studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId());
         ThrowUtils.throwIf(teacherUid == null || studentUid == null, ErrorCode.NOT_FOUND_ERROR);
-        ThrowUtils.throwIf(!uid.equals(teacherUid), ErrorCode.NO_AUTH_ERROR);
-        ThrowUtils.throwIf(!targetUid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(!uid.equals(teacherUid) && !uid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
+        if (uid.equals(teacherUid)) {
+            ThrowUtils.throwIf(!targetUid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
+        } else {
+            ThrowUtils.throwIf(!targetUid.equals(teacherUid), ErrorCode.NO_AUTH_ERROR);
+        }
 
         CollaborationProposal proposal = collaborationProposalMapper.selectLatestByRoomId(roomId);
         ThrowUtils.throwIf(proposal == null, ErrorCode.NOT_FOUND_ERROR);

@@ -51,6 +51,8 @@ public class CollaborationProposalService {
     private ChatService chatService;
     @Resource
     private BrokerageOrderService brokerageOrderService;
+    @Resource
+    private CourseEnrollmentService courseEnrollmentService;
 
     public Long createAndSend(CreateCollaborationProposalReq req, Long uid) {
         ThrowUtils.throwIf(req == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -243,6 +245,9 @@ public class CollaborationProposalService {
             TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(proposal.getRoomId());
             if (application != null && "DEMAND".equalsIgnoreCase(application.getContextType()) && application.getContextId() != null) {
                 studentJobPostingLiteMapper.updateBizStatus(application.getContextId(), 4);
+            }
+            if (courseEnrollmentService != null) {
+                courseEnrollmentService.onCollaborationAccepted(proposal.getRoomId(), proposalId);
             }
         }
 

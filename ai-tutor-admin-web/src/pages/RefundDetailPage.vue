@@ -15,48 +15,45 @@
     <div v-if="detail" class="grid">
       <div class="card section">
         <div class="section-head">
-          <div class="section-title">订单信息</div>
-          <span class="badge">{{ detail.order.status || '-' }}</span>
+          <div class="section-title">申请信息</div>
+          <span class="badge">{{ detail.refundRequest.status || '-' }}</span>
         </div>
 
         <div class="kv">
-          <div class="k">订单ID</div>
-          <div class="v">{{ detail.order.id }}</div>
+          <div class="k">申请ID</div>
+          <div class="v">{{ detail.refundRequest.id }}</div>
         </div>
         <div class="kv">
-          <div class="k">金额(分)</div>
-          <div class="v">{{ detail.order.amountFen ?? '-' }}</div>
+          <div class="k">类型</div>
+          <div class="v">{{ detail.refundRequest.type }}</div>
         </div>
         <div class="kv">
           <div class="k">会话ID</div>
-          <div class="v">{{ detail.order.roomId ?? '-' }}</div>
+          <div class="v">{{ detail.refundRequest.roomId ?? '-' }}</div>
         </div>
         <div class="kv">
-          <div class="k">付款人UID</div>
-          <div class="v">{{ detail.order.payerUid ?? '-' }}</div>
+          <div class="k">订单ID</div>
+          <div class="v">{{ detail.refundRequest.brokerageOrderId }}</div>
         </div>
         <div class="kv">
-          <div class="k">支付方式</div>
-          <div class="v">{{ detail.order.payMethod ?? '-' }}</div>
+          <div class="k">退款比例</div>
+          <div class="v">{{ detail.refundRequest.refundPercent }}%</div>
         </div>
         <div class="kv">
-          <div class="k">支付时间</div>
-          <div class="v">{{ timeText(detail.order.paidAt) }}</div>
+          <div class="k">退款金额(分)</div>
+          <div class="v">{{ detail.refundRequest.refundAmountFen }}</div>
         </div>
         <div class="kv">
-          <div class="k">凭证说明</div>
-          <div class="v">{{ detail.order.proofNote ?? '-' }}</div>
-        </div>
-        <div class="kv">
-          <div class="k">凭证链接</div>
-          <div class="v">
-            <a v-if="detail.order.proofUrl" class="link" :href="detail.order.proofUrl" target="_blank">打开凭证</a>
-            <span v-else>-</span>
-          </div>
+          <div class="k">申请说明</div>
+          <div class="v">{{ detail.refundRequest.reason || '-' }}</div>
         </div>
 
-        <div v-if="detail.order.proofUrl" class="img-wrap">
-          <img class="img" :src="detail.order.proofUrl" alt="proof" />
+        <div v-if="evidenceUrls.length > 0" class="img-wrap">
+          <div class="imgs">
+            <a v-for="u in evidenceUrls" :key="u" class="img-link" :href="u" target="_blank">
+              <img class="img" :src="u" alt="evidence" />
+            </a>
+          </div>
         </div>
 
         <div class="actions">
@@ -103,16 +100,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { approveRefund, getDisputeDetails, rejectRefund } from '@/api/refunds'
-import type { DisputeDetailResponse } from '@/api/types'
+import { approveRefundRequest, getRefundRequestDetails, rejectRefundRequest } from '@/api/refunds'
+import type { RefundRequestDetailResponse } from '@/api/types'
 import DialogModal from '@/ui/DialogModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const orderId = computed(() => Number(route.params.orderId))
+const requestId = computed(() => Number(route.params.requestId))
 
-const detail = ref<DisputeDetailResponse | null>(null)
+const detail = ref<RefundRequestDetailResponse | null>(null)
 const loading = ref(false)
 const errorText = ref<string | null>(null)
 const busyAction = ref(false)
@@ -127,7 +124,7 @@ async function load() {
   loading.value = true
   errorText.value = null
   try {
-    detail.value = await getDisputeDetails(orderId.value)
+    detail.value = await getRefundRequestDetails(requestId.value)
   } catch (e) {
     errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '加载失败'
   } finally {
@@ -143,7 +140,7 @@ async function onApprove() {
   if (busyAction.value) return
   busyAction.value = true
   try {
-    await approveRefund(orderId.value)
+    await approveRefundRequest(requestId.value)
     await load()
   } catch (e) {
     errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '操作失败'
@@ -178,7 +175,7 @@ async function submitReject() {
   rejectSubmitting.value = true
   rejectError.value = null
   try {
-    await rejectRefund({ orderId: orderId.value, reason })
+    await rejectRefundRequest(requestId.value, { reason })
     closeReject()
     await load()
   } catch (e) {
@@ -187,6 +184,19 @@ async function submitReject() {
     rejectSubmitting.value = false
   }
 }
+
+const evidenceUrls = computed<string[]>(() => {
+  const raw = detail.value?.refundRequest?.evidenceImagesJson
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.map((v) => String(v)).filter((v) => v && v !== 'null' && v !== 'undefined')
+    }
+  } catch {
+  }
+  return []
+})
 
 onMounted(load)
 </script>
@@ -256,6 +266,24 @@ onMounted(load)
 .v {
   font-size: 13px;
   word-break: break-word;
+}
+
+.imgs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.img-link {
+  display: block;
+}
+
+.img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .actions {
@@ -341,4 +369,3 @@ onMounted(load)
   }
 }
 </style>
-

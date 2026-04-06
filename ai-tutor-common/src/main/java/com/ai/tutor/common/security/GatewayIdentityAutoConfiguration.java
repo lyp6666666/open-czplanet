@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(prefix = "security.gateway-identity", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "security.gateway-identity", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(IdentitySignProperties.class)
 public class GatewayIdentityAutoConfiguration {
 

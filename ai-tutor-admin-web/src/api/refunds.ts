@@ -1,19 +1,19 @@
 import { http } from './http'
-import type { DisputeDetailResponse, PageResult, BrokerageOrder } from './types'
+import type { PageResult, RefundRequestRecord, RefundRequestDetailResponse } from './types'
 
-export function listRefundDisputes(page = 1, size = 10): Promise<PageResult<BrokerageOrder>> {
-  return http.get('/api/admin/refund/disputes', { params: { page, size } })
+export function listRefundRequests(params: { page?: number; size?: number; type?: string; status?: string } = {}): Promise<PageResult<RefundRequestRecord>> {
+  const { page = 1, size = 10, type, status } = params
+  return http.get('/api/admin/refund/requests', { params: { page, size, type, status } })
 }
 
-export function getDisputeDetails(orderId: number): Promise<DisputeDetailResponse> {
-  return http.get(`/api/admin/refund/details/${orderId}`)
+export function getRefundRequestDetails(requestId: number): Promise<RefundRequestDetailResponse> {
+  return http.get(`/api/admin/refund/requests/${requestId}`)
 }
 
-export function approveRefund(orderId: number): Promise<boolean> {
-  return http.post('/api/admin/refund/approve', { orderId })
+export function approveRefundRequest(requestId: number, payload?: { note?: string }): Promise<boolean> {
+  return http.post(`/api/admin/refund/requests/${requestId}/approve`, payload || {})
 }
 
-export function rejectRefund(payload: { orderId: number; reason: string }): Promise<boolean> {
-  return http.post('/api/admin/refund/reject', payload)
+export function rejectRefundRequest(requestId: number, payload: { reason: string }): Promise<boolean> {
+  return http.post(`/api/admin/refund/requests/${requestId}/reject`, payload)
 }
-

@@ -1,10 +1,13 @@
 package com.ai.tutor.payment.service;
 
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.event.PaymentSuccessEvent;
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.security.IdentitySignatureUtils;
 import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.payment.integration.feign.ImBrokerageOrderFeignClient;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
 import com.ai.tutor.payment.controller.dto.PrepayRequest;
@@ -24,6 +27,8 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -48,6 +53,8 @@ public class YungouosPaymentAppService {
     private final PaymentOrderService paymentOrderService;
     private final BrokerageOrderFacade brokerageOrderFacade;
     private final YungouosClient yungouosClient;
+    private final ImBrokerageOrderFeignClient imBrokerageOrderFeignClient;
+    private final IdentitySignatureUtils identitySignatureUtils;
 
     public PrepayResponse prepay(PrepayRequest req, Long uid, String clientIp) {
         ThrowUtils.throwIf(Boolean.FALSE.equals(paymentProperties.getEnabled()), ErrorCode.OPERATION_ERROR, "支付功能已禁用");
@@ -77,10 +84,21 @@ public class YungouosPaymentAppService {
         if (order.getExpireTime() == null || order.getExpireTime().isBefore(now) || !StringUtils.hasText(order.getPayData())) {
             String totalFeeYuan = fenToYuan(order.getAmount());
             PaymentProperties.Yungouos config = paymentProperties.getYungouos();
-            boolean mock = config != null && StringUtils.hasText(config.getBaseUrl()) && config.getBaseUrl().startsWith("mock://");
-            String appKey = config == null ? null : config.getAppKey();
+            ThrowUtils.throwIf(config == null, ErrorCode.OPERATION_ERROR, "支付配置缺失");
+            String baseUrl = config.getBaseUrl() == null ? null : config.getBaseUrl().trim();
+            boolean mock = StringUtils.hasText(baseUrl) && baseUrl.startsWith("mock://");
+            String appKey = config.getAppKey();
             if (mock && !StringUtils.hasText(appKey)) {
                 appKey = "TEST_KEY";
+            }
+            if (!mock) {
+                ThrowUtils.throwIf(!StringUtils.hasText(appKey), ErrorCode.OPERATION_ERROR, "缺少 YunGouOS appKey 配置");
+            }
+            ThrowUtils.throwIf(!StringUtils.hasText(config.getAppId()), ErrorCode.OPERATION_ERROR, "缺少 YunGouOS appId 配置");
+            ThrowUtils.throwIf(!StringUtils.hasText(config.getNotifyUrl()), ErrorCode.OPERATION_ERROR, "缺少 YunGouOS notifyUrl 配置");
+            String nativePayType = config.getNativePayType() == null ? null : config.getNativePayType().trim();
+            if (!"1".equals(nativePayType) && !"2".equals(nativePayType)) {
+                ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "YunGouOS nativePayType 必须为 1 或 2");
             }
 
             String data;
@@ -97,7 +115,7 @@ public class YungouosPaymentAppService {
                             totalFeeYuan,
                             mchId,
                             order.getBody(),
-                            config.getNativePayType(),
+                            nativePayType,
                             config.getAppId(),
                             buildAttach(order),
                             config.getNotifyUrl(),
@@ -116,7 +134,7 @@ public class YungouosPaymentAppService {
                             totalFeeYuan,
                             mchId,
                             order.getBody(),
-                            config.getNativePayType(),
+                            nativePayType,
                             config.getAppId(),
                             buildAttach(order),
                             config.getNotifyUrl(),
@@ -131,7 +149,7 @@ public class YungouosPaymentAppService {
 
             LocalDateTime expire = now.plus(5, ChronoUnit.MINUTES);
             String payData = JSONUtil.createObj()
-                    .set("type", config.getNativePayType())
+                    .set("type", nativePayType)
                     .set("data", data)
                     .set("channel", channel.toUpperCase())
                     .set("provider", "YUNGOUOS")
@@ -148,6 +166,7 @@ public class YungouosPaymentAppService {
         PaymentOrder order = paymentOrderService.getByOrderNo(orderNo.trim());
         ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(order.getUserId()), ErrorCode.NO_AUTH_ERROR);
+        tryFinalizeBusiness(order);
         return toStatusResponse(order);
     }
 
@@ -156,12 +175,20 @@ public class YungouosPaymentAppService {
             return "SUCCESS";
         }
         PaymentProperties.Yungouos config = paymentProperties.getYungouos();
-        boolean mock = config != null && StringUtils.hasText(config.getBaseUrl()) && config.getBaseUrl().startsWith("mock://");
-        String appKey = config == null ? null : config.getAppKey();
+        if (config == null) {
+            log.warn("YunGouOS 回调处理失败：缺少配置 payment.yungouos");
+            return "FAIL";
+        }
+        String baseUrl = config.getBaseUrl() == null ? null : config.getBaseUrl().trim();
+        boolean mock = StringUtils.hasText(baseUrl) && baseUrl.startsWith("mock://");
+        String appKey = config.getAppKey();
         if (mock && !StringUtils.hasText(appKey)) {
             appKey = "TEST_KEY";
         }
-        ThrowUtils.throwIf(config == null || !StringUtils.hasText(appKey), ErrorCode.OPERATION_ERROR, "支付配置缺失");
+        if (!StringUtils.hasText(appKey)) {
+            log.warn("YunGouOS 回调处理失败：缺少 appKey");
+            return "FAIL";
+        }
 
         String outTradeNo = request.getParameter("out_trade_no");
         if (!StringUtils.hasText(outTradeNo)) {
@@ -208,7 +235,131 @@ public class YungouosPaymentAppService {
         LocalDateTime successTime = parsePayTime(payTime);
 
         boolean ok = paymentOrderService.updateSuccessFromNotify(outTradeNo, payNo, providerOrderNo, successTime, 1);
+        PaymentOrder updated = paymentOrderService.getByOrderNo(outTradeNo.trim());
+        tryFinalizeBusiness(updated);
         return ok ? "SUCCESS" : "SUCCESS";
+    }
+
+    public String handleReturn(HttpServletRequest request) {
+        PaymentProperties.Yungouos config = paymentProperties.getYungouos();
+        String target = config == null ? null : config.getReturnPageUrl();
+        if (!StringUtils.hasText(target)) {
+            target = "http://localhost:5173/";
+        }
+
+        if (Boolean.FALSE.equals(paymentProperties.getEnabled())) {
+            return renderRedirectHtml(target);
+        }
+        if (config == null) {
+            return renderRedirectHtml(target);
+        }
+        String baseUrl = config.getBaseUrl() == null ? null : config.getBaseUrl().trim();
+        boolean mock = StringUtils.hasText(baseUrl) && baseUrl.startsWith("mock://");
+        String appKey = config.getAppKey();
+        if (mock && !StringUtils.hasText(appKey)) {
+            appKey = "TEST_KEY";
+        }
+
+        Map<String, String> params = extractParams(request);
+        String outTradeNo = firstNonBlank(params.get("outTradeNo"), params.get("out_trade_no"));
+        if (!StringUtils.hasText(outTradeNo)) {
+            return renderRedirectHtml(target);
+        }
+
+        boolean signOk = false;
+        try {
+            signOk = verifyNotifySign(params, appKey);
+        } catch (Exception ignored) {
+        }
+        if (!signOk && !mock) {
+            return renderRedirectHtml(appendQuery(target, "pay", "invalid_sign"));
+        }
+
+        String code = params.get("code");
+        if (!"1".equals(StringUtils.trimAllWhitespace(code))) {
+            return renderRedirectHtml(appendQuery(target, "pay", "failed"));
+        }
+
+        PaymentOrder order = paymentOrderService.getByOrderNo(outTradeNo.trim());
+        if (order == null) {
+            return renderRedirectHtml(appendQuery(target, "pay", "order_not_found"));
+        }
+
+        String fee = firstNonBlank(params.get("money"), params.get("total_fee"));
+        if (StringUtils.hasText(fee)) {
+            boolean amountOk = amountEqualsFen(fee, order.getAmount());
+            if (!amountOk) {
+                return renderRedirectHtml(appendQuery(target, "pay", "amount_mismatch"));
+            }
+        }
+
+        String payNo = firstNonBlank(params.get("payNo"), params.get("pay_no"), params.get("transaction_id"));
+        String providerOrderNo = firstNonBlank(params.get("orderNo"), params.get("order_no"));
+        String payTime = params.get("time");
+        LocalDateTime successTime = parsePayTime(payTime);
+
+        paymentOrderService.updateSuccessFromNotify(outTradeNo, payNo, providerOrderNo, successTime, signOk ? 1 : 0);
+        PaymentOrder updated = paymentOrderService.getByOrderNo(outTradeNo.trim());
+        tryFinalizeBusiness(updated);
+
+        return renderRedirectHtml(appendQuery(target, "orderNo", outTradeNo.trim()));
+    }
+
+    private void tryFinalizeBusiness(PaymentOrder order) {
+        if (order == null) {
+            return;
+        }
+        if (!PaymentStatus.SUCCESS.getCode().equals(order.getStatus())) {
+            return;
+        }
+        Integer sent = order.getEventSent();
+        if (sent != null && sent == 1) {
+            return;
+        }
+        String contextType = order.getContextType() == null ? "" : order.getContextType().trim().toUpperCase();
+        if (!CONTEXT_BROKERAGE_ORDER.equals(contextType)) {
+            return;
+        }
+        if (order.getContextId() == null) {
+            return;
+        }
+
+        String orderNo = order.getOrderNo();
+        long ts = System.currentTimeMillis();
+        long uid = 0L;
+        int role = 0;
+        String path = "/internal/facade/payment/success";
+        String sign = identitySignatureUtils.sign(uid, role, ts, "POST", path);
+
+        PaymentSuccessEvent event = new PaymentSuccessEvent();
+        event.setOrderNo(orderNo);
+        event.setUserId(order.getUserId());
+        event.setAmount(order.getAmount());
+        event.setContextId(order.getContextId());
+        event.setContextType(order.getContextType());
+        event.setTransactionId(order.getTransactionId());
+        event.setSuccessTime(order.getSuccessTime());
+        event.setChannel(order.getChannel());
+        event.setProvider(order.getProvider());
+        event.setProviderOrderNo(order.getProviderOrderNo());
+
+        try {
+            BaseResponse<Boolean> resp = imBrokerageOrderFeignClient.onPaymentSuccess(
+                    String.valueOf(uid),
+                    String.valueOf(role),
+                    String.valueOf(ts),
+                    sign,
+                    event
+            );
+            if (resp != null && resp.getCode() == ErrorCode.SUCCESS.getCode() && Boolean.TRUE.equals(resp.getData())) {
+                paymentOrderService.markEventSent(orderNo);
+                return;
+            }
+            String msg = resp == null ? "null response" : String.valueOf(resp.getMessage());
+            paymentOrderService.markEventSendFailed(orderNo, "im finalize failed: " + msg);
+        } catch (Exception e) {
+            paymentOrderService.markEventSendFailed(orderNo, "im finalize exception: " + e.getMessage());
+        }
     }
 
     private static Map<String, String> extractParams(HttpServletRequest request) {
@@ -228,6 +379,43 @@ public class YungouosPaymentAppService {
             params.put(key, String.join(",", values));
         }
         return params;
+    }
+
+    private static String appendQuery(String baseUrl, String key, String value) {
+        if (!StringUtils.hasText(baseUrl) || !StringUtils.hasText(key) || value == null) {
+            return baseUrl;
+        }
+        String sep = baseUrl.contains("?") ? "&" : "?";
+        return baseUrl + sep + urlEncode(key) + "=" + urlEncode(value);
+    }
+
+    private static String urlEncode(String s) {
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
+    }
+
+    private static String renderRedirectHtml(String targetUrl) {
+        String safe = targetUrl == null ? "" : targetUrl;
+        String escaped = escapeHtml(safe);
+        return "<!doctype html><html><head><meta charset=\"utf-8\">"
+                + "<meta http-equiv=\"refresh\" content=\"0;url=" + escaped + "\">"
+                + "</head><body>"
+                + "<a href=\"" + escaped + "\">Continue</a>"
+                + "</body></html>";
+    }
+
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        StringBuilder out = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '&') out.append("&amp;");
+            else if (c == '<') out.append("&lt;");
+            else if (c == '>') out.append("&gt;");
+            else if (c == '"') out.append("&quot;");
+            else if (c == '\'') out.append("&#39;");
+            else out.append(c);
+        }
+        return out.toString();
     }
 
     private static boolean verifyNotifySign(Map<String, String> params, String appKey) {

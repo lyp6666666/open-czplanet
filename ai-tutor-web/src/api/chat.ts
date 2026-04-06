@@ -1,6 +1,12 @@
 import { http } from './http'
 import type { ChatMessageResp, ChatRoomItemResp, CursorPageBaseResp, CursorPageResp } from './types'
 
+export type ChatRefundStateResp = {
+  canApply: boolean
+  disableReasonCode?: string
+  hoverText?: string
+}
+
 export const chatApi = {
   getOrCreateRoom(targetUid: number) {
     return http.post<unknown, number>('/chat/room', { targetUid })
@@ -26,12 +32,12 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body })
   },
 
-  requestBrokerageRefund(roomId: number) {
-    return http.post<unknown, ChatMessageResp>('/chat/msg', {
-      roomId,
-      msgType: 8,
-      body: { bizType: 'BROKERAGE_REFUND_REQUEST', eventId: Date.now(), title: '结束沟通', status: 'PENDING_REVIEW' },
-    })
+  getChatRefundState(roomId: number) {
+    return http.get<unknown, ChatRefundStateResp>('/chat/refund/state', { params: { roomId } })
+  },
+
+  requestBrokerageRefund(roomId: number, reason?: string) {
+    return http.post<unknown, ChatMessageResp>('/chat/refund/apply', { roomId, reason })
   },
 
   requestEndChat(roomId: number) {

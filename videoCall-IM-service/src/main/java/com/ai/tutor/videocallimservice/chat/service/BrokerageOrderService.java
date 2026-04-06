@@ -16,6 +16,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.CreateDirectBroker
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitBrokerageProofReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.BrokerageOrderVO;
+import com.ai.tutor.videocallimservice.chat.config.BrokerageInfoFeeHotConfig;
 import com.ai.tutor.videocallimservice.chat.mapper.ApplicationBrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
@@ -65,6 +66,9 @@ public class BrokerageOrderService {
 
     @Resource
     private BizKpiMetrics bizKpiMetrics;
+
+    @Resource
+    private BrokerageInfoFeeHotConfig brokerageInfoFeeHotConfig;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -141,6 +145,11 @@ public class BrokerageOrderService {
     }
 
     private long computeInfoFeeAmountFen(CollaborationProposal proposal) {
+        if (brokerageInfoFeeHotConfig != null && brokerageInfoFeeHotConfig.isUnifiedEnabled()) {
+            long v = brokerageInfoFeeHotConfig.getUnifiedAmountFen();
+            ThrowUtils.throwIf(v <= 0L, ErrorCode.OPERATION_ERROR, "统一信息费配置不合法");
+            return v;
+        }
         if (proposal == null) {
             return defaultAmountFen;
         }

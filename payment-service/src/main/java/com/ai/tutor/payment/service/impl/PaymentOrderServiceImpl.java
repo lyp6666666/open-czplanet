@@ -47,7 +47,6 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         boolean updated = this.update(updateWrapper);
         if (updated) {
             log.info("Payment order {} updated to SUCCESS, transactionId: {}", orderNo, transactionId);
-            // 发送MQ消息
             try {
                 PaymentOrder order = getByOrderNo(orderNo);
                 if (order != null) {
@@ -64,12 +63,15 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                     event.setProviderOrderNo(order.getProviderOrderNo());
                     if (rocketMQTemplate != null) {
                         rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                        markEventSent(orderNo);
                     } else {
                         log.warn("RocketMQTemplate 不存在，跳过支付成功事件投递. orderNo={}", orderNo);
+                        markEventSendFailed(orderNo, "RocketMQTemplate missing");
                     }
                 }
             } catch (Exception e) {
                 log.error("Failed to send payment success event for order {}", orderNo, e);
+                markEventSendFailed(orderNo, truncateReason(e.getMessage()));
             }
             return true;
         } else {
@@ -206,10 +208,11 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                     event.setProviderOrderNo(order.getProviderOrderNo());
                     if (rocketMQTemplate != null) {
                         rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                        markEventSent(orderNo);
                     } else {
                         log.warn("RocketMQTemplate 不存在，跳过支付成功事件投递. orderNo={}", orderNo);
+                        markEventSendFailed(orderNo, "RocketMQTemplate missing");
                     }
-                    markEventSent(orderNo);
                 }
             } catch (Exception e) {
                 log.error("Failed to send payment success event for order {}", orderNo, e);
@@ -248,6 +251,19 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                 .set("event_sent", 0)
                 .set("event_send_fail_reason", truncateReason(reason));
         return this.update(updateWrapper);
+    }
+
+    @Override
+    public PaymentOrder getLatestSuccessByContext(String contextType, Long contextId) {
+        if (contextType == null || contextType.trim().isEmpty() || contextId == null) {
+            return null;
+        }
+        return this.getOne(new QueryWrapper<PaymentOrder>()
+                .eq("context_type", contextType.trim())
+                .eq("context_id", contextId)
+                .eq("status", PaymentStatus.SUCCESS.getCode())
+                .orderByDesc("create_time")
+                .last("limit 1"));
     }
 
     private static String truncateReason(String reason) {

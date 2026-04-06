@@ -23,6 +23,8 @@ public class BrokerageOrder {
     private String proofUrl;
     private String proofNote;
     private LocalDateTime paidAt;
+    private Integer refundLocked;
+    private Long refundedAmountFen;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

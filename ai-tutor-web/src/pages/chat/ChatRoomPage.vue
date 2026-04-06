@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
+import type { ChatRefundStateResp } from '@/api/chat'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
 import { scheduleApi } from '@/api/schedule'
@@ -42,10 +43,11 @@ const error = ref<string | null>(null)
 const sending = ref(false)
 const input = ref('')
 
-const endOpen = ref(false)
-const endBusy = ref(false)
-const endError = ref<string | null>(null)
+const endRequestBusy = ref(false)
 const endActionBusy = ref(false)
+
+const refundState = ref<ChatRefundStateResp | null>(null)
+const refundStateLoading = ref(false)
 
 const appActionBusy = ref<Record<number, boolean>>({})
 const appActionError = ref<Record<number, string>>({})
@@ -189,42 +191,6 @@ function closeCollaboration() {
   if (collabCreateBusy.value) return
   collabOpen.value = false
   collabEdit.value = null
-}
-
-function openEndChat() {
-  if (!canEndChat.value) {
-    error.value = composerLockedHint.value
-    return
-  }
-  endError.value = null
-  endOpen.value = true
-}
-
-function closeEndChat() {
-  if (endBusy.value) return
-  endOpen.value = false
-}
-
-async function submitEndChat() {
-  if (!canEndChat.value) return
-  if (endBusy.value) return
-  endBusy.value = true
-  endError.value = null
-  try {
-    if (isTeacher.value) {
-      const msg = await chatApi.requestEndChat(roomId.value)
-      mergeMessages([msg], 'append')
-      endOpen.value = false
-      return
-    }
-    const msg = await chatApi.requestBrokerageRefund(roomId.value)
-    mergeMessages([msg], 'append')
-    endOpen.value = false
-  } catch (e) {
-    endError.value = e instanceof Error ? e.message : '发起失败'
-  } finally {
-    endBusy.value = false
-  }
 }
 
 // #region debug-point
@@ -547,6 +513,34 @@ const refundStatusByRequestId = computed<Record<number, string>>(() => {
   return out
 })
 
+const canApplyRefund = computed(() => !!refundState.value?.canApply)
+const refundHoverText = computed(() => refundState.value?.hoverText || '')
+
+async function refreshRefundState() {
+  if (!roomId.value || !Number.isFinite(roomId.value)) return
+  if (refundStateLoading.value) return
+  refundStateLoading.value = true
+  try {
+    refundState.value = await chatApi.getChatRefundState(roomId.value)
+  } catch {
+    refundState.value = null
+  } finally {
+    refundStateLoading.value = false
+  }
+}
+
+async function applyRefund() {
+  if (!roomId.value || !Number.isFinite(roomId.value)) return
+  if (!canApplyRefund.value) return
+  try {
+    const msg = await chatApi.requestBrokerageRefund(roomId.value)
+    mergeMessages([msg], 'append')
+    await refreshRefundState()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '申请退费失败'
+  }
+}
+
 const latestRefundStatusFallback = computed(() => {
   let best: { msgId: number; status: string } | null = null
   for (const m of sortedMessages.value) {
@@ -661,6 +655,22 @@ const collabStatusByProposalId = computed<Record<number, CollaborationProposalSt
   return out
 })
 
+const hasAcceptedCollaboration = computed(() => {
+  return Object.values(collabStatusByProposalId.value).some((s) => s === 'ACCEPTED')
+})
+
+const canViewContact = computed(() => {
+  return hasAcceptedCollaboration.value
+})
+
+const contactAutoShown = ref(false)
+watch(hasAcceptedCollaboration, (v) => {
+  if (!v) return
+  if (contactAutoShown.value) return
+  contactAutoShown.value = true
+  viewUnlockedContact()
+})
+
 const hasActiveCollabProposal = computed(() => {
   return Object.values(collabStatusByProposalId.value).some((s) => s !== 'REJECTED')
 })
@@ -673,6 +683,10 @@ const hasAnyRefundRequest = computed(() => {
   return renderMessages.value.some((m) => isRefundRequestBody(m.body))
 })
 
+const composerEnabled = computed(() => {
+  return chatUnlocked.value && !hasAnyRefundRequest.value
+})
+
 const hasPendingEndChatRequest = computed(() => {
   return renderMessages.value.some((m) => {
     const b = m.body
@@ -682,9 +696,27 @@ const hasPendingEndChatRequest = computed(() => {
   })
 })
 
-const composerEnabled = computed(() => {
-  return chatUnlocked.value && !hasAnyRefundRequest.value
+const canRequestEndChat = computed(() => {
+  if (!chatUnlocked.value) return false
+  if (hasAnyRefundRequest.value) return false
+  if (!isTeacher.value) return false
+  return !hasPendingEndChatRequest.value
 })
+
+async function requestEndChat() {
+  if (!roomId.value || !Number.isFinite(roomId.value)) return
+  if (!canRequestEndChat.value) return
+  if (endRequestBusy.value) return
+  endRequestBusy.value = true
+  try {
+    const msg = await chatApi.requestEndChat(roomId.value)
+    mergeMessages([msg], 'append')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '发起结束沟通失败'
+  } finally {
+    endRequestBusy.value = false
+  }
+}
 
 const composerLockedHint = computed(() => {
   if (hasAnyRefundRequest.value) {
@@ -693,12 +725,9 @@ const composerLockedHint = computed(() => {
   return chatLockedHint.value
 })
 
-const canEndChat = computed(() => {
-  if (!chatUnlocked.value) return false
-  if (hasAnyRefundRequest.value) return false
-  if (isTeacher.value) return !hasPendingEndChatRequest.value
-  return true
-})
+watch([roomId, () => messages.value.length], () => {
+  refreshRefundState()
+}, { immediate: true })
 
 function refundStatusText(raw: unknown): string {
   const s = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
@@ -853,9 +882,6 @@ watch(
     collabCreateBusy.value = false
     collabCreateError.value = null
     collabEdit.value = null
-    endOpen.value = false
-    endBusy.value = false
-    endError.value = null
     endActionBusy.value = false
     appActionBusy.value = {}
     appActionError.value = {}
@@ -975,7 +1001,7 @@ watch(
                 />
               </template>
               <template v-else-if="isContactUnlockedBody(it.m.body)">
-                <ContactUnlockedCard :body="it.m.body" :can-view="auth.user?.userType === 1" @view="viewUnlockedContact" />
+                <ContactUnlockedCard :body="it.m.body" :can-view="canViewContact" @view="viewUnlockedContact" />
               </template>
               <template v-else-if="isEndChatRequestBody(it.m.body)">
                 <div class="end-card">
@@ -1025,8 +1051,13 @@ watch(
               <button class="btn" type="button" :disabled="hasActiveCollabProposal || !composerEnabled" @click="openCollaboration">
                 {{ hasActiveCollabProposal ? '已发起合作' : '发起合作' }}
               </button>
-              <button v-if="chatUnlocked && !hasAnyRefundRequest" class="btn" type="button" :disabled="!canEndChat" @click="openEndChat">
-                {{ isTeacher && hasPendingEndChatRequest ? '等待买家确认' : '结束沟通' }}
+              <span v-if="chatUnlocked && isTeacher && !hasAnyRefundRequest" :title="refundHoverText">
+                <button class="btn" type="button" :disabled="!canApplyRefund" @click="applyRefund">
+                  申请退费
+                </button>
+              </span>
+              <button v-if="chatUnlocked" class="btn" type="button" :disabled="!canRequestEndChat || endRequestBusy" @click="requestEndChat">
+                {{ endRequestBusy ? '提交中...' : '结束沟通' }}
               </button>
             </div>
           </template>
@@ -1059,23 +1090,6 @@ watch(
       @close="closeCollaboration"
       @submit="createCollaboration"
     />
-
-    <div v-if="endOpen" class="mask" @click.self="closeEndChat">
-      <div class="modal card">
-        <div class="m-title">结束沟通</div>
-        <div class="m-desc">
-          <template v-if="isTeacher">发送结束沟通请求，需要买家确认后才会结束</template>
-          <template v-else>结束后无法再发送消息；发起合作请勿脱离平台，避免产生额外纠纷</template>
-        </div>
-        <div v-if="endError" class="m-error">{{ endError }}</div>
-        <div class="m-ops">
-          <button class="btn" type="button" :disabled="endBusy" @click="closeEndChat">取消</button>
-          <button class="btn btn-primary" type="button" :disabled="endBusy" @click="submitEndChat">
-            {{ endBusy ? '提交中...' : '确认' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 

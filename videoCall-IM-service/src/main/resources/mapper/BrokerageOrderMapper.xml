@@ -15,6 +15,8 @@
         <result column="proof_url" property="proofUrl"/>
         <result column="proof_note" property="proofNote"/>
         <result column="paid_at" property="paidAt"/>
+        <result column="refund_locked" property="refundLocked"/>
+        <result column="refunded_amount_fen" property="refundedAmountFen"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
     </resultMap>
@@ -54,7 +56,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE id = #{id}
         LIMIT 1
@@ -62,7 +64,7 @@
 
     <select id="selectByProposalId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE proposal_id = #{proposalId}
         LIMIT 1
@@ -70,7 +72,7 @@
 
     <select id="selectByApplicationId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE application_id = #{applicationId}
         LIMIT 1
@@ -78,7 +80,7 @@
 
     <select id="selectPaidByRoomId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE room_id = #{roomId}
           AND status = 'PAID'
@@ -131,6 +133,17 @@
             update_time = NOW()
         WHERE id = #{id}
           AND status IN ('PENDING', 'PROOF_SUBMITTED')
+    </update>
+
+    <update id="lockForRefund">
+        UPDATE brokerage_order
+        SET
+            status = #{nextStatus},
+            refund_locked = 1,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = 'PAID'
+          AND refund_locked = 0
     </update>
 
 </mapper>

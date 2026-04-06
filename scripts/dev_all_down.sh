@@ -10,6 +10,8 @@ APPOINTMENT_PORT="${APPOINTMENT_PORT:-18081}"
 IM_PORT="${IM_PORT:-18082}"
 PAYMENT_PORT="${PAYMENT_PORT:-18083}"
 ADMIN_PORT="${ADMIN_PORT:-18084}"
+WEB_PORT="${WEB_PORT:-5173}"
+ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
 
 PID_DIR="$ROOT_DIR/.pids"
 
@@ -60,6 +62,8 @@ stop_by_port() {
   done
 }
 
+stop_by_pid_file "ai-tutor-admin-web"
+stop_by_pid_file "ai-tutor-web"
 stop_by_pid_file "ai-tutor-admin"
 stop_by_pid_file "payment-service"
 stop_by_pid_file "videoCall-IM-service"
@@ -71,5 +75,7 @@ stop_by_port "tutor-appointment-service" "$APPOINTMENT_PORT"
 stop_by_port "videoCall-IM-service" "$IM_PORT"
 stop_by_port "payment-service" "$PAYMENT_PORT"
 stop_by_port "ai-tutor-admin" "$ADMIN_PORT"
+stop_by_port "ai-tutor-web" "$WEB_PORT"
+stop_by_port "ai-tutor-admin-web" "$ADMIN_WEB_PORT"
 
 echo "[dev_all_down] 服务进程已停止（若仍残留 Java 进程，请检查 .logs/*.log 末尾）"

@@ -11,10 +11,16 @@ spring:
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
   cloud:
     nacos:
+      username: ${NACOS_USERNAME:}
+      password: ${NACOS_PASSWORD:}
       config:
-        server-addr: 106.52.179.248:8848
+        server-addr: ${NACOS_SERVER_ADDR:111.228.20.88:8848}
         group: DEFAULT_GROUP
-        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
+        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:beacf12a-2e06-43ae-80f1-6579081850a1}}
       discovery:
-        server-addr: 106.52.179.248:8848
-        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:3066af4f-57ee-4f4d-80fe-0d2a4e791f7d}}
+        server-addr: ${NACOS_SERVER_ADDR:111.228.20.88:8848}
+        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:beacf12a-2e06-43ae-80f1-6579081850a1}}
+
+security:
+  gateway-identity:
+    enabled: true

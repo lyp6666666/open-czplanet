@@ -218,7 +218,28 @@ export interface Message {
   createTime?: string | null
 }
 
-export interface DisputeDetailResponse {
-  order: BrokerageOrder
+export interface RefundRequestRecord {
+  id: number
+  brokerageOrderId: number
+  courseId?: number | null
+  roomId?: number | null
+  applicantUid: number
+  applicantRole: string
+  type: string
+  status: string
+  reason?: string | null
+  evidenceImagesJson?: string | null
+  refundPercent: number
+  refundAmountFen: number
+  adminUid?: number | null
+  adminNote?: string | null
+  decidedAt?: string | null
+  createTime?: string | null
+  updateTime?: string | null
+}
+
+export interface RefundRequestDetailResponse {
+  refundRequest: RefundRequestRecord
+  order: BrokerageOrder | null
   chatHistory: Message[] | null
 }
