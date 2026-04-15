@@ -6,10 +6,24 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-dev}"
-NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-111.228.20.88:8848}"
-NACOS_NAMESPACE="${NACOS_NAMESPACE:-beacf12a-2e06-43ae-80f1-6579081850a1}"
+NACOS_SERVER_ADDR="${NACOS_SERVER_ADDR:-}"
+NACOS_NAMESPACE_DEV="${NACOS_NAMESPACE_DEV:-481e4376-4576-4b18-ac19-f61e170ca3ae}"
+NACOS_NAMESPACE_PROD="${NACOS_NAMESPACE_PROD:-44cf681d-9f93-443e-aa9e-ba6ec8f721d5}"
+AUTO_NACOS_TUNNEL="${AUTO_NACOS_TUNNEL:-auto}"
+LOCAL_NACOS_SERVER_ADDR="${LOCAL_NACOS_SERVER_ADDR:-127.0.0.1:8848}"
+TUNNELED_NACOS_SERVER_ADDR="${TUNNELED_NACOS_SERVER_ADDR:-127.0.0.1:18848}"
+case "$SPRING_PROFILES_ACTIVE" in
+  prod)
+    DEFAULT_NACOS_NAMESPACE="$NACOS_NAMESPACE_PROD"
+    ;;
+  *)
+    DEFAULT_NACOS_NAMESPACE="$NACOS_NAMESPACE_DEV"
+    ;;
+esac
+NACOS_NAMESPACE="${NACOS_NAMESPACE:-$DEFAULT_NACOS_NAMESPACE}"
 NACOS_CONFIG_NAMESPACE="${NACOS_CONFIG_NAMESPACE:-$NACOS_NAMESPACE}"
 NACOS_DISCOVERY_NAMESPACE="${NACOS_DISCOVERY_NAMESPACE:-$NACOS_NAMESPACE}"
+NACOS_GRPC_CHECK="${NACOS_GRPC_CHECK:-fail}"
 
 JWT_ISSUER="${JWT_ISSUER:-ai-tutor}"
 JWT_SECRET_PRIMARY="${JWT_SECRET_PRIMARY:-LypJwtSecretKey123LypJwtSecretKey123}"
@@ -20,8 +34,6 @@ GATEWAY_SIGN_SECRET="${GATEWAY_SIGN_SECRET:-DevGatewaySignSecretKey_ChangeMe_AtL
 JWT_SECRETS_0="${JWT_SECRETS_0:-$JWT_SECRET_PRIMARY}"
 GATEWAY_JWT_SECRETS_0="${GATEWAY_JWT_SECRETS_0:-$JWT_SECRET_PRIMARY}"
 
-export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE
-
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
 APPOINTMENT_PORT="${APPOINTMENT_PORT:-18081}"
 IM_PORT="${IM_PORT:-18082}"
@@ -29,15 +41,95 @@ PAYMENT_PORT="${PAYMENT_PORT:-18083}"
 ADMIN_PORT="${ADMIN_PORT:-18084}"
 WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
+FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+MANAGE_INFRA="${MANAGE_INFRA:-auto}"
+DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
+INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+nacos_addr_host() {
+  echo "$1" | awk -F: '{print $1}'
+}
+
+nacos_addr_port() {
+  port="$(echo "$1" | awk -F: '{print $2}')"
+  if [ -z "$port" ]; then
+    port="8848"
+  fi
+  echo "$port"
+}
+
+http_endpoint_reachable() {
+  addr="$1"
+  host="$(nacos_addr_host "$addr")"
+  port="$(nacos_addr_port "$addr")"
+  if command -v curl >/dev/null 2>&1; then
+    code="$(curl -s -o /dev/null -m 2 -w '%{http_code}' "http://${host}:${port}/nacos/" || true)"
+    case "$code" in
+      200|301|302|401|403)
+        return 0
+        ;;
+    esac
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z -w 2 "$host" "$port" >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+ensure_nacos_server_addr() {
+  if [ -n "$NACOS_SERVER_ADDR" ]; then
+    return 0
+  fi
+
+  if http_endpoint_reachable "$LOCAL_NACOS_SERVER_ADDR"; then
+    NACOS_SERVER_ADDR="$LOCAL_NACOS_SERVER_ADDR"
+    echo "[dev_all_up] 使用本机 Nacos：$NACOS_SERVER_ADDR"
+    return 0
+  fi
+
+  if http_endpoint_reachable "$TUNNELED_NACOS_SERVER_ADDR"; then
+    NACOS_SERVER_ADDR="$TUNNELED_NACOS_SERVER_ADDR"
+    echo "[dev_all_up] 使用现有本地 Nacos 隧道：$NACOS_SERVER_ADDR"
+    return 0
+  fi
+
+  case "$AUTO_NACOS_TUNNEL" in
+    auto|always)
+      echo "[dev_all_up] 本机未检测到可用 Nacos，尝试建立本地 Nacos 隧道..."
+      bash scripts/nacos_tunnel.sh start
+      NACOS_SERVER_ADDR="$TUNNELED_NACOS_SERVER_ADDR"
+      echo "[dev_all_up] 使用隧道 Nacos：$NACOS_SERVER_ADDR"
+      ;;
+    never)
+      echo "[dev_all_up] 本机未检测到可用 Nacos，且 AUTO_NACOS_TUNNEL=never"
+      echo "[dev_all_up] 请手动设置 NACOS_SERVER_ADDR，或先执行 bash scripts/nacos_tunnel.sh start"
+      exit 1
+      ;;
+    *)
+      echo "[dev_all_up] 不支持的 AUTO_NACOS_TUNNEL=$AUTO_NACOS_TUNNEL，可选值：auto/always/never"
+      exit 1
+      ;;
+  esac
+}
+
+ensure_nacos_server_addr
+
+export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE
+
 echo "[dev_all_up] profile=$SPRING_PROFILES_ACTIVE nacos.server-addr=$NACOS_SERVER_ADDR"
+echo "[dev_all_up] nacos.namespace.dev=$NACOS_NAMESPACE_DEV"
+echo "[dev_all_up] nacos.namespace.prod=$NACOS_NAMESPACE_PROD"
 echo "[dev_all_up] nacos.namespace=$NACOS_NAMESPACE"
 echo "[dev_all_up] nacos.config.namespace=$NACOS_CONFIG_NAMESPACE"
 echo "[dev_all_up] nacos.discovery.namespace=$NACOS_DISCOVERY_NAMESPACE"
+echo "[dev_all_up] nacos.grpc.check=$NACOS_GRPC_CHECK"
+echo "[dev_all_up] manage.infra=$MANAGE_INFRA"
+echo "[dev_all_up] auto.nacos.tunnel=$AUTO_NACOS_TUNNEL"
 
 if command -v nc >/dev/null 2>&1; then
   nacos_host="$(echo "$NACOS_SERVER_ADDR" | awk -F: '{print $1}')"
@@ -51,12 +143,26 @@ if command -v nc >/dev/null 2>&1; then
     echo "[dev_all_up] Nacos HTTP 端口不可达：$nacos_host:$nacos_port"
     exit 1
   }
-  nc -z -w 2 "$nacos_host" "$nacos_grpc_port" >/dev/null 2>&1 || {
-    echo "[dev_all_up] Nacos gRPC 端口不可达：$nacos_host:$nacos_grpc_port"
-    echo "[dev_all_up] 说明：Nacos 2.x 的服务注册（Discovery）需要 gRPC 端口可达（常见为 9848=8848+1000）。"
-    echo "[dev_all_up] 处理：请放通 $nacos_grpc_port（以及按部署可能还要 $((nacos_grpc_port + 1))），或绕过仅暴露 8848 的反向代理直连 Nacos 节点。"
-    exit 1
-  }
+  if ! nc -z -w 2 "$nacos_host" "$nacos_grpc_port" >/dev/null 2>&1; then
+    case "$NACOS_GRPC_CHECK" in
+      skip)
+        echo "[dev_all_up] 跳过 Nacos gRPC 端口检查（NACOS_GRPC_CHECK=skip）"
+        ;;
+      warn)
+        echo "[dev_all_up] 警告：Nacos gRPC 端口不可达：$nacos_host:$nacos_grpc_port，将继续启动。若使用服务发现，可能导致注册/订阅失败。"
+        ;;
+      fail)
+        echo "[dev_all_up] Nacos gRPC 端口不可达：$nacos_host:$nacos_grpc_port"
+        echo "[dev_all_up] 说明：Nacos 2.x 的服务注册（Discovery）需要 gRPC 端口可达（常见为 9848=8848+1000）。"
+        echo "[dev_all_up] 处理：请放通 $nacos_grpc_port（以及按部署可能还要 $((nacos_grpc_port + 1))），或绕过仅暴露 8848 的反向代理直连 Nacos 节点。"
+        exit 1
+        ;;
+      *)
+        echo "[dev_all_up] 不支持的 NACOS_GRPC_CHECK=$NACOS_GRPC_CHECK，可选值：fail/warn/skip"
+        exit 1
+        ;;
+    esac
+  fi
 else
   echo "[dev_all_up] 未检测到 nc，跳过 Nacos 端口连通性检查"
 fi
@@ -67,11 +173,79 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[dev_all_up] 启动基础依赖（MySQL/Redis/MinIO/RabbitMQ）..."
-docker compose -f Dockerfile/docker-compose.yml up -d
+docker_compose_cmd() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+  echo "[dev_all_up] 未检测到 docker compose 或 docker-compose"
+  exit 1
+}
 
-echo "[dev_all_up] 构建本地依赖模块（ai-tutor-common/ai-tutor-mq）..."
-./mvnw -q -DskipTests install -pl ai-tutor-common,ai-tutor-mq -am
+is_container_running() {
+  container_name="$1"
+  docker ps --format '{{.Names}}' | grep -Fx "$container_name" >/dev/null 2>&1
+}
+
+container_exists() {
+  container_name="$1"
+  docker ps -a --format '{{.Names}}' | grep -Fx "$container_name" >/dev/null 2>&1
+}
+
+start_infra() {
+  if [ ! -f "$ROOT_DIR/$DOCKER_COMPOSE_FILE" ]; then
+    echo "[dev_all_up] 未找到 compose 文件：$DOCKER_COMPOSE_FILE"
+    exit 1
+  fi
+  echo "[dev_all_up] 启动基础依赖..."
+  docker_compose_cmd -f "$DOCKER_COMPOSE_FILE" up -d
+}
+
+ensure_infra_running() {
+  missing_services=""
+  for container_name in $INFRA_CONTAINERS; do
+    if is_container_running "$container_name"; then
+      echo "[dev_all_up] 基础依赖已运行：$container_name"
+      continue
+    fi
+    if container_exists "$container_name"; then
+      echo "[dev_all_up] 基础依赖已存在但未运行，执行 docker start：$container_name"
+      docker start "$container_name" >/dev/null
+      continue
+    fi
+    missing_services="$missing_services $container_name"
+  done
+
+  if [ -n "$missing_services" ]; then
+    echo "[dev_all_up] 缺少基础依赖，使用 compose 补启动:${missing_services}"
+    docker_compose_cmd -f "$DOCKER_COMPOSE_FILE" up -d $missing_services
+  else
+    echo "[dev_all_up] 基础依赖已就绪，跳过 compose 启动"
+  fi
+}
+
+case "$MANAGE_INFRA" in
+  never)
+    echo "[dev_all_up] 跳过基础依赖管理（MANAGE_INFRA=never）"
+    ;;
+  always)
+    start_infra
+    ;;
+  auto)
+    ensure_infra_running
+    ;;
+  *)
+    echo "[dev_all_up] 不支持的 MANAGE_INFRA=$MANAGE_INFRA，可选值：auto/always/never"
+    exit 1
+    ;;
+esac
+
+echo "[dev_all_up] 构建本地依赖模块（ai-tutor-common/ai-tutor-mq，跳过测试与测试编译）..."
+./mvnw -q -Dmaven.test.skip=true install -pl ai-tutor-common,ai-tutor-mq -am
 
 start_service() {
   svc_dir="$1"
@@ -108,7 +282,7 @@ start_service() {
   (
     cd "$ROOT_DIR"
     SERVER_PORT="$port" SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" NACOS_NAMESPACE="$NACOS_NAMESPACE" \
-      nohup ./mvnw -q -f "$svc_dir/pom.xml" spring-boot:run >"$log_file" 2>&1 &
+      nohup ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run >"$log_file" 2>&1 &
     launcher_pid=$!
     echo "$launcher_pid" >"$pid_file"
   )
@@ -178,10 +352,10 @@ start_frontend() {
     (cd "$ROOT_DIR/$app_dir" && npm ci >/dev/null)
   fi
 
-  echo "[dev_all_up] 启动 $app_name port=$port"
+  echo "[dev_all_up] 启动 $app_name host=$FRONTEND_HOST port=$port"
   (
     cd "$ROOT_DIR/$app_dir"
-    nohup npm run dev -- --port "$port" --strictPort >"$log_file" 2>&1 &
+    nohup npm run dev -- --host "$FRONTEND_HOST" --port "$port" --strictPort >"$log_file" 2>&1 &
     launcher_pid=$!
     echo "$launcher_pid" >"$pid_file"
   )
@@ -217,5 +391,5 @@ start_frontend "ai-tutor-admin-web" "ai-tutor-admin-web" "$ADMIN_WEB_PORT"
 echo "[dev_all_up] 已拉起网关 + 4 个服务 + 2 个前端"
 echo "[dev_all_up] 日志目录：$LOG_DIR"
 echo "[dev_all_up] PID 目录：$PID_DIR"
-echo "[dev_all_up] 用户端前端：http://localhost:$WEB_PORT"
-echo "[dev_all_up] 管理端前端：http://localhost:$ADMIN_WEB_PORT"
+echo "[dev_all_up] 用户端前端：http://$FRONTEND_HOST:$WEB_PORT"
+echo "[dev_all_up] 管理端前端：http://$FRONTEND_HOST:$ADMIN_WEB_PORT"

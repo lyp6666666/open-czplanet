@@ -1,4 +1,5 @@
 import { http } from './http'
+import { normalizeAssetUrl } from '@/utils/avatar'
 
 export interface UploadResult {
   objectKey: string
@@ -8,10 +9,14 @@ export interface UploadResult {
 }
 
 export const assetsApi = {
-  uploadImage(file: File, biz: string) {
+  async uploadImage(file: File, biz: string) {
     const form = new FormData()
     form.append('file', file)
     form.append('biz', biz)
-    return http.post<unknown, UploadResult>('/api/v1/assets/upload', form)
+    const result = await http.post<unknown, UploadResult>('/api/v1/assets/upload', form)
+    return {
+      ...result,
+      url: normalizeAssetUrl(result.url),
+    }
   },
 }

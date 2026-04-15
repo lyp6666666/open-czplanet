@@ -24,6 +24,7 @@ import java.util.UUID;
 public class MinioStorageService implements StorageService {
 
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    public static final String PUBLIC_ASSET_PREFIX = "/api/v1/public/assets/";
 
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
@@ -46,7 +47,7 @@ public class MinioStorageService implements StorageService {
         ThrowUtils.throwIf(ext == null, ErrorCode.PARAMS_ERROR, "不支持的图片格式");
 
         String objectKey = buildObjectKey(biz, uid, ext);
-        String url = joinUrl(minioProperties.getPublicBaseUrl(), objectKey);
+        String url = buildPublicAssetUrl(objectKey);
 
         try (InputStream in = file.getInputStream()) {
             minioClient.putObject(PutObjectArgs.builder()
@@ -119,12 +120,11 @@ public class MinioStorageService implements StorageService {
         return "uploads/other/" + day + "/" + id + "." + ext;
     }
 
-    private static String joinUrl(String base, String path) {
-        if (base == null || base.isBlank()) {
-            return path;
+    public static String buildPublicAssetUrl(String objectKey) {
+        String key = objectKey == null ? "" : objectKey.trim();
+        if (key.startsWith("/")) {
+            key = key.substring(1);
         }
-        String b = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
-        String p = path.startsWith("/") ? path.substring(1) : path;
-        return b + "/" + p;
+        return PUBLIC_ASSET_PREFIX + key;
     }
 }

@@ -146,6 +146,7 @@ public class TeacherVerificationServiceImpl implements TeacherVerificationServic
         String v = url == null ? "" : url.trim();
         ThrowUtils.throwIf(v.isEmpty(), ErrorCode.PARAMS_ERROR, "图片地址不合法");
         if (v.startsWith("/avatars/")) return;
+        if (v.startsWith("/api/v1/public/assets/")) return;
         String base = minioProperties == null ? null : minioProperties.getPublicBaseUrl();
         if (base != null && !base.isBlank() && v.startsWith(base)) return;
         if (minioProperties != null && minioProperties.getAllowedAvatarUrlPrefixes() != null) {
@@ -187,4 +188,3 @@ public class TeacherVerificationServiceImpl implements TeacherVerificationServic
         }
     }
 }
-

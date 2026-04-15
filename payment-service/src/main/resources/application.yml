@@ -18,7 +18,7 @@ spring:
       config:
         server-addr: ${NACOS_SERVER_ADDR:111.228.20.88:8848}
         group: DEFAULT_GROUP
-        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:beacf12a-2e06-43ae-80f1-6579081850a1}}
+        namespace: ${NACOS_CONFIG_NAMESPACE:${NACOS_NAMESPACE:481e4376-4576-4b18-ac19-f61e170ca3ae}}
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:111.228.20.88:8848}
-        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:beacf12a-2e06-43ae-80f1-6579081850a1}}
+        namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:481e4376-4576-4b18-ac19-f61e170ca3ae}}

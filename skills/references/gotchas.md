@@ -1,0 +1,56 @@
+# Gotchas
+
+Only record repo-specific truths here.
+
+## Current Known Pitfalls
+
+- Some repo docs are stale.
+  Example: older docs may describe missing `/user/me` or missing role gating, but current code already implements them.
+- `videoCall-IM-service` is broader than its name suggests.
+  Do not assume "IM-only"; it also carries collaboration and some transactional flows.
+- Auth debugging often requires three layers together:
+  gateway JWT parsing, common identity signing, and service interceptors.
+- Chat debugging often requires both backend and frontend realtime state.
+  Do not change `/chat/*` in isolation without checking `ai-tutor-web/src/stores/chatRealtime.ts`.
+- `scripts/dev_all_up.sh` is convenient but contains strong environment assumptions.
+  Review Nacos and default secrets before treating it as production-like behavior.
+- Remote-server development often wants different infra behavior from local development.
+  Prefer `MANAGE_INFRA=auto` so already-running middleware containers are reused instead of blindly re-managed.
+- `scripts/dev_all_down.sh` now preserves middleware by default.
+  Use `STOP_INFRA=1` only when you explicitly want the compose-managed infra stopped too.
+- Use the wrapper scripts instead of calling `dev_all_up/down` blindly.
+  `dev_local_*` and `dev_remote_*` encode the safer defaults for each environment.
+- The SSH tunnel is now a managed background process with its own PID.
+  Use `scripts/ssh_tunnel.sh stop` or `scripts/dev_remote_down.sh`; do not rely on manually hunting the SSH process.
+- When remote behavior does not match local script changes, first suspect sync drift.
+  If the remote log is missing newly added echo lines, the updated script likely has not been uploaded to the server yet.
+- Remote development should normally leave middleware alone.
+  `scripts/dev_remote_up.sh` now defaults to `REMOTE_MANAGE_INFRA=never`.
+- This repo uses one shared Nacos server across environments.
+  Environment separation is by namespace, not by host. Current defaults are `dev=481e4376-4576-4b18-ac19-f61e170ca3ae` and `prod=44cf681d-9f93-443e-aa9e-ba6ec8f721d5`.
+- For day-to-day testing, assume `dev` namespace unless the user explicitly says otherwise.
+- When services run on the same server as Nacos, prefer `127.0.0.1:8848` over the public IP in remote-start scripts.
+  This avoids unnecessary dependence on public ingress or hairpin networking.
+- Nacos 2.x is not "just 8848".
+  If Docker only maps `8848` but not `9848/9849`, Java services may appear to reach config HTTP yet still fail to load config or discovery data because the gRPC ports are missing.
+- A startup failure like `storage.minio.endpoint must not be null` can be a Nacos symptom, not a MinIO symptom.
+  In this repo, missing `ai-tutor-common-dev.yaml` from Nacos can cascade into bean creation errors that look unrelated to Nacos at first glance.
+- If remote testing skips the SSH tunnel and uses browser direct access, the frontend dev servers must bind `0.0.0.0`.
+  Otherwise `5173/5174` may be up on the server but unreachable from another machine.
+- `sh scripts/dev_all_up.sh` now has environment-sensitive Nacos behavior.
+  On the server it should use local `127.0.0.1:8848`; on a laptop it may auto-open a dedicated Nacos tunnel and switch to `127.0.0.1:18848`.
+- Runtime config debugging in this repo is usually a four-layer problem.
+  Check startup env vars, Nacos imports, optional `.private` files, and in-code defaults before concluding that "Nacos did not work".
+- `tutor-appointment-service` has extra file fallbacks that the other services do not.
+  It can also read `./.private/tutor-appointment-service.yml` or `../.private/tutor-appointment-service.yml`, so its effective config path is slightly wider than the other backends.
+- The quickest proof of effective config is in startup logs, not in the template files.
+  `bash scripts/verify_nacos_effect.sh` is usually faster than manually guessing which DataId was loaded.
+
+## Maintenance Rule
+
+Whenever you discover one of these, add a note:
+
+- a stale doc that can mislead future work
+- a hidden cross-service dependency
+- a surprising required validation step
+- an environment assumption that changes behavior

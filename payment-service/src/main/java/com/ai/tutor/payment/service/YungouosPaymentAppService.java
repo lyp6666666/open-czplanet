@@ -17,6 +17,7 @@ import com.ai.tutor.payment.enums.PaymentChannel;
 import com.ai.tutor.payment.enums.PaymentStatus;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
 import com.ai.tutor.utils.ThrowUtils;
+import com.yungouos.pay.entity.PayOrder;
 import com.yungouos.pay.common.PayException;
 import com.yungouos.pay.util.PaySignUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,6 +49,9 @@ import java.util.Map;
 public class YungouosPaymentAppService {
 
     public static final String CONTEXT_BROKERAGE_ORDER = "BROKERAGE_ORDER";
+    private static final String PAY_NOTIFY = "PAY_NOTIFY";
+    private static final String PAY_FINALIZE = "PAY_FINALIZE";
+    private static final String PAY_QUERY = "PAY_QUERY";
 
     private final PaymentProperties paymentProperties;
     private final PaymentOrderService paymentOrderService;
@@ -79,7 +83,6 @@ public class YungouosPaymentAppService {
                 defaultBody(payInfo),
                 clientIp
         );
-
         LocalDateTime now = LocalDateTime.now();
         if (order.getExpireTime() == null || order.getExpireTime().isBefore(now) || !StringUtils.hasText(order.getPayData())) {
             String totalFeeYuan = fenToYuan(order.getAmount());
@@ -166,6 +169,7 @@ public class YungouosPaymentAppService {
         PaymentOrder order = paymentOrderService.getByOrderNo(orderNo.trim());
         ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(order.getUserId()), ErrorCode.NO_AUTH_ERROR);
+        order = trySyncPaidFromProvider(order);
         tryFinalizeBusiness(order);
         return toStatusResponse(order);
     }
@@ -190,21 +194,28 @@ public class YungouosPaymentAppService {
             return "FAIL";
         }
 
-        String outTradeNo = request.getParameter("out_trade_no");
+        Map<String, String> params = extractParams(request);
+        String outTradeNo = params.get("out_trade_no");
+        log.info("{} received provider=YUNGOUOS orderNo={} remoteAddr={}",
+                PAY_NOTIFY, trimToNull(outTradeNo), request.getRemoteAddr());
         if (!StringUtils.hasText(outTradeNo)) {
+            log.warn("{} failed reason=missing_order_no provider=YUNGOUOS remoteAddr={}",
+                    PAY_NOTIFY, request.getRemoteAddr());
             return "FAIL";
         }
 
         boolean signOk;
         try {
-            signOk = verifyNotifySign(extractParams(request), appKey);
+            signOk = verifyNotifySign(params, appKey);
         } catch (Exception e) {
+            log.warn("{} failed reason=verify_exception provider=YUNGOUOS orderNo={} msg={}", PAY_NOTIFY, outTradeNo, e.getMessage());
             log.warn("YunGouOS 回调验签异常，outTradeNo={}, msg={}", outTradeNo, e.getMessage());
             paymentOrderService.recordNotifyReceipt(outTradeNo, 0);
             return "FAIL";
         }
 
         if (!signOk) {
+            log.warn("{} failed reason=verify_failed provider=YUNGOUOS orderNo={}", PAY_NOTIFY, outTradeNo);
             log.warn("YunGouOS 回调验签失败，outTradeNo={}", outTradeNo);
             paymentOrderService.recordNotifyReceipt(outTradeNo, 0);
             return "FAIL";
@@ -212,6 +223,7 @@ public class YungouosPaymentAppService {
 
         PaymentOrder order = paymentOrderService.getByOrderNo(outTradeNo.trim());
         if (order == null) {
+            log.warn("{} failed reason=order_missing provider=YUNGOUOS orderNo={}", PAY_NOTIFY, outTradeNo);
             log.warn("YunGouOS 回调订单不存在，outTradeNo={}", outTradeNo);
             return "FAIL";
         }
@@ -221,6 +233,8 @@ public class YungouosPaymentAppService {
             if (StringUtils.hasText(fee)) {
                 boolean amountOk = amountEqualsFen(fee, order.getAmount());
                 if (!amountOk) {
+                    log.warn("{} failed reason=amount_mismatch orderNo={} feeYuan={} orderAmountFen={}",
+                            PAY_NOTIFY, outTradeNo, fee, order.getAmount());
                     log.warn("YunGouOS 回调金额不一致，outTradeNo={}, fee={}, orderAmountFen={}", outTradeNo, fee, order.getAmount());
                     paymentOrderService.recordNotifyReceipt(outTradeNo, 1);
                     return "FAIL";
@@ -236,6 +250,8 @@ public class YungouosPaymentAppService {
 
         boolean ok = paymentOrderService.updateSuccessFromNotify(outTradeNo, payNo, providerOrderNo, successTime, 1);
         PaymentOrder updated = paymentOrderService.getByOrderNo(outTradeNo.trim());
+        log.info("{} success provider=YUNGOUOS orderNo={} updateResult={} status={} transactionId={} providerOrderNo={}",
+                PAY_NOTIFY, outTradeNo, ok, updated == null ? null : updated.getStatus(), payNo, providerOrderNo);
         tryFinalizeBusiness(updated);
         return ok ? "SUCCESS" : "SUCCESS";
     }
@@ -344,6 +360,8 @@ public class YungouosPaymentAppService {
         event.setProviderOrderNo(order.getProviderOrderNo());
 
         try {
+            log.info("{} start orderNo={} contextType={} contextId={} status={}",
+                    PAY_FINALIZE, orderNo, order.getContextType(), order.getContextId(), order.getStatus());
             BaseResponse<Boolean> resp = imBrokerageOrderFeignClient.onPaymentSuccess(
                     String.valueOf(uid),
                     String.valueOf(role),
@@ -353,13 +371,72 @@ public class YungouosPaymentAppService {
             );
             if (resp != null && resp.getCode() == ErrorCode.SUCCESS.getCode() && Boolean.TRUE.equals(resp.getData())) {
                 paymentOrderService.markEventSent(orderNo);
+                log.info("{} success orderNo={} contextId={}", PAY_FINALIZE, orderNo, order.getContextId());
                 return;
             }
             String msg = resp == null ? "null response" : String.valueOf(resp.getMessage());
             paymentOrderService.markEventSendFailed(orderNo, "im finalize failed: " + msg);
+            log.warn("{} failed orderNo={} contextId={} msg={}", PAY_FINALIZE, orderNo, order.getContextId(), msg);
         } catch (Exception e) {
             paymentOrderService.markEventSendFailed(orderNo, "im finalize exception: " + e.getMessage());
+            log.warn("{} failed orderNo={} contextId={} msg={}", PAY_FINALIZE, orderNo, order.getContextId(), e.getMessage());
         }
+    }
+
+    private PaymentOrder trySyncPaidFromProvider(PaymentOrder order) {
+        if (order == null || !PaymentStatus.PENDING.getCode().equals(order.getStatus())) {
+            return order;
+        }
+        PaymentProperties.Yungouos config = paymentProperties.getYungouos();
+        if (config == null || !StringUtils.hasText(config.getAppKey())) {
+            return order;
+        }
+        String mchId = resolveMchId(order.getChannel(), config);
+        if (!StringUtils.hasText(mchId)) {
+            return order;
+        }
+        try {
+            log.info("{} start provider=YUNGOUOS orderNo={} channel={}", PAY_QUERY, order.getOrderNo(), order.getChannel());
+            PayOrder providerOrder = yungouosClient.getOrderInfoByOutTradeNo(order.getOrderNo(), mchId, config.getAppKey());
+            if (providerOrder == null || providerOrder.getPayStatus() != 1) {
+                return order;
+            }
+            if (StringUtils.hasText(providerOrder.getMoney()) && !amountEqualsFen(providerOrder.getMoney(), order.getAmount())) {
+                log.warn("{} failed reason=amount_mismatch provider=YUNGOUOS orderNo={} feeYuan={} orderAmountFen={}",
+                        PAY_QUERY, order.getOrderNo(), providerOrder.getMoney(), order.getAmount());
+                return order;
+            }
+            paymentOrderService.updateSuccessFromProviderQuery(
+                    order.getOrderNo(),
+                    trimToNull(providerOrder.getPayNo()),
+                    trimToNull(providerOrder.getOrderNo()),
+                    null
+            );
+            PaymentOrder refreshed = paymentOrderService.getByOrderNo(order.getOrderNo());
+            log.info("{} success provider=YUNGOUOS orderNo={} status={} transactionId={} providerOrderNo={}",
+                    PAY_QUERY,
+                    order.getOrderNo(),
+                    refreshed == null ? null : refreshed.getStatus(),
+                    refreshed == null ? null : refreshed.getTransactionId(),
+                    refreshed == null ? null : refreshed.getProviderOrderNo());
+            return refreshed == null ? order : refreshed;
+        } catch (Exception e) {
+            log.warn("{} failed reason=query_exception provider=YUNGOUOS orderNo={} msg={}", PAY_QUERY, order.getOrderNo(), e.getMessage());
+            return order;
+        }
+    }
+
+    private static String resolveMchId(String channel, PaymentProperties.Yungouos config) {
+        if (!StringUtils.hasText(channel) || config == null) {
+            return null;
+        }
+        if (PaymentChannel.WECHAT.getCode().equalsIgnoreCase(channel)) {
+            return trimToNull(config.getWechatMchId());
+        }
+        if (PaymentChannel.ALIPAY.getCode().equalsIgnoreCase(channel)) {
+            return trimToNull(config.getAlipayMchId());
+        }
+        return null;
     }
 
     private static Map<String, String> extractParams(HttpServletRequest request) {
@@ -527,6 +604,10 @@ public class YungouosPaymentAppService {
             if (StringUtils.hasText(v)) return v.trim();
         }
         return null;
+    }
+
+    private static String trimToNull(String val) {
+        return StringUtils.hasText(val) ? val.trim() : null;
     }
 
     private static LocalDateTime parsePayTime(String payTime) {

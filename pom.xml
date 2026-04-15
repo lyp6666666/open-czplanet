@@ -12,6 +12,8 @@
 
   <properties>
     <java.version>21</java.version>
+    <maven.compiler.release>${java.version}</maven.compiler.release>
+    <lombok.version>1.18.36</lombok.version>
     <spring.boot.version>3.2.4</spring.boot.version>
     <spring.cloud.version>2023.0.1</spring.cloud.version>
     <spring.cloud.alibaba.version>2023.0.1.0</spring.cloud.alibaba.version>
@@ -127,7 +129,7 @@
       <dependency>
         <groupId>org.projectlombok</groupId>
         <artifactId>lombok</artifactId>
-        <version>1.18.36</version>
+        <version>${lombok.version}</version>
         <optional>true</optional>
       </dependency>
       <!-- JJwt -->
@@ -172,6 +174,23 @@
 
   <!-- 父 pom.xml -->
   <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+    </plugins>
     <pluginManagement>
       <plugins>
         <!-- 关键：声明 spring-boot-maven-plugin 版本 -->

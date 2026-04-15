@@ -492,6 +492,7 @@ public class TutorApplicationService {
                 body.setCreatorUserId(teacherUid);
                 chatService.sendMsg(ChatMessageReq.builder().roomId(application.getRoomId()).msgType(8).body(body).build(), teacherUid);
             }
+            return;
         }
     }
 

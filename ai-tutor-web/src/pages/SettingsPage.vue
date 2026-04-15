@@ -6,6 +6,7 @@ import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { normalizeAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const settings = useSettingsStore()
@@ -28,6 +29,8 @@ const userInitial = computed(() => {
   const n = auth.user?.name?.trim()
   return n && n.length > 0 ? n.slice(0, 1) : 'U'
 })
+
+const avatarSrc = computed(() => normalizeAvatarUrl(auth.user?.avatar))
 
 function onAvatarClick() {
   if (avatarBusy.value) return
@@ -52,6 +55,7 @@ async function onAvatarSelected(e: Event) {
     const r = await assetsApi.uploadImage(file, 'avatar')
     await userApi.updateUserInfo({ baseUserInfo: { avatar: r.url } })
     await auth.refreshMe()
+    saved.value = '头像已更新'
   } catch (err) {
     avatarError.value = err instanceof Error ? err.message : '头像上传失败'
   } finally {
@@ -148,7 +152,7 @@ onMounted(() => {
           <div class="card-header">个人资料</div>
           <div class="profile-row">
             <div class="avatar-wrapper" @click="onAvatarClick">
-              <img v-if="auth.user?.avatar" class="avatar" :src="auth.user.avatar" alt="avatar" />
+              <img v-if="auth.user?.avatar" class="avatar" :src="avatarSrc" alt="avatar" />
               <div v-else class="avatar fallback">{{ userInitial }}</div>
               <div class="avatar-mask">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

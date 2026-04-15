@@ -1,10 +1,14 @@
 package com.ai.tutor.payment.service;
 
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
+import com.ai.tutor.common.security.IdentitySignatureUtils;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
+import com.ai.tutor.payment.integration.feign.ImBrokerageOrderFeignClient;
 import com.ai.tutor.payment.enums.PaymentChannel;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.enums.ErrorCode;
 import com.yungouos.pay.util.PaySignUtil;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -30,18 +34,28 @@ public class YungouosPaymentAppServiceNotifyTest {
         PaymentOrderService paymentOrderService = Mockito.mock(PaymentOrderService.class);
         BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
         YungouosClient yungouosClient = Mockito.mock(YungouosClient.class);
-        YungouosPaymentAppService svc = new YungouosPaymentAppService(props, paymentOrderService, brokerageOrderFacade, yungouosClient);
+        ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
+        YungouosPaymentAppService svc = new YungouosPaymentAppService(
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, identitySignatureUtils);
 
         PaymentOrder order = new PaymentOrder();
         order.setOrderNo("ORDER_NO_1");
         order.setAmount(19900L);
         order.setChannel(PaymentChannel.WECHAT.getCode());
         order.setUserId(1L);
+        order.setStatus("SUCCESS");
         order.setContextType("BROKERAGE_ORDER");
         order.setContextId(100L);
 
-        when(paymentOrderService.getByOrderNo("ORDER_NO_1")).thenReturn(order);
+        when(paymentOrderService.getByOrderNo("ORDER_NO_1")).thenReturn(order).thenReturn(order);
         when(paymentOrderService.updateSuccessFromNotify(eq("ORDER_NO_1"), anyString(), any(), any(LocalDateTime.class), eq(1))).thenReturn(true);
+        when(identitySignatureUtils.sign(anyLong(), anyInt(), anyLong(), anyString(), anyString())).thenReturn("SIGN");
+        BaseResponse<Boolean> successResp = new BaseResponse<>();
+        successResp.setCode(ErrorCode.SUCCESS.getCode());
+        successResp.setData(Boolean.TRUE);
+        when(imBrokerageOrderFeignClient.onPaymentSuccess(anyString(), anyString(), anyString(), anyString(), any()))
+                .thenReturn(successResp);
 
         MockHttpServletRequest request = new MockHttpServletRequest();
         Map<String, String> params = new HashMap<>();
@@ -72,7 +86,10 @@ public class YungouosPaymentAppServiceNotifyTest {
         PaymentOrderService paymentOrderService = Mockito.mock(PaymentOrderService.class);
         BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
         YungouosClient yungouosClient = Mockito.mock(YungouosClient.class);
-        YungouosPaymentAppService svc = new YungouosPaymentAppService(props, paymentOrderService, brokerageOrderFacade, yungouosClient);
+        ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
+        YungouosPaymentAppService svc = new YungouosPaymentAppService(
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, identitySignatureUtils);
 
         PaymentOrder order = new PaymentOrder();
         order.setOrderNo("ORDER_NO_2");
@@ -108,7 +125,10 @@ public class YungouosPaymentAppServiceNotifyTest {
         PaymentOrderService paymentOrderService = Mockito.mock(PaymentOrderService.class);
         BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
         com.ai.tutor.payment.client.YungouosClient yungouosClient = Mockito.mock(com.ai.tutor.payment.client.YungouosClient.class);
-        YungouosPaymentAppService svc = new YungouosPaymentAppService(props, paymentOrderService, brokerageOrderFacade, yungouosClient);
+        ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
+        YungouosPaymentAppService svc = new YungouosPaymentAppService(
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, identitySignatureUtils);
 
         PaymentOrder order = new PaymentOrder();
         order.setOrderNo("ORDER_NO_3");

@@ -20,7 +20,20 @@ JDBC_URL="jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DB}?useUnicode=true&c
 
 mkdir -p .logs .pids
 
-docker compose -f Dockerfile/docker-compose.yml up -d
+docker_compose_cmd() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+  echo "[run_refund_flow_e2e] 未检测到 docker compose 或 docker-compose"
+  exit 1
+}
+
+docker_compose_cmd -f Dockerfile/docker-compose.yml up -d
 
 mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" "${MYSQL_DB}" < sqlDoc/migrations/20260404_brokerage_order_refund_and_trial_fields.sql
 mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" "${MYSQL_DB}" < sqlDoc/migrations/20260404_refund_request_create.sql
@@ -66,4 +79,3 @@ export E2E_MYSQL_USER="${MYSQL_USER}"
 export E2E_MYSQL_PASSWORD="${MYSQL_PASSWORD}"
 
 ./mvnw -q -pl e2e-tests -DskipTests=false test
-

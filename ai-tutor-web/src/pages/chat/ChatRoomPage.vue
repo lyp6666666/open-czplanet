@@ -159,8 +159,12 @@ async function viewUnlockedContact() {
 
 function goPay(orderId: number, applicationId?: number | null) {
   router.push({
-    name: 'brokeragePay',
-    query: { orderId: String(orderId), ...(applicationId ? { applicationId: String(applicationId) } : {}) },
+    name: 'cashierPay',
+    query: {
+      contextType: 'BROKERAGE_ORDER',
+      contextId: String(orderId),
+      ...(applicationId ? { applicationId: String(applicationId) } : {}),
+    },
   })
 }
 

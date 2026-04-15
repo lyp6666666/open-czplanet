@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { assetsApi } from '@/api/assets'
@@ -7,6 +7,7 @@ import { userApi } from '@/api/user'
 import { teacherVerificationApi } from '@/api/verification'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { normalizeAssetUrl } from '@/utils/avatar'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import AutoTextarea from '@/ui/form/AutoTextarea.vue'
 
@@ -25,12 +26,22 @@ const avatar = ref('')
 const avatarUploading = ref(false)
 const avatarHint = ref<string | null>(null)
 const avatarLoaded = ref(false)
+const avatarPreviewUrl = ref('')
 let avatarProbeId = 0
 
+function revokeAvatarPreview() {
+  if (!avatarPreviewUrl.value) return
+  if (typeof URL.revokeObjectURL === 'function') {
+    URL.revokeObjectURL(avatarPreviewUrl.value)
+  }
+  avatarPreviewUrl.value = ''
+}
+
 const avatarSrc = computed(() => {
-  const v = String(avatar.value || '').trim()
+  if (avatarPreviewUrl.value) return avatarPreviewUrl.value
+  const v = normalizeAssetUrl(avatar.value)
   if (!v) return ''
-  const low = v.toLowerCase()
+  const low = String(v).toLowerCase()
   if (low === 'null' || low === 'undefined') return ''
   return v
 })
@@ -141,6 +152,7 @@ async function load() {
     const me = await auth.refreshMe()
     name.value = me?.name || auth.user?.name || ''
     sex.value = me?.sex ?? auth.user?.sex ?? null
+    revokeAvatarPreview()
     avatar.value = me?.avatar || auth.user?.avatar || ''
 
     if (me?.teacherProfile) {
@@ -189,10 +201,15 @@ async function onSelectAvatar(e: Event) {
   }
   avatarUploading.value = true
   try {
+    revokeAvatarPreview()
+    if (typeof URL.createObjectURL === 'function') {
+      avatarPreviewUrl.value = URL.createObjectURL(f)
+    }
     const r = await assetsApi.uploadImage(f, 'avatar')
     avatar.value = r.url
     avatarHint.value = '头像已上传，点击保存生效'
   } catch (e2) {
+    revokeAvatarPreview()
     toast.show(e2 instanceof Error ? e2.message : '头像上传失败', 'error')
   } finally {
     avatarUploading.value = false
@@ -422,6 +439,10 @@ function openSettings() {
 
 onMounted(() => {
   void load()
+})
+
+onBeforeUnmount(() => {
+  revokeAvatarPreview()
 })
 </script>
 

@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,7 +60,40 @@ public class PaymentOrderServiceTest {
         boolean result = paymentOrderService.updateSuccess("ORDER123", "TRANS456", LocalDateTime.now());
 
         assertTrue(result);
-        verify(paymentOrderMapper).update(any(), any());
+        verify(paymentOrderMapper, atLeastOnce()).update(any(), any());
         verify(rocketMQTemplate).convertAndSend(eq("payment-success-topic"), any(Object.class));
+    }
+
+    @Test
+    void createOrReusePending_amountChanged_shouldCloseOldAndCreateNew() {
+        PaymentOrder oldPending = new PaymentOrder();
+        oldPending.setId(10L);
+        oldPending.setOrderNo("OLD_ORDER");
+        oldPending.setStatus(PaymentStatus.PENDING.getCode());
+        oldPending.setAmount(19900L);
+        oldPending.setExpireTime(LocalDateTime.now().plusMinutes(5));
+
+        when(paymentOrderMapper.selectOne(any(), anyBoolean())).thenReturn(oldPending);
+        when(paymentOrderMapper.update(any(), any())).thenReturn(1);
+        doAnswer(invocation -> {
+            PaymentOrder inserted = invocation.getArgument(0);
+            inserted.setId(11L);
+            return 1;
+        }).when(paymentOrderMapper).insert(any(PaymentOrder.class));
+
+        PaymentOrder created = paymentOrderService.createOrReusePending(
+                "BROKERAGE_ORDER",
+                2001L,
+                1001L,
+                "WECHAT",
+                1L,
+                "信息费支付",
+                "对接咨询费支付",
+                "127.0.0.1"
+        );
+
+        assertTrue(created != null && created.getId() != null && !"OLD_ORDER".equals(created.getOrderNo()));
+        verify(paymentOrderMapper).update(any(), any());
+        verify(paymentOrderMapper).insert(any(PaymentOrder.class));
     }
 }

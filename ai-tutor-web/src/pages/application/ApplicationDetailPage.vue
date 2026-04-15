@@ -19,7 +19,6 @@ const id = computed(() => {
 const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<TutorApplicationVO | null>(null)
-  
 
 const busy = ref(false)
 const opError = ref<string | null>(null)
@@ -27,6 +26,12 @@ const opError = ref<string | null>(null)
 const myUid = computed(() => (auth.user?.id ? Number(auth.user.id) : null))
 const isReceiver = computed(() => !!(data.value && myUid.value != null && data.value.receiverUid === myUid.value))
 const isTeacher = computed(() => auth.user?.userType === 1)
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
 
 function statusText(s: TutorApplicationVO['status']): string {
   if (s === 'PENDING') return '待处理'
@@ -57,11 +62,24 @@ async function load() {
 
 function onCashierMessage(e: MessageEvent) {
   if (e.origin !== window.location.origin) return
-  const data = e.data as unknown
-  if (!data || typeof data !== 'object') return
-  const t = (data as { type?: unknown }).type
+  const payload = e.data as unknown
+  if (!payload || typeof payload !== 'object') return
+  const t = (payload as { type?: unknown }).type
+  const paidApplicationId = (payload as { applicationId?: unknown }).applicationId
   if (t === 'PAY_SUCCESS') {
-    void load()
+    if (typeof paidApplicationId === 'number' && id.value && paidApplicationId !== id.value) return
+    void (async () => {
+      for (let i = 0; i < 4; i += 1) {
+        await load()
+        if (data.value?.chatAccessStatus === 'CHAT_ENABLED' && id.value) {
+          await enterChat()
+          return
+        }
+        if (i < 3) {
+          await wait(700)
+        }
+      }
+    })()
   }
 }
 
@@ -86,7 +104,14 @@ async function enterChat() {
     const res = await applicationApi.enterChat(id.value)
     if (res.paymentRequired) {
       if (res.orderId) {
-        await router.push({ name: 'brokeragePay', query: { orderId: String(res.orderId), applicationId: String(id.value) } })
+        await router.push({
+          name: 'cashierPay',
+          query: {
+            contextType: 'BROKERAGE_ORDER',
+            contextId: String(res.orderId),
+            applicationId: String(id.value),
+          },
+        })
       } else {
         opError.value = '需要先支付信息费'
       }
@@ -111,12 +136,14 @@ async function enterChat() {
 
 function openCashier() {
   if (!data.value?.orderId) return
-  const href = router.resolve({
+  void router.push({
     name: 'cashierPay',
-    query: { contextType: 'BROKERAGE_ORDER', contextId: String(data.value.orderId) },
-  }).href
-  const url = `${window.location.origin}${window.location.pathname}${href}`
-  window.open(url, '_blank', 'noopener')
+    query: {
+      contextType: 'BROKERAGE_ORDER',
+      contextId: String(data.value.orderId),
+      ...(id.value ? { applicationId: String(id.value) } : {}),
+    },
+  })
 }
 
 function back() {

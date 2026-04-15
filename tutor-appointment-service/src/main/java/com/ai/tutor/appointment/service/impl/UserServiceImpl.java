@@ -379,6 +379,9 @@ public class UserServiceImpl implements UserService {
         if (v.startsWith("/avatars/")) {
             return;
         }
+        if (v.startsWith("/api/v1/public/assets/")) {
+            return;
+        }
         String publicBaseUrl = minioProperties == null ? null : minioProperties.getPublicBaseUrl();
         if (publicBaseUrl != null && !publicBaseUrl.isBlank() && v.startsWith(publicBaseUrl)) {
             return;

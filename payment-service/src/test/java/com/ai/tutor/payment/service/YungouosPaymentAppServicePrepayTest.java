@@ -2,10 +2,12 @@ package com.ai.tutor.payment.service;
 
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.security.IdentitySignatureUtils;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
 import com.ai.tutor.payment.controller.dto.PrepayRequest;
 import com.ai.tutor.payment.controller.dto.PrepayResponse;
+import com.ai.tutor.payment.integration.feign.ImBrokerageOrderFeignClient;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -32,8 +34,11 @@ public class YungouosPaymentAppServicePrepayTest {
         PaymentOrderService paymentOrderService = Mockito.mock(PaymentOrderService.class);
         BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
         YungouosClient yungouosClient = Mockito.mock(YungouosClient.class);
+        ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
 
-        YungouosPaymentAppService svc = new YungouosPaymentAppService(props, paymentOrderService, brokerageOrderFacade, yungouosClient);
+        YungouosPaymentAppService svc = new YungouosPaymentAppService(
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, identitySignatureUtils);
 
         BrokerageOrderPayInfo payInfo = new BrokerageOrderPayInfo();
         payInfo.setOrderId(10L);

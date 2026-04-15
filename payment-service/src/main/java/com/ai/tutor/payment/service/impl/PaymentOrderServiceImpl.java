@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 
 /**
  * 支付订单服务实现类
@@ -117,12 +118,16 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                 .last("limit 1"));
 
         if (existing != null) {
-            if (existing.getExpireTime() != null && existing.getExpireTime().isBefore(now)) {
+            boolean expired = existing.getExpireTime() != null && existing.getExpireTime().isBefore(now);
+            boolean amountChanged = !Objects.equals(existing.getAmount(), amount);
+            if (expired || amountChanged) {
                 UpdateWrapper<PaymentOrder> closeWrapper = new UpdateWrapper<>();
                 closeWrapper.eq("id", existing.getId())
                         .eq("status", PaymentStatus.PENDING.getCode())
                         .set("status", PaymentStatus.CLOSED.getCode());
                 this.update(closeWrapper);
+                log.info("Close stale pending payment order. orderNo={}, expired={}, amountChanged={}, oldAmount={}, newAmount={}",
+                        existing.getOrderNo(), expired, amountChanged, existing.getAmount(), amount);
             } else {
                 return existing;
             }
@@ -229,6 +234,58 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         }
         recordNotifyReceipt(orderNo, notifyVerified);
         log.warn("Failed to update payment order {} to SUCCESS from notify. Current status might not be PENDING.", orderNo);
+        return false;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateSuccessFromProviderQuery(String orderNo, String transactionId, String providerOrderNo, LocalDateTime successTime) {
+        UpdateWrapper<PaymentOrder> updateWrapper = new UpdateWrapper<>();
+        updateWrapper.eq("order_no", orderNo)
+                .eq("status", PaymentStatus.PENDING.getCode())
+                .set("status", PaymentStatus.SUCCESS.getCode())
+                .set("transaction_id", transactionId)
+                .set("provider_order_no", providerOrderNo)
+                .set("success_time", successTime != null ? successTime : LocalDateTime.now());
+
+        boolean updated = this.update(updateWrapper);
+        if (updated) {
+            log.info("Payment order {} updated to SUCCESS by provider query, transactionId: {}", orderNo, transactionId);
+            try {
+                PaymentOrder order = getByOrderNo(orderNo);
+                if (order != null) {
+                    com.ai.tutor.common.event.PaymentSuccessEvent event = new com.ai.tutor.common.event.PaymentSuccessEvent();
+                    event.setOrderNo(orderNo);
+                    event.setUserId(order.getUserId());
+                    event.setAmount(order.getAmount());
+                    event.setContextId(order.getContextId());
+                    event.setContextType(order.getContextType());
+                    event.setTransactionId(transactionId);
+                    event.setSuccessTime(order.getSuccessTime());
+                    event.setChannel(order.getChannel());
+                    event.setProvider(order.getProvider());
+                    event.setProviderOrderNo(order.getProviderOrderNo());
+                    if (rocketMQTemplate != null) {
+                        rocketMQTemplate.convertAndSend("payment-success-topic", event);
+                        markEventSent(orderNo);
+                    } else {
+                        log.warn("RocketMQTemplate 不存在，跳过支付成功事件投递. orderNo={}", orderNo);
+                        markEventSendFailed(orderNo, "RocketMQTemplate missing");
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to send payment success event for order {}", orderNo, e);
+                markEventSendFailed(orderNo, truncateReason(e.getMessage()));
+            }
+            return true;
+        }
+
+        PaymentOrder order = getByOrderNo(orderNo);
+        if (order != null && PaymentStatus.SUCCESS.getCode().equals(order.getStatus())) {
+            log.info("Payment order {} is already SUCCESS after provider query, idempotent check passed.", orderNo);
+            return true;
+        }
+        log.warn("Failed to update payment order {} to SUCCESS from provider query. Current status might not be PENDING.", orderNo);
         return false;
     }
 

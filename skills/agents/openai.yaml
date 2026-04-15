@@ -1,0 +1,7 @@
+interface:
+  display_name: "AI Tutor Project"
+  short_description: "Repo-aware guide for this project"
+  default_prompt: "Use $ai-platform-context to understand the relevant project background before changing code in this repository."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,5 +1,7 @@
 package com.ai.tutor.payment.client;
 
+import com.yungouos.pay.entity.PayOrder;
+
 /**
  * YunGouOS SDK 调用封装
  *
@@ -38,6 +40,13 @@ public interface YungouosClient {
                            String attach,
                            String notifyUrl,
                            String appKey);
+
+    /**
+     * 根据商户订单号查询第三方订单状态。
+     */
+    PayOrder getOrderInfoByOutTradeNo(String outTradeNo,
+                                      String mchId,
+                                      String appKey);
 
     /**
      * 微信退款（原路退款）

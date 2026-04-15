@@ -11,6 +11,19 @@ DB_NAME="${DB_NAME:-ai_tutor}"
 MYSQL_USER="${MYSQL_USER:-root}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-Aa123456}"
 
+docker_compose_cmd() {
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+  echo "[db_apply_migrations] 未检测到 docker compose 或 docker-compose"
+  exit 1
+}
+
 case "${1:-}" in
   ""|"--migrations")
     ;;
@@ -22,7 +35,7 @@ case "${1:-}" in
     ;;
 esac
 
-docker compose -f "$COMPOSE_FILE" up -d mysql
+docker_compose_cmd -f "$COMPOSE_FILE" up -d mysql
 
 MYSQL_CMD="mysql -u${MYSQL_USER} -p${MYSQL_PASSWORD} --default-character-set=utf8mb4 ${DB_NAME}"
 

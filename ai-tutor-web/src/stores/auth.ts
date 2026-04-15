@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 import { userApi } from '@/api/user'
 import type { LoginUserVO, UserMeVO, UserRoleEnum } from '@/api/types'
+import { normalizeAssetUrl } from '@/utils/avatar'
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -17,7 +18,7 @@ function readUserFromStorage(): LoginUserVO | null {
   const raw = localStorage.getItem(STORAGE_USER_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as LoginUserVO
+    return normalizeLoginUser(JSON.parse(raw) as LoginUserVO)
   } catch {
     return null
   }
@@ -26,6 +27,20 @@ function readUserFromStorage(): LoginUserVO | null {
 function persistAuth(user: LoginUserVO) {
   localStorage.setItem(STORAGE_TOKEN_KEY, user.token)
   localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user))
+}
+
+function normalizeLoginUser(user: LoginUserVO): LoginUserVO {
+  return {
+    ...user,
+    avatar: normalizeAssetUrl(user.avatar) || null,
+  }
+}
+
+function normalizeUserMe(me: UserMeVO): UserMeVO {
+  return {
+    ...me,
+    avatar: normalizeAssetUrl(me.avatar) || null,
+  }
 }
 
 function clearPersistedAuth() {
@@ -54,7 +69,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async loginOrRegister(role: UserRoleEnum, phone: string, code: string) {
-      const user = await userApi.loginOrRegister({ userRoleEnum: role, phone, code })
+      const user = normalizeLoginUser(await userApi.loginOrRegister({ userRoleEnum: role, phone, code }))
       this.token = user.token
       this.user = user
       this.me = null
@@ -82,10 +97,10 @@ export const useAuthStore = defineStore('auth', {
 
     async refreshMe() {
       if (!this.isLoggedIn) return null
-      const me = await userApi.me()
+      const me = normalizeUserMe(await userApi.me())
       this.me = me
       if (this.user) {
-        const merged = { ...this.user, name: me.name, phone: me.phone, avatar: me.avatar, sex: me.sex, userType: me.userType }
+        const merged = normalizeLoginUser({ ...this.user, name: me.name, phone: me.phone, avatar: me.avatar, sex: me.sex, userType: me.userType })
         this.user = merged
         persistAuth(merged)
       }

@@ -339,6 +339,7 @@ public class BrokerageOrderService {
      */
     public void onPaymentSuccess(Long orderId, LocalDateTime paidAt, String payMethod) {
         ThrowUtils.throwIf(orderId == null, ErrorCode.PARAMS_ERROR);
+        log.info("brokerage_payment_success start orderId={} payMethod={} paidAt={}", orderId, payMethod, paidAt);
         BrokerageOrder order = brokerageOrderMapper.selectById(orderId);
         ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
 
@@ -369,6 +370,8 @@ public class BrokerageOrderService {
         }
 
         afterPaid(order);
+        log.info("brokerage_payment_success done orderId={} status={} applicationId={} roomId={}",
+                order.getId(), order.getStatus(), order.getApplicationId(), order.getRoomId());
     }
 
     private String resolveInitiatorLower(BrokerageOrder order) {
@@ -448,6 +451,7 @@ public class BrokerageOrderService {
         ApplicationBrokerageOrder rel = applicationBrokerageOrderMapper.selectByOrderId(latest.getId());
         if (rel != null && rel.getApplicationId() != null) {
             tutorApplicationService.onBrokerageOrderPaid(rel.getApplicationId());
+            return;
         }
     }
 

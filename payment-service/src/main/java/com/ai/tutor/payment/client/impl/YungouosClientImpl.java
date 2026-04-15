@@ -2,9 +2,11 @@ package com.ai.tutor.payment.client.impl;
 
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
+import com.yungouos.pay.entity.PayOrder;
 import com.yungouos.pay.entity.RefundOrder;
 import com.yungouos.pay.alipay.AliPay;
 import com.yungouos.pay.common.PayException;
+import com.yungouos.pay.order.SystemOrder;
 import com.yungouos.pay.wxpay.WxPay;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -69,6 +71,19 @@ public class YungouosClientImpl implements YungouosClient {
                     null,
                     appKey
             );
+        } catch (PayException e) {
+            throw e;
+        }
+    }
+
+    @Override
+    public PayOrder getOrderInfoByOutTradeNo(String outTradeNo, String mchId, String appKey) {
+        PaymentProperties.Yungouos yungouos = paymentProperties.getYungouos();
+        if (yungouos != null && yungouos.getBaseUrl() != null && yungouos.getBaseUrl().startsWith("mock://")) {
+            return null;
+        }
+        try {
+            return SystemOrder.getOrderInfoByOutTradeNo(outTradeNo, mchId, appKey);
         } catch (PayException e) {
             throw e;
         }

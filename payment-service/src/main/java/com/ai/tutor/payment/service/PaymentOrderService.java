@@ -80,6 +80,17 @@ public interface PaymentOrderService extends IService<PaymentOrder> {
     boolean updateSuccessFromNotify(String orderNo, String transactionId, String providerOrderNo, LocalDateTime successTime, int notifyVerified);
 
     /**
+     * 第三方主动查单驱动的支付成功更新：写入第三方交易信息，但不计入异步回调统计。
+     *
+     * @param orderNo 商户订单号
+     * @param transactionId 第三方交易号
+     * @param providerOrderNo 第三方系统单号
+     * @param successTime 支付成功时间
+     * @return 是否更新成功或已是成功
+     */
+    boolean updateSuccessFromProviderQuery(String orderNo, String transactionId, String providerOrderNo, LocalDateTime successTime);
+
+    /**
      * 标记支付成功事件已投递成功。
      *
      * @param orderNo 商户订单号

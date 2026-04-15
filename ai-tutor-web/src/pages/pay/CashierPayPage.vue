@@ -2,16 +2,24 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { applicationApi } from '@/api/application'
 import { getPaymentOrderStatus, prepay, type PayChannel } from '@/api/payment'
+import { useToastStore } from '@/stores/toast'
 
 type UiState = 'loading' | 'ready' | 'paid' | 'expired' | 'failed'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToastStore()
 
 const contextType = computed(() => (typeof route.query.contextType === 'string' ? route.query.contextType.trim() : ''))
 const contextId = computed(() => {
   const raw = route.query.contextId
+  const v = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(v) ? v : null
+})
+const applicationId = computed(() => {
+  const raw = route.query.applicationId
   const v = typeof raw === 'string' ? Number(raw) : NaN
   return Number.isFinite(v) ? v : null
 })
@@ -42,11 +50,18 @@ const leftSeconds = computed(() => {
   return Math.max(0, Math.floor((ex - nowMs.value) / 1000))
 })
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 function buildOpenMessage(type: string) {
   return {
     type,
     contextType: contextType.value,
     contextId: contextId.value,
+    applicationId: applicationId.value,
     orderNo: orderNo.value,
     channel: channel.value,
   }
@@ -59,6 +74,45 @@ function notifyOpenerPaid() {
   } catch {
     //
   }
+}
+
+async function redirectAfterPaid() {
+  if (!applicationId.value) return
+  toast.show('支付成功，正在进入聊天…', 'success', 2200)
+  for (let i = 0; i < 8; i += 1) {
+    try {
+      const res = await applicationApi.enterChat(applicationId.value)
+      if (res.roomId) {
+        await router.replace({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
+        return
+      }
+    } catch {
+      //
+    }
+    if (i < 7) {
+      await wait(900)
+    }
+  }
+  toast.show('支付结果已返回，但聊天权限仍在同步，请稍后再试', 'info', 3500)
+}
+
+async function handlePaid() {
+  if (state.value === 'paid') return
+  state.value = 'paid'
+  stopPoll()
+  notifyOpenerPaid()
+  if (!applicationId.value) {
+    toast.show('支付成功', 'success', 2200)
+  }
+
+  if (window.opener) {
+    window.setTimeout(() => {
+      window.close()
+    }, 800)
+    return
+  }
+
+  await redirectAfterPaid()
 }
 
 function startTick() {
@@ -106,9 +160,7 @@ async function refreshStatus() {
     amountFen.value = s.amountFen
     if (s.expireTime) expireTime.value = s.expireTime
     if (s.status === 'SUCCESS') {
-      state.value = 'paid'
-      stopPoll()
-      notifyOpenerPaid()
+      await handlePaid()
       return
     }
     if (s.status === 'FAILED') {
