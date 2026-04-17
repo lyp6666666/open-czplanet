@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 import TutorJobsPage from './TutorJobsPage.vue'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 
 const mocks = vi.hoisted(() => ({
   feedDemands: vi.fn(),
@@ -51,7 +52,40 @@ function createTestRouter() {
   })
 }
 
+function createStorageMock(): Storage {
+  const store = new Map<string, string>()
+  return {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store.clear()
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value))
+    },
+  }
+}
+
 describe('TutorJobsPage', () => {
+  beforeEach(() => {
+    const localStorageMock = createStorageMock()
+    const sessionStorageMock = createStorageMock()
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true })
+    Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock, configurable: true })
+    Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, configurable: true })
+    Object.defineProperty(globalThis, 'sessionStorage', { value: sessionStorageMock, configurable: true })
+  })
+
   it('applies budget filter when clicking search without confirming budget menu', async () => {
     localStorage.setItem('ai_tutor_city', '北京')
     mocks.feedDemands.mockReset()
@@ -241,5 +275,137 @@ describe('TutorJobsPage', () => {
     expect(wrapper.text()).toContain('工作地址')
     expect(wrapper.text()).toContain('北京')
     expect(wrapper.text()).toContain('海淀区中关村')
+  })
+
+  it('refreshes the selected detail application when receiving a matching realtime event', async () => {
+    vi.useFakeTimers()
+    localStorage.setItem('ai_tutor_city', '北京')
+    mocks.feedDemands.mockReset()
+    mocks.getDemandView.mockReset()
+    mocks.checkDemandFavorites.mockReset()
+    mocks.listSent.mockReset()
+    mocks.applicationDetail.mockReset()
+
+    mocks.feedDemands.mockResolvedValue({
+      nextCursor: null,
+      isLast: true,
+      list: [
+        {
+          id: 3001,
+          parentId: 101,
+          subjectId: 201,
+          subjectName: null,
+          subjectIsOther: 0,
+          title: '初中数学一对一',
+          description: '描述',
+          childAge: 14,
+          classMode: 'online',
+          city: null,
+          address: null,
+          frequencyPerWeek: 2,
+          budgetMin: '180',
+          budgetMax: '240',
+          stageCode: 'JUNIOR',
+          educationRequirement: 'UNLIMITED',
+          publisherIdentity: 'PARENT',
+          schedule: null,
+          status: 1,
+          createTime: '',
+          updateTime: '',
+        },
+      ],
+    })
+    mocks.getDemandView.mockResolvedValue({
+      id: 3001,
+      parentId: 101,
+      subjectId: 201,
+      subjectName: null,
+      subjectIsOther: 0,
+      title: '初中数学一对一',
+      description: '描述',
+      childAge: 14,
+      classMode: 'online',
+      city: null,
+      address: null,
+      frequencyPerWeek: 2,
+      budgetMin: '180',
+      budgetMax: '240',
+      stageCode: 'JUNIOR',
+      educationRequirement: 'UNLIMITED',
+      publisherIdentity: 'PARENT',
+      schedule: null,
+      status: 1,
+      createTime: '',
+      updateTime: '',
+      publisher: { uid: 101, displayName: '林女士', avatar: null, identityLabel: '学生家长' },
+    })
+    mocks.checkDemandFavorites.mockResolvedValue([])
+    mocks.listSent.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          id: 9527,
+          senderUid: 2001,
+          receiverUid: 101,
+          senderRole: 'TEACHER',
+          receiverRole: 'STUDENT',
+          contextType: 'DEMAND',
+          contextId: 3001,
+          content: '申请内容',
+          status: 'PENDING',
+          chatAccessStatus: 'NONE',
+          paymentPayerRole: 'TEACHER',
+          orderId: null,
+          roomId: 7001,
+          receiverRead: false,
+          decidedAt: null,
+          createTime: '2026-04-17T00:00:00',
+        },
+      ],
+    })
+    mocks.applicationDetail.mockResolvedValue({
+      id: 9527,
+      senderUid: 2001,
+      receiverUid: 101,
+      senderRole: 'TEACHER',
+      receiverRole: 'STUDENT',
+      contextType: 'DEMAND',
+      contextId: 3001,
+      content: '申请内容',
+      status: 'ACCEPTED',
+      chatAccessStatus: 'CHAT_ENABLED',
+      paymentPayerRole: 'TEACHER',
+      orderId: 30001,
+      roomId: 7001,
+      receiverRead: true,
+      decidedAt: '2026-04-17T00:10:00',
+      createTime: '2026-04-17T00:00:00',
+    })
+
+    const router = createTestRouter()
+    await router.push('/tutor/jobs')
+    await router.isReady()
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const wrapper = mount(TutorJobsPage, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已发起申请')
+    expect(mocks.applicationDetail).not.toHaveBeenCalled()
+
+    const realtime = useChatRealtimeStore(pinia)
+    realtime.consumeApplicationEvent({ applicationId: 9527, status: 'ACCEPTED' }, 'application.decided')
+    await flushPromises()
+
+    expect(mocks.applicationDetail).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('已发起沟通')
+
+    wrapper.unmount()
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
   })
 })

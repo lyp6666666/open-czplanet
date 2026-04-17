@@ -7,6 +7,7 @@ import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, TutorApplicationVO } from '@/api/types'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
 import OrgCardModal from '@/ui/user/OrgCardModal.vue'
@@ -14,6 +15,7 @@ import { formatClassMode, formatEducationRequirement, formatScheduleText } from 
 
 const route = useRoute()
 const router = useRouter()
+const chatRealtime = useChatRealtimeStore()
 const settings = useSettingsStore()
 
 const id = computed(() => Number(route.params.id))
@@ -114,21 +116,33 @@ async function loadApplication() {
     const app = await findLatestSentDemandApplication(data.value.parentId, data.value.id)
     application.value = app
     if (app?.status === 'PENDING') {
-      const appId = app.id
-      applicationPollTimer = window.setInterval(async () => {
-        if (!application.value) return
-        if (application.value.id !== appId) return
-        try {
-          const latest = await applicationApi.detail(appId)
-          application.value = latest
-          if (latest.status !== 'PENDING') stopApplicationPolling()
-        } catch {
-          void 0
-        }
+      applicationPollTimer = window.setInterval(() => {
+        void reloadCurrentApplicationDetail('polling')
       }, 5000)
     }
   } finally {
     applicationLoading.value = false
+  }
+}
+
+async function reloadCurrentApplicationDetail(reason: 'realtime' | 'polling') {
+  const appId = application.value?.id
+  if (!(appId && appId > 0)) return
+  try {
+    const latest = await applicationApi.detail(appId)
+    application.value = latest
+    if (latest.status !== 'PENDING') {
+      stopApplicationPolling()
+      return
+    }
+    if (reason === 'realtime' && applicationPollTimer == null) {
+      // 实时事件优先触发刷新，但仍保留轮询兜底，避免漏事件时详情页完全失去更新能力。
+      applicationPollTimer = window.setInterval(() => {
+        void reloadCurrentApplicationDetail('polling')
+      }, 5000)
+    }
+  } catch {
+    void 0
   }
 }
 
@@ -297,6 +311,16 @@ onMounted(() => {
 watch(id, () => {
   void load()
 })
+
+watch(
+  () => chatRealtime.lastApplicationEvent,
+  (ev) => {
+    if (!ev?.applicationId) return
+    if (ev.applicationId !== application.value?.id) return
+    // 只在当前详情页绑定的申请发生变化时回源刷新，避免其他申请事件引发页面抖动。
+    void reloadCurrentApplicationDetail('realtime')
+  },
+)
 
 onBeforeUnmount(() => {
   stopApplicationPolling()

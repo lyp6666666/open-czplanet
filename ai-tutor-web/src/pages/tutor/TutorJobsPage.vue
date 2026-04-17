@@ -7,6 +7,7 @@ import { chatApi } from '@/api/chat'
 import { favoritesApi } from '@/api/favorites'
 import { jobsApi } from '@/api/jobs'
 import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting, TutorApplicationVO } from '@/api/types'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { useCityStore } from '@/stores/city'
 import OrgCardModal from '@/ui/user/OrgCardModal.vue'
@@ -15,6 +16,7 @@ import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
 
 const router = useRouter()
 const route = useRoute()
+const chatRealtime = useChatRealtimeStore()
 const settings = useSettingsStore()
 const cityStore = useCityStore()
 
@@ -361,22 +363,33 @@ async function loadDetailApplication() {
     const app = await findLatestSentDemandApplication(detail.value.parentId, detail.value.id)
     detailApplication.value = app
     if (app?.status === 'PENDING') {
-      const appId = app.id
-      detailApplicationPollTimer = window.setInterval(async () => {
-        if (!detail.value) return
-        if (!detailApplication.value) return
-        if (detailApplication.value.id !== appId) return
-        try {
-          const latest = await applicationApi.detail(appId)
-          detailApplication.value = latest
-          if (latest.status !== 'PENDING') stopDetailApplicationPolling()
-        } catch {
-          void 0
-        }
+      detailApplicationPollTimer = window.setInterval(() => {
+        void reloadDetailApplication('polling')
       }, 5000)
     }
   } finally {
     detailApplicationLoading.value = false
+  }
+}
+
+async function reloadDetailApplication(reason: 'realtime' | 'polling') {
+  const appId = detailApplication.value?.id
+  if (!(appId && appId > 0)) return
+  try {
+    const latest = await applicationApi.detail(appId)
+    detailApplication.value = latest
+    if (latest.status !== 'PENDING') {
+      stopDetailApplicationPolling()
+      return
+    }
+    if (reason === 'realtime' && detailApplicationPollTimer == null) {
+      // 列表页详情侧栏优先走实时刷新，但保留轮询兜底，避免丢事件后状态长期卡住。
+      detailApplicationPollTimer = window.setInterval(() => {
+        void reloadDetailApplication('polling')
+      }, 5000)
+    }
+  } catch {
+    void 0
   }
 }
 
@@ -571,6 +584,16 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopDetailApplicationPolling()
 })
+
+watch(
+  () => chatRealtime.lastApplicationEvent,
+  (ev) => {
+    if (!ev?.applicationId) return
+    if (ev.applicationId !== detailApplication.value?.id) return
+    // 仅在当前右侧详情绑定的申请发生变化时刷新，避免其他申请事件影响当前浏览体验。
+    void reloadDetailApplication('realtime')
+  },
+)
 
 watch(
   () => cityStore.city,
