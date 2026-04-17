@@ -14,5 +14,6 @@ public class RefundRequestDetailResponse {
     private RefundRequestRecord refundRequest;
     private BrokerageOrder order;
     private List<Message> chatHistory;
+    private RefundChatParticipantVO studentParticipant;
+    private RefundChatParticipantVO teacherParticipant;
 }
-

@@ -231,6 +231,13 @@ export interface Message {
   createTime?: string | null
 }
 
+export interface RefundChatParticipant {
+  uid?: number | null
+  role?: string | null
+  name?: string | null
+  avatar?: string | null
+}
+
 export interface RefundRequestRecord {
   id: number
   brokerageOrderId: number
@@ -255,4 +262,6 @@ export interface RefundRequestDetailResponse {
   refundRequest: RefundRequestRecord
   order: BrokerageOrder | null
   chatHistory: Message[] | null
+  studentParticipant?: RefundChatParticipant | null
+  teacherParticipant?: RefundChatParticipant | null
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
@@ -35,7 +35,29 @@ function createTestRouter() {
   })
 }
 
+function createLocalStorageMock() {
+  const store = new Map<string, string>()
+  return {
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value))
+    },
+    removeItem: (key: string) => {
+      store.delete(key)
+    },
+    clear: () => {
+      store.clear()
+    },
+  }
+}
+
 describe('MePage avatar upload', () => {
+  beforeEach(() => {
+    const localStorageMock = createLocalStorageMock()
+    Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, configurable: true })
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true })
+  })
+
   it('uploads avatar then saves avatar url', async () => {
     localStorage.setItem('ai_tutor_token', 't')
     localStorage.setItem(
@@ -73,6 +95,48 @@ describe('MePage avatar upload', () => {
     expect(mocks.updateUserInfo).toHaveBeenCalledTimes(1)
     expect(mocks.updateUserInfo.mock.calls[0]![0]).toMatchObject({
       baseUserInfo: { avatar: 'https://assets.example.com/ai-tutor/avatars/1001/x.png' },
+    })
+  })
+
+  it('uses student real name as base user name when saving student profile', async () => {
+    localStorage.setItem('ai_tutor_token', 't')
+    localStorage.setItem(
+      'ai_tutor_user',
+      JSON.stringify({ id: 1001, token: 't', userType: 2, name: '', phone: '13800001111', avatar: '', sex: 2 }),
+    )
+
+    mocks.me.mockReset()
+    mocks.updateUserInfo.mockReset()
+    mocks.uploadImage.mockReset()
+
+    mocks.me.mockResolvedValue({
+      name: '',
+      phone: '13800001111',
+      avatar: '',
+      sex: 2,
+      userType: 2,
+      teacherProfile: null,
+      studentProfile: { realName: '', childAge: null, address: '', demandDescription: '', budget: null },
+    })
+    mocks.updateUserInfo.mockResolvedValue('ok')
+
+    const router = createTestRouter()
+    await router.push('/me')
+    await router.isReady()
+
+    const wrapper = mount(MePage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    await wrapper.find('input[placeholder="例如：王女士"]').setValue('陆熠鹏')
+    await wrapper.findAll('button').find((b) => b.text().trim() === '保存')!.trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateUserInfo).toHaveBeenCalledTimes(1)
+    expect(mocks.updateUserInfo.mock.calls[0]![0]).toMatchObject({
+      baseUserInfo: { name: '陆熠鹏' },
+      studentExtInfo: { realName: '陆熠鹏' },
     })
   })
 })

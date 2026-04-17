@@ -23,4 +23,4 @@ spring:
 
 security:
   gateway-identity:
-    enabled: true
+    enabled: false

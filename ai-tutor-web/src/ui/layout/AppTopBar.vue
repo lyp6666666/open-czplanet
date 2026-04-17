@@ -25,12 +25,20 @@ const currentChatRoomId = computed<number | null>(() => {
   if (!Number.isFinite(roomId) || roomId <= 0) return null
   return route.name === 'chatRoom' || route.path.startsWith('/chat/') ? roomId : null
 })
+
+function normalizedText(raw: string | null | undefined) {
+  const text = String(raw || '').trim()
+  return text || ''
+}
+
 const displayName = computed(() => {
   if (!auth.isLoggedIn) return '未登录'
-  const t = (auth.me?.teacherProfile?.realName || '').trim()
-  if (t) return t
-  const n = (auth.user?.name || '').trim()
-  if (n) return n
+  const teacherName = normalizedText(auth.me?.teacherProfile?.realName)
+  if (teacherName) return teacherName
+  const studentName = normalizedText(auth.me?.studentProfile?.realName)
+  if (studentName) return studentName
+  const userName = normalizedText(auth.user?.name)
+  if (userName) return userName
   return '未填写姓名'
 })
 const unread = computed(() => chatRealtime.totalUnread)
@@ -46,8 +54,8 @@ const cities = computed(() => {
 })
 
 const userInitial = computed(() => {
-  const n = auth.user?.name?.trim()
-  return n && n.length > 0 ? n.slice(0, 1) : 'U'
+  const n = displayName.value.trim()
+  return n && n !== '未填写姓名' && n !== '未登录' ? n.slice(0, 1) : 'U'
 })
 
 const menuOpen = ref(false)
@@ -159,6 +167,9 @@ watch(
 )
 
 onMounted(() => {
+  if (auth.isLoggedIn && !auth.me) {
+    void auth.refreshMe()
+  }
   if (!canChat.value) return
   syncActiveRoomFromRoute()
   void chatRealtime.refreshUnreadFromServer()

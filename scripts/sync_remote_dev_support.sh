@@ -17,6 +17,7 @@ ssh -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_HOST}" \
   "mkdir -p '$REMOTE_PATH/scripts'"
 
 scp -P "$REMOTE_PORT" \
+  scripts/db_bootstrap_if_missing.sh \
   scripts/dev_all_up.sh \
   scripts/dev_all_down.sh \
   scripts/dev_local_up.sh \

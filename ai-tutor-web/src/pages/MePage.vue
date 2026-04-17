@@ -227,9 +227,11 @@ async function onSave() {
       }
     }
 
+    const studentDisplayName = !isTeacher.value ? studentRealName.value.trim() : ''
+
     await userApi.updateUserInfo({
       baseUserInfo: {
-        name: name.value.trim() || undefined,
+        name: isTeacher.value ? name.value.trim() || undefined : studentDisplayName || name.value.trim() || undefined,
         avatar: avatar.value.trim() || undefined,
         sex: sex.value ?? undefined,
       },
@@ -248,7 +250,7 @@ async function onSave() {
         : undefined,
       studentExtInfo: !isTeacher.value
         ? {
-            realName: studentRealName.value.trim() || undefined,
+            realName: studentDisplayName || undefined,
             childAge: studentChildAge.value ?? undefined,
             address: studentAddress.value.trim() || undefined,
             demandDescription: studentDemandDescription.value.trim() || undefined,

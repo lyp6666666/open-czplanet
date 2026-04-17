@@ -32,8 +32,8 @@
             <td>
               <RouterLink class="link" :to="`/refunds/${row.id}`">{{ row.id }}</RouterLink>
             </td>
-            <td><span class="badge">{{ row.type || '-' }}</span></td>
-            <td><span class="badge">{{ row.status || '-' }}</span></td>
+            <td><span class="badge">{{ refundTypeText(row.type) }}</span></td>
+            <td><span class="badge">{{ refundStatusText(row.status) }}</span></td>
             <td>{{ row.refundAmountFen ?? '-' }}</td>
             <td>{{ row.roomId ?? '-' }}</td>
             <td>
@@ -41,6 +41,9 @@
             </td>
             <td>
               <div class="actions">
+                <RouterLink class="btn btn-muted" :to="`/refunds/${row.id}`">
+                  查看聊天记录
+                </RouterLink>
                 <button class="btn btn-primary" type="button" :disabled="busyId === row.id" @click="onApprove(row.id)">
                   同意退款
                 </button>
@@ -96,6 +99,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { approveRefundRequest, listRefundRequests, rejectRefundRequest } from '@/api/refunds'
 import type { RefundRequestRecord } from '@/api/types'
 import DialogModal from '@/ui/DialogModal.vue'
+import { refundStatusText, refundTypeText } from '@/utils/refunds'
 
 const rows = ref<RefundRequestRecord[]>([])
 const total = ref(0)
@@ -232,6 +236,7 @@ onMounted(load)
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .empty {

@@ -47,6 +47,7 @@ SERVICE_STARTUP_WAIT_LOOPS="${SERVICE_STARTUP_WAIT_LOOPS:-300}"
 FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
 INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana}"
+AUTO_BOOTSTRAP_DEV_DB="${AUTO_BOOTSTRAP_DEV_DB:-1}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
@@ -242,6 +243,20 @@ case "$MANAGE_INFRA" in
     ;;
   *)
     echo "[dev_all_up] 不支持的 MANAGE_INFRA=$MANAGE_INFRA，可选值：auto/always/never"
+    exit 1
+    ;;
+esac
+
+case "$AUTO_BOOTSTRAP_DEV_DB" in
+  1|true|yes)
+    echo "[dev_all_up] 检查开发库是否需要初始化..."
+    sh scripts/db_bootstrap_if_missing.sh
+    ;;
+  0|false|no)
+    echo "[dev_all_up] 跳过开发库初始化（AUTO_BOOTSTRAP_DEV_DB=$AUTO_BOOTSTRAP_DEV_DB）"
+    ;;
+  *)
+    echo "[dev_all_up] 不支持的 AUTO_BOOTSTRAP_DEV_DB=$AUTO_BOOTSTRAP_DEV_DB，可选值：1/0 true/false yes/no"
     exit 1
     ;;
 esac

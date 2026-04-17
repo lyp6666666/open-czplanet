@@ -16,7 +16,7 @@
       <div class="card section">
         <div class="section-head">
           <div class="section-title">申请信息</div>
-          <span class="badge">{{ detail.refundRequest.status || '-' }}</span>
+          <span class="badge">{{ refundStatusText(detail.refundRequest.status) }}</span>
         </div>
 
         <div class="kv">
@@ -25,7 +25,11 @@
         </div>
         <div class="kv">
           <div class="k">类型</div>
-          <div class="v">{{ detail.refundRequest.type }}</div>
+          <div class="v">{{ refundTypeText(detail.refundRequest.type) }}</div>
+        </div>
+        <div class="kv">
+          <div class="k">状态</div>
+          <div class="v">{{ refundStatusText(detail.refundRequest.status) }}</div>
         </div>
         <div class="kv">
           <div class="k">会话ID</div>
@@ -67,16 +71,35 @@
       </div>
 
       <div class="card section chat">
-        <div class="section-title">聊天记录</div>
+        <div class="section-head chat-head">
+          <div class="section-title">聊天记录</div>
+          <div class="participants">
+            <div class="party student">
+              <span class="party-label">左侧</span>
+              <span class="party-name">{{ studentDisplayName }}</span>
+            </div>
+            <div class="party teacher">
+              <span class="party-label">右侧</span>
+              <span class="party-name">{{ teacherDisplayName }}</span>
+            </div>
+          </div>
+        </div>
 
         <div v-if="!detail.chatHistory || detail.chatHistory.length === 0" class="empty">暂无聊天记录</div>
         <div v-else class="msgs">
-          <div v-for="m in detail.chatHistory" :key="m.id" class="msg">
-            <div class="meta">
-              <span class="badge">from {{ m.fromUid }} → {{ m.toUid }}</span>
-              <span class="time">{{ timeText(m.createTime) }}</span>
+          <div
+            v-for="m in detail.chatHistory"
+            :key="m.id"
+            class="msg-row"
+            :class="messageRoleClass(m.fromUid)"
+          >
+            <div class="speaker">
+              {{ messageSpeakerName(m.fromUid) }}
             </div>
-            <div class="content">{{ m.content || '-' }}</div>
+            <div class="msg">
+              <div class="content">{{ m.content || '-' }}</div>
+              <div class="time">{{ timeText(m.createTime) }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -103,6 +126,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { approveRefundRequest, getRefundRequestDetails, rejectRefundRequest } from '@/api/refunds'
 import type { RefundRequestDetailResponse } from '@/api/types'
 import DialogModal from '@/ui/DialogModal.vue'
+import { refundParticipantDisplayName, refundTypeText, refundStatusText } from '@/utils/refunds'
 
 const route = useRoute()
 const router = useRouter()
@@ -114,9 +138,41 @@ const loading = ref(false)
 const errorText = ref<string | null>(null)
 const busyAction = ref(false)
 
+const studentDisplayName = computed(() =>
+  refundParticipantDisplayName(
+    detail.value?.studentParticipant?.role ?? 'STUDENT',
+    detail.value?.studentParticipant?.name,
+    detail.value?.studentParticipant?.uid,
+  ),
+)
+
+const teacherDisplayName = computed(() =>
+  refundParticipantDisplayName(
+    detail.value?.teacherParticipant?.role ?? 'TEACHER',
+    detail.value?.teacherParticipant?.name,
+    detail.value?.teacherParticipant?.uid,
+  ),
+)
+
 function timeText(s?: string | null) {
   if (!s) return '-'
   return String(s).replace('T', ' ').slice(0, 19)
+}
+
+function messageRoleClass(uid?: number | null) {
+  if (uid != null && uid === detail.value?.teacherParticipant?.uid) return 'is-teacher'
+  if (uid != null && uid === detail.value?.studentParticipant?.uid) return 'is-student'
+  return 'is-student'
+}
+
+function messageSpeakerName(uid?: number | null) {
+  if (uid != null && uid === detail.value?.teacherParticipant?.uid) {
+    return teacherDisplayName.value
+  }
+  if (uid != null && uid === detail.value?.studentParticipant?.uid) {
+    return studentDisplayName.value
+  }
+  return refundParticipantDisplayName(null, null, uid ?? null)
 }
 
 async function load() {
@@ -308,6 +364,45 @@ onMounted(load)
   flex-direction: column;
 }
 
+.chat-head {
+  align-items: flex-start;
+}
+
+.participants {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.party {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.party.student {
+  background: rgba(15, 118, 110, 0.08);
+  color: #115e59;
+}
+
+.party.teacher {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1d4ed8;
+}
+
+.party-label {
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.party-name {
+  font-weight: 700;
+}
+
 .msgs {
   margin-top: 10px;
   display: flex;
@@ -315,30 +410,58 @@ onMounted(load)
   gap: 10px;
 }
 
-.msg {
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.7);
+.msg-row {
+  display: flex;
+  flex-direction: column;
+  max-width: 84%;
+  gap: 6px;
 }
 
-.meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
+.msg-row.is-student {
+  align-items: flex-start;
+}
+
+.msg-row.is-teacher {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.speaker {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.msg {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background: rgba(247, 250, 252, 0.95);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.msg-row.is-student .msg {
+  border-top-left-radius: 6px;
+  background: linear-gradient(180deg, rgba(236, 253, 245, 0.96), rgba(209, 250, 229, 0.96));
+}
+
+.msg-row.is-teacher .msg {
+  border-top-right-radius: 6px;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.98), rgba(219, 234, 254, 0.98));
 }
 
 .time {
   color: var(--muted);
   font-size: 12px;
+  margin-top: 8px;
+  text-align: right;
 }
 
 .content {
-  margin-top: 8px;
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 13px;
+  line-height: 1.6;
 }
 
 .empty {
@@ -357,6 +480,20 @@ onMounted(load)
   color: var(--muted);
   font-size: 12px;
   margin-bottom: 6px;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .participants {
+    justify-content: flex-start;
+  }
+
+  .msg-row {
+    max-width: 100%;
+  }
 }
 
 .link {
