@@ -3,6 +3,8 @@ package com.ai.tutor.videocallimservice.chat.service.stream;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeStreamReadyResp;
+import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
+import jakarta.annotation.Resource;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
@@ -37,6 +39,9 @@ public class SseSessionManager {
         thread.setDaemon(true);
         return thread;
     });
+
+    @Resource
+    private RealtimeEventStoreService realtimeEventStoreService;
 
     @PostConstruct
     public void startHeartbeatTask() {
@@ -92,7 +97,12 @@ public class SseSessionManager {
     }
 
     public void sendToUid(Long uid, String eventName, Object data) {
-        RealtimeEventEnvelope envelope = appendReplayEvent(uid, buildEnvelope(uid, eventName, data));
+        RealtimeEventEnvelope envelope = buildEnvelope(uid, eventName, data);
+        if (realtimeEventStoreService != null) {
+            // 先落库再在线推送，这样客户端断线重连后才能按 eventId 做补偿同步。
+            envelope = realtimeEventStoreService.save(envelope);
+        }
+        envelope = appendReplayEvent(uid, envelope);
         List<SessionHolder> emitters = emittersByUid.get(uid);
         if (emitters == null || emitters.isEmpty()) {
             return;
@@ -126,12 +136,10 @@ public class SseSessionManager {
     }
 
     Long getLatestEventId(Long uid) {
-        Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.get(uid);
-        if (replayEvents == null || replayEvents.isEmpty()) {
-            return 0L;
-        }
-        RealtimeEventEnvelope latest = replayEvents.peekLast();
-        return latest == null || latest.getEventId() == null ? 0L : latest.getEventId();
+        // ready 阶段优先暴露“服务端已知最新水位”，让前端判断是否需要补偿拉取。
+        long memoryLatest = getLatestReplayEventId(uid);
+        long storedLatest = realtimeEventStoreService == null ? 0L : realtimeEventStoreService.getLatestEventId(uid);
+        return Math.max(memoryLatest, storedLatest);
     }
 
     void sendHeartbeatToV2Clients() {
@@ -163,6 +171,15 @@ public class SseSessionManager {
         return envelope;
     }
 
+    private long getLatestReplayEventId(Long uid) {
+        Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.get(uid);
+        if (replayEvents == null || replayEvents.isEmpty()) {
+            return 0L;
+        }
+        RealtimeEventEnvelope latest = replayEvents.peekLast();
+        return latest == null || latest.getEventId() == null ? 0L : latest.getEventId();
+    }
+
     private RealtimeEventEnvelope buildEnvelope(Long uid, String eventName, Object data) {
         String normalizedEventName = eventName == null ? "" : eventName.trim();
         String eventType = "legacy." + normalizedEventName;
@@ -170,7 +187,8 @@ public class SseSessionManager {
         Long roomId = null;
         Long msgId = null;
 
-        if ("message".equals(normalizedEventName) && data instanceof ChatStreamMessageEvent messageEvent) {
+        if ("message".equals(normalizedEventName) && data instanceof ChatStreamMessageEvent) {
+            ChatStreamMessageEvent messageEvent = (ChatStreamMessageEvent) data;
             eventType = "chat.message.created";
             bizType = "chat";
             roomId = messageEvent.getRoomId();
@@ -193,7 +211,8 @@ public class SseSessionManager {
     }
 
     private String resolveApplicationEventType(Object data) {
-        if (data instanceof Map<?, ?> map) {
+        if (data instanceof Map<?, ?>) {
+            Map<?, ?> map = (Map<?, ?>) data;
             Object rawType = map.get("type");
             String type = rawType == null ? "" : String.valueOf(rawType).trim().toUpperCase();
             if ("CREATED".equals(type)) {

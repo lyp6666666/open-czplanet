@@ -35,6 +35,12 @@ type ApplicationRealtimeEvent = {
   payload: unknown
 }
 
+type StreamReadyEvent = {
+  clientId?: string | null
+  lastEventId?: number | null
+  replayedCount?: number | null
+}
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -54,6 +60,7 @@ const ackInFlightByRoom = new Map<number, Promise<void>>()
 const READ_MARKS_STORAGE_PREFIX = 'ai_tutor_chat_read_marks:'
 const REALTIME_LAST_EVENT_STORAGE_PREFIX = 'ai_tutor_realtime_last_event:'
 const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
+let realtimeSyncInFlight: Promise<void> | null = null
 
 function buildReadMarksStorageKey(uid: number) {
   return `${READ_MARKS_STORAGE_PREFIX}${uid}`
@@ -261,6 +268,66 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       writePersistedPositiveNumber(buildLastEventStorageKey(uid), this.lastRealtimeEventId)
       if (this.clientId) {
         writePersistedText(buildClientIdStorageKey(uid), this.clientId)
+      }
+    },
+
+    async syncMissedRealtimeEvents(serverLatestEventId?: number | null) {
+      const auth = useAuthStore()
+      if (!auth.isLoggedIn) return
+      const normalizedServerLatest =
+        typeof serverLatestEventId === 'number' && Number.isFinite(serverLatestEventId) ? serverLatestEventId : 0
+      // 只对“已有本地水位”的场景做补偿，避免新设备首次登录时把全部历史事件都拉下来。
+      if (!(this.lastRealtimeEventId > 0) || !(normalizedServerLatest > this.lastRealtimeEventId)) {
+        return
+      }
+      if (realtimeSyncInFlight) {
+        await realtimeSyncInFlight
+        return
+      }
+
+      realtimeSyncInFlight = (async () => {
+        let cursor = this.lastRealtimeEventId
+        for (let i = 0; i < 10; i += 1) {
+          const page = await chatApi.syncRealtimeEvents({
+            lastEventId: cursor > 0 ? cursor : undefined,
+            pageSize: 100,
+          })
+          const list = Array.isArray(page?.list) ? page.list : []
+          for (const envelope of list) {
+            this.consumeRealtimeEnvelope(envelope)
+          }
+          const nextCursor =
+            typeof page?.cursor === 'number' && Number.isFinite(page.cursor) ? Number(page.cursor) : this.lastRealtimeEventId
+          if (page?.isLast !== false) break
+          if (!(nextCursor > cursor)) break
+          cursor = nextCursor
+        }
+      })()
+
+      try {
+        await realtimeSyncInFlight
+      } catch {
+        // 补偿拉取失败时保留现有轮询/在线推送兜底，不阻断主链路。
+        void 0
+      } finally {
+        realtimeSyncInFlight = null
+      }
+    },
+
+    async handleStreamReady(payload: unknown) {
+      const ready = payload as StreamReadyEvent | null
+      if (!ready || typeof ready !== 'object') return
+
+      const serverClientId = typeof ready.clientId === 'string' ? ready.clientId.trim() : ''
+      if (serverClientId && serverClientId !== this.clientId) {
+        this.clientId = serverClientId
+        this.persistRealtimeWatermark()
+      }
+
+      const serverLatestEventId =
+        typeof ready.lastEventId === 'number' ? ready.lastEventId : Number(ready.lastEventId || 0)
+      if (Number.isFinite(serverLatestEventId) && serverLatestEventId > 0) {
+        await this.syncMissedRealtimeEvents(serverLatestEventId)
       }
     },
 
@@ -532,7 +599,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
               try {
                 const payload = JSON.parse(dataRaw) as unknown
                 if (streamMode === 'v2') {
-                  if (event === 'heartbeat' || event === 'ready') continue
+                  if (event === 'heartbeat') continue
+                  if (event === 'ready') {
+                    await this.handleStreamReady(payload)
+                    continue
+                  }
                   if (event !== 'event') continue
                   this.consumeRealtimeEnvelope(payload as RealtimeEnvelope)
                   continue

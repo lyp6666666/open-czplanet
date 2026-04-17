@@ -7,6 +7,25 @@ export type ChatRefundStateResp = {
   hoverText?: string
 }
 
+export type RealtimeEnvelopeResp = {
+  eventId?: number
+  eventType?: string
+  bizType?: string
+  targetUid?: number
+  roomId?: number | null
+  msgId?: number | null
+  occurredAt?: string | number | Date | null
+  clientId?: string | null
+  payload?: unknown
+}
+
+export type RealtimeEventSyncResp = {
+  cursor?: number | null
+  isLast?: boolean
+  latestEventId?: number | null
+  list?: RealtimeEnvelopeResp[]
+}
+
 export const chatApi = {
   getOrCreateRoom(targetUid: number) {
     return http.post<unknown, number>('/chat/room', { targetUid })
@@ -70,5 +89,9 @@ export const chatApi = {
 
   ackRead(roomId: number, lastReadMsgId: number) {
     return http.post<unknown, ChatReadAckResp>('/chat/read/ack', { roomId, lastReadMsgId })
+  },
+
+  syncRealtimeEvents(params: { lastEventId?: number | null; pageSize?: number }) {
+    return http.get<unknown, RealtimeEventSyncResp>('/chat/events/sync', { params })
   },
 }

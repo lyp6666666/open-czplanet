@@ -2,12 +2,16 @@ package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
+import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class SseSessionManagerTest {
 
@@ -65,5 +69,15 @@ class SseSessionManagerTest {
         assertThat(replayEvents).hasSize(200);
         assertThat(replayEvents.get(0).getMsgId()).isEqualTo(21L);
         assertThat(replayEvents.get(replayEvents.size() - 1).getMsgId()).isEqualTo(220L);
+    }
+
+    @Test
+    void shouldExposePersistedLatestEventIdWhenMemoryReplayIsEmpty() {
+        SseSessionManager manager = new SseSessionManager();
+        RealtimeEventStoreService realtimeEventStoreService = mock(RealtimeEventStoreService.class);
+        when(realtimeEventStoreService.getLatestEventId(2001L)).thenReturn(9527L);
+        ReflectionTestUtils.setField(manager, "realtimeEventStoreService", realtimeEventStoreService);
+
+        assertThat(manager.getLatestEventId(2001L)).isEqualTo(9527L);
     }
 }

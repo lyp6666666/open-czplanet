@@ -11,6 +11,7 @@ vi.mock('@/api/chat', () => ({
   chatApi: {
     listRooms: vi.fn(),
     ackRead: vi.fn(),
+    syncRealtimeEvents: vi.fn(),
   },
 }))
 
@@ -219,5 +220,56 @@ describe('chatRealtime store', () => {
     expect(chatRealtime.lastRealtimeEventId).toBe(900)
     expect(chatRealtime.lastApplicationEvent?.eventType).toBe('application.created')
     expect(chatRealtime.lastApplicationEvent?.status).toBe('PENDING')
+  })
+
+  it('syncs missed realtime events after stream ready when the server watermark is newer', async () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.lastRealtimeEventId = 800
+    chatRealtime.clientId = 'web-local'
+
+    vi.mocked(chatApi.syncRealtimeEvents).mockResolvedValueOnce({
+      cursor: 905,
+      isLast: true,
+      latestEventId: 905,
+      list: [
+        {
+          eventId: 905,
+          eventType: 'application.decided',
+          bizType: 'application',
+          payload: {
+            applicationId: 9527,
+            status: 'ACCEPTED',
+          },
+        },
+      ],
+    })
+
+    await chatRealtime.handleStreamReady({
+      clientId: 'web-server',
+      lastEventId: 905,
+      replayedCount: 0,
+    })
+
+    expect(chatApi.syncRealtimeEvents).toHaveBeenCalledWith({
+      lastEventId: 800,
+      pageSize: 100,
+    })
+    expect(chatRealtime.clientId).toBe('web-server')
+    expect(chatRealtime.lastRealtimeEventId).toBe(905)
+    expect(chatRealtime.lastApplicationEvent).toEqual({
+      eventType: 'application.decided',
+      applicationId: 9527,
+      status: 'ACCEPTED',
+      occurredAt: undefined,
+      payload: {
+        applicationId: 9527,
+        status: 'ACCEPTED',
+      },
+    })
+    expect(window.localStorage.getItem('ai_tutor_realtime_client:2001')).toBe('web-server')
+    expect(window.localStorage.getItem('ai_tutor_realtime_last_event:2001')).toBe('905')
   })
 })
