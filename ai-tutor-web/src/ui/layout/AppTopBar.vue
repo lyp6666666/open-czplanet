@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
@@ -18,13 +18,6 @@ const cityStore = useCityStore()
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const isOrg = computed(() => auth.user?.userType === 3)
-const canChat = computed(() => auth.user?.userType === 1 || auth.user?.userType === 2)
-const currentChatRoomId = computed<number | null>(() => {
-  const raw = route.params.roomId
-  const roomId = typeof raw === 'string' ? Number(raw) : Array.isArray(raw) ? Number(raw[0]) : Number.NaN
-  if (!Number.isFinite(roomId) || roomId <= 0) return null
-  return route.name === 'chatRoom' || route.path.startsWith('/chat/') ? roomId : null
-})
 
 function normalizedText(raw: string | null | undefined) {
   const text = String(raw || '').trim()
@@ -128,37 +121,6 @@ function onLogout() {
   void router.push(t === 3 ? '/auth/org' : '/')
 }
 
-function syncActiveRoomFromRoute() {
-  if (!canChat.value) {
-    chatRealtime.setActiveRoom(null)
-    return
-  }
-  chatRealtime.setActiveRoom(currentChatRoomId.value)
-}
-
-watch(
-  () => auth.token,
-  () => {
-    chatRealtime.stop()
-    if (!canChat.value) {
-      chatRealtime.resetState()
-      return
-    }
-    syncActiveRoomFromRoute()
-    void chatRealtime.refreshUnreadFromServer()
-    void chatRealtime.start()
-  },
-)
-
-watch(
-  () => route.fullPath,
-  () => {
-    syncActiveRoomFromRoute()
-    if (!canChat.value) return
-    void chatRealtime.refreshUnreadFromServer()
-  },
-)
-
 watch(
   () => auth.user?.avatar,
   () => {
@@ -170,14 +132,6 @@ onMounted(() => {
   if (auth.isLoggedIn && !auth.me) {
     void auth.refreshMe()
   }
-  if (!canChat.value) return
-  syncActiveRoomFromRoute()
-  void chatRealtime.refreshUnreadFromServer()
-  void chatRealtime.start()
-})
-
-onBeforeUnmount(() => {
-  chatRealtime.stop()
 })
 </script>
 
