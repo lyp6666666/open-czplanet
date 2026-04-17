@@ -186,6 +186,8 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         }
 
         List<Long> roomIds = new ArrayList<>();
+        Map<Long, Long> otherUidByRoom = new HashMap<>();
+        Map<Long, Long> peerReadMap = new HashMap<>();
         for (Room room : rooms) {
             roomIds.add(room.getId());
         }
@@ -209,11 +211,37 @@ public class ChatRoomServiceImpl implements ChatRoomService {
             }
         }
 
-        List<ChatRoomItemResp> list = new ArrayList<>();
         for (Room room : rooms) {
             Long otherUid = Integer.valueOf(1).equals(role)
                     ? studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId())
                     : teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
+            otherUidByRoom.put(room.getId(), otherUid);
+        }
+
+        if (!roomIds.isEmpty() && !otherUidByRoom.isEmpty()) {
+            List<Long> otherUids = otherUidByRoom.values().stream().filter(it -> it != null && it > 0).distinct().toList();
+            if (!otherUids.isEmpty()) {
+                try {
+                    List<RoomReadState> peerReadStates = roomReadStateMapper.listByRoomIdsAndUids(roomIds, otherUids);
+                    if (peerReadStates != null) {
+                        peerReadStates.forEach(it -> {
+                            if (it == null || it.getRoomId() == null || it.getUid() == null || it.getLastReadMsgId() == null) {
+                                return;
+                            }
+                            Long expectedPeerUid = otherUidByRoom.get(it.getRoomId());
+                            if (expectedPeerUid != null && expectedPeerUid.equals(it.getUid())) {
+                                peerReadMap.put(it.getRoomId(), it.getLastReadMsgId());
+                            }
+                        });
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        List<ChatRoomItemResp> list = new ArrayList<>();
+        for (Room room : rooms) {
+            Long otherUid = otherUidByRoom.get(room.getId());
 
             Message lastMsg = room.getLastMsgId() == null ? null : messageMapper.getById(room.getLastMsgId());
             Object lastBody = lastMsg == null ? null : MessageAdapter.buildContactPreview(lastMsg);
@@ -224,6 +252,7 @@ public class ChatRoomServiceImpl implements ChatRoomService {
                     .lastMsgId(room.getLastMsgId())
                     .lastMsgBody(lastBody)
                     .myLastReadMsgId(readMap.get(room.getId()))
+                    .peerLastReadMsgId(peerReadMap.get(room.getId()))
                     .unreadCount(unreadMap.getOrDefault(room.getId(), 0L))
                     .activeTime(toDate(room.getActiveTime()))
                     .build());

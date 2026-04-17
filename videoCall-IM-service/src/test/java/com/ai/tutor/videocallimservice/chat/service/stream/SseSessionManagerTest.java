@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,25 @@ class SseSessionManagerTest {
         assertThat(replayEvents).hasSize(200);
         assertThat(replayEvents.get(0).getMsgId()).isEqualTo(21L);
         assertThat(replayEvents.get(replayEvents.size() - 1).getMsgId()).isEqualTo(220L);
+    }
+
+    @Test
+    void shouldBuildReplayEventForReadReceiptPush() {
+        SseSessionManager manager = new SseSessionManager();
+        ChatStreamReadEvent event = new ChatStreamReadEvent();
+        event.setRoomId(7001L);
+        event.setReaderUid(2001L);
+        event.setLastReadMsgId(9001L);
+
+        manager.sendToUid(1001L, "read", event);
+
+        List<RealtimeEventEnvelope> replayEvents = manager.listReplayEventsAfter(1001L, 0L);
+        assertThat(replayEvents).hasSize(1);
+        RealtimeEventEnvelope replayEvent = replayEvents.get(0);
+        assertThat(replayEvent.getEventType()).isEqualTo("chat.read.updated");
+        assertThat(replayEvent.getBizType()).isEqualTo("chat");
+        assertThat(replayEvent.getRoomId()).isEqualTo(7001L);
+        assertThat(replayEvent.getMsgId()).isEqualTo(9001L);
     }
 
     @Test

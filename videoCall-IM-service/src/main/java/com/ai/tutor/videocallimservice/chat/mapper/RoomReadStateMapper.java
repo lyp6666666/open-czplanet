@@ -13,5 +13,7 @@ public interface RoomReadStateMapper extends BaseMapper<RoomReadState> {
 
     List<RoomReadState> listByRoomIdsAndUid(@Param("roomIds") List<Long> roomIds, @Param("uid") Long uid);
 
+    List<RoomReadState> listByRoomIdsAndUids(@Param("roomIds") List<Long> roomIds, @Param("uids") List<Long> uids);
+
     int upsertReadState(@Param("roomId") Long roomId, @Param("uid") Long uid, @Param("lastReadMsgId") Long lastReadMsgId);
 }

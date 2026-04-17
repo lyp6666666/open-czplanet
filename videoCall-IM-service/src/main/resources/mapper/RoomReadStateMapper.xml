@@ -31,6 +31,19 @@
         </foreach>
     </select>
 
+    <select id="listByRoomIdsAndUids" resultMap="roomReadStateMap">
+        SELECT *
+        FROM room_read_state
+        WHERE room_id IN
+        <foreach collection="roomIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+          AND uid IN
+        <foreach collection="uids" item="uid" open="(" separator="," close=")">
+            #{uid}
+        </foreach>
+    </select>
+
     <insert id="upsertReadState">
         INSERT INTO room_read_state
         (

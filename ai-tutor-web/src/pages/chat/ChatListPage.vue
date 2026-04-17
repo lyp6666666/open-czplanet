@@ -46,6 +46,7 @@ type StreamMsgEvent = {
 function upsertRoomFromEvent(ev: StreamMsgEvent) {
   const myUid = auth.user?.id
   if (!myUid) return
+  const existingRoom = rooms.value.find((r) => r.roomId === ev.roomId)
   const otherUid = ev.fromUid === myUid ? ev.toUid : ev.fromUid
   const prevUnread = chatRealtime.roomUnread[ev.roomId] || 0
   const sendTimeMs =
@@ -59,7 +60,8 @@ function upsertRoomFromEvent(ev: StreamMsgEvent) {
     otherUid,
     lastMsgId: ev.msgId,
     lastMsgBody: ev.body,
-    myLastReadMsgId: rooms.value.find((r) => r.roomId === ev.roomId)?.myLastReadMsgId ?? null,
+    myLastReadMsgId: existingRoom?.myLastReadMsgId ?? null,
+    peerLastReadMsgId: existingRoom?.peerLastReadMsgId ?? null,
     unreadCount: prevUnread,
     activeTime: Number.isFinite(sendTimeMs) ? new Date(sendTimeMs).toISOString() : new Date().toISOString(),
   }

@@ -353,6 +353,7 @@ export interface ChatRoomItemResp {
   lastMsgId: number | null
   lastMsgBody: unknown
   myLastReadMsgId: number | null
+  peerLastReadMsgId?: number | null
   unreadCount: number
   activeTime: string
 }

@@ -314,6 +314,25 @@ describe('chatRealtime store', () => {
     expect(queued[1].event.roomId).toBe(9002)
   })
 
+  it('updates peer read watermark from unified chat read events', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1201,
+      eventType: 'chat.read.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 7101,
+        readerUid: 3001,
+        lastReadMsgId: 6001,
+      },
+    })
+
+    expect(chatRealtime.peerReadMsgIdByRoom[7101]).toBe(6001)
+  })
+
   it('aborts a silent realtime stream when watchdog timeout is reached', () => {
     vi.useFakeTimers()
     seedAuth()

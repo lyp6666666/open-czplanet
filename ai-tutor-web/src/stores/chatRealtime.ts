@@ -35,6 +35,12 @@ type ApplicationRealtimeEvent = {
   payload: unknown
 }
 
+type ChatReadRealtimeEvent = {
+  roomId: number
+  readerUid?: number
+  lastReadMsgId: number
+}
+
 type QueuedMessageEvent = {
   serial: number
   event: StreamMsgEvent
@@ -200,6 +206,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     totalUnread: 0,
     roomUnread: {} as Record<number, number>,
     optimisticReadMsgIdByRoom: {} as Record<number, number>,
+    peerReadMsgIdByRoom: {} as Record<number, number>,
     latestMsgIdByRoom: {} as Record<number, number>,
     persistedReadMarksOwnerUid: null as number | null,
     activeRoomId: null as number | null,
@@ -220,6 +227,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.totalUnread = 0
       this.roomUnread = {}
       this.optimisticReadMsgIdByRoom = {}
+      this.peerReadMsgIdByRoom = {}
       this.latestMsgIdByRoom = {}
       this.persistedReadMarksOwnerUid = null
       this.activeRoomId = null
@@ -428,6 +436,18 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       }
     },
 
+    syncPeerReadMark(roomId: number, peerLastReadMsgId: number | null | undefined) {
+      const confirmed = typeof peerLastReadMsgId === 'number' ? peerLastReadMsgId : 0
+      if (confirmed <= 0) return
+      const prev = this.peerReadMsgIdByRoom[roomId] || 0
+      if (confirmed > prev) {
+        this.peerReadMsgIdByRoom = {
+          ...this.peerReadMsgIdByRoom,
+          [roomId]: confirmed,
+        }
+      }
+    },
+
     notifyIncomingMessage(ev: StreamMsgEvent) {
       const preview = textPreview(ev.body)
       if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.hidden && 'Notification' in window) {
@@ -450,6 +470,15 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.lastApplicationEvent = normalized
     },
 
+    consumeReadEvent(payload: unknown) {
+      if (!payload || typeof payload !== 'object') return
+      const any = payload as Partial<ChatReadRealtimeEvent> & Record<string, unknown>
+      const roomId = typeof any.roomId === 'number' ? any.roomId : Number(any.roomId)
+      const lastReadMsgId = typeof any.lastReadMsgId === 'number' ? any.lastReadMsgId : Number(any.lastReadMsgId)
+      if (!(roomId > 0) || !(lastReadMsgId > 0)) return
+      this.syncPeerReadMark(roomId, lastReadMsgId)
+    },
+
     consumeRealtimeEnvelope(envelope: RealtimeEnvelope) {
       const eventId = typeof envelope.eventId === 'number' ? envelope.eventId : Number(envelope.eventId)
       if (Number.isFinite(eventId) && eventId > 0) {
@@ -468,6 +497,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
         this.recordMessageEvent(payload)
         this.lastEvent = payload
         this.onMessageEvent(payload)
+        return
+      }
+
+      if (eventType === 'chat.read.updated') {
+        this.consumeReadEvent(envelope.payload)
         return
       }
 
@@ -563,6 +597,13 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
             if (hasServerReadMsgId) {
               this.syncServerReadMark(r.roomId, serverReadMsgId)
             }
+            const peerLastReadMsgId =
+              Object.prototype.hasOwnProperty.call(r, 'peerLastReadMsgId') && typeof r.peerLastReadMsgId === 'number'
+                ? r.peerLastReadMsgId
+                : Object.prototype.hasOwnProperty.call(r, 'peerLastReadMsgId')
+                  ? Number(r.peerLastReadMsgId)
+                  : 0
+            this.syncPeerReadMark(r.roomId, peerLastReadMsgId)
             const optimisticReadMsgId = this.optimisticReadMsgIdByRoom[r.roomId] || 0
             let c = typeof r.unreadCount === 'number' ? r.unreadCount : 0
             if (latestMsgId > 0 && serverReadMsgId >= latestMsgId) {

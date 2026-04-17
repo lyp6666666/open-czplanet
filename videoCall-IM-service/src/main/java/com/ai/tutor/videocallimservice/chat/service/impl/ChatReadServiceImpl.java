@@ -4,12 +4,15 @@ import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
+import com.ai.tutor.videocallimservice.chat.domain.entity.RoomReadState;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatReadAckReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatReadAckResp;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomReadStateMapper;
 import com.ai.tutor.videocallimservice.chat.service.ChatReadService;
+import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
 import jakarta.annotation.Resource;
@@ -30,6 +33,9 @@ public class ChatReadServiceImpl implements ChatReadService {
     @Resource
     private ImUserMapper imUserMapper;
 
+    @Resource
+    private SseSessionManager sseSessionManager;
+
     @Override
     public ChatReadAckResp ackRead(ChatReadAckReq request, Long uid) {
         ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -47,14 +53,30 @@ public class ChatReadServiceImpl implements ChatReadService {
         ThrowUtils.throwIf(msg == null || msg.getStatus() == null || msg.getStatus() != 0, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!request.getRoomId().equals(msg.getRoomId()), ErrorCode.PARAMS_ERROR);
 
+        RoomReadState currentState = roomReadStateMapper.getByRoomAndUid(request.getRoomId(), uid);
+        long previousLastReadMsgId = currentState == null || currentState.getLastReadMsgId() == null ? 0L : currentState.getLastReadMsgId();
+        long confirmedLastReadMsgId = Math.max(previousLastReadMsgId, request.getLastReadMsgId());
+
         try {
-            roomReadStateMapper.upsertReadState(request.getRoomId(), uid, request.getLastReadMsgId());
+            roomReadStateMapper.upsertReadState(request.getRoomId(), uid, confirmedLastReadMsgId);
         } catch (Exception e) {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "已读上报失败");
         }
+
+        if (confirmedLastReadMsgId > previousLastReadMsgId) {
+            Long peerUid = uid.equals(teacherUid) ? studentUid : teacherUid;
+            if (peerUid != null && !peerUid.equals(uid)) {
+                ChatStreamReadEvent readEvent = new ChatStreamReadEvent();
+                readEvent.setRoomId(request.getRoomId());
+                readEvent.setReaderUid(uid);
+                readEvent.setLastReadMsgId(confirmedLastReadMsgId);
+                sseSessionManager.sendToUid(peerUid, "read", readEvent);
+            }
+        }
+
         return ChatReadAckResp.builder()
                 .roomId(request.getRoomId())
-                .lastReadMsgId(request.getLastReadMsgId())
+                .lastReadMsgId(confirmedLastReadMsgId)
                 .build();
     }
 

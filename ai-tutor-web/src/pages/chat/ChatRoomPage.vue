@@ -69,6 +69,7 @@ const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
 
 const myUid = computed(() => auth.user?.id ?? 0)
+const peerLastReadMsgId = computed(() => chatRealtime.peerReadMsgIdByRoom[roomId.value] || 0)
 const myRealName = computed(() => {
   const teacherName = auth.me?.teacherProfile?.realName?.trim()
   if (teacherName) return teacherName
@@ -607,6 +608,21 @@ const renderMessages = computed<RenderMessage[]>(() => {
   return list
 })
 
+const latestOutgoingMsgId = computed(() => {
+  let latest = 0
+  for (const item of renderMessages.value) {
+    if (item.fromUser.uid !== myUid.value) continue
+    latest = Math.max(latest, item.message.id)
+  }
+  return latest
+})
+
+function messageReceiptText(message: RenderMessage): string {
+  if (message.fromUser.uid !== myUid.value) return ''
+  if (message.message.id !== latestOutgoingMsgId.value) return ''
+  return peerLastReadMsgId.value >= message.message.id ? '对方已读' : '未读'
+}
+
 const paidBrokerageOrderIds = computed<Record<number, true>>(() => {
   const out: Record<number, true> = {}
   for (const m of renderMessages.value) {
@@ -959,6 +975,7 @@ watch(
     messages.value = []
     contactAutoShown.value = false
     void loadOtherUser()
+    void chatRealtime.refreshUnreadFromServer()
     void ackFromRoomList()
     void loadMore().then(() => ackLatest())
     chatRealtime.setActiveRoom(roomId.value)
@@ -1118,6 +1135,7 @@ watch(
                 {{ msgText(it.m.body) }}
               </template>
             </div>
+            <div v-if="messageReceiptText(it.m)" class="receipt">{{ messageReceiptText(it.m) }}</div>
           </div>
         </div>
         </template>
@@ -1316,6 +1334,12 @@ watch(
   font-size: 12px;
   color: rgba(0, 0, 0, 0.55);
   line-height: 1;
+}
+
+.receipt {
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.45);
 }
 
 .bubble {
