@@ -66,6 +66,8 @@ const READ_MARKS_STORAGE_PREFIX = 'ai_tutor_chat_read_marks:'
 const REALTIME_LAST_EVENT_STORAGE_PREFIX = 'ai_tutor_realtime_last_event:'
 const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
 const MESSAGE_EVENT_LOG_LIMIT = 200
+const REALTIME_IDLE_TIMEOUT_MS = 45_000
+const REALTIME_WATCHDOG_INTERVAL_MS = 10_000
 let realtimeSyncInFlight: Promise<void> | null = null
 
 function buildReadMarksStorageKey(uid: number) {
@@ -209,6 +211,8 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     lastRealtimeEventId: 0,
     clientId: '',
     streamAbort: null as AbortController | null,
+    lastStreamActivityAt: 0,
+    realtimeWatchdogTimer: null as number | null,
   }),
   actions: {
     resetState() {
@@ -226,6 +230,8 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.lastRealtimeEnvelope = null
       this.lastRealtimeEventId = 0
       this.clientId = ''
+      this.lastStreamActivityAt = 0
+      this.stopRealtimeWatchdog()
     },
 
     setActiveRoom(roomId: number | null) {
@@ -292,6 +298,30 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     listMessageEventsAfter(serial: number) {
       const watermark = Number.isFinite(serial) ? serial : 0
       return this.messageEventLog.filter((item) => item.serial > watermark)
+    },
+
+    noteRealtimeActivity() {
+      this.lastStreamActivityAt = Date.now()
+    },
+
+    stopRealtimeWatchdog() {
+      if (this.realtimeWatchdogTimer == null) return
+      globalThis.clearInterval(this.realtimeWatchdogTimer)
+      this.realtimeWatchdogTimer = null
+    },
+
+    startRealtimeWatchdog(controller: AbortController, idleTimeoutMs = REALTIME_IDLE_TIMEOUT_MS, intervalMs = REALTIME_WATCHDOG_INTERVAL_MS) {
+      this.stopRealtimeWatchdog()
+      this.noteRealtimeActivity()
+      if (typeof globalThis.setInterval !== 'function') return
+
+      // 某些代理或网络异常会让连接“看起来还活着”，但实际上已经不再下发任何数据。
+      // 这里用心跳/消息的最近活动时间做兜底，超时后主动打断当前流，交给现有重连逻辑恢复。
+      this.realtimeWatchdogTimer = globalThis.setInterval(() => {
+        if (controller.signal.aborted) return
+        if (Date.now() - this.lastStreamActivityAt < idleTimeoutMs) return
+        controller.abort('realtime_idle_timeout')
+      }, intervalMs)
     },
 
     async syncMissedRealtimeEvents(serverLatestEventId?: number | null) {
@@ -598,6 +628,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
           }
           if (!res.ok || !res.body) throw new Error('stream_failed')
           this.connected = true
+          this.startRealtimeWatchdog(controller)
           void this.refreshUnreadFromServer()
 
           const reader = res.body.getReader()
@@ -607,6 +638,9 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
           while (!controller.signal.aborted) {
             const { value, done } = await reader.read()
             if (done) break
+            if (value && value.length > 0) {
+              this.noteRealtimeActivity()
+            }
             buffer += decoder.decode(value, { stream: true })
             const parts = buffer.split('\n\n')
             buffer = parts.pop() || ''
@@ -623,8 +657,12 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
               try {
                 const payload = JSON.parse(dataRaw) as unknown
                 if (streamMode === 'v2') {
-                  if (event === 'heartbeat') continue
+                  if (event === 'heartbeat') {
+                    this.noteRealtimeActivity()
+                    continue
+                  }
                   if (event === 'ready') {
+                    this.noteRealtimeActivity()
                     await this.handleStreamReady(payload)
                     continue
                   }
@@ -654,6 +692,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
           void 0
         } finally {
           this.connected = false
+          this.stopRealtimeWatchdog()
         }
 
         if (controller.signal.aborted) break
@@ -670,6 +709,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.streamAbort?.abort()
       this.streamAbort = null
       this.connected = false
+      this.stopRealtimeWatchdog()
     },
 
     onMessageEvent(ev: StreamMsgEvent) {

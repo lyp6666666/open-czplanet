@@ -69,6 +69,7 @@ describe('chatRealtime store', () => {
     Object.defineProperty(globalThis, 'sessionStorage', { value: window.sessionStorage, configurable: true })
     clearAuthAndReadMarkStorage()
     vi.clearAllMocks()
+    vi.useRealTimers()
     setActivePinia(createPinia())
   })
 
@@ -311,5 +312,40 @@ describe('chatRealtime store', () => {
     expect(queued).toHaveLength(2)
     expect(queued[0].event.roomId).toBe(9001)
     expect(queued[1].event.roomId).toBe(9002)
+  })
+
+  it('aborts a silent realtime stream when watchdog timeout is reached', () => {
+    vi.useFakeTimers()
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    const controller = new AbortController()
+
+    chatRealtime.startRealtimeWatchdog(controller, 1000, 200)
+    vi.advanceTimersByTime(1200)
+
+    expect(controller.signal.aborted).toBe(true)
+    chatRealtime.stopRealtimeWatchdog()
+  })
+
+  it('keeps the realtime stream alive when activity continues before timeout', () => {
+    vi.useFakeTimers()
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    const controller = new AbortController()
+
+    chatRealtime.startRealtimeWatchdog(controller, 1000, 200)
+    vi.advanceTimersByTime(600)
+    chatRealtime.noteRealtimeActivity()
+    vi.advanceTimersByTime(600)
+
+    expect(controller.signal.aborted).toBe(false)
+
+    vi.advanceTimersByTime(1200)
+    expect(controller.signal.aborted).toBe(true)
+    chatRealtime.stopRealtimeWatchdog()
   })
 })
