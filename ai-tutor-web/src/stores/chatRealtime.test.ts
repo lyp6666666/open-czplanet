@@ -162,4 +162,62 @@ describe('chatRealtime store', () => {
     expect(chatRealtime.totalUnread).toBe(1)
     expect(chatRealtime.roomUnread[666004]).toBe(1)
   })
+
+  it('persists realtime watermark and routes application events through the unified envelope', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 801,
+      eventType: 'application.decided',
+      bizType: 'application',
+      payload: {
+        applicationId: 9527,
+        status: 'ACCEPTED',
+      },
+    })
+
+    expect(chatRealtime.lastRealtimeEventId).toBe(801)
+    expect(chatRealtime.lastApplicationEvent).toEqual({
+      eventType: 'application.decided',
+      applicationId: 9527,
+      status: 'ACCEPTED',
+      occurredAt: undefined,
+      payload: {
+        applicationId: 9527,
+        status: 'ACCEPTED',
+      },
+    })
+    expect(window.localStorage.getItem('ai_tutor_realtime_last_event:2001')).toBe('801')
+  })
+
+  it('ignores duplicated or older unified realtime envelopes', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 900,
+      eventType: 'application.created',
+      bizType: 'application',
+      payload: {
+        applicationId: 1,
+        status: 'PENDING',
+      },
+    })
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 899,
+      eventType: 'application.decided',
+      bizType: 'application',
+      payload: {
+        applicationId: 1,
+        status: 'REJECTED',
+      },
+    })
+
+    expect(chatRealtime.lastRealtimeEventId).toBe(900)
+    expect(chatRealtime.lastApplicationEvent?.eventType).toBe('application.created')
+    expect(chatRealtime.lastApplicationEvent?.status).toBe('PENDING')
+  })
 })

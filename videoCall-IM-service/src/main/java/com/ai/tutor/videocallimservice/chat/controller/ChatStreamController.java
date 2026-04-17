@@ -5,7 +5,9 @@ import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -18,9 +20,16 @@ public class ChatStreamController {
     @Resource
     private SseSessionManager sseSessionManager;
 
-    @GetMapping("/stream")
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "建立实时消息流连接")
     public SseEmitter stream() {
         return sseSessionManager.connect(RequestHolder.get().getUid());
+    }
+
+    @GetMapping(value = "/stream/v2", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "建立实时消息流连接 v2，支持心跳与短窗口补偿")
+    public SseEmitter streamV2(@RequestParam(value = "clientId", required = false) String clientId,
+                               @RequestParam(value = "lastEventId", required = false) Long lastEventId) {
+        return sseSessionManager.connectV2(RequestHolder.get().getUid(), clientId, lastEventId);
     }
 }

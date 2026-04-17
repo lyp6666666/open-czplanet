@@ -15,6 +15,26 @@ type StreamMsgEvent = {
   body: unknown
 }
 
+type RealtimeEnvelope = {
+  eventId?: number
+  eventType?: string
+  bizType?: string
+  targetUid?: number
+  roomId?: number | null
+  msgId?: number | null
+  occurredAt?: string | number | Date | null
+  clientId?: string | null
+  payload?: unknown
+}
+
+type ApplicationRealtimeEvent = {
+  eventType: string
+  applicationId: number
+  status?: string
+  occurredAt?: unknown
+  payload: unknown
+}
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -32,9 +52,19 @@ function apiUrl(path: string) {
 const ackPendingByRoom = new Map<number, number>()
 const ackInFlightByRoom = new Map<number, Promise<void>>()
 const READ_MARKS_STORAGE_PREFIX = 'ai_tutor_chat_read_marks:'
+const REALTIME_LAST_EVENT_STORAGE_PREFIX = 'ai_tutor_realtime_last_event:'
+const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
 
 function buildReadMarksStorageKey(uid: number) {
   return `${READ_MARKS_STORAGE_PREFIX}${uid}`
+}
+
+function buildLastEventStorageKey(uid: number) {
+  return `${REALTIME_LAST_EVENT_STORAGE_PREFIX}${uid}`
+}
+
+function buildClientIdStorageKey(uid: number) {
+  return `${REALTIME_CLIENT_ID_STORAGE_PREFIX}${uid}`
 }
 
 function normalizeRoomIdMap(raw: unknown): Record<number, number> {
@@ -75,6 +105,54 @@ function writePersistedReadMarks(uid: number, marks: Record<number, number>) {
   }
 }
 
+function readPersistedPositiveNumber(key: string): number {
+  if (typeof window === 'undefined') return 0
+  const raw = window.localStorage.getItem(key)
+  if (!raw) return 0
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+function writePersistedPositiveNumber(key: string, value: number) {
+  if (typeof window === 'undefined') return
+  if (!(value > 0)) {
+    window.localStorage.removeItem(key)
+    return
+  }
+  window.localStorage.setItem(key, String(value))
+}
+
+function readPersistedText(key: string): string {
+  if (typeof window === 'undefined') return ''
+  return String(window.localStorage.getItem(key) || '').trim()
+}
+
+function writePersistedText(key: string, value: string) {
+  if (typeof window === 'undefined') return
+  const normalized = value.trim()
+  if (!normalized) {
+    window.localStorage.removeItem(key)
+    return
+  }
+  window.localStorage.setItem(key, normalized)
+}
+
+function buildRealtimeClientId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `web-${crypto.randomUUID()}`
+  }
+  return `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+function normalizeApplicationRealtimeEvent(payload: unknown, eventType: string, occurredAt?: unknown): ApplicationRealtimeEvent | null {
+  if (!payload || typeof payload !== 'object') return null
+  const any = payload as Record<string, unknown>
+  const applicationId = typeof any.applicationId === 'number' ? any.applicationId : Number(any.applicationId)
+  if (!(applicationId > 0)) return null
+  const status = typeof any.status === 'string' ? any.status : undefined
+  return { eventType, applicationId, status, occurredAt, payload }
+}
+
 function textPreview(raw: unknown): string {
   if (!raw) return '您有一条新消息'
   if (typeof raw === 'string') {
@@ -111,6 +189,10 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     persistedReadMarksOwnerUid: null as number | null,
     activeRoomId: null as number | null,
     lastEvent: null as StreamMsgEvent | null,
+    lastApplicationEvent: null as ApplicationRealtimeEvent | null,
+    lastRealtimeEnvelope: null as RealtimeEnvelope | null,
+    lastRealtimeEventId: 0,
+    clientId: '',
     streamAbort: null as AbortController | null,
   }),
   actions: {
@@ -123,6 +205,10 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.persistedReadMarksOwnerUid = null
       this.activeRoomId = null
       this.lastEvent = null
+      this.lastApplicationEvent = null
+      this.lastRealtimeEnvelope = null
+      this.lastRealtimeEventId = 0
+      this.clientId = ''
     },
 
     setActiveRoom(roomId: number | null) {
@@ -148,6 +234,34 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (typeof uid !== 'number' || uid <= 0) return
       writePersistedReadMarks(uid, this.optimisticReadMsgIdByRoom)
       this.persistedReadMarksOwnerUid = uid
+    },
+
+    ensureRealtimeSessionLoaded() {
+      const auth = useAuthStore()
+      const uid = auth.user?.id
+      if (typeof uid !== 'number' || uid <= 0) {
+        this.lastRealtimeEventId = 0
+        this.clientId = ''
+        return
+      }
+      if (!(this.lastRealtimeEventId > 0)) {
+        this.lastRealtimeEventId = readPersistedPositiveNumber(buildLastEventStorageKey(uid))
+      }
+      if (!this.clientId) {
+        const persisted = readPersistedText(buildClientIdStorageKey(uid))
+        this.clientId = persisted || buildRealtimeClientId()
+        writePersistedText(buildClientIdStorageKey(uid), this.clientId)
+      }
+    },
+
+    persistRealtimeWatermark() {
+      const auth = useAuthStore()
+      const uid = auth.user?.id
+      if (typeof uid !== 'number' || uid <= 0) return
+      writePersistedPositiveNumber(buildLastEventStorageKey(uid), this.lastRealtimeEventId)
+      if (this.clientId) {
+        writePersistedText(buildClientIdStorageKey(uid), this.clientId)
+      }
     },
 
     clearRoomUnread(roomId: number) {
@@ -208,6 +322,37 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       }
       const toast = useToastStore()
       toast.show(preview, 'info', 3200)
+    },
+
+    consumeApplicationEvent(payload: unknown, eventType: string, occurredAt?: unknown) {
+      const normalized = normalizeApplicationRealtimeEvent(payload, eventType, occurredAt)
+      if (!normalized) return
+      this.lastApplicationEvent = normalized
+    },
+
+    consumeRealtimeEnvelope(envelope: RealtimeEnvelope) {
+      const eventId = typeof envelope.eventId === 'number' ? envelope.eventId : Number(envelope.eventId)
+      if (Number.isFinite(eventId) && eventId > 0) {
+        if (eventId <= this.lastRealtimeEventId) return
+        this.lastRealtimeEventId = eventId
+        this.persistRealtimeWatermark()
+      }
+
+      this.lastRealtimeEnvelope = envelope
+      const eventType = typeof envelope.eventType === 'string' ? envelope.eventType.trim() : ''
+      if (!eventType) return
+
+      if (eventType === 'chat.message.created') {
+        const payload = envelope.payload as StreamMsgEvent | undefined
+        if (!payload || typeof payload.roomId !== 'number') return
+        this.lastEvent = payload
+        this.onMessageEvent(payload)
+        return
+      }
+
+      if (eventType.startsWith('application.')) {
+        this.consumeApplicationEvent(envelope.payload, eventType, envelope.occurredAt)
+      }
     },
 
     async ackRoomRead(roomId: number, lastReadMsgId: number) {
@@ -328,6 +473,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       const auth = useAuthStore()
       if (!auth.isLoggedIn || !auth.token) return
       if (this.streamAbort) return
+      this.ensureRealtimeSessionLoaded()
       const controller = new AbortController()
       this.streamAbort = controller
       this.connected = false
@@ -335,11 +481,25 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       let attempt = 0
       while (!controller.signal.aborted) {
         try {
-          const res = await fetch(apiUrl('/chat/stream'), {
+          let streamMode: 'v2' | 'legacy' = 'v2'
+          const search = new URLSearchParams()
+          if (this.clientId) search.set('clientId', this.clientId)
+          if (this.lastRealtimeEventId > 0) search.set('lastEventId', String(this.lastRealtimeEventId))
+
+          // 先尝试 v2 流；如果服务端还没升级，则无缝降级到旧协议。
+          let res = await fetch(apiUrl(`/chat/stream/v2${search.size > 0 ? `?${search.toString()}` : ''}`), {
             method: 'GET',
             headers: { Authorization: `Bearer ${auth.token}` },
             signal: controller.signal,
           })
+          if (res.status === 404 || res.status === 405) {
+            streamMode = 'legacy'
+            res = await fetch(apiUrl('/chat/stream'), {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${auth.token}` },
+              signal: controller.signal,
+            })
+          }
           if (res.status === 401 || res.status === 403) {
             notifyAuthInvalid(`sse_http_${res.status}`)
             controller.abort()
@@ -369,12 +529,26 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
               }
               const dataRaw = dataLines.join('\n')
               if (!dataRaw) continue
-              if (event !== 'message') continue
               try {
-                const ev = JSON.parse(dataRaw) as StreamMsgEvent
-                if (!ev || typeof ev.roomId !== 'number') continue
-                this.lastEvent = ev
-                this.onMessageEvent(ev)
+                const payload = JSON.parse(dataRaw) as unknown
+                if (streamMode === 'v2') {
+                  if (event === 'heartbeat' || event === 'ready') continue
+                  if (event !== 'event') continue
+                  this.consumeRealtimeEnvelope(payload as RealtimeEnvelope)
+                  continue
+                }
+
+                if (event === 'message') {
+                  const ev = payload as StreamMsgEvent
+                  if (!ev || typeof ev.roomId !== 'number') continue
+                  this.lastEvent = ev
+                  this.onMessageEvent(ev)
+                  continue
+                }
+
+                if (event === 'application') {
+                  this.consumeApplicationEvent(payload, 'application.legacy', null)
+                }
               } catch {
                 void 0
               }

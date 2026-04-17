@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
-import { notifyAuthInvalid } from '@/api/http'
 import { userApi } from '@/api/user'
 import type { CursorPageResp, TutorApplicationVO, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
+import { useChatRealtimeStore } from '@/stores/chatRealtime'
 
 type TabKey = 'received' | 'sent'
 
 const router = useRouter()
 const auth = useAuthStore()
+const chatRealtime = useChatRealtimeStore()
 const isTeacher = computed(() => auth.user?.userType === 1)
 const isOrg = computed(() => auth.user?.userType === 3)
 
@@ -31,86 +32,6 @@ const receivedIsLast = ref(false)
 const unreadCount = ref(0)
 
 const userMap = ref<Record<number, UserSimpleVO>>({})
-
-const streamAbort = ref<AbortController | null>(null)
-
-function normalizeBaseUrl(raw: unknown) {
-  const s = typeof raw === 'string' ? raw.trim() : ''
-  return s.length > 0 ? s : ''
-}
-
-async function startStream() {
-  if (!auth.isLoggedIn || !auth.token) return
-  if (streamAbort.value) return
-  const controller = new AbortController()
-  streamAbort.value = controller
-
-  const baseUrl = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
-  const url = `${baseUrl}/chat/stream`
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${auth.token}` },
-    signal: controller.signal,
-  })
-  if (res.status === 401 || res.status === 403) {
-    notifyAuthInvalid(`sse_http_${res.status}`)
-    streamAbort.value = null
-    return
-  }
-  if (!res.ok || !res.body) {
-    streamAbort.value = null
-    return
-  }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop() || ''
-    for (const part of parts) {
-      const lines = part.split('\n').map((l) => l.trimEnd())
-      let event = 'message'
-      const dataLines: string[] = []
-      for (const line of lines) {
-        if (line.startsWith('event:')) event = line.slice(6).trim()
-        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
-      }
-      const dataRaw = dataLines.join('\n')
-      if (!dataRaw) continue
-      if (event !== 'application') continue
-      try {
-        const ev = JSON.parse(dataRaw) as { type?: string; applicationId?: number }
-        if (!ev || !ev.applicationId) continue
-        await loadUnread()
-        if (tab.value === 'received') {
-          received.value = []
-          receivedCursor.value = null
-          receivedIsLast.value = false
-          await loadPage('received')
-        }
-        if (tab.value === 'sent') {
-          sent.value = []
-          sentCursor.value = null
-          sentIsLast.value = false
-          await loadPage('sent')
-        }
-      } catch {
-        void 0
-      }
-    }
-  }
-  streamAbort.value = null
-}
-
-function stopStream() {
-  streamAbort.value?.abort()
-  streamAbort.value = null
-}
 
 async function enrichUsers(list: TutorApplicationVO[]) {
   const ids = Array.from(new Set(list.flatMap((it) => [it.senderUid, it.receiverUid]))).filter((n) => Number.isFinite(n))
@@ -206,14 +127,30 @@ watch(
   },
 )
 
+watch(
+  () => chatRealtime.lastApplicationEvent,
+  async (ev) => {
+    if (!ev?.applicationId) return
+    // 申请中心不直接改局部状态，统一回源刷新，避免不同业务页看到的状态不一致。
+    await loadUnread()
+    if (tab.value === 'received') {
+      received.value = []
+      receivedCursor.value = null
+      receivedIsLast.value = false
+      await loadPage('received')
+    }
+    if (tab.value === 'sent') {
+      sent.value = []
+      sentCursor.value = null
+      sentIsLast.value = false
+      await loadPage('sent')
+    }
+  },
+)
+
 onMounted(() => {
   void loadUnread()
   void loadPage('received')
-  void startStream()
-})
-
-onBeforeUnmount(() => {
-  stopStream()
 })
 </script>
 

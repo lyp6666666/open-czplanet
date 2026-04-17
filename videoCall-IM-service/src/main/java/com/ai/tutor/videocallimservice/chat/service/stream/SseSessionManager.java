@@ -1,57 +1,246 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeStreamReadyResp;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 public class SseSessionManager {
 
-    private final Map<Long, List<SseEmitter>> emittersByUid = new ConcurrentHashMap<>();
+    private static final int REPLAY_BUFFER_LIMIT = 200;
+
+    private final Map<Long, List<SessionHolder>> emittersByUid = new ConcurrentHashMap<>();
+    private final Map<Long, Deque<RealtimeEventEnvelope>> replayBufferByUid = new ConcurrentHashMap<>();
+    private final AtomicLong eventIdGenerator = new AtomicLong(System.currentTimeMillis());
+    private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread thread = new Thread(r, "im-sse-heartbeat");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @PostConstruct
+    public void startHeartbeatTask() {
+        heartbeatExecutor.scheduleAtFixedRate(this::sendHeartbeatToV2Clients, 20, 20, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    public void stopHeartbeatTask() {
+        heartbeatExecutor.shutdownNow();
+    }
 
     public SseEmitter connect(Long uid) {
         SseEmitter emitter = new SseEmitter(0L);
-        emittersByUid.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>()).add(emitter);
+        SessionHolder holder = new SessionHolder(uid, null, Protocol.LEGACY, emitter);
+        emittersByUid.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>()).add(holder);
 
-        emitter.onCompletion(() -> remove(uid, emitter));
-        emitter.onTimeout(() -> remove(uid, emitter));
-        emitter.onError(e -> remove(uid, emitter));
+        emitter.onCompletion(() -> remove(uid, holder));
+        emitter.onTimeout(() -> remove(uid, holder));
+        emitter.onError(e -> remove(uid, holder));
 
         try {
             emitter.send(SseEmitter.event().name("ready").data("ok"));
         } catch (IOException e) {
-            remove(uid, emitter);
+            remove(uid, holder);
+        }
+        return emitter;
+    }
+
+    public SseEmitter connectV2(Long uid, String clientId, Long lastEventId) {
+        String normalizedClientId = normalizeClientId(clientId);
+        SseEmitter emitter = new SseEmitter(0L);
+        SessionHolder holder = new SessionHolder(uid, normalizedClientId, Protocol.V2, emitter);
+        emittersByUid.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>()).add(holder);
+
+        emitter.onCompletion(() -> remove(uid, holder));
+        emitter.onTimeout(() -> remove(uid, holder));
+        emitter.onError(e -> remove(uid, holder));
+
+        List<RealtimeEventEnvelope> replayEvents = listReplayEventsAfter(uid, lastEventId);
+        try {
+            emitter.send(SseEmitter.event().name("ready").data(RealtimeStreamReadyResp.builder()
+                    .clientId(normalizedClientId)
+                    .lastEventId(getLatestEventId(uid))
+                    .replayedCount(replayEvents.size())
+                    .build()));
+            for (RealtimeEventEnvelope replayEvent : replayEvents) {
+                emitter.send(SseEmitter.event().name("event").data(replayEvent));
+            }
+        } catch (IOException e) {
+            remove(uid, holder);
         }
         return emitter;
     }
 
     public void sendToUid(Long uid, String eventName, Object data) {
-        List<SseEmitter> emitters = emittersByUid.get(uid);
+        RealtimeEventEnvelope envelope = appendReplayEvent(uid, buildEnvelope(uid, eventName, data));
+        List<SessionHolder> emitters = emittersByUid.get(uid);
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
-        for (SseEmitter emitter : emitters) {
+        for (SessionHolder holder : emitters) {
             try {
-                emitter.send(SseEmitter.event().name(eventName).data(data));
+                if (holder.protocol == Protocol.V2) {
+                    holder.emitter.send(SseEmitter.event().name("event").data(envelope));
+                } else {
+                    holder.emitter.send(SseEmitter.event().name(eventName).data(data));
+                }
             } catch (IOException e) {
-                remove(uid, emitter);
+                remove(uid, holder);
             }
         }
     }
 
-    private void remove(Long uid, SseEmitter emitter) {
-        List<SseEmitter> emitters = emittersByUid.get(uid);
+    List<RealtimeEventEnvelope> listReplayEventsAfter(Long uid, Long lastEventId) {
+        Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.get(uid);
+        if (replayEvents == null || replayEvents.isEmpty()) {
+            return List.of();
+        }
+        long watermark = lastEventId == null ? 0L : lastEventId;
+        List<RealtimeEventEnvelope> result = new ArrayList<>();
+        for (RealtimeEventEnvelope replayEvent : replayEvents) {
+            if (replayEvent != null && replayEvent.getEventId() != null && replayEvent.getEventId() > watermark) {
+                result.add(replayEvent);
+            }
+        }
+        return result;
+    }
+
+    Long getLatestEventId(Long uid) {
+        Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.get(uid);
+        if (replayEvents == null || replayEvents.isEmpty()) {
+            return 0L;
+        }
+        RealtimeEventEnvelope latest = replayEvents.peekLast();
+        return latest == null || latest.getEventId() == null ? 0L : latest.getEventId();
+    }
+
+    void sendHeartbeatToV2Clients() {
+        for (Map.Entry<Long, List<SessionHolder>> entry : emittersByUid.entrySet()) {
+            Long uid = entry.getKey();
+            for (SessionHolder holder : entry.getValue()) {
+                if (holder.protocol != Protocol.V2) {
+                    continue;
+                }
+                try {
+                    // 心跳事件不进入补偿窗口，只用于让浏览器和代理层保持活跃。
+                    holder.emitter.send(SseEmitter.event().name("heartbeat").data(Map.of(
+                            "uid", uid,
+                            "ts", System.currentTimeMillis()
+                    )));
+                } catch (IOException e) {
+                    remove(uid, holder);
+                }
+            }
+        }
+    }
+
+    private RealtimeEventEnvelope appendReplayEvent(Long uid, RealtimeEventEnvelope envelope) {
+        Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.computeIfAbsent(uid, k -> new ConcurrentLinkedDeque<>());
+        replayEvents.addLast(envelope);
+        while (replayEvents.size() > REPLAY_BUFFER_LIMIT) {
+            replayEvents.pollFirst();
+        }
+        return envelope;
+    }
+
+    private RealtimeEventEnvelope buildEnvelope(Long uid, String eventName, Object data) {
+        String normalizedEventName = eventName == null ? "" : eventName.trim();
+        String eventType = "legacy." + normalizedEventName;
+        String bizType = normalizedEventName.isEmpty() ? "unknown" : normalizedEventName;
+        Long roomId = null;
+        Long msgId = null;
+
+        if ("message".equals(normalizedEventName) && data instanceof ChatStreamMessageEvent messageEvent) {
+            eventType = "chat.message.created";
+            bizType = "chat";
+            roomId = messageEvent.getRoomId();
+            msgId = messageEvent.getMsgId();
+        } else if ("application".equals(normalizedEventName)) {
+            bizType = "application";
+            eventType = resolveApplicationEventType(data);
+        }
+
+        return RealtimeEventEnvelope.builder()
+                .eventId(eventIdGenerator.incrementAndGet())
+                .eventType(eventType)
+                .bizType(bizType)
+                .targetUid(uid)
+                .roomId(roomId)
+                .msgId(msgId)
+                .occurredAt(new Date())
+                .payload(data)
+                .build();
+    }
+
+    private String resolveApplicationEventType(Object data) {
+        if (data instanceof Map<?, ?> map) {
+            Object rawType = map.get("type");
+            String type = rawType == null ? "" : String.valueOf(rawType).trim().toUpperCase();
+            if ("CREATED".equals(type)) {
+                return "application.created";
+            }
+            if ("DECIDED".equals(type)) {
+                return "application.decided";
+            }
+            if ("CHAT_ENABLED".equals(type)) {
+                return "application.chat_enabled";
+            }
+        }
+        return "application.updated";
+    }
+
+    private String normalizeClientId(String clientId) {
+        String normalized = clientId == null ? "" : clientId.trim();
+        return normalized.isEmpty() ? "web-" + UUID.randomUUID() : normalized;
+    }
+
+    private void remove(Long uid, SessionHolder holder) {
+        List<SessionHolder> emitters = emittersByUid.get(uid);
         if (emitters == null) {
             return;
         }
-        emitters.remove(emitter);
+        emitters.remove(holder);
         if (emitters.isEmpty()) {
             emittersByUid.remove(uid);
+        }
+    }
+
+    private enum Protocol {
+        LEGACY,
+        V2
+    }
+
+    private static final class SessionHolder {
+        private final Long uid;
+        private final String clientId;
+        private final Protocol protocol;
+        private final SseEmitter emitter;
+
+        private SessionHolder(Long uid, String clientId, Protocol protocol, SseEmitter emitter) {
+            this.uid = uid;
+            this.clientId = clientId;
+            this.protocol = Objects.requireNonNull(protocol);
+            this.emitter = Objects.requireNonNull(emitter);
         }
     }
 }
