@@ -24,6 +24,7 @@ const isLast = ref(false)
 const userMap = ref<Record<number, UserSimpleVO>>({})
 const search = ref('')
 const avatarBroken = ref<Record<number, boolean>>({})
+const lastConsumedMessageSerial = ref(0)
 
 function displayNameOf(user: UserSimpleVO | null | undefined, uid: number): string {
   const realName = user?.realName?.trim()
@@ -179,17 +180,19 @@ const filteredRooms = computed(() => {
 
 onMounted(() => {
   void loadMore()
-  if (chatRealtime.lastEvent) {
-    upsertRoomFromEvent(chatRealtime.lastEvent)
-  }
+  consumePendingMessageEvents()
 })
 
-watch(
-  () => chatRealtime.lastEvent,
-  (ev) => {
-    if (ev) upsertRoomFromEvent(ev)
-  },
-)
+function consumePendingMessageEvents() {
+  const pending = chatRealtime.listMessageEventsAfter(lastConsumedMessageSerial.value)
+  if (!pending.length) return
+  for (const item of pending) {
+    upsertRoomFromEvent(item.event)
+    lastConsumedMessageSerial.value = item.serial
+  }
+}
+
+watch(() => chatRealtime.messageEventSerial, consumePendingMessageEvents)
 </script>
 
 <template>

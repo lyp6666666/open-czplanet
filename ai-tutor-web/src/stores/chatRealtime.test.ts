@@ -272,4 +272,44 @@ describe('chatRealtime store', () => {
     expect(window.localStorage.getItem('ai_tutor_realtime_client:2001')).toBe('web-server')
     expect(window.localStorage.getItem('ai_tutor_realtime_last_event:2001')).toBe('905')
   })
+
+  it('keeps a consumable message event queue for pages when multiple realtime messages arrive together', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1001,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 501,
+        roomId: 9001,
+        fromUid: 1001,
+        toUid: 2001,
+        sendTime: '2026-04-17T10:00:00',
+        body: { content: '第一条' },
+      },
+    })
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1002,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 502,
+        roomId: 9002,
+        fromUid: 1002,
+        toUid: 2001,
+        sendTime: '2026-04-17T10:00:01',
+        body: { content: '第二条' },
+      },
+    })
+
+    const queued = chatRealtime.listMessageEventsAfter(0)
+
+    expect(chatRealtime.messageEventSerial).toBe(2)
+    expect(queued).toHaveLength(2)
+    expect(queued[0].event.roomId).toBe(9001)
+    expect(queued[1].event.roomId).toBe(9002)
+  })
 })

@@ -66,6 +66,7 @@ const messages = ref<ChatMessageResp[]>([])
 const msgsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
+const lastConsumedMessageSerial = ref(0)
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const myRealName = computed(() => {
@@ -966,19 +967,31 @@ watch(
 )
 
 watch(
-  () => chatRealtime.lastEvent,
-  (ev) => {
-    if (!ev) return
-    if (ev.roomId !== roomId.value) return
-    const exists = messages.value.some((m) => m.message?.id === ev.msgId)
-    if (exists) return
-    const msg: ChatMessageResp = {
-      fromUser: { uid: ev.fromUid },
-      message: { id: ev.msgId, roomId: ev.roomId, sendTime: ev.sendTime == null ? '' : String(ev.sendTime), body: ev.body },
+  () => chatRealtime.messageEventSerial,
+  () => {
+    const pending = chatRealtime.listMessageEventsAfter(lastConsumedMessageSerial.value)
+    if (!pending.length) return
+
+    const incoming: ChatMessageResp[] = []
+    let latestMsgId = 0
+    for (const item of pending) {
+      lastConsumedMessageSerial.value = item.serial
+      const ev = item.event
+      if (ev.roomId !== roomId.value) continue
+      latestMsgId = Math.max(latestMsgId, ev.msgId || 0)
+      incoming.push({
+        fromUser: { uid: ev.fromUid },
+        message: { id: ev.msgId, roomId: ev.roomId, sendTime: ev.sendTime == null ? '' : String(ev.sendTime), body: ev.body },
+      })
     }
-    mergeMessages([msg], 'append')
-    void chatRealtime.ackRoomRead(roomId.value, ev.msgId)
+
+    if (!incoming.length) return
+    mergeMessages(incoming, 'append')
+    if (latestMsgId > 0) {
+      void chatRealtime.ackRoomRead(roomId.value, latestMsgId)
+    }
   },
+  { immediate: true },
 )
 </script>
 

@@ -35,6 +35,11 @@ type ApplicationRealtimeEvent = {
   payload: unknown
 }
 
+type QueuedMessageEvent = {
+  serial: number
+  event: StreamMsgEvent
+}
+
 type StreamReadyEvent = {
   clientId?: string | null
   lastEventId?: number | null
@@ -60,6 +65,7 @@ const ackInFlightByRoom = new Map<number, Promise<void>>()
 const READ_MARKS_STORAGE_PREFIX = 'ai_tutor_chat_read_marks:'
 const REALTIME_LAST_EVENT_STORAGE_PREFIX = 'ai_tutor_realtime_last_event:'
 const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
+const MESSAGE_EVENT_LOG_LIMIT = 200
 let realtimeSyncInFlight: Promise<void> | null = null
 
 function buildReadMarksStorageKey(uid: number) {
@@ -196,6 +202,8 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     persistedReadMarksOwnerUid: null as number | null,
     activeRoomId: null as number | null,
     lastEvent: null as StreamMsgEvent | null,
+    messageEventSerial: 0,
+    messageEventLog: [] as QueuedMessageEvent[],
     lastApplicationEvent: null as ApplicationRealtimeEvent | null,
     lastRealtimeEnvelope: null as RealtimeEnvelope | null,
     lastRealtimeEventId: 0,
@@ -212,6 +220,8 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.persistedReadMarksOwnerUid = null
       this.activeRoomId = null
       this.lastEvent = null
+      this.messageEventSerial = 0
+      this.messageEventLog = []
       this.lastApplicationEvent = null
       this.lastRealtimeEnvelope = null
       this.lastRealtimeEventId = 0
@@ -269,6 +279,19 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (this.clientId) {
         writePersistedText(buildClientIdStorageKey(uid), this.clientId)
       }
+    },
+
+    recordMessageEvent(ev: StreamMsgEvent) {
+      const nextSerial = this.messageEventSerial + 1
+      const nextLog = [...this.messageEventLog, { serial: nextSerial, event: ev }]
+      this.messageEventSerial = nextSerial
+      // 保留一个短窗口事件队列，供页面在批量补偿时按序补消费，避免只看到最后一条。
+      this.messageEventLog = nextLog.length > MESSAGE_EVENT_LOG_LIMIT ? nextLog.slice(-MESSAGE_EVENT_LOG_LIMIT) : nextLog
+    },
+
+    listMessageEventsAfter(serial: number) {
+      const watermark = Number.isFinite(serial) ? serial : 0
+      return this.messageEventLog.filter((item) => item.serial > watermark)
     },
 
     async syncMissedRealtimeEvents(serverLatestEventId?: number | null) {
@@ -412,6 +435,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (eventType === 'chat.message.created') {
         const payload = envelope.payload as StreamMsgEvent | undefined
         if (!payload || typeof payload.roomId !== 'number') return
+        this.recordMessageEvent(payload)
         this.lastEvent = payload
         this.onMessageEvent(payload)
         return
@@ -612,6 +636,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
                 if (event === 'message') {
                   const ev = payload as StreamMsgEvent
                   if (!ev || typeof ev.roomId !== 'number') continue
+                  this.recordMessageEvent(ev)
                   this.lastEvent = ev
                   this.onMessageEvent(ev)
                   continue
