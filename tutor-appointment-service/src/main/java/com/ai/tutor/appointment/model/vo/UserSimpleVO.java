@@ -13,10 +13,11 @@ public class UserSimpleVO implements Serializable {
 
     private String name;
 
+    private String realName;
+
     private String avatar;
 
     private Integer userType;
 
     private static final long serialVersionUID = 1L;
 }
-

@@ -21,6 +21,16 @@
         LIMIT 1
     </select>
 
+    <select id="listByRoomIdsAndUid" resultMap="roomReadStateMap">
+        SELECT *
+        FROM room_read_state
+        WHERE uid = #{uid}
+          AND room_id IN
+        <foreach collection="roomIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+    </select>
+
     <insert id="upsertReadState">
         INSERT INTO room_read_state
         (

@@ -424,7 +424,7 @@ public class BrokerageOrderService {
         body.setEventId(order.getProposalId());
         body.setOrderId(order.getId());
         body.setProposalId(order.getProposalId());
-        body.setTitle("联系方式已解锁");
+        body.setTitle("聊天功能开启");
         body.setStatus(BrokerageOrderStatus.PAID.name());
         body.setCreatorUserId(order.getPayerUid());
 

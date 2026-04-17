@@ -8,6 +8,7 @@
 
       <nav class="nav">
         <RouterLink class="nav-link" to="/dashboard">仪表盘</RouterLink>
+        <RouterLink class="nav-link" to="/home-carousel">首页轮播</RouterLink>
         <RouterLink class="nav-link" to="/users">用户管理</RouterLink>
         <RouterLink class="nav-link" to="/organizations">机构账号</RouterLink>
         <RouterLink class="nav-link" to="/jobs">需求审核</RouterLink>
@@ -51,6 +52,7 @@ const auth = useAdminAuthStore()
 const title = computed(() => {
   const name = String(route.name || '')
   if (name === 'dashboard') return '仪表盘'
+  if (name === 'homeCarousel') return '首页轮播'
   if (name === 'users') return '用户管理'
   if (name === 'organizations') return '机构账号'
   if (name === 'jobs') return '需求审核'

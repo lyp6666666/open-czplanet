@@ -168,3 +168,32 @@ Append one short entry after validated repo changes made while using this skill.
   reviewed `docs/nacos/templates/*.yaml` and `common.md`
 - New note added:
   the skill now includes a dedicated runtime/config reference covering remote-vs-local startup, effective config lookup, and high-value Nacos DataIds
+
+## 2026-04-16
+
+- Request:
+  Record the now-working payment callback test topology, real verification routine, server roles, product payment flow, and Nacos payment config into the project skill
+- Areas:
+  `skills/`
+- Background checked:
+  current startup scripts, live remote server roles, verified callback logs from `111.229.64.41` and `111.228.20.88`, shared Nacos payment config
+- Validation:
+  reviewed `skills/SKILL.md`
+  reviewed payment/business/runtime/gotchas references
+  incorporated the observed successful callback sequence from the `2026-04-16` live payment test
+- New note added:
+  added a dedicated payment remote testing reference and routed payment/runtime work to it
+
+## 2026-04-16
+
+- Request:
+  Rename the frontend brand to `创智星球`, improve chat realtime message notice and unread-dot behavior, and add a permanent skill rule for syncing `sqlDoc` on schema changes
+- Areas:
+  `ai-tutor-web/`, `skills/`
+- Background checked:
+  chat realtime store, top bar unread entry, current SSE/unread/ack flow, existing brand text locations, skill maintenance rules
+- Validation:
+  ran `cd ai-tutor-web && npm run typecheck`
+  ran `cd ai-tutor-web && npm run lint` and confirmed there were no errors, only existing repo-wide Vue formatting warnings
+- New note added:
+  chat realtime now uses existing SSE for lightweight new-message popups plus optimistic read-state suppression, and the skill now requires same-turn `sqlDoc/` sync for any schema change

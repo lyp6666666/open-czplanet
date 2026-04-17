@@ -6,6 +6,7 @@ import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useCityStore } from '@/stores/city'
+import { BRAND_NAME } from '@/constants/brand'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
@@ -18,6 +19,12 @@ const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const isOrg = computed(() => auth.user?.userType === 3)
 const canChat = computed(() => auth.user?.userType === 1 || auth.user?.userType === 2)
+const currentChatRoomId = computed<number | null>(() => {
+  const raw = route.params.roomId
+  const roomId = typeof raw === 'string' ? Number(raw) : Array.isArray(raw) ? Number(raw[0]) : Number.NaN
+  if (!Number.isFinite(roomId) || roomId <= 0) return null
+  return route.name === 'chatRoom' || route.path.startsWith('/chat/') ? roomId : null
+})
 const displayName = computed(() => {
   if (!auth.isLoggedIn) return '未登录'
   const t = (auth.me?.teacherProfile?.realName || '').trim()
@@ -113,17 +120,34 @@ function onLogout() {
   void router.push(t === 3 ? '/auth/org' : '/')
 }
 
+function syncActiveRoomFromRoute() {
+  if (!canChat.value) {
+    chatRealtime.setActiveRoom(null)
+    return
+  }
+  chatRealtime.setActiveRoom(currentChatRoomId.value)
+}
+
 watch(
   () => auth.token,
   () => {
     chatRealtime.stop()
     if (!canChat.value) {
-      chatRealtime.totalUnread = 0
-      chatRealtime.roomUnread = {}
+      chatRealtime.resetState()
       return
     }
+    syncActiveRoomFromRoute()
     void chatRealtime.refreshUnreadFromServer()
     void chatRealtime.start()
+  },
+)
+
+watch(
+  () => route.fullPath,
+  () => {
+    syncActiveRoomFromRoute()
+    if (!canChat.value) return
+    void chatRealtime.refreshUnreadFromServer()
   },
 )
 
@@ -136,6 +160,7 @@ watch(
 
 onMounted(() => {
   if (!canChat.value) return
+  syncActiveRoomFromRoute()
   void chatRealtime.refreshUnreadFromServer()
   void chatRealtime.start()
 })
@@ -149,7 +174,7 @@ onBeforeUnmount(() => {
   <header class="bar" @click="closeMenu">
     <div class="container inner">
       <div class="left">
-        <button class="logo" type="button" @click="go('/')">家教直聘</button>
+        <button class="logo" type="button" @click="go('/')">{{ BRAND_NAME }}</button>
 
         <div v-if="isLoggedIn" class="city">
           <button class="city-trigger" type="button" @click.stop="cityModalOpen = true">

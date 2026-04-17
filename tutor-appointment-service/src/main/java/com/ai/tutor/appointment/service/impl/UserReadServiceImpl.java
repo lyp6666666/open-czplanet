@@ -7,6 +7,8 @@ import com.ai.tutor.appointment.mapper.StudentProfileMapper;
 import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.model.entity.StudentProfile;
+import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.UserCardVO;
 import com.ai.tutor.appointment.model.vo.UserMeVO;
@@ -20,7 +22,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -75,10 +79,12 @@ public class UserReadServiceImpl implements UserReadService {
         if (users == null || users.isEmpty()) {
             return Collections.emptyList();
         }
+        Map<Long, String> realNameByUserId = loadRealNameMap(users);
         return users.stream()
                 .map(u -> UserSimpleVO.builder()
                         .id(u.getId())
                         .name(u.getName())
+                        .realName(realNameByUserId.get(u.getId()))
                         .avatar(normalizeAvatar(u.getAvatar()))
                         .userType(u.getUserType())
                         .build())
@@ -95,6 +101,7 @@ public class UserReadServiceImpl implements UserReadService {
                 .user(UserSimpleVO.builder()
                         .id(user.getId())
                         .name(user.getName())
+                        .realName(resolveRealName(user))
                         .avatar(normalizeAvatar(user.getAvatar()))
                         .userType(user.getUserType())
                         .build());
@@ -151,5 +158,43 @@ public class UserReadServiceImpl implements UserReadService {
             return avatar;
         }
         return resolveDefaultAvatarUrl();
+    }
+
+    private Map<Long, String> loadRealNameMap(List<User> users) {
+        Map<Long, String> out = new HashMap<>();
+        for (User user : users) {
+            if (user == null || user.getId() == null) {
+                continue;
+            }
+            String realName = resolveRealName(user);
+            if (realName != null) {
+                out.put(user.getId(), realName);
+            }
+        }
+        return out;
+    }
+
+    private String resolveRealName(User user) {
+        if (user == null || user.getId() == null) {
+            return null;
+        }
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        if (role == UserRoleEnum.TEACHER) {
+            TeacherProfile profile = teacherProfileMapper.selectByUserId(user.getId());
+            return normalizeRealName(profile == null ? null : profile.getRealName());
+        }
+        if (role == UserRoleEnum.STUDENT) {
+            StudentProfile profile = studentProfileMapper.selectByUserId(user.getId());
+            return normalizeRealName(profile == null ? null : profile.getRealName());
+        }
+        return null;
+    }
+
+    private String normalizeRealName(String realName) {
+        if (realName == null) {
+            return null;
+        }
+        String trimmed = realName.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

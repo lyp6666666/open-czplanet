@@ -1,6 +1,11 @@
 package com.ai.tutor.appointment.service.impl;
 
+import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.appointment.mapper.StudentProfileMapper;
+import com.ai.tutor.appointment.mapper.TeacherProfileMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.model.entity.StudentProfile;
+import com.ai.tutor.appointment.model.entity.TeacherProfile;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.service.ContactQueryService;
@@ -23,6 +28,12 @@ public class ContactQueryServiceImpl implements ContactQueryService {
     @Resource
     private UserMapper userMapper;
 
+    @Resource
+    private TeacherProfileMapper teacherProfileMapper;
+
+    @Resource
+    private StudentProfileMapper studentProfileMapper;
+
     @Override
     public List<UserSimpleVO> recentContacts(Long uid, Integer limit) {
         int safeLimit = Math.min(Math.max(limit == null ? 50 : limit, 1), 200);
@@ -38,6 +49,7 @@ public class ContactQueryServiceImpl implements ContactQueryService {
                 .map(u -> UserSimpleVO.builder()
                         .id(u.getId())
                         .name(u.getName())
+                        .realName(resolveRealName(u))
                         .avatar(u.getAvatar())
                         .userType(u.getUserType())
                         .build())
@@ -60,9 +72,34 @@ public class ContactQueryServiceImpl implements ContactQueryService {
                 .map(u -> UserSimpleVO.builder()
                         .id(u.getId())
                         .name(u.getName())
+                        .realName(resolveRealName(u))
                         .avatar(u.getAvatar())
                         .userType(u.getUserType())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    private String resolveRealName(User user) {
+        if (user == null || user.getId() == null) {
+            return null;
+        }
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        if (role == UserRoleEnum.TEACHER) {
+            TeacherProfile profile = teacherProfileMapper.selectByUserId(user.getId());
+            return normalizeRealName(profile == null ? null : profile.getRealName());
+        }
+        if (role == UserRoleEnum.STUDENT) {
+            StudentProfile profile = studentProfileMapper.selectByUserId(user.getId());
+            return normalizeRealName(profile == null ? null : profile.getRealName());
+        }
+        return null;
+    }
+
+    private String normalizeRealName(String realName) {
+        if (realName == null) {
+            return null;
+        }
+        String trimmed = realName.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

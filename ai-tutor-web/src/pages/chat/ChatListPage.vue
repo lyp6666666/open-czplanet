@@ -25,6 +25,14 @@ const userMap = ref<Record<number, UserSimpleVO>>({})
 const search = ref('')
 const avatarBroken = ref<Record<number, boolean>>({})
 
+function displayNameOf(user: UserSimpleVO | null | undefined, uid: number): string {
+  const realName = user?.realName?.trim()
+  if (realName) return realName
+  const name = user?.name?.trim()
+  if (name) return name
+  return `用户${uid}`
+}
+
 type StreamMsgEvent = {
   msgId: number
   roomId: number
@@ -50,6 +58,7 @@ function upsertRoomFromEvent(ev: StreamMsgEvent) {
     otherUid,
     lastMsgId: ev.msgId,
     lastMsgBody: ev.body,
+    myLastReadMsgId: rooms.value.find((r) => r.roomId === ev.roomId)?.myLastReadMsgId ?? null,
     unreadCount: prevUnread,
     activeTime: Number.isFinite(sendTimeMs) ? new Date(sendTimeMs).toISOString() : new Date().toISOString(),
   }
@@ -163,7 +172,7 @@ const filteredRooms = computed(() => {
   const kw = search.value.trim().toLowerCase()
   if (!kw) return rooms.value
   return rooms.value.filter((r) => {
-    const name = userMap.value[r.otherUid]?.name || `用户${r.otherUid}`
+    const name = displayNameOf(userMap.value[r.otherUid], r.otherUid)
     return name.toLowerCase().includes(kw) || lastMsgText(r.lastMsgBody).toLowerCase().includes(kw)
   })
 })
@@ -214,11 +223,11 @@ watch(
           }}</span>
           <div class="avatar">
             <img v-if="avatarOf(r.otherUid)" :src="avatarOf(r.otherUid)" alt="" @error="markAvatarBroken(r.otherUid)" />
-            <span v-else class="avatar-fallback">{{ (userMap[r.otherUid]?.name || 'U').slice(0, 1) }}</span>
+            <span v-else class="avatar-fallback">{{ displayNameOf(userMap[r.otherUid], r.otherUid).slice(0, 1) }}</span>
           </div>
           <div class="main">
             <div class="row1">
-              <div class="name">{{ userMap[r.otherUid]?.name || `用户${r.otherUid}` }}</div>
+              <div class="name">{{ displayNameOf(userMap[r.otherUid], r.otherUid) }}</div>
               <div class="meta">
                 <span class="time">{{ r.activeTime ? String(r.activeTime).slice(0, 19).replace('T', ' ') : '' }}</span>
               </div>

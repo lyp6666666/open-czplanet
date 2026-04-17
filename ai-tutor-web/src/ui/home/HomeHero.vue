@@ -39,7 +39,27 @@ const topSubjects = computed(() => {
 const activeSubject = computed(() => topSubjects.value.find((s) => s.id === activeId.value) || null)
 
 const carouselItems = computed(() => (Array.isArray(props.banners?.carousel) ? props.banners!.carousel : []))
-const cardItems = computed(() => (Array.isArray(props.banners?.cards) ? props.banners!.cards : []))
+const carouselAutoplay = computed(() =>
+  carouselItems.value.length > 1 ? { delay: 3500, disableOnInteraction: false } : false,
+)
+const carouselPagination = computed(() => (carouselItems.value.length > 1 ? { clickable: true } : false))
+
+const guideCards = [
+  {
+    id: 'guide-tutor',
+    title: '家教教程',
+    subtitle: '从完善资料到接单上课，一次看懂高效路径',
+    imageUrl: '/guides/tutor-guide-card.svg',
+    to: '/guide/tutor',
+  },
+  {
+    id: 'guide-student',
+    title: '学生教程',
+    subtitle: '从发布需求到约课成交，少走弯路更高效',
+    imageUrl: '/guides/student-guide-card.svg',
+    to: '/guide/student',
+  },
+] as const
 
 type BannerLink = { type?: string; url?: string } | null | undefined
 
@@ -101,8 +121,8 @@ const swiperModules = [Autoplay, Pagination]
             class="carousel-inner"
             :modules="swiperModules"
             :loop="carouselItems.length > 1"
-            :autoplay="{ delay: 3500, disableOnInteraction: false }"
-            :pagination="{ clickable: true }"
+            :autoplay="carouselAutoplay"
+            :pagination="carouselPagination"
           >
             <SwiperSlide v-for="c in carouselItems" :key="c.id">
               <component :is="linkSpec(c.link).is" v-bind="linkSpec(c.link).attrs" class="slide">
@@ -128,27 +148,13 @@ const swiperModules = [Autoplay, Pagination]
             <div class="small card skeleton" />
           </template>
           <template v-else>
-            <component
-              v-for="c in cardItems"
-              :key="c.id"
-              :is="linkSpec(c.link).is"
-              v-bind="linkSpec(c.link).attrs"
-              class="small card"
-            >
+            <RouterLink v-for="c in guideCards" :key="c.id" :to="c.to" class="small card">
               <img class="img" :src="c.imageUrl" :alt="c.title" />
               <div class="info">
                 <div class="small-title">{{ c.title }}</div>
                 <div class="small-sub">{{ c.subtitle }}</div>
               </div>
-            </component>
-            <div v-if="!cardItems.length" class="small card empty-card">
-              <div class="empty-card-title">新手指南</div>
-              <div class="empty-card-sub">快速了解发布需求与挑选家教</div>
-            </div>
-            <div v-if="!cardItems.length" class="small card empty-card">
-              <div class="empty-card-title">在线沟通</div>
-              <div class="empty-card-sub">先聊再约课，匹配更高效</div>
-            </div>
+            </RouterLink>
           </template>
         </div>
       </div>
@@ -361,6 +367,11 @@ const swiperModules = [Autoplay, Pagination]
 
 .small .img {
   filter: saturate(1.05);
+}
+
+.small:hover .img {
+  transform: scale(1.02);
+  transition: transform 220ms ease;
 }
 
 .info {

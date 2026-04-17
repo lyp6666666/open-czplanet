@@ -66,6 +66,12 @@ a {
   color: #fff;
 }
 
+.btn-muted {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+}
+
 .skeleton {
   background: linear-gradient(90deg, #f0f1f3 25%, #e8eaed 37%, #f0f1f3 63%);
   background-size: 400% 100%;

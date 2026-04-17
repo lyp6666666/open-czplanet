@@ -74,6 +74,14 @@ MANAGE_INFRA=never sh scripts/dev_all_up.sh
 STOP_INFRA=0 sh scripts/dev_all_down.sh
 ```
 
+Current shared remote payment-test start on `111.228.20.88`:
+
+```bash
+cd /opt/ai-platform
+MANAGE_INFRA=never FRONTEND_HOST=0.0.0.0 NACOS_SERVER_ADDR=127.0.0.1:8848 sh scripts/dev_local_up.sh
+STOP_INFRA=0 sh scripts/dev_local_down.sh
+```
+
 Explicit namespace switching on server:
 
 ```bash
@@ -97,6 +105,20 @@ Optional environment overrides:
 ```bash
 REMOTE_USER=root REMOTE_HOST=111.228.20.88 bash scripts/ssh_tunnel.sh start
 ```
+
+Current laptop-to-shared-server payment-test workflow:
+
+```bash
+bash scripts/ssh_tunnel.sh start
+bash scripts/ssh_tunnel.sh status
+bash scripts/ssh_tunnel.sh stop
+```
+
+Then browse locally:
+
+- `http://localhost:5173`
+- `http://localhost:5174`
+- `http://localhost:18080`
 
 ## Infra Only
 
@@ -168,6 +190,14 @@ Confirm remote helper scripts were synced:
 ```bash
 grep -n "manage.infra" scripts/dev_all_up.sh
 grep -n "REMOTE_MANAGE_INFRA" scripts/dev_remote_up.sh
+```
+
+Payment callback verification logs:
+
+```bash
+ssh root@111.229.64.41 "tail -f /var/log/nginx/ai-tutor-payment-domain.access.log | grep --line-buffered -E 'payment/notify/yungouos|payment/return/yungouos'"
+ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/payment-service.log | grep --line-buffered -E 'PAY_NOTIFY|PAY_FINALIZE|updated to SUCCESS|YunGouOS 回调|YunGouOS 回调验签|YunGouOS 回调订单不存在'"
+ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/videoCall-IM-service.log | grep --line-buffered -E 'payment_success_received|brokerage_payment_success|tutor_application_paid'"
 ```
 
 ## Backend

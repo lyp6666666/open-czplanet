@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import type { UserRoleEnum } from '@/api/types'
+import { BRAND_NAME } from '@/constants/brand'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
@@ -248,7 +249,7 @@ async function confirmSwitch() {
       <div class="card board">
         <aside class="left">
           <div class="brand">
-            <div class="logo">家教直聘</div>
+            <div class="logo">{{ BRAND_NAME }}</div>
             <div class="slogan">{{ currentActionLabel }}</div>
           </div>
 

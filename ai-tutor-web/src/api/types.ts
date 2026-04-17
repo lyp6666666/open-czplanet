@@ -277,6 +277,7 @@ export interface UserSettingsVO {
 export interface UserSimpleVO {
   id: number
   name: string
+  realName?: string | null
   avatar: string | null
   userType: number
 }
@@ -351,8 +352,14 @@ export interface ChatRoomItemResp {
   otherUid: number
   lastMsgId: number | null
   lastMsgBody: unknown
+  myLastReadMsgId: number | null
   unreadCount: number
   activeTime: string
+}
+
+export interface ChatReadAckResp {
+  roomId: number
+  lastReadMsgId: number
 }
 
 export interface CursorPageResp<T> {

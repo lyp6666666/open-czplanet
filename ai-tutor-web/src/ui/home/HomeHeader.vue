@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { homeGuestApi } from '@/api/homeGuest'
 import type { HomeConfigVO, HotWordsVO, SearchSuggestVO } from '@/api/types'
+import { BRAND_NAME } from '@/constants/brand'
 import { useAuthStore } from '@/stores/auth'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 import { debounce } from '@/utils/debounce'
@@ -125,7 +126,7 @@ watch(
   <header class="header">
     <div class="container bar">
       <div class="left">
-        <div class="logo">家教直聘</div>
+        <div class="logo">{{ BRAND_NAME }}</div>
 
         <div class="city">
           <button class="city-trigger" type="button" @click="cityModalOpen = true">

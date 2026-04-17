@@ -12,4 +12,7 @@ public interface AppointmentInternalFeignClient {
 
     @GetMapping("/internal/facade/users/{uid}/basic")
     BaseResponse<Map<String, Object>> getUserBasicById(@PathVariable("uid") Long uid);
+
+    @GetMapping("/internal/facade/users/{uid}/phone")
+    BaseResponse<String> getUserPhoneById(@PathVariable("uid") Long uid);
 }

@@ -487,7 +487,7 @@ public class TutorApplicationService {
                 body.setEventId(application.getId());
                 body.setProposalId(application.getId());
                 body.setOrderId(resolveOrderId(applicationId));
-                body.setTitle("联系方式已解锁");
+                body.setTitle("聊天功能开启");
                 body.setStatus(BrokerageOrderStatus.PAID.name());
                 body.setCreatorUserId(teacherUid);
                 chatService.sendMsg(ChatMessageReq.builder().roomId(application.getRoomId()).msgType(8).body(body).build(), teacherUid);

@@ -13,7 +13,9 @@ import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,8 @@ public class ContactUnlockService {
     private BrokerageOrderMapper brokerageOrderMapper;
     @Resource
     private JdbcTemplate jdbcTemplate;
+    @Resource
+    private ObjectProvider<AppointmentInternalClient> appointmentInternalClientProvider;
 
     public UnlockedContactVO getUnlockedContact(Long roomId, Long targetUid, Long uid) {
         ThrowUtils.throwIf(roomId == null || targetUid == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -56,15 +60,26 @@ public class ContactUnlockService {
         ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!BrokerageOrderStatus.PAID.name().equals(order.getStatus()), ErrorCode.NO_AUTH_ERROR);
 
-        String phone = "";
+        String phone = loadPhone(targetUid);
+        return UnlockedContactVO.builder().uid(targetUid).phone(phone == null ? "" : phone).build();
+    }
+
+    private String loadPhone(Long targetUid) {
+        AppointmentInternalClient internalClient = appointmentInternalClientProvider == null ? null : appointmentInternalClientProvider.getIfAvailable();
+        if (internalClient != null) {
+            try {
+                return internalClient.getUserPhoneById(targetUid);
+            } catch (Exception ignored) {
+            }
+        }
         try {
-            phone = jdbcTemplate.queryForObject(
+            return jdbcTemplate.queryForObject(
                     "SELECT phone FROM user WHERE id = ? LIMIT 1",
                     new Object[]{targetUid},
                     (rs, rowNum) -> rs.getString("phone")
             );
         } catch (EmptyResultDataAccessException ignored) {
+            return "";
         }
-        return UnlockedContactVO.builder().uid(targetUid).phone(phone == null ? "" : phone).build();
     }
 }

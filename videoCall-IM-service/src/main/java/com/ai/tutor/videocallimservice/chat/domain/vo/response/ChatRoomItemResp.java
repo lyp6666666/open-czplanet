@@ -27,6 +27,9 @@ public class ChatRoomItemResp {
     @Schema(description = "最后消息内容")
     private Object lastMsgBody;
 
+    @Schema(description = "当前用户服务端已确认的最后已读消息id")
+    private Long myLastReadMsgId;
+
     @Schema(description = "未读消息数")
     private Long unreadCount;
 

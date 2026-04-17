@@ -4,6 +4,7 @@ import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
+import com.ai.tutor.videocallimservice.chat.domain.entity.RoomReadState;
 import com.ai.tutor.videocallimservice.chat.domain.enums.MessageTypeEnum;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
@@ -15,6 +16,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatRoomItemResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomReadStateMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.chat.service.adapter.MessageAdapter;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
@@ -48,6 +50,9 @@ public class ChatRoomServiceImpl implements ChatRoomService {
 
     @Resource
     private MessageMapper messageMapper;
+
+    @Resource
+    private RoomReadStateMapper roomReadStateMapper;
 
     @Resource
     private ImUserMapper imUserMapper;
@@ -185,9 +190,21 @@ public class ChatRoomServiceImpl implements ChatRoomService {
             roomIds.add(room.getId());
         }
         Map<Long, Long> unreadMap = new HashMap<>();
+        Map<Long, Long> readMap = new HashMap<>();
         if (!roomIds.isEmpty()) {
             try {
                 messageMapper.listUnreadCounts(roomIds, uid).forEach(it -> unreadMap.put(it.getRoomId(), it.getUnreadCount()));
+            } catch (Exception ignored) {
+            }
+            try {
+                List<RoomReadState> readStates = roomReadStateMapper.listByRoomIdsAndUid(roomIds, uid);
+                if (readStates != null) {
+                    readStates.forEach(it -> {
+                        if (it != null && it.getRoomId() != null) {
+                            readMap.put(it.getRoomId(), it.getLastReadMsgId());
+                        }
+                    });
+                }
             } catch (Exception ignored) {
             }
         }
@@ -206,6 +223,7 @@ public class ChatRoomServiceImpl implements ChatRoomService {
                     .otherUid(otherUid)
                     .lastMsgId(room.getLastMsgId())
                     .lastMsgBody(lastBody)
+                    .myLastReadMsgId(readMap.get(room.getId()))
                     .unreadCount(unreadMap.getOrDefault(room.getId(), 0L))
                     .activeTime(toDate(room.getActiveTime()))
                     .build());

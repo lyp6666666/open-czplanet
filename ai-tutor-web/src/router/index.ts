@@ -31,6 +31,7 @@ const OrgFavoritesPage = () => import('@/pages/org/OrgFavoritesPage.vue')
 const OrgMineJobsPage = () => import('@/pages/org/OrgMineJobsPage.vue')
 const OrgMineJobDetailPage = () => import('@/pages/org/OrgMineJobDetailPage.vue')
 const OrgPublicProfilePage = () => import('@/pages/org/OrgPublicProfilePage.vue')
+const GuideFlowPage = () => import('@/pages/GuideFlowPage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -114,6 +115,18 @@ export const router = createRouter({
       path: '/organization/:orgUserId',
       name: 'orgPublicProfile',
       component: OrgPublicProfilePage,
+    },
+    {
+      path: '/guide/tutor',
+      name: 'guideTutor',
+      component: GuideFlowPage,
+      props: { audience: 'tutor' },
+    },
+    {
+      path: '/guide/student',
+      name: 'guideStudent',
+      component: GuideFlowPage,
+      props: { audience: 'student' },
     },
     {
       path: '/me',

@@ -90,6 +90,19 @@ export interface DashboardStatsResponse {
   pendingRefunds: number
 }
 
+export interface AdminHomeCarouselItem {
+  id: number
+  title: string
+  subtitle?: string | null
+  imageUrl: string
+  objectKey: string
+  linkType?: string | null
+  linkUrl?: string | null
+  sortOrder: number
+  createTime?: string | null
+  updateTime?: string | null
+}
+
 export interface StudentJobPosting {
   id: number
   parentId: number

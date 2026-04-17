@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FooterLinksVO } from '@/api/types'
+import { BRAND_NAME } from '@/constants/brand'
 
 defineProps<{
   links: FooterLinksVO | null
@@ -12,7 +13,7 @@ defineProps<{
       <div class="links">
         <a v-for="l in links?.links || []" :key="l.url" :href="l.url" target="_blank" rel="noreferrer">{{ l.name }}</a>
       </div>
-      <div class="copy">© {{ new Date().getFullYear() }} 家教直聘</div>
+      <div class="copy">© {{ new Date().getFullYear() }} {{ BRAND_NAME }}</div>
     </div>
   </footer>
 </template>

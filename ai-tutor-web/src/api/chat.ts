@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { ChatMessageResp, ChatRoomItemResp, CursorPageBaseResp, CursorPageResp } from './types'
+import type { ChatMessageResp, ChatReadAckResp, ChatRoomItemResp, CursorPageBaseResp, CursorPageResp } from './types'
 
 export type ChatRefundStateResp = {
   canApply: boolean
@@ -69,6 +69,6 @@ export const chatApi = {
   },
 
   ackRead(roomId: number, lastReadMsgId: number) {
-    return http.post<unknown, boolean>('/chat/read/ack', { roomId, lastReadMsgId })
+    return http.post<unknown, ChatReadAckResp>('/chat/read/ack', { roomId, lastReadMsgId })
   },
 }

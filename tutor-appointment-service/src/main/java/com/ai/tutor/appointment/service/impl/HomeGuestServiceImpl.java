@@ -3,7 +3,6 @@ package com.ai.tutor.appointment.service.impl;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
 import com.ai.tutor.appointment.config.HomeGuestProperties;
-import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.appointment.mapper.*;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.home.HomeHotTutorAggRow;
@@ -13,6 +12,8 @@ import com.ai.tutor.appointment.model.vo.SubjectTreeNodeVO;
 import com.ai.tutor.appointment.model.vo.home.HomeGuestVOs;
 import com.ai.tutor.appointment.service.HomeGuestService;
 import com.ai.tutor.appointment.service.SubjectQueryService;
+import com.ai.tutor.appointment.storage.MinioProperties;
+import com.ai.tutor.appointment.storage.MinioStorageService;
 import com.ai.tutor.appointment.utils.CityCatalog;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +53,9 @@ public class HomeGuestServiceImpl implements HomeGuestService {
 
     @Resource
     private MinioProperties minioProperties;
+
+    @Resource
+    private HomeCarouselConfigMapper homeCarouselConfigMapper;
 
     @Override
     public HomeGuestVOs.HomeConfigVO getHomeConfig(String city) {
@@ -235,12 +239,19 @@ public class HomeGuestServiceImpl implements HomeGuestService {
     @Override
     public HomeGuestVOs.BannersVO getBanners(String city, String scene) {
         String effectiveCity = defaultIfBlank(city, homeGuestProperties.getDefaultCity());
-        List<HomeGuestVOs.BannersVO.BannerItem> carousel = homeGuestProperties.getBanners()
-                .getCarousel()
+        List<HomeGuestVOs.BannersVO.BannerItem> carousel = safeGet(homeCarouselConfigMapper::selectAll, List.<HomeCarouselConfig>of())
                 .stream()
-                .filter(b -> matchCity(b.getCities(), effectiveCity))
+                .limit(5)
                 .map(this::toBannerItem)
                 .toList();
+        if (carousel.isEmpty()) {
+            carousel = homeGuestProperties.getBanners()
+                    .getCarousel()
+                    .stream()
+                    .filter(b -> matchCity(b.getCities(), effectiveCity))
+                    .map(this::toBannerItem)
+                    .toList();
+        }
         List<HomeGuestVOs.BannersVO.BannerItem> cards = homeGuestProperties.getBanners()
                 .getCards()
                 .stream()
@@ -639,6 +650,22 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         return new HomeGuestVOs.BannersVO.BannerItem(b.getId(), b.getTitle(), b.getSubtitle(), imageUrl, link);
     }
 
+    private HomeGuestVOs.BannersVO.BannerItem toBannerItem(HomeCarouselConfig config) {
+        String linkUrl = defaultIfBlank(config.getLinkUrl(), null);
+        HomeGuestVOs.BannersVO.Link link = null;
+        if (linkUrl != null) {
+            String linkType = defaultIfBlank(config.getLinkType(), linkUrl.startsWith("/") ? "ROUTE" : "URL");
+            link = new HomeGuestVOs.BannersVO.Link(linkType, linkUrl);
+        }
+        return new HomeGuestVOs.BannersVO.BannerItem(
+                String.valueOf(config.getId()),
+                defaultIfBlank(config.getTitle(), "创智星球首页推荐"),
+                defaultIfBlank(config.getSubtitle(), "发现更适合你的老师与课程"),
+                normalizeUploadedBannerImageUrl(config.getImageObjectKey()),
+                link
+        );
+    }
+
     /**
      * Banner 图片地址兼容策略：
      * - bannersUseMinio=false：原样透传（兼容旧的 /banners/* 静态资源）；
@@ -665,6 +692,17 @@ public class HomeGuestServiceImpl implements HomeGuestService {
         String b = base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
         String p = v.startsWith("/") ? v.substring(1) : v;
         return b + "/" + p;
+    }
+
+    private String normalizeUploadedBannerImageUrl(String objectKey) {
+        String key = defaultIfBlank(objectKey, null);
+        if (key == null) {
+            return null;
+        }
+        if (key.startsWith("http://") || key.startsWith("https://") || key.startsWith("/api/v1/public/assets/")) {
+            return key;
+        }
+        return MinioStorageService.buildPublicAssetUrl(key);
     }
 
     private HomeGuestVOs.HotTabsVO.TabItem toTabItem(HomeGuestProperties.TabItem tab) {

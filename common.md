@@ -31,6 +31,12 @@ bash scripts/dev_local_down.sh
 bash scripts/dev_remote_up.sh
 ```
 
+远程同步代码并重启：
+
+```bash
+bash scripts/dev_remote_sync_up.sh
+```
+
 远程关闭：
 
 ```bash
@@ -103,6 +109,12 @@ STOP_INFRA=0 bash scripts/dev_local_down.sh
 bash scripts/dev_remote_up.sh
 ```
 
+同步代码并重启：
+
+```bash
+bash scripts/dev_remote_sync_up.sh
+```
+
 关闭：
 
 ```bash
@@ -113,11 +125,13 @@ bash scripts/dev_remote_down.sh
 
 - `dev_remote_up.sh` 会先在本地启动 SSH 隧道，再 SSH 到远程执行启动脚本
 - `dev_remote_up.sh` 和 `dev_remote_down.sh` 会先同步关键脚本与 `common.md` 到远程
+- `dev_remote_sync_up.sh` 会先用 `rsync over SSH` 增量同步仓库代码，再重启远程应用
 - `dev_remote_up.sh` 默认 `REMOTE_MANAGE_INFRA=never`
 - `dev_remote_up.sh` 默认 `REMOTE_NACOS_GRPC_CHECK=warn`
 - `dev_remote_up.sh` 默认 `REMOTE_NACOS_SERVER_ADDR=127.0.0.1:8848`
 - `dev_remote_up.sh` 默认 `REMOTE_USE_TUNNEL=1`
 - `dev_remote_down.sh` 默认 `REMOTE_STOP_INFRA=0`
+- `dev_remote_sync_up.sh` 默认 `REMOTE_SYNC_DELETE=1`，会让远程代码目录尽量对齐本地
 - `dev_remote_up.sh` 默认 `SPRING_PROFILES_ACTIVE=dev`，对应 `dev` namespace
 - 远程关闭时会顺手停止本地 SSH 隧道
 
@@ -127,6 +141,9 @@ bash scripts/dev_remote_down.sh
 - 远程默认对 Nacos gRPC 端口只告警不阻塞，方便先做页面和接口测试
 - 远程默认通过 `127.0.0.1:8848` 访问同机 Nacos，不依赖公网回环访问
 - 远程默认通过 SSH 隧道把页面映射回本地；这种模式下前端默认绑定 `127.0.0.1`
+- `dev_remote_up.sh` 只同步脚本和文档，不同步业务代码
+- `dev_remote_sync_up.sh` 不依赖 VS Code SFTP 插件；它通过 `rsync + SSH` 直接把本地仓库同步到远程
+- `dev_remote_sync_up.sh` 会排除 `.git`、`.vscode`、`node_modules`、`target`、`.logs`、`.pids` 和 Docker 持久化数据目录
 - 远程启动成功后，本地浏览器访问：
   - `http://localhost:5173`
   - `http://localhost:5174`
@@ -147,6 +164,18 @@ bash scripts/nacos_tunnel.sh stop
 
 ```bash
 REMOTE_USER=root REMOTE_HOST=111.228.20.88 REMOTE_PATH=/opt/ai-platform bash scripts/dev_remote_up.sh
+```
+
+如果你改了前端或后端代码，想把当前仓库同步到远程并立即重启：
+
+```bash
+REMOTE_USER=root REMOTE_HOST=111.228.20.88 REMOTE_PATH=/opt/ai-platform bash scripts/dev_remote_sync_up.sh
+```
+
+如果你不想删除远程多出来的文件：
+
+```bash
+REMOTE_SYNC_DELETE=0 bash scripts/dev_remote_sync_up.sh
 ```
 
 如果你打算直接在浏览器打开远程地址，不走本地隧道：

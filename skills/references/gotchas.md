@@ -45,6 +45,16 @@ Only record repo-specific truths here.
   It can also read `./.private/tutor-appointment-service.yml` or `../.private/tutor-appointment-service.yml`, so its effective config path is slightly wider than the other backends.
 - The quickest proof of effective config is in startup logs, not in the template files.
   `bash scripts/verify_nacos_effect.sh` is usually faster than manually guessing which DataId was loaded.
+- `huoyue.online` is currently a payment callback ingress, not the main frontend domain.
+  Seeing `ai-tutor payment callback proxy ok` at `/` is expected and healthy.
+- The current shared payment test topology is intentionally split across two servers.
+  `111.229.64.41` serves only public callback ingress, while `111.228.20.88` runs the actual app and middleware.
+- A YunGouOS callback may still produce `PAY_NOTIFY failed reason=missing_order_no` in `payment-service.log`.
+  Do not declare the payment failed until you also check whether the order was later `updated to SUCCESS by provider query` and `PAY_FINALIZE success`.
+- For current remote payment testing, the strongest success proof is a three-log chain:
+  domain-server callback access log -> payment-service success/finalize log -> IM-service `tutor_application_paid` log.
+- Any repo change that alters database schema is incomplete unless `sqlDoc/` is updated in the same turn.
+  The final response should explicitly say whether `sqlDoc` was updated or not.
 
 ## Maintenance Rule
 

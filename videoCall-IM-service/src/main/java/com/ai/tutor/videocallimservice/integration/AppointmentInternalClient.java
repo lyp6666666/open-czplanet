@@ -26,6 +26,13 @@ public class AppointmentInternalClient {
         return toImUser(basicInfo);
     }
 
+    public String getUserPhoneById(Long uid) {
+        ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
+        BaseResponse<String> response = client.getUserPhoneById(uid);
+        String phone = unwrapData(response, "getUserPhoneById");
+        return phone == null ? "" : phone;
+    }
+
     private static ImUser toImUser(Map<String, Object> info) {
         if (info == null) {
             return null;

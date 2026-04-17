@@ -5,6 +5,7 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatReadAckReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatReadAckResp;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomReadStateMapper;
@@ -30,7 +31,7 @@ public class ChatReadServiceImpl implements ChatReadService {
     private ImUserMapper imUserMapper;
 
     @Override
-    public void ackRead(ChatReadAckReq request, Long uid) {
+    public ChatReadAckResp ackRead(ChatReadAckReq request, Long uid) {
         ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(request.getRoomId() == null || request.getLastReadMsgId() == null, ErrorCode.PARAMS_ERROR);
 
@@ -51,6 +52,10 @@ public class ChatReadServiceImpl implements ChatReadService {
         } catch (Exception e) {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "已读上报失败");
         }
+        return ChatReadAckResp.builder()
+                .roomId(request.getRoomId())
+                .lastReadMsgId(request.getLastReadMsgId())
+                .build();
     }
 
     private Long resolveUserId(int userType, Long refId) {

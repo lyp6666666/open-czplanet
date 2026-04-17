@@ -72,8 +72,14 @@ Read the section that matches the feature you are touching.
   payment may need brokerage order info from IM-side integration
 - Typical flow:
   business action creates payable context -> prepay/cashier page -> poll order status -> notify callback -> finalize business state
+- In the current shared remote test environment:
+  public callback hits `huoyue.online` on `111.229.64.41`, then `nginx` proxies to the real business host `111.228.20.88`
+- The app is not served from `huoyue.online` today.
+  laptop browser testing usually happens through the SSH tunnel at `localhost:5173`
+- Payment success is not complete until IM-side unlock logs appear, such as `brokerage_payment_success` and `tutor_application_paid`
 - When changing payment:
   inspect both `payment-service` and any IM/admin integration that consumes the result
+  also read `references/payment-remote-testing.md` for the shared two-server callback topology and live verification routine
 
 ## 7. Refund And Dispute Flows
 

@@ -43,6 +43,8 @@ WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
 MANAGE_INFRA="${MANAGE_INFRA:-auto}"
+SERVICE_STARTUP_WAIT_LOOPS="${SERVICE_STARTUP_WAIT_LOOPS:-300}"
+FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
 INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana}"
 
@@ -295,7 +297,7 @@ start_service() {
       return 0
     fi
     i=$((i + 1))
-    if [ "$i" -ge 80 ]; then
+    if [ "$i" -ge "$SERVICE_STARTUP_WAIT_LOOPS" ]; then
       echo "[dev_all_up] $svc_name 启动失败（端口 $port 未监听）"
       if [ -f "$log_file" ]; then
         echo "[dev_all_up] $svc_name 最近日志（$log_file）"
@@ -368,7 +370,7 @@ start_frontend() {
       return 0
     fi
     i=$((i + 1))
-    if [ "$i" -ge 80 ]; then
+    if [ "$i" -ge "$FRONTEND_STARTUP_WAIT_LOOPS" ]; then
       echo "[dev_all_up] $app_name 启动失败（端口 $port 未监听）"
       if [ -f "$log_file" ]; then
         echo "[dev_all_up] $app_name 最近日志（$log_file）"

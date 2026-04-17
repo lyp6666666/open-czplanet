@@ -13,6 +13,7 @@ const UsersPage = () => import('@/pages/UsersPage.vue')
 const PaymentOrdersPage = () => import('@/pages/PaymentOrdersPage.vue')
 const PaymentOrderDetailPage = () => import('@/pages/PaymentOrderDetailPage.vue')
 const OrganizationsPage = () => import('@/pages/OrganizationsPage.vue')
+const HomeCarouselPage = () => import('@/pages/HomeCarouselPage.vue')
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -32,6 +33,7 @@ export const router = createRouter({
     { path: '/refunds/:requestId', name: 'refundDetail', component: RefundDetailPage, meta: { auth: true } },
     { path: '/users', name: 'users', component: UsersPage, meta: { auth: true } },
     { path: '/organizations', name: 'organizations', component: OrganizationsPage, meta: { auth: true } },
+    { path: '/home-carousel', name: 'homeCarousel', component: HomeCarouselPage, meta: { auth: true } },
     { path: '/payments', name: 'paymentOrders', component: PaymentOrdersPage, meta: { auth: true } },
     { path: '/payments/:orderNo', name: 'paymentOrderDetail', component: PaymentOrderDetailPage, meta: { auth: true } },
   ],

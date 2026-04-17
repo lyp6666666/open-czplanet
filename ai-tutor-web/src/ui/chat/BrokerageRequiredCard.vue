@@ -18,11 +18,27 @@ const amountYuan = computed(() => {
   return (fen / 100).toFixed(2)
 })
 
+const statusCode = computed(() => {
+  return typeof props.body.status === 'string' ? props.body.status.trim().toUpperCase() : ''
+})
+
+const isPaid = computed(() => statusCode.value === 'PAID')
+
+const showAmount = computed(() => props.canPay || isPaid.value)
+
+const showPayButton = computed(() => props.canPay && (statusCode.value === '' || statusCode.value === 'PENDING'))
+
+const statusToneClass = computed(() => {
+  if (isPaid.value) return 'tone-paid'
+  if (statusCode.value === 'PROOF_SUBMITTED') return 'tone-review'
+  return 'tone-pending'
+})
+
 function statusText() {
-  const s = typeof props.body.status === 'string' ? props.body.status.trim().toUpperCase() : ''
+  const s = statusCode.value
   if (s === 'PENDING') return '待支付'
   if (s === 'PROOF_SUBMITTED') return '待平台确认'
-  if (s === 'PAID') return '已确认支付'
+  if (s === 'PAID') return '已支付'
   if (s === 'REJECTED') return '已拒绝'
   if (s === 'CANCELED') return '已取消'
   return s || '未知状态'
@@ -30,19 +46,23 @@ function statusText() {
 </script>
 
 <template>
-  <div class="cardx">
-    <div class="h1">信息费</div>
-    <div v-if="canPay" class="row">
+  <div class="cardx" :class="{ paid: isPaid }">
+    <div class="head">
+      <div class="h1">信息费</div>
+      <div class="status-tag" :class="statusToneClass">{{ canPay || isPaid ? statusText() : '待教师支付信息费' }}</div>
+    </div>
+    <div v-if="showAmount" class="row">
       <div class="k">金额</div>
       <div class="v">{{ amountYuan ? `${amountYuan} 元` : '待定' }}</div>
     </div>
     <div class="row">
       <div class="k">状态</div>
-      <div class="v">{{ canPay ? statusText() : '待教师支付信息费' }}</div>
+      <div class="v">{{ canPay || isPaid ? statusText() : '待教师支付信息费' }}</div>
     </div>
-    <div v-if="canPay" class="ops">
+    <div v-if="showPayButton" class="ops">
       <button class="btn btn-primary" type="button" @click="emit('pay')">去支付</button>
     </div>
+    <div v-else-if="isPaid" class="success-hint">平台已确认信息费支付，当前会话已进入可沟通状态。</div>
   </div>
 </template>
 
@@ -54,11 +74,50 @@ function statusText() {
   border: 1px solid rgba(0, 0, 0, 0.08);
   padding: 10px 10px 12px;
   background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.cardx.paid {
+  border-color: rgba(17, 185, 129, 0.28);
+  background: linear-gradient(180deg, rgba(17, 185, 129, 0.09), rgba(255, 255, 255, 0.96));
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .h1 {
   font-weight: 900;
   margin-bottom: 8px;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tone-pending {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0369a1;
+}
+
+.tone-review {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.tone-paid {
+  background: rgba(17, 185, 129, 0.14);
+  color: #047857;
 }
 
 .row {
@@ -84,5 +143,13 @@ function statusText() {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+}
+
+.success-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #047857;
+  font-weight: 700;
 }
 </style>

@@ -6,6 +6,8 @@ Use this reference when work touches startup, remote testing, Nacos, environment
 
 - Shared remote dev/test server:
   `root@111.228.20.88`
+- Shared domain/callback proxy server:
+  `root@111.229.64.41`
 - Remote repo path:
   `/opt/ai-platform`
 - Current shared Nacos host:
@@ -42,6 +44,7 @@ Use this reference when work touches startup, remote testing, Nacos, environment
   `REMOTE_NACOS_GRPC_CHECK=warn`
   `REMOTE_USE_TUNNEL=1`
 - This means the server is expected to have always-on middleware already running, while app processes are started from the repo checkout
+- In the current payment-callback topology, `111.228.20.88` is still the real app/middleware host
 
 ### Directly On The Server
 
@@ -50,6 +53,16 @@ Use this reference when work touches startup, remote testing, Nacos, environment
 - Common stop:
   `cd /opt/ai-platform && STOP_INFRA=0 sh scripts/dev_all_down.sh`
 - Use `MANAGE_INFRA=auto` only when the server really should let repo scripts manage middleware containers too
+- For current shared payment testing on `111.228.20.88`, the more explicit start is:
+  `cd /opt/ai-platform && MANAGE_INFRA=never FRONTEND_HOST=0.0.0.0 NACOS_SERVER_ADDR=127.0.0.1:8848 sh scripts/dev_local_up.sh`
+
+### Domain Callback Proxy Server
+
+- `111.229.64.41` only runs `nginx`
+- `huoyue.online` should resolve to `111.229.64.41`
+- This host is used for public payment callback ingress, not as the main app runtime
+- `/payment/notify/*` and `/payment/return/*` proxy to `111.228.20.88`
+- Root `/` intentionally returns a small probe string instead of the app frontend
 
 ## What `dev_all_up.sh` Starts
 
@@ -184,6 +197,27 @@ Template source for these lives in:
 - `docs/nacos/templates/*.yaml`
 
 When the user asks "what should I fill into Nacos?", start from the matching template before reading code.
+
+### Current Payment Values Worth Rechecking First
+
+In `ai-tutor-payment-dev.yaml`, the high-value live fields are:
+
+- `payment.enabled`
+- `alipay.notifyUrl`
+- `wechat.notifyUrl`
+- `yungouos.notify-url`
+- `yungouos.return-url`
+- `yungouos.return-page-url`
+
+Current shared remote payment testing expects:
+
+- `yungouos.notify-url: http://huoyue.online/payment/notify/yungouos`
+- `yungouos.return-url: http://huoyue.online/payment/return/yungouos`
+
+Note:
+
+- `return-page-url` may still point at the business host frontend
+- async callback correctness should be judged from logs first, not only from where the browser lands
 
 ## How To Find What A Config Key Means
 

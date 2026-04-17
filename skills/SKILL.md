@@ -12,6 +12,7 @@ Use it whenever work touches this repo's code, configuration, tests, or specs.
 ## Core Rules
 
 - Treat code as the source of truth. Some docs and OpenSpec files lag behind the current implementation.
+- If a task changes database schema, migration SQL, or table structure, update the matching files under `sqlDoc/` in the same turn and explicitly mention that sync in the final response.
 - Before changing code, first identify the affected area and read the matching sections in:
   - `references/module-map.md`
   - `references/business-flows.md`
@@ -28,13 +29,13 @@ Use it whenever work touches this repo's code, configuration, tests, or specs.
 - Chat, realtime, collaboration proposal, contact unlock, refund-in-chat:
   Read `references/business-flows.md`, then `references/gotchas.md`
 - Payment, cashier, refund callback, brokerage:
-  Read `references/business-flows.md`, `references/testing-matrix.md`, and `references/gotchas.md`
+  Read `references/business-flows.md`, `references/payment-remote-testing.md`, `references/testing-matrix.md`, and `references/gotchas.md`
 - Admin backend or admin web:
   Read `references/module-map.md` and `references/testing-matrix.md`
 - Web frontend or miniprogram:
   Read `references/module-map.md`, then the relevant flow in `references/business-flows.md`
 - Local startup, remote server testing, infra, Nacos, Docker, environment variables, or runtime config lookup:
-  Read `references/commands.md`, then `references/runtime-config.md`, then `references/gotchas.md`
+  Read `references/commands.md`, then `references/runtime-config.md`, then `references/payment-remote-testing.md`, then `references/gotchas.md`
 - Tests, QA automation, regression planning:
   Read `references/testing-matrix.md`
 
@@ -71,6 +72,8 @@ When this skill is used during real project work:
   `references/commands.md`
 - Runtime environment, config import chain, and Nacos lookup:
   `references/runtime-config.md`
+- Payment callback topology, shared test servers, and live verification routine:
+  `references/payment-remote-testing.md`
 - Validation guidance by change type:
   `references/testing-matrix.md`
 - Known traps, stale docs, and cross-module cautions:

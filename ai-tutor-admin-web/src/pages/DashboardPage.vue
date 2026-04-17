@@ -29,6 +29,7 @@
         </button>
       </div>
       <div class="links">
+        <RouterLink class="btn btn-muted" to="/home-carousel">去首页轮播</RouterLink>
         <RouterLink class="btn btn-muted" to="/jobs">去需求审核</RouterLink>
         <RouterLink class="btn btn-muted" to="/verification">去认证审核</RouterLink>
         <RouterLink class="btn btn-muted" to="/refunds">去退款纠纷</RouterLink>
@@ -121,4 +122,3 @@ onMounted(load)
   }
 }
 </style>
-

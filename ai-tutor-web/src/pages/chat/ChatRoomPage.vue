@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -68,11 +68,19 @@ const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
 
 const myUid = computed(() => auth.user?.id ?? 0)
+const myRealName = computed(() => {
+  const teacherName = auth.me?.teacherProfile?.realName?.trim()
+  if (teacherName) return teacherName
+  const studentName = auth.me?.studentProfile?.realName?.trim()
+  if (studentName) return studentName
+  return null
+})
 const myUser = computed<UserSimpleVO | null>(() => {
   if (!auth.user?.id) return null
   return {
     id: auth.user.id,
     name: auth.user.name || `用户${auth.user.id}`,
+    realName: myRealName.value,
     avatar: auth.user.avatar,
     userType: auth.user.userType,
   }
@@ -91,10 +99,18 @@ function getUser(uid: number | null | undefined): UserSimpleVO | null {
   return userByUid.value.get(id) ?? null
 }
 
+function pickDisplayName(user: UserSimpleVO | null | undefined, uid: number | null | undefined): string {
+  const realName = user?.realName?.trim()
+  if (realName) return realName
+  const name = user?.name?.trim()
+  if (name) return name
+  return uid ? `用户${uid}` : '用户'
+}
+
 function userName(uid: number): string {
-  if (uid === myUid.value) return myUser.value?.name || `用户${uid}`
-  if (otherUid.value && uid === otherUid.value) return otherUser.value?.name || `用户${uid}`
-  return getUser(uid)?.name || `用户${uid}`
+  if (uid === myUid.value) return pickDisplayName(myUser.value, uid)
+  if (otherUid.value && uid === otherUid.value) return pickDisplayName(otherUser.value, uid)
+  return pickDisplayName(getUser(uid), uid)
 }
 
 function userAvatar(uid: number): string {
@@ -133,6 +149,7 @@ const unlockUid = ref<number | null>(null)
 const unlockPhone = ref('')
 const unlockLoading = ref(false)
 const unlockError = ref<string | null>(null)
+const contactAutoShown = ref(false)
 
 function closeUnlock() {
   unlockOpen.value = false
@@ -167,6 +184,12 @@ function goPay(orderId: number, applicationId?: number | null) {
     },
   })
 }
+
+onMounted(() => {
+  if (auth.isLoggedIn && !auth.me) {
+    void auth.refreshMe()
+  }
+})
 
 function openCollaboration() {
   if (!composerEnabled.value) {
@@ -583,6 +606,26 @@ const renderMessages = computed<RenderMessage[]>(() => {
   return list
 })
 
+const paidBrokerageOrderIds = computed<Record<number, true>>(() => {
+  const out: Record<number, true> = {}
+  for (const m of renderMessages.value) {
+    const b = m.body
+    if (!isContactUnlockedBody(b)) continue
+    if (typeof b.orderId === 'number' && Number.isFinite(b.orderId)) {
+      out[b.orderId] = true
+    }
+  }
+  return out
+})
+
+function effectiveBrokerageStatus(body: Extract<ChatMessageBody, { type: 'brokerage_required' }>): string | null {
+  const fallback = typeof body.status === 'string' ? body.status : null
+  if (typeof body.orderId === 'number' && Number.isFinite(body.orderId) && paidBrokerageOrderIds.value[body.orderId]) {
+    return 'PAID'
+  }
+  return fallback
+}
+
 type RenderItem = { kind: 'time'; key: string; text: string } | { kind: 'msg'; key: string; m: RenderMessage }
 
 function pad2(n: number): string {
@@ -667,14 +710,6 @@ const canViewContact = computed(() => {
   return hasAcceptedCollaboration.value
 })
 
-const contactAutoShown = ref(false)
-watch(hasAcceptedCollaboration, (v) => {
-  if (!v) return
-  if (contactAutoShown.value) return
-  contactAutoShown.value = true
-  viewUnlockedContact()
-})
-
 const hasActiveCollabProposal = computed(() => {
   return Object.values(collabStatusByProposalId.value).some((s) => s !== 'REJECTED')
 })
@@ -732,6 +767,16 @@ const composerLockedHint = computed(() => {
 watch([roomId, () => messages.value.length], () => {
   refreshRefundState()
 }, { immediate: true })
+
+watch(
+  hasAcceptedCollaboration,
+  (v) => {
+    if (!v) return
+    if (contactAutoShown.value) return
+    contactAutoShown.value = true
+    void viewUnlockedContact()
+  },
+)
 
 function refundStatusText(raw: unknown): string {
   const s = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
@@ -828,6 +873,12 @@ async function ackLatest() {
   void chatRealtime.ackRoomRead(roomId.value, latest)
 }
 
+function keepaliveAckLatest() {
+  const latest = messages.value.reduce((max, m) => Math.max(max, m.message?.id || 0), 0)
+  if (latest <= 0) return
+  chatRealtime.ackRoomReadKeepalive(roomId.value, latest)
+}
+
 async function onSend() {
   const text = input.value.trim()
   if (!text) return
@@ -873,7 +924,16 @@ async function ackFromRoomList() {
 }
 
 onBeforeUnmount(() => {
+  keepaliveAckLatest()
   chatRealtime.setActiveRoom(null)
+})
+
+onMounted(() => {
+  window.addEventListener('pagehide', keepaliveAckLatest)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pagehide', keepaliveAckLatest)
 })
 
 watch(
@@ -896,6 +956,7 @@ watch(
     cursor.value = null
     isLast.value = false
     messages.value = []
+    contactAutoShown.value = false
     void loadOtherUser()
     void ackFromRoomList()
     void loadMore().then(() => ackLatest())
@@ -925,7 +986,7 @@ watch(
   <div class="wrap">
     <div class="head card">
       <button class="btn back" type="button" @click="router.push({ name: 'chatList' })">返回</button>
-      <div class="name">{{ otherUser?.name || (otherUid ? `用户${otherUid}` : `会话 ${roomId}`) }}</div>
+      <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
       <div />
     </div>
 
@@ -999,8 +1060,12 @@ watch(
               </template>
               <template v-else-if="isBrokerageRequiredBody(it.m.body)">
                 <BrokerageRequiredCard
-                  :body="it.m.body"
-                  :can-pay="auth.user?.userType === 1 && (!it.m.body.payerUserId || it.m.body.payerUserId === myUid)"
+                  :body="{ ...it.m.body, status: effectiveBrokerageStatus(it.m.body) }"
+                  :can-pay="
+                    auth.user?.userType === 1 &&
+                    (!it.m.body.payerUserId || it.m.body.payerUserId === myUid) &&
+                    effectiveBrokerageStatus(it.m.body) === 'PENDING'
+                  "
                   @pay="goPay(it.m.body.orderId, it.m.body.proposalId)"
                 />
               </template>

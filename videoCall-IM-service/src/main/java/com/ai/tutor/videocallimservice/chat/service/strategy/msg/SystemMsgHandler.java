@@ -235,7 +235,7 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             return "信息费支付";
         }
         if ("CONTACT_UNLOCKED".equals(bizType)) {
-            return "联系方式已解锁";
+            return "聊天功能开启";
         }
         if ("TUTOR_APPLICATION".equals(bizType)) {
             return "家教申请";

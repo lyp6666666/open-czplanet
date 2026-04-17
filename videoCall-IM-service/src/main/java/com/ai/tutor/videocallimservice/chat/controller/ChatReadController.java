@@ -4,6 +4,7 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatReadAckReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatReadAckResp;
 import com.ai.tutor.videocallimservice.chat.service.ChatReadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,8 +25,7 @@ public class ChatReadController {
 
     @PostMapping("/ack")
     @Operation(summary = "已读上报")
-    public BaseResponse<Boolean> ack(@Valid @RequestBody ChatReadAckReq request) {
-        chatReadService.ackRead(request, RequestHolder.get().getUid());
-        return ResultUtils.success(true);
+    public BaseResponse<ChatReadAckResp> ack(@Valid @RequestBody ChatReadAckReq request) {
+        return ResultUtils.success(chatReadService.ackRead(request, RequestHolder.get().getUid()));
     }
 }

@@ -1,0 +1,31 @@
+<svg width="720" height="420" viewBox="0 0 720 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="72" y1="38" x2="654" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="1" stop-color="#4338CA"/>
+    </linearGradient>
+    <linearGradient id="card2" x1="446" y1="54" x2="620" y2="334" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#DBEAFE" stop-opacity="0.9"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="420" rx="36" fill="url(#bg2)"/>
+  <circle cx="606" cy="82" r="94" fill="#93C5FD" fill-opacity="0.18"/>
+  <circle cx="124" cy="338" r="120" fill="#BFDBFE" fill-opacity="0.15"/>
+  <path d="M96 300C154 214 230 170 320 162C398 155 460 116 520 64" stroke="white" stroke-opacity="0.22" stroke-width="18" stroke-linecap="round"/>
+  <rect x="66" y="64" width="312" height="292" rx="30" fill="white" fill-opacity="0.12" stroke="white" stroke-opacity="0.18"/>
+  <text x="94" y="132" fill="white" font-size="48" font-weight="800" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">学生教程</text>
+  <text x="94" y="182" fill="#DBEAFE" font-size="26" font-weight="600" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">从发需求到约课成交</text>
+  <text x="94" y="236" fill="white" font-size="22" font-weight="600" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">1. 清晰填写科目和时间</text>
+  <text x="94" y="274" fill="white" font-size="22" font-weight="600" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">2. 选择老师并发起沟通</text>
+  <text x="94" y="312" fill="white" font-size="22" font-weight="600" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">3. 试课确认后安排上课</text>
+  <rect x="436" y="58" width="208" height="274" rx="28" fill="url(#card2)"/>
+  <rect x="466" y="90" width="148" height="26" rx="13" fill="#DBEAFE"/>
+  <rect x="466" y="132" width="148" height="154" rx="22" fill="#1D4ED8" fill-opacity="0.1"/>
+  <rect x="486" y="156" width="108" height="72" rx="18" fill="white"/>
+  <rect x="486" y="240" width="84" height="18" rx="9" fill="#93C5FD"/>
+  <circle cx="540" cy="192" r="24" fill="#2563EB"/>
+  <path d="M540 170V194L556 204" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="448" y="338" width="184" height="36" rx="18" fill="white" fill-opacity="0.18" stroke="white" stroke-opacity="0.26"/>
+  <text x="480" y="362" fill="white" font-size="20" font-weight="700" font-family="Arial,'PingFang SC','Microsoft YaHei',sans-serif">查看找老师流程</text>
+</svg>
