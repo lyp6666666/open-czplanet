@@ -55,7 +55,7 @@ class MinioStorageServiceTest {
         UploadResult r = service.uploadImage(AssetBiz.AVATAR, 1001L, file);
 
         assertThat(r.getObjectKey()).startsWith("avatars/1001/");
-        assertThat(r.getUrl()).startsWith("https://assets.example.com/ai-tutor/avatars/1001/");
+        assertThat(r.getUrl()).startsWith(MinioStorageService.PUBLIC_ASSET_PREFIX + "avatars/1001/");
         assertThat(r.getContentType()).isEqualTo("image/png");
         assertThat(r.getSize()).isEqualTo(3);
 
@@ -64,5 +64,14 @@ class MinioStorageServiceTest {
         assertThat(captor.getValue().bucket()).isEqualTo("ai-tutor-assets");
         assertThat(captor.getValue().object()).isEqualTo(r.getObjectKey());
     }
-}
 
+    @Test
+    void shouldRejectAvatarWhenExceedConfiguredAvatarLimit() {
+        byte[] bytes = new byte[4 * 1024 * 1024 + 1];
+        MockMultipartFile file = new MockMultipartFile("file", "big.png", "image/png", bytes);
+
+        assertThatThrownBy(() -> service.uploadImage(AssetBiz.AVATAR, 1001L, file))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("文件过大");
+    }
+}

@@ -11,9 +11,9 @@ spring:
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
   servlet:
     multipart:
-      # 管理端轮播图上传需要支持常规运营图片，和用户端资源上传保持一致，避免默认 1MB 限制导致“接口 200 但业务失败”。
-      max-file-size: 20MB
-      max-request-size: 20MB
+      # 管理端轮播图按运营需求不限制文件大小，避免应用层因为 multipart 默认限制拦截。
+      max-file-size: -1
+      max-request-size: -1
   cloud:
     nacos:
       username: ${NACOS_USERNAME:}

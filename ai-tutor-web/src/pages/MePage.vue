@@ -27,6 +27,8 @@ const avatarUploading = ref(false)
 const avatarHint = ref<string | null>(null)
 const avatarLoaded = ref(false)
 const avatarPreviewUrl = ref('')
+// 头像上传上限需要与后端/Nacos 配置保持一致，当前统一为 4MB。
+const AVATAR_MAX_SIZE_BYTES = 4 * 1024 * 1024
 let avatarProbeId = 0
 
 function revokeAvatarPreview() {
@@ -195,8 +197,8 @@ async function onSelectAvatar(e: Event) {
     toast.show('请选择图片文件', 'error')
     return
   }
-  if (f.size > 5 * 1024 * 1024) {
-    toast.show('头像文件不能超过 5MB', 'error')
+  if (f.size > AVATAR_MAX_SIZE_BYTES) {
+    toast.show('头像文件不能超过 4MB', 'error')
     return
   }
   avatarUploading.value = true

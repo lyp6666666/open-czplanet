@@ -24,6 +24,8 @@ const greeting = ref(DEFAULT_APPLICATION_GREETING)
 const avatarFileInput = ref<HTMLInputElement | null>(null)
 const avatarBusy = ref(false)
 const avatarError = ref<string | null>(null)
+// 头像上传上限需要与后端/Nacos 配置保持一致，当前统一为 4MB。
+const AVATAR_MAX_SIZE_BYTES = 4 * 1024 * 1024
 
 const userInitial = computed(() => {
   const n = auth.user?.name?.trim()
@@ -44,8 +46,8 @@ async function onAvatarSelected(e: Event) {
   // 重置 input，允许重复选择同一文件
   if (avatarFileInput.value) avatarFileInput.value.value = ''
 
-  if (file.size > 5 * 1024 * 1024) {
-    avatarError.value = '图片大小不能超过 5MB'
+  if (file.size > AVATAR_MAX_SIZE_BYTES) {
+    avatarError.value = '图片大小不能超过 4MB'
     return
   }
 

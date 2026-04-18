@@ -19,5 +19,9 @@ public class UploadProperties {
             "image/svg+xml"
     ));
 
-    private long maxSizeBytes = 20L * 1024 * 1024;
+    /**
+     * 管理端轮播图不做应用层大小限制。
+     * 小于等于 0 代表不限制。
+     */
+    private long maxSizeBytes = -1L;
 }

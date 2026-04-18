@@ -15,6 +15,6 @@ class GlobalExceptionHandlerTest {
         BaseResponse<?> response = handler.handleMaxUploadSizeExceededException(new MaxUploadSizeExceededException(1024));
 
         assertThat(response.getCode()).isEqualTo(40000);
-        assertThat(response.getMessage()).isEqualTo("上传文件过大，请控制在 20MB 以内");
+        assertThat(response.getMessage()).isEqualTo("上传文件过大");
     }
 }

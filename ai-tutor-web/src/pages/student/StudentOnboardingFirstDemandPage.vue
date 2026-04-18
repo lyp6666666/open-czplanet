@@ -24,6 +24,8 @@ const toast = useToastStore()
 const step = ref<1 | 2 | 3>(1)
 const loading = ref(false)
 const uid = ref<number | null>(null)
+// 头像上传上限需要与后端/Nacos 配置保持一致，当前统一为 4MB。
+const AVATAR_MAX_SIZE_BYTES = 4 * 1024 * 1024
 
 const avatar = ref('')
 const avatarUploading = ref(false)
@@ -147,8 +149,8 @@ async function onSelectAvatarFile(e: Event) {
     toast.show('请选择图片文件', 'error')
     return
   }
-  if (f.size > 2 * 1024 * 1024) {
-    toast.show('头像文件不能超过 2MB', 'error')
+  if (f.size > AVATAR_MAX_SIZE_BYTES) {
+    toast.show('头像文件不能超过 4MB', 'error')
     return
   }
   avatarUploading.value = true
@@ -381,7 +383,7 @@ watch(
                   <button class="btn btn-secondary btn-sm" type="button" :disabled="avatarUploading || loading" @click="triggerAvatarUpload">
                     {{ avatar && avatar !== '/avatars/default-avatar.svg' ? '更换头像' : '上传头像' }}
                   </button>
-                  <div class="avatar-tip">支持 JPG/PNG，最大 2MB</div>
+                  <div class="avatar-tip">支持 JPG/PNG，最大 4MB</div>
                 </div>
                 <input ref="fileInput" class="avatar-file-input" type="file" accept="image/*" :disabled="avatarUploading || loading" @change="onSelectAvatarFile" />
               </div>

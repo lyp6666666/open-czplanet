@@ -103,7 +103,8 @@ public class AdminHomeCarouselServiceImpl implements AdminHomeCarouselService {
         String contentType = normalizeContentType(file.getContentType());
         ThrowUtils.throwIf(contentType == null, ErrorCode.PARAMS_ERROR, "无法识别文件类型");
         ThrowUtils.throwIf(!uploadProperties.getAllowedContentTypes().contains(contentType), ErrorCode.PARAMS_ERROR, "不支持的文件类型");
-        ThrowUtils.throwIf(file.getSize() > uploadProperties.getMaxSizeBytes(), ErrorCode.PARAMS_ERROR, "文件过大");
+        long maxSizeBytes = uploadProperties.getMaxSizeBytes();
+        ThrowUtils.throwIf(maxSizeBytes > 0 && file.getSize() > maxSizeBytes, ErrorCode.PARAMS_ERROR, "文件过大");
 
         String ext = guessExt(contentType);
         ThrowUtils.throwIf(ext == null, ErrorCode.PARAMS_ERROR, "不支持的图片格式");

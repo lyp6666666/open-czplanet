@@ -97,7 +97,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public BaseResponse<?> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
         log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
-        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "上传文件过大，请控制在 20MB 以内");
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "上传文件过大");
     }
 
     /**

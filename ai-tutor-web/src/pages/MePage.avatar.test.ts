@@ -5,6 +5,7 @@ import { createPinia } from 'pinia'
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 import MePage from './MePage.vue'
+import { useToastStore } from '@/stores/toast'
 
 const mocks = vi.hoisted(() => ({
   uploadImage: vi.fn(),
@@ -138,5 +139,39 @@ describe('MePage avatar upload', () => {
       baseUserInfo: { name: '陆熠鹏' },
       studentExtInfo: { realName: '陆熠鹏' },
     })
+  })
+
+  it('rejects avatar larger than 4MB before upload', async () => {
+    localStorage.setItem('ai_tutor_token', 't')
+    localStorage.setItem(
+      'ai_tutor_user',
+      JSON.stringify({ id: 1001, token: 't', userType: 2, name: '用户', phone: '13800001111', avatar: '', sex: 1 }),
+    )
+
+    mocks.me.mockReset()
+    mocks.updateUserInfo.mockReset()
+    mocks.uploadImage.mockReset()
+
+    mocks.me.mockResolvedValue({ name: '用户', phone: '13800001111', avatar: '', sex: 1, userType: 2, teacherProfile: null, studentProfile: null })
+
+    const router = createTestRouter()
+    await router.push('/me')
+    await router.isReady()
+
+    const wrapper = mount(MePage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    const file = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'oversize.png', { type: 'image/png' })
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+
+    const toast = useToastStore()
+    expect(mocks.uploadImage).not.toHaveBeenCalled()
+    expect(toast.message).toBe('头像文件不能超过 4MB')
+    expect(toast.type).toBe('error')
   })
 })

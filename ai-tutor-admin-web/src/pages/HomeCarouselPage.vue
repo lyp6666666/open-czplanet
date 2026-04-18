@@ -71,8 +71,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { createHomeCarousel, deleteHomeCarousel, listHomeCarousel } from '@/api/homeCarousel'
 import type { AdminHomeCarouselItem } from '@/api/types'
 
-const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
-
 const rows = ref<AdminHomeCarouselItem[]>([])
 const loading = ref(false)
 const uploading = ref(false)
@@ -112,9 +110,6 @@ function validateUploadForm() {
   }
   if (!pickedFile.value) {
     return '请先选择图片文件'
-  }
-  if (pickedFile.value.size > MAX_UPLOAD_SIZE_BYTES) {
-    return '图片不能超过 20MB'
   }
   return null
 }

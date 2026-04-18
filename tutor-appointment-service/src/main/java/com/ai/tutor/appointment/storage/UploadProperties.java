@@ -34,6 +34,5 @@ public class UploadProperties {
     /**
      * 头像最大上传大小（字节）。
      */
-    private long avatarMaxSizeBytes = 5L * 1024 * 1024;
+    private long avatarMaxSizeBytes = 4L * 1024 * 1024;
 }
-
