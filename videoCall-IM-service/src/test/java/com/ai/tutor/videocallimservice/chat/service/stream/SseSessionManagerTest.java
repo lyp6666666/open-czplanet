@@ -2,6 +2,7 @@ package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,20 @@ class SseSessionManagerTest {
         assertThat(replayEvent.getBizType()).isEqualTo("chat");
         assertThat(replayEvent.getRoomId()).isEqualTo(7001L);
         assertThat(replayEvent.getMsgId()).isEqualTo(9001L);
+    }
+
+    @Test
+    void shouldNotStoreEphemeralTypingEventInReplayBuffer() {
+        SseSessionManager manager = new SseSessionManager();
+        ChatStreamTypingEvent event = new ChatStreamTypingEvent();
+        event.setRoomId(7001L);
+        event.setTypingUid(2001L);
+        event.setTyping(true);
+
+        manager.sendEphemeralToUid(1001L, "typing", event);
+
+        List<RealtimeEventEnvelope> replayEvents = manager.listReplayEventsAfter(1001L, 0L);
+        assertThat(replayEvents).isEmpty();
     }
 
     @Test

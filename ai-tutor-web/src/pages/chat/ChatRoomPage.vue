@@ -76,9 +76,16 @@ const msgsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
+const TYPING_REPORT_THROTTLE_MS = 2_000
+const TYPING_IDLE_TIMEOUT_MS = 2_200
+const typingReportRoomId = ref<number | null>(null)
+const typingReported = ref(false)
+const lastTypingReportAt = ref(0)
+const typingStopTimer = ref<number | null>(null)
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const peerLastReadMsgId = computed(() => chatRealtime.peerReadMsgIdByRoom[roomId.value] || 0)
+const peerTyping = computed(() => chatRealtime.peerTypingByRoom[roomId.value] === true)
 const myRealName = computed(() => {
   const teacherName = auth.me?.teacherProfile?.realName?.trim()
   if (teacherName) return teacherName
@@ -958,6 +965,53 @@ function keepaliveAckLatest() {
   chatRealtime.ackRoomReadKeepalive(roomId.value, latest)
 }
 
+function clearTypingStopTimer() {
+  if (typingStopTimer.value == null) return
+  globalThis.clearTimeout(typingStopTimer.value)
+  typingStopTimer.value = null
+}
+
+async function reportTypingState(targetRoomId: number, typing: boolean, force = false) {
+  if (!(targetRoomId > 0)) return
+
+  if (!typing) {
+    if (!typingReported.value || typingReportRoomId.value !== targetRoomId) return
+    typingReported.value = false
+    typingReportRoomId.value = null
+    lastTypingReportAt.value = Date.now()
+    try {
+      await chatApi.reportTyping(targetRoomId, false)
+    } catch {
+      void 0
+    }
+    return
+  }
+
+  if (!composerEnabled.value || targetRoomId !== roomId.value) return
+  const now = Date.now()
+  const isSameRoom = typingReportRoomId.value === targetRoomId
+  if (!force && isSameRoom && typingReported.value && now - lastTypingReportAt.value < TYPING_REPORT_THROTTLE_MS) {
+    return
+  }
+
+  // “正在输入”只做在线短态展示，这里按节流续期，避免每次按键都打到后端。
+  typingReported.value = true
+  typingReportRoomId.value = targetRoomId
+  lastTypingReportAt.value = now
+  try {
+    await chatApi.reportTyping(targetRoomId, true)
+  } catch {
+    void 0
+  }
+}
+
+function scheduleTypingStop() {
+  clearTypingStopTimer()
+  typingStopTimer.value = globalThis.setTimeout(() => {
+    void reportTypingState(roomId.value, false, true)
+  }, TYPING_IDLE_TIMEOUT_MS)
+}
+
 async function onSend() {
   const text = input.value.trim()
   if (!text) return
@@ -967,6 +1021,8 @@ async function onSend() {
   }
   if (sending.value) return
   error.value = null
+  clearTypingStopTimer()
+  void reportTypingState(roomId.value, false, true)
   const pending = createPendingOutgoingMessage(text)
   pendingOutgoingMessages.value = [...pendingOutgoingMessages.value, pending]
   input.value = ''
@@ -998,6 +1054,11 @@ async function ackFromRoomList() {
 }
 
 onBeforeUnmount(() => {
+  clearTypingStopTimer()
+  const currentTypingRoomId = typingReportRoomId.value
+  if (currentTypingRoomId) {
+    void chatApi.reportTyping(currentTypingRoomId, false).catch(() => undefined)
+  }
   keepaliveAckLatest()
   chatRealtime.setActiveRoom(null)
 })
@@ -1009,6 +1070,40 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('pagehide', keepaliveAckLatest)
 })
+
+watch(
+  () => input.value,
+  (value) => {
+    const hasText = value.trim().length > 0
+    if (!hasText) {
+      clearTypingStopTimer()
+      void reportTypingState(roomId.value, false, true)
+      return
+    }
+    if (!composerEnabled.value) return
+    void reportTypingState(roomId.value, true)
+    scheduleTypingStop()
+  },
+)
+
+watch(
+  composerEnabled,
+  (enabled) => {
+    if (enabled) return
+    clearTypingStopTimer()
+    void reportTypingState(roomId.value, false, true)
+  },
+)
+
+watch(
+  () => roomId.value,
+  (nextRoomId, previousRoomId) => {
+    if (previousRoomId && previousRoomId !== nextRoomId) {
+      clearTypingStopTimer()
+      void reportTypingState(previousRoomId, false, true)
+    }
+  },
+)
 
 watch(
   () => [roomId.value, otherUid.value] as const,
@@ -1075,7 +1170,10 @@ watch(
   <div class="wrap">
     <div class="head card">
       <button class="btn back" type="button" @click="router.push({ name: 'chatList' })">返回</button>
-      <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
+      <div class="head-main">
+        <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
+        <div v-if="peerTyping" class="typing-hint">对方正在输入...</div>
+      </div>
       <div />
     </div>
 
@@ -1284,9 +1382,21 @@ watch(
   padding: 10px 12px;
 }
 
+.head-main {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
 .name {
   text-align: center;
   font-weight: 900;
+}
+
+.typing-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1;
 }
 
 .panel {

@@ -11,6 +11,7 @@ vi.mock('@/api/chat', () => ({
   chatApi: {
     listRooms: vi.fn(),
     ackRead: vi.fn(),
+    reportTyping: vi.fn(),
     syncRealtimeEvents: vi.fn(),
   },
 }))
@@ -331,6 +332,57 @@ describe('chatRealtime store', () => {
     })
 
     expect(chatRealtime.peerReadMsgIdByRoom[7101]).toBe(6001)
+  })
+
+  it('shows peer typing only for a short online window and then expires automatically', () => {
+    vi.useFakeTimers()
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.typing.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 7101,
+        typingUid: 3001,
+        typing: true,
+      },
+    })
+
+    expect(chatRealtime.peerTypingByRoom[7101]).toBe(true)
+
+    vi.advanceTimersByTime(3600)
+
+    expect(chatRealtime.peerTypingByRoom[7101]).toBeUndefined()
+  })
+
+  it('clears peer typing immediately when the peer reports typing stopped', () => {
+    vi.useFakeTimers()
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.typing.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 7101,
+        typingUid: 3001,
+        typing: true,
+      },
+    })
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.typing.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 7101,
+        typingUid: 3001,
+        typing: false,
+      },
+    })
+
+    expect(chatRealtime.peerTypingByRoom[7101]).toBeUndefined()
   })
 
   it('aborts a silent realtime stream when watchdog timeout is reached', () => {

@@ -2,6 +2,7 @@ package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeStreamReadyResp;
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
@@ -121,6 +122,25 @@ public class SseSessionManager {
         }
     }
 
+    public void sendEphemeralToUid(Long uid, String eventName, Object data) {
+        RealtimeEventEnvelope envelope = buildEphemeralEnvelope(uid, eventName, data);
+        List<SessionHolder> emitters = emittersByUid.get(uid);
+        if (emitters == null || emitters.isEmpty()) {
+            return;
+        }
+        for (SessionHolder holder : emitters) {
+            try {
+                if (holder.protocol == Protocol.V2) {
+                    holder.emitter.send(SseEmitter.event().name("event").data(envelope));
+                } else {
+                    holder.emitter.send(SseEmitter.event().name(eventName).data(data));
+                }
+            } catch (IOException e) {
+                remove(uid, holder);
+            }
+        }
+    }
+
     List<RealtimeEventEnvelope> listReplayEventsAfter(Long uid, Long lastEventId) {
         Deque<RealtimeEventEnvelope> replayEvents = replayBufferByUid.get(uid);
         if (replayEvents == null || replayEvents.isEmpty()) {
@@ -182,6 +202,14 @@ public class SseSessionManager {
     }
 
     private RealtimeEventEnvelope buildEnvelope(Long uid, String eventName, Object data) {
+        return buildEnvelope(uid, eventName, data, true);
+    }
+
+    private RealtimeEventEnvelope buildEphemeralEnvelope(Long uid, String eventName, Object data) {
+        return buildEnvelope(uid, eventName, data, false);
+    }
+
+    private RealtimeEventEnvelope buildEnvelope(Long uid, String eventName, Object data, boolean includeEventId) {
         String normalizedEventName = eventName == null ? "" : eventName.trim();
         String eventType = "legacy." + normalizedEventName;
         String bizType = normalizedEventName.isEmpty() ? "unknown" : normalizedEventName;
@@ -200,13 +228,18 @@ public class SseSessionManager {
             bizType = "chat";
             roomId = readEvent.getRoomId();
             msgId = readEvent.getLastReadMsgId();
+        } else if ("typing".equals(normalizedEventName) && data instanceof ChatStreamTypingEvent) {
+            ChatStreamTypingEvent typingEvent = (ChatStreamTypingEvent) data;
+            eventType = "chat.typing.updated";
+            bizType = "chat";
+            roomId = typingEvent.getRoomId();
         } else if ("application".equals(normalizedEventName)) {
             bizType = "application";
             eventType = resolveApplicationEventType(data);
         }
 
         return RealtimeEventEnvelope.builder()
-                .eventId(eventIdGenerator.incrementAndGet())
+                .eventId(includeEventId ? eventIdGenerator.incrementAndGet() : null)
                 .eventType(eventType)
                 .bizType(bizType)
                 .targetUid(uid)

@@ -41,6 +41,12 @@ type ChatReadRealtimeEvent = {
   lastReadMsgId: number
 }
 
+type ChatTypingRealtimeEvent = {
+  roomId: number
+  typingUid?: number
+  typing: boolean
+}
+
 type QueuedMessageEvent = {
   serial: number
   event: StreamMsgEvent
@@ -74,7 +80,22 @@ const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
 const MESSAGE_EVENT_LOG_LIMIT = 200
 const REALTIME_IDLE_TIMEOUT_MS = 45_000
 const REALTIME_WATCHDOG_INTERVAL_MS = 10_000
+const PEER_TYPING_EXPIRE_MS = 3_500
 let realtimeSyncInFlight: Promise<void> | null = null
+const peerTypingTimerByRoom = new Map<number, number>()
+
+function clearPeerTypingTimer(roomId: number) {
+  const timer = peerTypingTimerByRoom.get(roomId)
+  if (timer == null) return
+  globalThis.clearTimeout(timer)
+  peerTypingTimerByRoom.delete(roomId)
+}
+
+function clearAllPeerTypingTimers() {
+  for (const roomId of peerTypingTimerByRoom.keys()) {
+    clearPeerTypingTimer(roomId)
+  }
+}
 
 function buildReadMarksStorageKey(uid: number) {
   return `${READ_MARKS_STORAGE_PREFIX}${uid}`
@@ -207,6 +228,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     roomUnread: {} as Record<number, number>,
     optimisticReadMsgIdByRoom: {} as Record<number, number>,
     peerReadMsgIdByRoom: {} as Record<number, number>,
+    peerTypingByRoom: {} as Record<number, boolean>,
     latestMsgIdByRoom: {} as Record<number, number>,
     persistedReadMarksOwnerUid: null as number | null,
     activeRoomId: null as number | null,
@@ -228,6 +250,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.roomUnread = {}
       this.optimisticReadMsgIdByRoom = {}
       this.peerReadMsgIdByRoom = {}
+      this.peerTypingByRoom = {}
       this.latestMsgIdByRoom = {}
       this.persistedReadMarksOwnerUid = null
       this.activeRoomId = null
@@ -239,6 +262,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.lastRealtimeEventId = 0
       this.clientId = ''
       this.lastStreamActivityAt = 0
+      clearAllPeerTypingTimers()
       this.stopRealtimeWatchdog()
     },
 
@@ -448,6 +472,34 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       }
     },
 
+    setPeerTyping(roomId: number, typing: boolean) {
+      if (!(roomId > 0)) return
+      clearPeerTypingTimer(roomId)
+      if (!typing) {
+        if (!this.peerTypingByRoom[roomId]) return
+        const next = { ...this.peerTypingByRoom }
+        delete next[roomId]
+        this.peerTypingByRoom = next
+        return
+      }
+
+      this.peerTypingByRoom = {
+        ...this.peerTypingByRoom,
+        [roomId]: true,
+      }
+
+      // “正在输入”只属于瞬时在线态，不应该参与历史补偿或持久化，因此到时后自动失效。
+      peerTypingTimerByRoom.set(
+        roomId,
+        globalThis.setTimeout(() => {
+          const next = { ...this.peerTypingByRoom }
+          delete next[roomId]
+          this.peerTypingByRoom = next
+          peerTypingTimerByRoom.delete(roomId)
+        }, PEER_TYPING_EXPIRE_MS),
+      )
+    },
+
     notifyIncomingMessage(ev: StreamMsgEvent) {
       const preview = textPreview(ev.body)
       if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.hidden && 'Notification' in window) {
@@ -479,6 +531,20 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.syncPeerReadMark(roomId, lastReadMsgId)
     },
 
+    consumeTypingEvent(payload: unknown) {
+      if (!payload || typeof payload !== 'object') return
+      const any = payload as Partial<ChatTypingRealtimeEvent> & Record<string, unknown>
+      const roomId = typeof any.roomId === 'number' ? any.roomId : Number(any.roomId)
+      if (!(roomId > 0)) return
+      const typing =
+        typeof any.typing === 'boolean'
+          ? any.typing
+          : typeof any.typing === 'string'
+            ? any.typing.trim().toLowerCase() === 'true'
+            : Boolean(any.typing)
+      this.setPeerTyping(roomId, typing)
+    },
+
     consumeRealtimeEnvelope(envelope: RealtimeEnvelope) {
       const eventId = typeof envelope.eventId === 'number' ? envelope.eventId : Number(envelope.eventId)
       if (Number.isFinite(eventId) && eventId > 0) {
@@ -502,6 +568,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
 
       if (eventType === 'chat.read.updated') {
         this.consumeReadEvent(envelope.payload)
+        return
+      }
+
+      if (eventType === 'chat.typing.updated') {
+        this.consumeTypingEvent(envelope.payload)
         return
       }
 

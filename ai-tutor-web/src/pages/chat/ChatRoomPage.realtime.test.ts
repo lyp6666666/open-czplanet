@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listRooms: vi.fn(),
   getChatRefundState: vi.fn(),
   ackRead: vi.fn(),
+  reportTyping: vi.fn(),
   batch: vi.fn(),
   sendText: vi.fn(),
 }))
@@ -23,6 +24,7 @@ vi.mock('@/api/chat', () => ({
     listRooms: mocks.listRooms,
     getChatRefundState: mocks.getChatRefundState,
     ackRead: mocks.ackRead,
+    reportTyping: mocks.reportTyping,
     sendText: mocks.sendText,
     requestBrokerageRefund: vi.fn(),
     requestEndChat: vi.fn(),
@@ -160,6 +162,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.listRooms.mockReset()
     mocks.getChatRefundState.mockReset()
     mocks.ackRead.mockReset()
+    mocks.reportTyping.mockReset()
     mocks.batch.mockReset()
     mocks.sendText.mockReset()
 
@@ -196,6 +199,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     })
     mocks.getChatRefundState.mockResolvedValue({ canApply: false })
     mocks.ackRead.mockResolvedValue({ roomId: 10, lastReadMsgId: 501 })
+    mocks.reportTyping.mockResolvedValue(true)
     mocks.batch.mockResolvedValue([{ id: 3001, name: '教师3001', realName: '张老师', avatar: '', userType: 1 }])
     mocks.sendText.mockResolvedValue({
       fromUser: { uid: 2001 },
@@ -271,5 +275,58 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(mocks.sendText).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('补发成功')
     expect(wrapper.text()).not.toContain('发送失败，点击重试')
+  })
+
+  it('shows peer typing hint after realtime typing event and hides it after expiration', async () => {
+    vi.useFakeTimers()
+    const { pinia, wrapper } = await mountChatRoomPage()
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.typing.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 10,
+        typingUid: 3001,
+        typing: true,
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('对方正在输入...')
+
+    vi.advanceTimersByTime(3600)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('对方正在输入...')
+  })
+
+  it('reports typing when the local user is composing and clears it after sending', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:59:00',
+            body: { type: 'contact_unlocked', proposalId: 1, orderId: 1, status: 'PAID' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    await wrapper.find('.input').setValue('正在输入')
+    await flushPromises()
+    expect(mocks.reportTyping).toHaveBeenCalledWith(10, true)
+
+    await wrapper.find('.send .btn.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(mocks.reportTyping).toHaveBeenCalledWith(10, false)
   })
 })
