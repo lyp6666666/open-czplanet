@@ -97,7 +97,7 @@ const lastTypingReportAt = ref(0)
 const typingStopTimer = ref<ReturnType<typeof globalThis.setTimeout> | null>(null)
 const roomPinned = ref(false)
 let stopPinSync: (() => void) | null = null
-let presenceRefreshTimer: number | null = null
+let presenceRefreshTimer: ReturnType<typeof globalThis.setInterval> | null = null
 const PRESENCE_REFRESH_INTERVAL_MS = 15_000
 
 const myUid = computed(() => auth.user?.id ?? 0)
@@ -151,7 +151,7 @@ function userName(uid: number): string {
 
 function clearPresenceRefreshTimer() {
   if (presenceRefreshTimer == null) return
-  window.clearInterval(presenceRefreshTimer)
+  globalThis.clearInterval(presenceRefreshTimer)
   presenceRefreshTimer = null
 }
 
@@ -186,6 +186,23 @@ const otherPresenceText = computed(() => {
   const lastOnlineText = formatPresenceTime(otherPresence.value?.lastOnlineAt)
   return lastOnlineText ? `离线 · 最后在线 ${lastOnlineText}` : '离线'
 })
+
+watch(
+  () => (otherUid.value ? chatRealtime.peerPresenceByUid[otherUid.value] ?? null : null),
+  (presence) => {
+    if (!otherUid.value) {
+      otherPresence.value = null
+      return
+    }
+    if (!presence) {
+      if (otherPresence.value?.uid === otherUid.value) return
+      otherPresence.value = null
+      return
+    }
+    otherPresence.value = { ...presence }
+  },
+  { immediate: true },
+)
 
 function userAvatar(uid: number): string {
   if (avatarBroken.value[uid]) return ''
@@ -1065,20 +1082,20 @@ async function loadOtherPresence() {
   try {
     const list = await chatApi.batchPresence([otherUid.value])
     if (v !== roomVersion.value) return
-    otherPresence.value = list[0] || { uid: otherUid.value, online: false, lastOnlineAt: null }
+    chatRealtime.setPeerPresenceSnapshot(list[0] || { uid: otherUid.value, online: false, lastOnlineAt: null })
   } catch {
     if (v !== roomVersion.value) return
     // 在线状态查询失败时不打断聊天主流程；若已有状态则继续沿用，避免页面闪烁误判。
     if (otherPresence.value?.uid === otherUid.value) return
-    otherPresence.value = { uid: otherUid.value, online: false, lastOnlineAt: null }
+    chatRealtime.setPeerPresenceSnapshot({ uid: otherUid.value, online: false, lastOnlineAt: null })
   }
 }
 
 function startPresenceRefresh() {
   clearPresenceRefreshTimer()
-  if (typeof window === 'undefined') return
+  if (typeof globalThis.setInterval !== 'function') return
   if (!otherUid.value) return
-  presenceRefreshTimer = window.setInterval(() => {
+  presenceRefreshTimer = globalThis.setInterval(() => {
     void loadOtherPresence()
   }, PRESENCE_REFRESH_INTERVAL_MS)
 }

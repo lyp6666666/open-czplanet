@@ -5,8 +5,10 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatPresenceResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamPresenceEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeStreamReadyResp;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import jakarta.annotation.Resource;
 import jakarta.annotation.PostConstruct;
@@ -50,6 +52,9 @@ public class SseSessionManager {
     @Resource
     private RealtimeEventStoreService realtimeEventStoreService;
 
+    @Resource
+    private RoomMapper roomMapper;
+
     @PostConstruct
     public void startHeartbeatTask() {
         heartbeatExecutor.scheduleAtFixedRate(this::sendHeartbeatToV2Clients, 20, 20, TimeUnit.SECONDS);
@@ -61,9 +66,11 @@ public class SseSessionManager {
     }
 
     public SseEmitter connect(Long uid) {
+        boolean wasOnline = isOnline(uid);
         SseEmitter emitter = new SseEmitter(0L);
         SessionHolder holder = new SessionHolder(uid, null, Protocol.LEGACY, emitter);
         emittersByUid.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>()).add(holder);
+        onPresenceConnected(uid, wasOnline);
 
         emitter.onCompletion(() -> remove(uid, holder));
         emitter.onTimeout(() -> remove(uid, holder));
@@ -79,9 +86,11 @@ public class SseSessionManager {
 
     public SseEmitter connectV2(Long uid, String clientId, Long lastEventId) {
         String normalizedClientId = normalizeClientId(clientId);
+        boolean wasOnline = isOnline(uid);
         SseEmitter emitter = new SseEmitter(0L);
         SessionHolder holder = new SessionHolder(uid, normalizedClientId, Protocol.V2, emitter);
         emittersByUid.computeIfAbsent(uid, k -> new CopyOnWriteArrayList<>()).add(holder);
+        onPresenceConnected(uid, wasOnline);
 
         emitter.onCompletion(() -> remove(uid, holder));
         emitter.onTimeout(() -> remove(uid, holder));
@@ -267,6 +276,9 @@ public class SseSessionManager {
             eventType = "chat.typing.updated";
             bizType = "chat";
             roomId = typingEvent.getRoomId();
+        } else if ("presence".equals(normalizedEventName) && data instanceof ChatStreamPresenceEvent) {
+            eventType = "chat.presence.updated";
+            bizType = "chat";
         } else if ("application".equals(normalizedEventName)) {
             bizType = "application";
             eventType = resolveApplicationEventType(data);
@@ -307,6 +319,18 @@ public class SseSessionManager {
         return normalized.isEmpty() ? "web-" + UUID.randomUUID() : normalized;
     }
 
+    private void onPresenceConnected(Long uid, boolean wasOnline) {
+        if (uid == null || uid <= 0) {
+            return;
+        }
+        if (wasOnline) {
+            return;
+        }
+        // 只在“从离线切到在线”时广播一次，避免多端登录导致对端状态来回抖动。
+        lastOfflineAtByUid.remove(uid);
+        notifyPresenceChanged(uid, true, null);
+    }
+
     private void remove(Long uid, SessionHolder holder) {
         List<SessionHolder> emitters = emittersByUid.get(uid);
         if (emitters == null) {
@@ -315,8 +339,10 @@ public class SseSessionManager {
         emitters.remove(holder);
         if (emitters.isEmpty()) {
             emittersByUid.remove(uid);
-            // 只有最后一个 SSE 会话断开时，才更新“最后在线时间”。
-            lastOfflineAtByUid.put(uid, new Date());
+            // 只有最后一个 SSE 会话断开时，才更新“最后在线时间”并广播离线。
+            Date lastOnlineAt = new Date();
+            lastOfflineAtByUid.put(uid, lastOnlineAt);
+            notifyPresenceChanged(uid, false, lastOnlineAt);
         }
     }
 
@@ -326,6 +352,27 @@ public class SseSessionManager {
         }
         List<SessionHolder> emitters = emittersByUid.get(uid);
         return emitters == null ? 0 : emitters.size();
+    }
+
+    private void notifyPresenceChanged(Long uid, boolean online, Date lastOnlineAt) {
+        if (uid == null || uid <= 0 || roomMapper == null) {
+            return;
+        }
+        List<Long> peerUids = roomMapper.listPeerUserIdsByUid(uid);
+        if (peerUids == null || peerUids.isEmpty()) {
+            return;
+        }
+        ChatStreamPresenceEvent event = new ChatStreamPresenceEvent();
+        event.setUid(uid);
+        event.setOnline(online);
+        event.setLastOnlineAt(lastOnlineAt);
+        for (Long peerUid : peerUids) {
+            if (peerUid == null || peerUid <= 0 || Objects.equals(peerUid, uid)) {
+                continue;
+            }
+            // Presence 是瞬时状态，走实时推送即可，不进入历史补偿窗口。
+            sendEphemeralToUid(peerUid, "presence", event);
+        }
     }
 
     private enum Protocol {

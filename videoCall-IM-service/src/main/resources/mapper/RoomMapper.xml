@@ -125,4 +125,27 @@
         LIMIT #{pageSize}
     </select>
 
+    <select id="listPeerUserIdsByUid" resultType="java.lang.Long">
+        SELECT DISTINCT peer_uid
+        FROM (
+            SELECT sp.user_id AS peer_uid
+            FROM room r
+            INNER JOIN teacher_profile tp ON tp.id = r.teacher_profile_id
+            INNER JOIN student_profile sp ON sp.id = r.student_profile_id
+            WHERE r.status = 1
+              AND tp.user_id = #{uid}
+
+            UNION
+
+            SELECT tp.user_id AS peer_uid
+            FROM room r
+            INNER JOIN teacher_profile tp ON tp.id = r.teacher_profile_id
+            INNER JOIN student_profile sp ON sp.id = r.student_profile_id
+            WHERE r.status = 1
+              AND sp.user_id = #{uid}
+        ) t
+        WHERE peer_uid IS NOT NULL
+          AND peer_uid != #{uid}
+    </select>
+
 </mapper>

@@ -402,6 +402,28 @@ describe('chatRealtime store', () => {
     expect(chatRealtime.peerTypingByRoom[7101]).toBeUndefined()
   })
 
+  it('updates peer presence from unified presence events', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.presence.updated',
+      bizType: 'chat',
+      payload: {
+        uid: 3001,
+        online: false,
+        lastOnlineAt: '2026-04-18T10:30:00',
+      },
+    })
+
+    expect(chatRealtime.peerPresenceByUid[3001]).toEqual({
+      uid: 3001,
+      online: false,
+      lastOnlineAt: '2026-04-18T10:30:00',
+    })
+  })
+
   it('clears peer typing immediately when the peer reports typing stopped', () => {
     vi.useFakeTimers()
     seedAuth()

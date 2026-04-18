@@ -390,6 +390,27 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(wrapper.find('.presence-text').text()).toContain('10:12')
   })
 
+  it('updates peer presence immediately after a realtime presence event arrives', async () => {
+    mocks.batchPresence.mockResolvedValueOnce([{ uid: 3001, online: false, lastOnlineAt: '2026-04-18T10:12:00' }])
+
+    const { pinia, wrapper } = await mountChatRoomPage()
+    expect(wrapper.find('.presence-text').text()).toContain('离线')
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.consumeRealtimeEnvelope({
+      eventType: 'chat.presence.updated',
+      bizType: 'chat',
+      payload: {
+        uid: 3001,
+        online: true,
+        lastOnlineAt: null,
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.presence-text').text()).toBe('在线')
+  })
+
   it('shows delivered receipt after peer delivery realtime event arrives', async () => {
     const { pinia, wrapper } = await mountChatRoomPage()
 

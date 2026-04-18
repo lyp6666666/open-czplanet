@@ -29,4 +29,6 @@ public interface RoomMapper {
     List<Room> listByStudentProfileId(@Param("studentProfileId") Long studentProfileId,
                                       @Param("cursor") Long cursor,
                                       @Param("pageSize") Integer pageSize);
+
+    List<Long> listPeerUserIdsByUid(@Param("uid") Long uid);
 }

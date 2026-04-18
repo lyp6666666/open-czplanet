@@ -53,6 +53,12 @@ type ChatTypingRealtimeEvent = {
   typing: boolean
 }
 
+type ChatPresenceRealtimeEvent = {
+  uid: number
+  online: boolean
+  lastOnlineAt?: string | number | Date | null
+}
+
 type QueuedMessageEvent = {
   serial: number
   event: StreamMsgEvent
@@ -240,6 +246,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     peerDeliveredMsgIdByRoom: {} as Record<number, number>,
     peerReadMsgIdByRoom: {} as Record<number, number>,
     peerTypingByRoom: {} as Record<number, boolean>,
+    peerPresenceByUid: {} as Record<number, ChatPresenceRealtimeEvent>,
     latestMsgIdByRoom: {} as Record<number, number>,
     persistedReadMarksOwnerUid: null as number | null,
     activeRoomId: null as number | null,
@@ -263,6 +270,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.peerDeliveredMsgIdByRoom = {}
       this.peerReadMsgIdByRoom = {}
       this.peerTypingByRoom = {}
+      this.peerPresenceByUid = {}
       this.latestMsgIdByRoom = {}
       this.persistedReadMarksOwnerUid = null
       this.activeRoomId = null
@@ -530,6 +538,26 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       )
     },
 
+    setPeerPresenceSnapshot(payload: Partial<ChatPresenceRealtimeEvent> | null | undefined) {
+      if (!payload || typeof payload !== 'object') return
+      const uid = typeof payload.uid === 'number' ? payload.uid : Number(payload.uid)
+      if (!(uid > 0)) return
+      const online =
+        typeof payload.online === 'boolean'
+          ? payload.online
+          : typeof payload.online === 'string'
+            ? String(payload.online).trim().toLowerCase() === 'true'
+            : Boolean(payload.online)
+      this.peerPresenceByUid = {
+        ...this.peerPresenceByUid,
+        [uid]: {
+          uid,
+          online,
+          lastOnlineAt: payload.lastOnlineAt ?? null,
+        },
+      }
+    },
+
     notifyIncomingMessage(ev: StreamMsgEvent) {
       const preview = textPreview(ev.body)
       if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.hidden && 'Notification' in window) {
@@ -585,6 +613,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.setPeerTyping(roomId, typing)
     },
 
+    consumePresenceEvent(payload: unknown) {
+      if (!payload || typeof payload !== 'object') return
+      this.setPeerPresenceSnapshot(payload as Partial<ChatPresenceRealtimeEvent>)
+    },
+
     consumeRealtimeEnvelope(envelope: RealtimeEnvelope) {
       const eventId = typeof envelope.eventId === 'number' ? envelope.eventId : Number(envelope.eventId)
       if (Number.isFinite(eventId) && eventId > 0) {
@@ -618,6 +651,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
 
       if (eventType === 'chat.typing.updated') {
         this.consumeTypingEvent(envelope.payload)
+        return
+      }
+
+      if (eventType === 'chat.presence.updated') {
+        this.consumePresenceEvent(envelope.payload)
         return
       }
 

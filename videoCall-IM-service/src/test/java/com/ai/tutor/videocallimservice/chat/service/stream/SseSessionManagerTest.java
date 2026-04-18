@@ -1,12 +1,15 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamPresenceEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -15,7 +18,16 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SseSessionManagerTest {
@@ -186,5 +198,59 @@ class SseSessionManagerTest {
 
         assertThat(presenceList).hasSize(1);
         assertThat(manager.listPresence(List.of(4001L)).getFirst().getLastOnlineAt()).isEqualTo(lastOnlineAt);
+    }
+
+    @Test
+    void shouldBroadcastOnlinePresenceOnlyWhenFirstClientConnects() {
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        when(roomMapper.listPeerUserIdsByUid(2001L)).thenReturn(List.of(3001L));
+
+        SseSessionManager manager = spy(new SseSessionManager());
+        ReflectionTestUtils.setField(manager, "roomMapper", roomMapper);
+        doNothing().when(manager).sendEphemeralToUid(anyLong(), eq("presence"), any());
+
+        manager.connectV2(2001L, "web-a", null);
+        manager.connectV2(2001L, "web-b", null);
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(manager, times(1)).sendEphemeralToUid(eq(3001L), eq("presence"), payloadCaptor.capture());
+        ChatStreamPresenceEvent event = (ChatStreamPresenceEvent) payloadCaptor.getValue();
+        assertThat(event.getUid()).isEqualTo(2001L);
+        assertThat(event.getOnline()).isTrue();
+        assertThat(event.getLastOnlineAt()).isNull();
+    }
+
+    @Test
+    void shouldBroadcastOfflinePresenceOnlyWhenLastClientDisconnects() {
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        when(roomMapper.listPeerUserIdsByUid(2001L)).thenReturn(List.of(3001L));
+
+        SseSessionManager manager = spy(new SseSessionManager());
+        ReflectionTestUtils.setField(manager, "roomMapper", roomMapper);
+        doNothing().when(manager).sendEphemeralToUid(anyLong(), eq("presence"), any());
+
+        manager.connectV2(2001L, "web-a", null);
+        manager.connectV2(2001L, "web-b", null);
+        clearInvocations(manager);
+
+        @SuppressWarnings("unchecked")
+        Map<Long, List<Object>> emittersByUid = (Map<Long, List<Object>>) ReflectionTestUtils.getField(manager, "emittersByUid");
+        assertThat(emittersByUid).isNotNull();
+        List<Object> holders = emittersByUid.get(2001L);
+        assertThat(holders).hasSize(2);
+
+        ReflectionTestUtils.invokeMethod(manager, "remove", 2001L, holders.getFirst());
+        verify(manager, never()).sendEphemeralToUid(eq(3001L), eq("presence"), any());
+
+        @SuppressWarnings("unchecked")
+        Map<Long, List<Object>> emittersAfterFirstRemove = (Map<Long, List<Object>>) ReflectionTestUtils.getField(manager, "emittersByUid");
+        assertThat(emittersAfterFirstRemove).isNotNull();
+        ReflectionTestUtils.invokeMethod(manager, "remove", 2001L, emittersAfterFirstRemove.get(2001L).getFirst());
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(manager, times(1)).sendEphemeralToUid(eq(3001L), eq("presence"), payloadCaptor.capture());
+        ChatStreamPresenceEvent event = (ChatStreamPresenceEvent) payloadCaptor.getValue();
+        assertThat(event.getUid()).isEqualTo(2001L);
+        assertThat(event.getOnline()).isFalse();
+        assertThat(event.getLastOnlineAt()).isNotNull();
     }
 }
