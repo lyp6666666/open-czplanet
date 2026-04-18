@@ -47,6 +47,13 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body: { content } })
   },
 
+  sendImage(
+    roomId: number,
+    payload: { url: string; objectKey?: string | null; contentType?: string | null; size: number; width?: number | null; height?: number | null },
+  ) {
+    return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 3, body: payload })
+  },
+
   sendBody(roomId: number, body: unknown) {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body })
   },

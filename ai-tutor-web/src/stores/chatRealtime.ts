@@ -215,6 +215,7 @@ function textPreview(raw: unknown): string {
     if (typeof any.content === 'string' && any.content.trim()) {
       return `收到新消息：${any.content.trim()}`
     }
+    if (type === 'image') return '收到新消息：[图片]'
     if (type === 'tutor_application') return '收到新消息：家教申请'
     if (type === 'tutor_application_status') return '收到新消息：家教申请状态更新'
     if (type === 'collaboration_proposal') return '收到新消息：合作提案'
@@ -272,6 +273,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.lastRealtimeEventId = 0
       this.clientId = ''
       this.lastStreamActivityAt = 0
+      // 这些队列是模块级别的内存态，若不清空，切账号/切测试实例后可能把旧会话的 ACK 状态带到新会话里。
+      ackPendingByRoom.clear()
+      ackInFlightByRoom.clear()
+      deliveryPendingByRoom.clear()
+      deliveryInFlightByRoom.clear()
       clearAllPeerTypingTimers()
       this.stopRealtimeWatchdog()
     },
@@ -666,7 +672,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
 
     ackRoomReadKeepalive(roomId: number, lastReadMsgId: number) {
       const auth = useAuthStore()
-      if (!auth.isLoggedIn || !auth.token || !(lastReadMsgId > 0)) return
+      if (!auth.isLoggedIn || !auth.token || !(roomId > 0) || !(lastReadMsgId > 0)) return
       this.ensureReadMarksLoaded()
       this.markRoomReadOptimistic(roomId, lastReadMsgId)
       try {

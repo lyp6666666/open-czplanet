@@ -1,14 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 import ChatRoomPage from './ChatRoomPage.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 
+const mountedWrappers: VueWrapper[] = []
+const mountedPinia: Pinia[] = []
+const fetchMock = vi.fn()
+const originalCreateObjectURL = URL.createObjectURL
+const originalRevokeObjectURL = URL.revokeObjectURL
+const originalImage = globalThis.Image
+
+class MockImage {
+  onload: null | (() => void) = null
+  onerror: null | (() => void) = null
+  naturalWidth = 640
+  naturalHeight = 480
+
+  set src(_value: string) {
+    queueMicrotask(() => {
+      this.onload?.()
+    })
+  }
+}
+
 const mocks = vi.hoisted(() => ({
+  uploadImage: vi.fn(),
   listMessages: vi.fn(),
   listRooms: vi.fn(),
   getChatRefundState: vi.fn(),
@@ -17,6 +38,13 @@ const mocks = vi.hoisted(() => ({
   reportTyping: vi.fn(),
   batch: vi.fn(),
   sendText: vi.fn(),
+  sendImage: vi.fn(),
+}))
+
+vi.mock('@/api/assets', () => ({
+  assetsApi: {
+    uploadImage: mocks.uploadImage,
+  },
 }))
 
 vi.mock('@/api/chat', () => ({
@@ -28,6 +56,7 @@ vi.mock('@/api/chat', () => ({
     ackDelivered: mocks.ackDelivered,
     reportTyping: mocks.reportTyping,
     sendText: mocks.sendText,
+    sendImage: mocks.sendImage,
     requestBrokerageRefund: vi.fn(),
     requestEndChat: vi.fn(),
     respondEndChat: vi.fn(),
@@ -97,6 +126,7 @@ function createTestRouter() {
 async function mountChatRoomPage() {
   const pinia = createPinia()
   setActivePinia(pinia)
+  mountedPinia.push(pinia)
   const auth = useAuthStore(pinia)
   auth.me = {
     id: 2001,
@@ -141,12 +171,33 @@ async function mountChatRoomPage() {
       },
     },
   })
+  mountedWrappers.push(wrapper)
   await flushPromises()
   return { pinia, wrapper }
 }
 
 describe('ChatRoomPage realtime read receipt', () => {
   beforeEach(() => {
+    vi.useRealTimers()
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => '',
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: vi.fn(() => 'blob:chat-room-test-image'),
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: vi.fn(),
+      configurable: true,
+      writable: true,
+    })
+    vi.stubGlobal('Image', MockImage as unknown as typeof Image)
     const localStorageMock = createStorage()
     const sessionStorageMock = createStorage()
     Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true })
@@ -163,11 +214,13 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.listMessages.mockReset()
     mocks.listRooms.mockReset()
     mocks.getChatRefundState.mockReset()
+    mocks.uploadImage.mockReset()
     mocks.ackRead.mockReset()
     mocks.ackDelivered.mockReset()
     mocks.reportTyping.mockReset()
     mocks.batch.mockReset()
     mocks.sendText.mockReset()
+    mocks.sendImage.mockReset()
 
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -214,6 +267,49 @@ describe('ChatRoomPage realtime read receipt', () => {
         body: { type: 'text', content: '重试成功' },
       },
     })
+    mocks.sendImage.mockResolvedValue({
+      fromUser: { uid: 2001 },
+      message: {
+        id: 504,
+        roomId: 10,
+        sendTime: '2026-04-18T10:00:03',
+        body: {
+          type: 'image',
+          url: '/api/v1/public/assets/chat/1001/a.png',
+          objectKey: 'chat/1001/a.png',
+          contentType: 'image/png',
+          size: 1024,
+          width: 320,
+          height: 200,
+        },
+      },
+    })
+  })
+
+  afterEach(() => {
+    while (mountedPinia.length > 0) {
+      useChatRealtimeStore(mountedPinia.pop()!).resetState()
+    }
+    // 主动卸载每次 mount 的页面实例，避免测试进程残留页面监听器和定时器。
+    while (mountedWrappers.length > 0) {
+      mountedWrappers.pop()?.unmount()
+    }
+    if (vi.isFakeTimers()) {
+      vi.runOnlyPendingTimers()
+    }
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: originalCreateObjectURL,
+      configurable: true,
+      writable: true,
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: originalRevokeObjectURL,
+      configurable: true,
+      writable: true,
+    })
+    vi.stubGlobal('Image', originalImage)
   })
 
   it('shows read receipt after peer read realtime event arrives', async () => {
@@ -351,5 +447,66 @@ describe('ChatRoomPage realtime read receipt', () => {
     await flushPromises()
 
     expect(mocks.reportTyping).toHaveBeenCalledWith(10, false)
+  })
+
+  it('renders image messages from history', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 700,
+            roomId: 10,
+            sendTime: '2026-04-18T10:02:00',
+            body: { type: 'image', url: '/api/v1/public/assets/chat/3001/history.png', size: 2048, width: 320, height: 240 },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    const image = wrapper.find('.chat-image')
+    expect(image.exists()).toBe(true)
+    expect(image.attributes('src')).toContain('/api/v1/public/assets/chat/3001/history.png')
+  })
+
+  it('uploads then sends image messages from the chat page', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:59:00',
+            body: { type: 'contact_unlocked', proposalId: 1, orderId: 1, status: 'PAID' },
+          },
+        },
+      ],
+    })
+    mocks.uploadImage.mockResolvedValue({
+      objectKey: 'chat/1001/a.png',
+      url: 'https://assets.example.com/ai-tutor-assets/chat/1001/a.png',
+      contentType: 'image/png',
+      size: 1024,
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    const file = new File([new Uint8Array([1, 2, 3])], 'a.png', { type: 'image/png' })
+    const input = wrapper.find('input[type="file"]')
+    Object.defineProperty(input.element, 'files', { value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+    await flushPromises()
+
+    expect(mocks.uploadImage).toHaveBeenCalledTimes(1)
+    expect(mocks.sendImage).toHaveBeenCalledTimes(1)
+    expect(mocks.sendImage.mock.calls[0]?.[0]).toBe(10)
+    expect(wrapper.find('.chat-image').exists()).toBe(true)
   })
 })

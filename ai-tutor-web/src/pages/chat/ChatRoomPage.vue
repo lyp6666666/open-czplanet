@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
 import type { ChatRefundStateResp } from '@/api/chat'
+import { assetsApi } from '@/api/assets'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
 import { scheduleApi } from '@/api/schedule'
@@ -11,7 +12,7 @@ import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
-import { normalizeAvatarUrl } from '@/utils/avatar'
+import { normalizeAssetUrl, normalizeAvatarUrl } from '@/utils/avatar'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
@@ -73,6 +74,7 @@ type PendingOutgoingMessage = {
 
 const pendingOutgoingMessages = ref<PendingOutgoingMessage[]>([])
 const msgsRef = ref<HTMLElement | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
 const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
@@ -138,6 +140,10 @@ function userAvatar(uid: number): string {
   return normalizeAvatarUrl(v)
 }
 
+function messageImageUrl(body: Extract<ChatMessageBody, { type: 'image' }>): string {
+  return normalizeAssetUrl(body.url)
+}
+
 function markAvatarBroken(uid: number) {
   if (!uid) return
   if (avatarBroken.value[uid]) return
@@ -169,6 +175,7 @@ const unlockPhone = ref('')
 const unlockLoading = ref(false)
 const unlockError = ref<string | null>(null)
 const contactAutoShown = ref(false)
+const imageSending = ref(false)
 
 function closeUnlock() {
   unlockOpen.value = false
@@ -298,6 +305,10 @@ function normalizeBody(raw: unknown): ChatMessageBody {
 
 function isLessonRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_request' }> {
   return body.type === 'lesson_request'
+}
+
+function isImageBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'image' }> {
+  return body.type === 'image'
 }
 
 function isLessonStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_status' }> {
@@ -957,12 +968,14 @@ async function loadMore() {
 }
 
 async function ackLatest() {
+  if (!(roomId.value > 0)) return
   const latest = messages.value.reduce((max, m) => Math.max(max, m.message?.id || 0), 0)
   if (latest <= 0) return
   void chatRealtime.ackRoomRead(roomId.value, latest)
 }
 
 function keepaliveAckLatest() {
+  if (!(roomId.value > 0)) return
   const latest = messages.value.reduce((max, m) => Math.max(max, m.message?.id || 0), 0)
   if (latest <= 0) return
   chatRealtime.ackRoomReadKeepalive(roomId.value, latest)
@@ -1031,6 +1044,86 @@ async function onSend() {
   input.value = ''
   void scrollToBottom()
   await dispatchPendingOutgoingMessage(pending.localId, pending.roomId, roomVersion.value)
+}
+
+function openImagePicker() {
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
+    return
+  }
+  if (imageSending.value) return
+  imageInputRef.value?.click()
+}
+
+async function onSelectImage(event: Event) {
+  const inputElement = event.target as HTMLInputElement | null
+  const file = inputElement?.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    error.value = '请选择图片文件'
+    if (inputElement) inputElement.value = ''
+    return
+  }
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
+    if (inputElement) inputElement.value = ''
+    return
+  }
+
+  clearTypingStopTimer()
+  void reportTypingState(roomId.value, false, true)
+  imageSending.value = true
+  error.value = null
+  try {
+    const upload = await assetsApi.uploadImage(file, 'other')
+    const dimensions = await readImageDimensions(file)
+    const msg = await chatApi.sendImage(roomId.value, {
+      url: upload.url,
+      objectKey: upload.objectKey,
+      contentType: upload.contentType,
+      size: upload.size,
+      width: dimensions.width,
+      height: dimensions.height,
+    })
+    mergeMessages([msg], 'append')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '图片发送失败'
+  } finally {
+    imageSending.value = false
+    if (inputElement) inputElement.value = ''
+  }
+}
+
+function readImageDimensions(file: File): Promise<{ width: number | null; height: number | null }> {
+  return new Promise((resolve) => {
+    if (typeof Image === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      resolve({ width: null, height: null })
+      return
+    }
+    const objectUrl = URL.createObjectURL(file)
+    let finished = false
+    const finish = (width: number | null, height: number | null) => {
+      if (finished) return
+      finished = true
+      if (typeof URL.revokeObjectURL === 'function') {
+        URL.revokeObjectURL(objectUrl)
+      }
+      resolve({ width, height })
+    }
+    const image = new Image()
+    const timeout = globalThis.setTimeout(() => finish(null, null), 80)
+    image.onload = () => {
+      globalThis.clearTimeout(timeout)
+      const width = Number.isFinite(image.naturalWidth) ? image.naturalWidth : null
+      const height = Number.isFinite(image.naturalHeight) ? image.naturalHeight : null
+      finish(width, height)
+    }
+    image.onerror = () => {
+      globalThis.clearTimeout(timeout)
+      finish(null, null)
+    }
+    image.src = objectUrl
+  })
 }
 
 async function ackFromRoomList() {
@@ -1291,6 +1384,9 @@ watch(
                   <div class="status">{{ refundStatusText(it.m.body.status) }}</div>
                 </div>
               </template>
+              <template v-else-if="isImageBody(it.m.body)">
+                <img class="chat-image" :src="messageImageUrl(it.m.body)" alt="聊天图片" loading="lazy" />
+              </template>
               <template v-else>
                 {{ msgText(it.m.body) }}
               </template>
@@ -1339,8 +1435,12 @@ watch(
           </template>
         </div>
         <div class="send">
+          <input ref="imageInputRef" class="image-input" type="file" accept="image/*" @change="onSelectImage" />
+          <button class="btn" type="button" :disabled="!composerEnabled || imageSending" @click="openImagePicker">
+            {{ imageSending ? '上传中...' : '发图片' }}
+          </button>
           <input v-model="input" class="input" :disabled="!composerEnabled" :placeholder="composerEnabled ? '请输入消息' : composerLockedHint" @keydown.enter.prevent="onSend" />
-          <button class="btn btn-primary" type="button" :disabled="sending || !composerEnabled" @click="onSend">
+          <button class="btn btn-primary" type="button" :disabled="sending || imageSending || !composerEnabled" @click="onSend">
             {{ sending ? '发送中...' : '发送' }}
           </button>
         </div>
@@ -1684,8 +1784,12 @@ watch(
 
 .send {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
+}
+
+.image-input {
+  display: none;
 }
 
 .input {
@@ -1700,6 +1804,15 @@ watch(
 .input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px var(--primary-weak);
+}
+
+.chat-image {
+  display: block;
+  max-width: min(320px, 65vw);
+  max-height: 320px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .hint {

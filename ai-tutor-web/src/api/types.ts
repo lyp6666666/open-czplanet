@@ -426,6 +426,15 @@ export interface ScheduleEventVO {
 export type ChatMessageBody =
   | { type: 'text'; content: string }
   | {
+      type: 'image'
+      url: string
+      objectKey?: string | null
+      contentType?: string | null
+      size: number
+      width?: number | null
+      height?: number | null
+    }
+  | {
       type: 'tutor_application'
       applicationId: number
       content: string
