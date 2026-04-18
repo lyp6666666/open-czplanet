@@ -12,6 +12,7 @@ import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { isRoomPinned, setRoomPinned, subscribeChatPinChange } from '@/utils/chatPins'
 import { normalizeAssetUrl, normalizeAvatarUrl } from '@/utils/avatar'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
@@ -85,6 +86,8 @@ const typingReportRoomId = ref<number | null>(null)
 const typingReported = ref(false)
 const lastTypingReportAt = ref(0)
 const typingStopTimer = ref<number | null>(null)
+const roomPinned = ref(false)
+let stopPinSync: (() => void) | null = null
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const peerLastDeliveredMsgId = computed(() => chatRealtime.peerDeliveredMsgIdByRoom[roomId.value] || 0)
@@ -149,6 +152,17 @@ function markAvatarBroken(uid: number) {
   if (!uid) return
   if (avatarBroken.value[uid]) return
   avatarBroken.value = { ...avatarBroken.value, [uid]: true }
+}
+
+function refreshRoomPinned() {
+  roomPinned.value = isRoomPinned(auth.user?.id, roomId.value)
+}
+
+function toggleRoomPinned() {
+  if (!(roomId.value > 0)) return
+  const next = !roomPinned.value
+  setRoomPinned(auth.user?.id, roomId.value, next)
+  roomPinned.value = next
 }
 
 const lessonActionBusy = ref<Record<number, boolean>>({})
@@ -216,6 +230,8 @@ onMounted(() => {
   if (auth.isLoggedIn && !auth.me) {
     void auth.refreshMe()
   }
+  refreshRoomPinned()
+  stopPinSync = subscribeChatPinChange(() => refreshRoomPinned())
 })
 
 function openCollaboration() {
@@ -1233,6 +1249,8 @@ onBeforeUnmount(() => {
   }
   keepaliveAckLatest()
   chatRealtime.setActiveRoom(null)
+  stopPinSync?.()
+  stopPinSync = null
 })
 
 onMounted(() => {
@@ -1274,6 +1292,7 @@ watch(
       clearTypingStopTimer()
       void reportTypingState(previousRoomId, false, true)
     }
+    refreshRoomPinned()
   },
 )
 
@@ -1346,7 +1365,9 @@ watch(
         <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
         <div v-if="peerTyping" class="typing-hint">对方正在输入...</div>
       </div>
-      <div />
+      <button class="btn pin-toggle" type="button" @click="toggleRoomPinned">
+        {{ roomPinned ? '取消置顶' : '会话置顶' }}
+      </button>
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>

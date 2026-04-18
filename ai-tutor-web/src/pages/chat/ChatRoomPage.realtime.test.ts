@@ -589,4 +589,17 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(wrapper.text()).toContain('你撤回了一条消息')
     expect(wrapper.text()).not.toContain('准备撤回的消息')
   })
+
+  it('toggles room pin status from the chat header', async () => {
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(wrapper.text()).toContain('会话置顶')
+
+    const pinButton = wrapper.find('.pin-toggle')
+    await pinButton.trigger('click')
+    await flushPromises()
+
+    expect(localStorage.getItem('ai_tutor_chat_pins:2001')).toContain('10')
+    expect(wrapper.text()).toContain('取消置顶')
+  })
 })

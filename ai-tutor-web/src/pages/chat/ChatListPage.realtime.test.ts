@@ -175,4 +175,42 @@ describe('ChatListPage realtime', () => {
 
     expect(wrapper.text()).toContain('[消息已撤回]')
   })
+
+  it('keeps pinned rooms at the top of the chat list', async () => {
+    localStorage.setItem('ai_tutor_chat_pins:2001', JSON.stringify([7102]))
+    mocks.listRooms.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        { roomId: 7101, otherUid: 3001, lastMsgId: 6001, lastMsgBody: { content: '第一条' }, myLastReadMsgId: null, unreadCount: 0, activeTime: '2026-04-17T10:00:00' },
+        { roomId: 7102, otherUid: 3002, lastMsgId: 6002, lastMsgBody: { content: '第二条' }, myLastReadMsgId: null, unreadCount: 0, activeTime: '2026-04-17T10:00:01' },
+      ],
+    })
+    mocks.batch.mockResolvedValue([
+      { id: 3001, name: '教师甲', realName: '教师甲', avatar: '', userType: 1 },
+      { id: 3002, name: '教师乙', realName: '教师乙', avatar: '', userType: 1 },
+    ])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const names = wrapper.findAll('.name').map((item) => item.text())
+    expect(names[0]).toBe('教师乙')
+    expect(wrapper.text()).toContain('置顶')
+  })
 })

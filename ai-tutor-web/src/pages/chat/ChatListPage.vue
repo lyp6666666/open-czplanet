@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -7,6 +7,7 @@ import { userApi } from '@/api/user'
 import type { ChatRoomItemResp, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { loadPinnedRoomIds, subscribeChatPinChange } from '@/utils/chatPins'
 import { normalizeAvatarUrl } from '@/utils/avatar'
 
 const route = useRoute()
@@ -25,6 +26,7 @@ const userMap = ref<Record<number, UserSimpleVO>>({})
 const search = ref('')
 const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
+const pinnedRoomIds = ref<number[]>([])
 
 function displayNameOf(user: UserSimpleVO | null | undefined, uid: number): string {
   const realName = user?.realName?.trim()
@@ -175,16 +177,37 @@ const activeRoomId = computed(() => {
 
 const filteredRooms = computed(() => {
   const kw = search.value.trim().toLowerCase()
-  if (!kw) return rooms.value
-  return rooms.value.filter((r) => {
-    const name = displayNameOf(userMap.value[r.otherUid], r.otherUid)
-    return name.toLowerCase().includes(kw) || lastMsgText(r.lastMsgBody).toLowerCase().includes(kw)
+  const base = !kw
+    ? rooms.value
+    : rooms.value.filter((r) => {
+        const name = displayNameOf(userMap.value[r.otherUid], r.otherUid)
+        return name.toLowerCase().includes(kw) || lastMsgText(r.lastMsgBody).toLowerCase().includes(kw)
+      })
+  const pinnedOrder = new Map<number, number>()
+  pinnedRoomIds.value.forEach((roomId, index) => pinnedOrder.set(roomId, index))
+  return base.slice().sort((a, b) => {
+    const aPinned = pinnedOrder.has(a.roomId)
+    const bPinned = pinnedOrder.has(b.roomId)
+    if (aPinned !== bPinned) return aPinned ? -1 : 1
+    if (aPinned && bPinned) {
+      return (pinnedOrder.get(a.roomId) ?? 0) - (pinnedOrder.get(b.roomId) ?? 0)
+    }
+    return 0
   })
 })
 
 onMounted(() => {
+  pinnedRoomIds.value = loadPinnedRoomIds(auth.user?.id)
   void loadMore()
   consumePendingMessageEvents()
+})
+
+const stopPinSync = subscribeChatPinChange(() => {
+  pinnedRoomIds.value = loadPinnedRoomIds(auth.user?.id)
+})
+
+onBeforeUnmount(() => {
+  stopPinSync()
 })
 
 function consumePendingMessageEvents() {
@@ -236,6 +259,7 @@ watch(() => chatRealtime.messageEventSerial, consumePendingMessageEvents)
             <div class="row1">
               <div class="name">{{ displayNameOf(userMap[r.otherUid], r.otherUid) }}</div>
               <div class="meta">
+                <span v-if="pinnedRoomIds.includes(r.roomId)" class="pin-tag">置顶</span>
                 <span class="time">{{ r.activeTime ? String(r.activeTime).slice(0, 19).replace('T', ' ') : '' }}</span>
               </div>
             </div>
@@ -381,6 +405,15 @@ watch(() => chatRealtime.messageEventSerial, consumePendingMessageEvents)
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.pin-tag {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 190, 189, 0.12);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .name {
