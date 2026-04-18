@@ -213,4 +213,42 @@ describe('ChatListPage realtime', () => {
     expect(names[0]).toBe('教师乙')
     expect(wrapper.text()).toContain('置顶')
   })
+
+  it('does not re-show the left unread badge after the unread snapshot confirms the room is cleared', async () => {
+    mocks.listRooms.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        { roomId: 7101, otherUid: 3001, lastMsgId: 6001, lastMsgBody: { content: '第一条' }, myLastReadMsgId: null, unreadCount: 1, activeTime: '2026-04-17T10:00:00' },
+      ],
+    })
+    mocks.batch.mockResolvedValue([{ id: 3001, name: '教师甲', realName: '教师甲', avatar: '', userType: 1 }])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.unread-badge').exists()).toBe(true)
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.unreadSnapshotLoaded = true
+    chatRealtime.roomUnread = {}
+    await flushPromises()
+
+    expect(wrapper.find('.unread-badge').exists()).toBe(false)
+  })
 })

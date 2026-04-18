@@ -93,8 +93,10 @@ watch(
 )
 
 function effectiveUnread(roomId: number, fallback: number) {
-  const v = chatRealtime.roomUnread[roomId]
-  return typeof v === 'number' ? v : fallback
+  if (Object.prototype.hasOwnProperty.call(chatRealtime.roomUnread, roomId)) {
+    return chatRealtime.roomUnread[roomId] || 0
+  }
+  return chatRealtime.unreadSnapshotLoaded ? 0 : fallback
 }
 
 function lastMsgText(raw: unknown): string {

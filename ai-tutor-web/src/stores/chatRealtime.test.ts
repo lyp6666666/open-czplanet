@@ -168,6 +168,32 @@ describe('chatRealtime store', () => {
     expect(chatRealtime.roomUnread[666004]).toBeUndefined()
   })
 
+  it('still queues a realtime message for UI rendering even when the room latest watermark was already refreshed from the server', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.latestMsgIdByRoom = { 7101: 6002 }
+
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1301,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 6002,
+        roomId: 7101,
+        fromUid: 3001,
+        toUid: 2001,
+        sendTime: '2026-04-18T16:00:00',
+        body: { content: '无需刷新也要立刻显示' },
+      },
+    })
+
+    expect(chatRealtime.messageEventSerial).toBe(1)
+    expect(chatRealtime.listMessageEventsAfter(0)[0]?.event.msgId).toBe(6002)
+    expect(chatRealtime.roomUnread[7101]).toBeUndefined()
+  })
+
   it('still shows unread after refresh when a newer message arrives beyond the confirmed read watermark', async () => {
     seedAuth()
     useAuthStore()

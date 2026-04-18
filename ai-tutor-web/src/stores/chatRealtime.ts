@@ -242,6 +242,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     connected: false,
     totalUnread: 0,
     roomUnread: {} as Record<number, number>,
+    unreadSnapshotLoaded: false,
     optimisticReadMsgIdByRoom: {} as Record<number, number>,
     peerDeliveredMsgIdByRoom: {} as Record<number, number>,
     peerReadMsgIdByRoom: {} as Record<number, number>,
@@ -266,6 +267,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.connected = false
       this.totalUnread = 0
       this.roomUnread = {}
+      this.unreadSnapshotLoaded = false
       this.optimisticReadMsgIdByRoom = {}
       this.peerDeliveredMsgIdByRoom = {}
       this.peerReadMsgIdByRoom = {}
@@ -355,6 +357,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     listMessageEventsAfter(serial: number) {
       const watermark = Number.isFinite(serial) ? serial : 0
       return this.messageEventLog.filter((item) => item.serial > watermark)
+    },
+
+    hasQueuedMessageEvent(roomId: number, msgId: number) {
+      if (!(roomId > 0) || !(msgId > 0)) return false
+      return this.messageEventLog.some((item) => item.event.roomId === roomId && item.event.msgId === msgId)
     },
 
     noteRealtimeActivity() {
@@ -633,8 +640,6 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (eventType === 'chat.message.created') {
         const payload = envelope.payload as StreamMsgEvent | undefined
         if (!payload || typeof payload.roomId !== 'number') return
-        this.recordMessageEvent(payload)
-        this.lastEvent = payload
         this.onMessageEvent(payload)
         return
       }
@@ -819,6 +824,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
         }
         this.totalUnread = total
         this.roomUnread = map
+        this.unreadSnapshotLoaded = true
       } catch {
         void 0
       }
@@ -908,8 +914,6 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
                 if (event === 'message') {
                   const ev = payload as StreamMsgEvent
                   if (!ev || typeof ev.roomId !== 'number') continue
-                  this.recordMessageEvent(ev)
-                  this.lastEvent = ev
                   this.onMessageEvent(ev)
                   continue
                 }
@@ -952,20 +956,33 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (!myUid) return
       this.ensureReadMarksLoaded()
       const knownLatest = this.latestMsgIdByRoom[ev.roomId] || 0
-      if (ev.msgId <= knownLatest) return
-      this.rememberLatestMsg(ev.roomId, ev.msgId)
+      const isNewerThanKnown = ev.msgId > knownLatest
+      if (ev.msgId > 0 && this.hasQueuedMessageEvent(ev.roomId, ev.msgId)) return
+      this.recordMessageEvent(ev)
+      this.lastEvent = ev
+      if (isNewerThanKnown) {
+        this.rememberLatestMsg(ev.roomId, ev.msgId)
+      }
       if (ev.toUid !== myUid) return
       // 收到在线消息后先回送“送达”，这样发送方能先看到“已送达”，再等待“已读”。
-      void this.ackRoomDelivered(ev.roomId, ev.msgId)
+      if (ev.msgId > 0) {
+        void this.ackRoomDelivered(ev.roomId, ev.msgId)
+      }
       // If active in this room, we assume it's read immediately
       if (this.activeRoomId != null && ev.roomId === this.activeRoomId) {
-        this.markRoomReadOptimistic(ev.roomId, ev.msgId)
-        void this.ackRoomRead(ev.roomId, ev.msgId)
+        if (ev.msgId > 0) {
+          this.markRoomReadOptimistic(ev.roomId, ev.msgId)
+          void this.ackRoomRead(ev.roomId, ev.msgId)
+        }
         return
       }
+      // 如果房间最新消息水位已经被列表刷新拿到了，就不要再次累计未读；
+      // 但消息事件本身仍要保留给会话列表/聊天页做即时渲染。
+      if (!isNewerThanKnown) return
       const prev = this.roomUnread[ev.roomId] || 0
       this.roomUnread = { ...this.roomUnread, [ev.roomId]: prev + 1 }
       this.totalUnread += 1
+      this.unreadSnapshotLoaded = true
       this.notifyIncomingMessage(ev)
     },
   },
