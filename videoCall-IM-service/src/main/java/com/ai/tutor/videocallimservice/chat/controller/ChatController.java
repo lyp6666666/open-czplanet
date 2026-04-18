@@ -5,6 +5,7 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageSearchReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
@@ -31,6 +32,14 @@ public class ChatController {
     @FrequencyControl(time = 120, count = 20, target = FrequencyControl.Target.IP)
     public BaseResponse<CursorPageBaseResp<ChatMessageResp>> getMsgPage(@Valid ChatMessagePageReq request) {
         CursorPageBaseResp<ChatMessageResp> msgPage = chatService.getMsgPage(request, RequestHolder.get().getUid());
+        return ResultUtils.success(msgPage);
+    }
+
+    @GetMapping("/public/msg/search")
+    @Operation(summary = "消息搜索")
+    @FrequencyControl(time = 60, count = 20, target = FrequencyControl.Target.UID)
+    public BaseResponse<CursorPageBaseResp<ChatMessageResp>> searchMsgPage(@Valid ChatMessageSearchReq request) {
+        CursorPageBaseResp<ChatMessageResp> msgPage = chatService.searchMsgPage(request, RequestHolder.get().getUid());
         return ResultUtils.success(msgPage);
     }
 

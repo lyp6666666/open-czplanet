@@ -48,6 +48,40 @@
         LIMIT #{request.pageSize}
     </select>
 
+    <select id="searchCursorPage" resultMap="cursorMap">
+        SELECT
+        m.id,
+        m.room_id,
+        m.from_uid,
+        m.to_uid,
+        m.content,
+        m.is_masked,
+        m.reply_msg_id,
+        m.status,
+        m.gap_count,
+        m.type,
+        m.extra,
+        m.create_time,
+        m.update_time
+        FROM message m
+        WHERE m.room_id = #{roomId}
+        AND m.status = 0
+        AND m.content LIKE CONCAT('%', #{request.keyword}, '%')
+        AND NOT EXISTS (
+            SELECT 1
+            FROM message recall_msg
+            WHERE recall_msg.room_id = m.room_id
+            AND recall_msg.type = 2
+            AND recall_msg.status = 0
+            AND recall_msg.reply_msg_id = m.id
+        )
+        <if test="request.cursor != null and request.cursor != ''">
+            AND m.id &lt; #{request.cursor}
+        </if>
+        ORDER BY m.id DESC
+        LIMIT #{request.pageSize}
+    </select>
+
     <select id="listUnreadCounts" resultType="com.ai.tutor.videocallimservice.chat.domain.vo.response.RoomUnreadCount">
         SELECT
             m.room_id AS roomId,

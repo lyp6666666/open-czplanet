@@ -43,6 +43,10 @@ export const chatApi = {
     return http.get<unknown, CursorPageBaseResp<ChatMessageResp>>('/chat/public/msg/page', { params })
   },
 
+  searchMessages(params: { roomId: number; keyword: string; pageSize?: number; cursor?: string | null }) {
+    return http.get<unknown, CursorPageBaseResp<ChatMessageResp>>('/chat/public/msg/search', { params })
+  },
+
   sendText(roomId: number, content: string) {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body: { content } })
   },

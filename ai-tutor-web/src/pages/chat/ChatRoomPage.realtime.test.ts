@@ -31,6 +31,7 @@ class MockImage {
 const mocks = vi.hoisted(() => ({
   uploadImage: vi.fn(),
   listMessages: vi.fn(),
+  searchMessages: vi.fn(),
   listRooms: vi.fn(),
   getChatRefundState: vi.fn(),
   ackRead: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@/api/assets', () => ({
 vi.mock('@/api/chat', () => ({
   chatApi: {
     listMessages: mocks.listMessages,
+    searchMessages: mocks.searchMessages,
     listRooms: mocks.listRooms,
     getChatRefundState: mocks.getChatRefundState,
     ackRead: mocks.ackRead,
@@ -214,6 +216,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     )
 
     mocks.listMessages.mockReset()
+    mocks.searchMessages.mockReset()
     mocks.listRooms.mockReset()
     mocks.getChatRefundState.mockReset()
     mocks.uploadImage.mockReset()
@@ -257,6 +260,21 @@ describe('ChatRoomPage realtime read receipt', () => {
       ],
     })
     mocks.getChatRefundState.mockResolvedValue({ canApply: false })
+    mocks.searchMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 801,
+            roomId: 10,
+            sendTime: '2026-04-18T10:10:00',
+            body: { type: 'text', content: '数学作业今晚发给你' },
+          },
+        },
+      ],
+    })
     mocks.ackRead.mockResolvedValue({ roomId: 10, lastReadMsgId: 501 })
     mocks.ackDelivered.mockResolvedValue(true)
     mocks.reportTyping.mockResolvedValue(true)
@@ -601,5 +619,47 @@ describe('ChatRoomPage realtime read receipt', () => {
 
     expect(localStorage.getItem('ai_tutor_chat_pins:2001')).toContain('10')
     expect(wrapper.text()).toContain('取消置顶')
+  })
+
+  it('searches messages through the frontend api and renders the results list', async () => {
+    const { wrapper } = await mountChatRoomPage()
+
+    await wrapper.find('.search-input').setValue('数学')
+    await wrapper.find('.search-row .btn').trigger('click')
+    await flushPromises()
+
+    expect(mocks.searchMessages).toHaveBeenCalledWith({ roomId: 10, keyword: '数学', pageSize: 20, cursor: null })
+    expect(wrapper.text()).toContain('共命中 1 条消息')
+    expect(wrapper.text()).toContain('数学作业今晚发给你')
+  })
+
+  it('locates a searched message after selecting a search result', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:59:00',
+            body: { type: 'contact_unlocked', proposalId: 1, orderId: 1, status: 'PAID' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    await wrapper.find('.search-input').setValue('数学')
+    await wrapper.find('.search-row .btn').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('.search-hit').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('数学作业今晚发给你')
+    expect(wrapper.find('[data-msg-id="801"]').classes()).toContain('search-focused')
   })
 })

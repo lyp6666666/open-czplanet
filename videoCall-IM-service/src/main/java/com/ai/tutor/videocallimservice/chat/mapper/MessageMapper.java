@@ -3,6 +3,7 @@ package com.ai.tutor.videocallimservice.chat.mapper;
 
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageSearchReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RoomUnreadCount;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
@@ -16,6 +17,8 @@ import java.util.List;
 public interface MessageMapper extends BaseMapper<Message> {
 
     CursorPageBaseResp<Message> getCursorPage(Long roomId, ChatMessagePageReq request);
+
+    CursorPageBaseResp<Message> searchCursorPage(Long roomId, ChatMessageSearchReq request);
 
     @Select("SELECT * FROM message WHERE id = #{msgId}")
     Message getById(Long msgId);

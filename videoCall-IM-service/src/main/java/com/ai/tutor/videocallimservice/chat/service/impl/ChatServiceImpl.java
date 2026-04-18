@@ -8,6 +8,7 @@ import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageSearchReq;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessagePageReq;
@@ -75,6 +76,24 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
             return CursorPageBaseResp.empty();
         }
         return CursorPageBaseResp.init(cursorPage, getMsgRespBatch(cursorPage.getList(), receiveUid));
+    }
+
+    @Override
+    public CursorPageBaseResp<ChatMessageResp> searchMsgPage(ChatMessageSearchReq request, Long receiveUid) {
+        ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR, "request 为空");
+        ThrowUtils.throwIf(receiveUid == null, ErrorCode.PARAMS_ERROR, "receiveUid为空");
+        String keyword = request.getKeyword() == null ? "" : request.getKeyword().trim();
+        ThrowUtils.throwIf(keyword.isEmpty(), ErrorCode.PARAMS_ERROR, "关键词不能为空");
+        request.setKeyword(keyword);
+
+        CursorPageBaseResp<Message> cursorPage = messageMapper.searchCursorPage(request.getRoomId(), request);
+        if (cursorPage == null || cursorPage.isEmpty()) {
+            return CursorPageBaseResp.empty();
+        }
+        List<ChatMessageResp> respList = getMsgRespBatch(cursorPage.getList(), receiveUid);
+        // 搜索结果更适合按“最新命中优先”展示，方便前端直接渲染结果列表。
+        respList.sort((a, b) -> Long.compare(b.getMessage().getId(), a.getMessage().getId()));
+        return CursorPageBaseResp.init(cursorPage, respList);
     }
 
     private CursorPageBaseResp<Message> getCursorPage(Long roomId, CursorPageBaseReq request) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
@@ -45,6 +45,14 @@ const error = ref<string | null>(null)
 const sending = ref(false)
 const input = ref('')
 const recallingMsgId = ref<number | null>(null)
+const searchKeyword = ref('')
+const searchedKeyword = ref('')
+const searchLoading = ref(false)
+const searchError = ref<string | null>(null)
+const searchCursor = ref<string | null>(null)
+const searchIsLast = ref(true)
+const searchFocusedMsgId = ref<number | null>(null)
+const searchResults = ref<ChatMessageResp[]>([])
 
 const endRequestBusy = ref(false)
 const endActionBusy = ref(false)
@@ -163,6 +171,18 @@ function toggleRoomPinned() {
   const next = !roomPinned.value
   setRoomPinned(auth.user?.id, roomId.value, next)
   roomPinned.value = next
+}
+
+function resetMessageSearch(clearKeyword = false) {
+  searchedKeyword.value = ''
+  searchError.value = null
+  searchCursor.value = null
+  searchIsLast.value = true
+  searchFocusedMsgId.value = null
+  searchResults.value = []
+  if (clearKeyword) {
+    searchKeyword.value = ''
+  }
 }
 
 const lessonActionBusy = ref<Record<number, boolean>>({})
@@ -552,6 +572,46 @@ function msgText(raw: unknown): string {
   } catch {
     return String(raw)
   }
+}
+
+function searchResultText(message: ChatMessageResp): string {
+  const body = normalizeBody(message.message?.body)
+  if (isRecallBody(body)) {
+    return recallText(body, message.fromUser.uid)
+  }
+  if (isImageBody(body)) return '[图片]'
+  return msgText(body)
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightSearchText(text: string): string {
+  const raw = String(text || '')
+  const keyword = searchedKeyword.value.trim()
+  if (!keyword) return escapeHtml(raw)
+  const matcher = new RegExp(escapeRegex(keyword), 'gi')
+  let lastIndex = 0
+  let out = ''
+  for (const match of raw.matchAll(matcher)) {
+    const start = match.index ?? 0
+    const matched = match[0] ?? ''
+    out += escapeHtml(raw.slice(lastIndex, start))
+    out += `<mark>${escapeHtml(matched)}</mark>`
+    lastIndex = start + matched.length
+  }
+  out += escapeHtml(raw.slice(lastIndex))
+  return out
 }
 
 const sortedMessages = computed(() => {
@@ -963,6 +1023,60 @@ function scrollToBottom() {
   })
 }
 
+async function scrollToMessage(messageId: number) {
+  await nextTick()
+  const target = msgsRef.value?.querySelector<HTMLElement>(`[data-msg-id="${messageId}"]`)
+  if (!target) return
+  if (typeof target.scrollIntoView === 'function') {
+    target.scrollIntoView({ block: 'center' })
+  }
+}
+
+async function locateSearchResult(message: ChatMessageResp) {
+  mergeMessages([message], 'prepend')
+  searchFocusedMsgId.value = message.message.id
+  await scrollToMessage(message.message.id)
+}
+
+async function searchMessages(reset = true) {
+  const keyword = searchKeyword.value.trim()
+  if (!keyword) {
+    resetMessageSearch()
+    return
+  }
+  if (!(roomId.value > 0) || searchLoading.value) return
+  searchLoading.value = true
+  searchError.value = null
+  if (reset) {
+    searchFocusedMsgId.value = null
+  }
+  try {
+    const page = await chatApi.searchMessages({
+      roomId: roomId.value,
+      keyword,
+      pageSize: 20,
+      cursor: reset ? null : searchCursor.value,
+    })
+    const incoming = page.list || []
+    searchedKeyword.value = keyword
+    searchCursor.value = page.cursor ?? null
+    searchIsLast.value = !!page.isLast
+    searchResults.value = reset
+      ? incoming
+      : Array.from(new Map([...searchResults.value, ...incoming].map((item) => [item.message.id, item])).values())
+  } catch (e) {
+    searchError.value = e instanceof Error ? e.message : '搜索失败'
+    if (reset) {
+      searchResults.value = []
+      searchCursor.value = null
+      searchIsLast.value = true
+      searchedKeyword.value = keyword
+    }
+  } finally {
+    searchLoading.value = false
+  }
+}
+
 function createPendingOutgoingMessage(content: string): PendingOutgoingMessage {
   const localId =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -1316,6 +1430,7 @@ watch(
     cursor.value = null
     isLast.value = false
     messages.value = []
+    resetMessageSearch(true)
     pendingOutgoingMessages.value = []
     sending.value = false
     contactAutoShown.value = false
@@ -1372,6 +1487,43 @@ watch(
 
     <div v-if="error" class="hint error">{{ error }}</div>
 
+    <div class="card search-panel">
+      <div class="search-row">
+        <input
+          v-model="searchKeyword"
+          class="search-input"
+          type="text"
+          placeholder="搜索本会话消息"
+          @keydown.enter.prevent="searchMessages(true)"
+        />
+        <button class="btn" type="button" :disabled="searchLoading || !searchKeyword.trim()" @click="searchMessages(true)">
+          {{ searchLoading ? '搜索中...' : '搜索消息' }}
+        </button>
+        <button v-if="searchedKeyword || searchResults.length > 0" class="btn" type="button" @click="resetMessageSearch(true)">清空</button>
+      </div>
+      <div v-if="searchError" class="hint error search-hint">{{ searchError }}</div>
+      <div v-else-if="searchResults.length > 0" class="search-results">
+        <div class="search-summary">“{{ searchedKeyword }}” 共命中 {{ searchResults.length }} 条消息</div>
+        <button
+          v-for="result in searchResults"
+          :key="`search-${result.message.id}`"
+          class="search-hit"
+          type="button"
+          @click="locateSearchResult(result)"
+        >
+          <div class="search-hit-meta">
+            <span>{{ userName(result.fromUser.uid) }}</span>
+            <span>{{ formatMsgTime(result.message.sendTime) }}</span>
+          </div>
+          <div class="search-hit-text" v-html="highlightSearchText(searchResultText(result))"></div>
+        </button>
+        <button v-if="!searchIsLast" class="btn btn-text search-more" type="button" :disabled="searchLoading" @click="searchMessages(false)">
+          {{ searchLoading ? '加载中...' : '查看更多结果' }}
+        </button>
+      </div>
+      <div v-else-if="searchedKeyword && !searchLoading" class="search-empty">未找到包含“{{ searchedKeyword }}”的消息</div>
+    </div>
+
     <div class="card panel">
       <div class="msgs" ref="msgsRef">
         <div class="top-hint" v-if="!isLast && !loading">
@@ -1382,7 +1534,7 @@ watch(
 
         <template v-for="it in renderItems" :key="it.key">
           <div v-if="it.kind === 'time'" class="time-divider">{{ it.text }}</div>
-          <div v-else class="msg" :class="{ me: it.m.fromUser.uid === myUid }">
+          <div v-else class="msg" :class="{ me: it.m.fromUser.uid === myUid, 'search-focused': searchFocusedMsgId === it.m.message.id }" :data-msg-id="it.m.message.id">
             <button class="avatar" type="button" :class="{ clickable: it.m.fromUser.uid !== myUid }" @click="openCard(it.m.fromUser.uid)">
               <img v-if="userAvatar(it.m.fromUser.uid)" :src="userAvatar(it.m.fromUser.uid)" alt="" @error="markAvatarBroken(it.m.fromUser.uid)" />
               <span v-else class="avatar-fallback">{{ userName(it.m.fromUser.uid).slice(0, 1) }}</span>
@@ -1615,6 +1767,86 @@ watch(
   overflow: hidden;
 }
 
+.search-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.search-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+}
+
+.search-input {
+  height: 40px;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  outline: none;
+  background: #fff;
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-weak);
+}
+
+.search-input {
+  min-width: 0;
+}
+
+.search-results {
+  display: grid;
+  gap: 8px;
+}
+
+.search-summary,
+.search-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-hit {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.search-hit-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.search-hit-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.search-hit-text :deep(mark) {
+  background: rgba(255, 196, 0, 0.26);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.search-more,
+.search-hint {
+  justify-self: start;
+}
+
 .msgs {
   flex: 1 1 auto;
   padding: 14px;
@@ -1671,6 +1903,13 @@ watch(
 .msg.me {
   justify-content: flex-end;
   flex-direction: row;
+}
+
+.search-focused .bubble,
+.search-focused .sys,
+.search-focused .refund-card,
+.search-focused .end-card {
+  box-shadow: 0 0 0 2px rgba(255, 196, 0, 0.45);
 }
 
 .msg.me .avatar {
