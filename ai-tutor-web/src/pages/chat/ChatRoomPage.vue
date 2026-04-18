@@ -63,6 +63,15 @@ const collabEdit = ref<{
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
 const messages = ref<ChatMessageResp[]>([])
+type PendingOutgoingMessage = {
+  localId: string
+  roomId: number
+  content: string
+  createdAt: string
+  status: 'sending' | 'failed'
+}
+
+const pendingOutgoingMessages = ref<PendingOutgoingMessage[]>([])
 const msgsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
@@ -841,6 +850,59 @@ function scrollToBottom() {
   })
 }
 
+function createPendingOutgoingMessage(content: string): PendingOutgoingMessage {
+  const localId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  return {
+    localId,
+    roomId: roomId.value,
+    content,
+    createdAt: new Date().toISOString(),
+    status: 'sending',
+  }
+}
+
+function updatePendingOutgoingMessage(localId: string, patch: Partial<PendingOutgoingMessage>) {
+  pendingOutgoingMessages.value = pendingOutgoingMessages.value.map((item) =>
+    item.localId === localId ? { ...item, ...patch } : item,
+  )
+}
+
+function removePendingOutgoingMessage(localId: string) {
+  pendingOutgoingMessages.value = pendingOutgoingMessages.value.filter((item) => item.localId !== localId)
+}
+
+async function dispatchPendingOutgoingMessage(localId: string, targetRoomId: number, versionAtSend: number) {
+  const pending = pendingOutgoingMessages.value.find((item) => item.localId === localId)
+  if (!pending) return
+
+  sending.value = true
+  try {
+    // 先把消息留在本地“发送中”队列里，网络失败时用户能看到并直接重试。
+    const msg = await chatApi.sendText(targetRoomId, pending.content)
+    removePendingOutgoingMessage(localId)
+    if (roomId.value === targetRoomId && roomVersion.value === versionAtSend) {
+      mergeMessages([msg], 'append')
+    }
+  } catch (e) {
+    if (roomId.value === targetRoomId && roomVersion.value === versionAtSend) {
+      updatePendingOutgoingMessage(localId, { status: 'failed' })
+      error.value = e instanceof Error ? e.message : '发送失败'
+    }
+  } finally {
+    sending.value = pendingOutgoingMessages.value.some((item) => item.status === 'sending')
+  }
+}
+
+function retryPendingOutgoingMessage(localId: string) {
+  const pending = pendingOutgoingMessages.value.find((item) => item.localId === localId)
+  if (!pending) return
+  updatePendingOutgoingMessage(localId, { status: 'sending' })
+  void dispatchPendingOutgoingMessage(localId, pending.roomId, roomVersion.value)
+}
+
 function mergeMessages(incoming: ChatMessageResp[], mode: 'prepend' | 'append') {
   const byId = new Map<number, ChatMessageResp>()
   messages.value.forEach((m) => byId.set(m.message.id, m))
@@ -904,17 +966,12 @@ async function onSend() {
     return
   }
   if (sending.value) return
-  sending.value = true
   error.value = null
-  try {
-    const msg = await chatApi.sendText(roomId.value, text)
-    mergeMessages([msg], 'append')
-    input.value = ''
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : '发送失败'
-  } finally {
-    sending.value = false
-  }
+  const pending = createPendingOutgoingMessage(text)
+  pendingOutgoingMessages.value = [...pendingOutgoingMessages.value, pending]
+  input.value = ''
+  void scrollToBottom()
+  await dispatchPendingOutgoingMessage(pending.localId, pending.roomId, roomVersion.value)
 }
 
 async function ackFromRoomList() {
@@ -973,6 +1030,8 @@ watch(
     cursor.value = null
     isLast.value = false
     messages.value = []
+    pendingOutgoingMessages.value = []
+    sending.value = false
     contactAutoShown.value = false
     void loadOtherUser()
     void chatRealtime.refreshUnreadFromServer()
@@ -1139,6 +1198,22 @@ watch(
           </div>
         </div>
         </template>
+        <div v-for="pending in pendingOutgoingMessages" :key="pending.localId" class="msg me pending">
+          <button class="avatar" type="button">
+            <img v-if="userAvatar(myUid)" :src="userAvatar(myUid)" alt="" @error="markAvatarBroken(myUid)" />
+            <span v-else class="avatar-fallback">{{ userName(myUid).slice(0, 1) }}</span>
+          </button>
+          <div class="content">
+            <div class="meta">{{ userName(myUid) }}</div>
+            <div class="bubble">{{ pending.content }}</div>
+            <div class="receipt pending-state">
+              <span v-if="pending.status === 'sending'">发送中...</span>
+              <button v-else class="retry-link" type="button" :disabled="sending" @click="retryPendingOutgoingMessage(pending.localId)">
+                发送失败，点击重试
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="composer">
@@ -1355,6 +1430,29 @@ watch(
 .msg.me .bubble {
   border-color: var(--primary);
   background: rgba(0, 190, 189, 0.12);
+}
+
+.msg.pending .bubble {
+  opacity: 0.85;
+}
+
+.pending-state {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.retry-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(212, 60, 60, 0.9);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.retry-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .composer {
