@@ -110,7 +110,7 @@ describe('chatRealtime store', () => {
     expect(reloaded.roomUnread[666004]).toBeUndefined()
   })
 
-  it('still shows unread after refresh when the server has not confirmed the local read watermark', async () => {
+  it('keeps a room read after refresh when the local read watermark already covers the latest message', async () => {
     seedAuth()
     window.sessionStorage.setItem('ai_tutor_chat_read_marks:2001', JSON.stringify({ 666004: 120 }))
     useAuthStore()
@@ -135,8 +135,37 @@ describe('chatRealtime store', () => {
 
     await chatRealtime.refreshUnreadFromServer()
 
-    expect(chatRealtime.totalUnread).toBe(1)
-    expect(chatRealtime.roomUnread[666004]).toBe(1)
+    expect(chatRealtime.totalUnread).toBe(0)
+    expect(chatRealtime.roomUnread[666004]).toBeUndefined()
+  })
+
+  it('keeps a room read after refresh when the server watermark is stale but the local read watermark is newer', async () => {
+    seedAuth()
+    window.sessionStorage.setItem('ai_tutor_chat_read_marks:2001', JSON.stringify({ 666004: 120 }))
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+
+    vi.mocked(chatApi.listRooms).mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          roomId: 666004,
+          otherUid: 1001,
+          lastMsgId: 120,
+          lastMsgBody: null,
+          myLastReadMsgId: 118,
+          unreadCount: 2,
+          activeTime: '2026-04-16T00:00:00',
+        },
+      ],
+    })
+
+    await chatRealtime.refreshUnreadFromServer()
+
+    expect(chatRealtime.totalUnread).toBe(0)
+    expect(chatRealtime.roomUnread[666004]).toBeUndefined()
   })
 
   it('still shows unread after refresh when a newer message arrives beyond the confirmed read watermark', async () => {

@@ -784,24 +784,24 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
           const list = page.list || []
           for (const r of list) {
             const latestMsgId = typeof r.lastMsgId === 'number' ? r.lastMsgId : 0
-            const hasServerReadMsgId = Object.prototype.hasOwnProperty.call(r, 'myLastReadMsgId')
             const serverReadMsgId = typeof r.myLastReadMsgId === 'number' ? r.myLastReadMsgId : 0
             this.rememberLatestMsg(r.roomId, latestMsgId)
-            if (hasServerReadMsgId) {
+            if (Object.prototype.hasOwnProperty.call(r, 'myLastReadMsgId')) {
               this.syncServerReadMark(r.roomId, serverReadMsgId)
             }
             const peerLastReadMsgId =
               Object.prototype.hasOwnProperty.call(r, 'peerLastReadMsgId') && typeof r.peerLastReadMsgId === 'number'
                 ? r.peerLastReadMsgId
                 : Object.prototype.hasOwnProperty.call(r, 'peerLastReadMsgId')
-                  ? Number(r.peerLastReadMsgId)
+                ? Number(r.peerLastReadMsgId)
                   : 0
             this.syncPeerReadMark(r.roomId, peerLastReadMsgId)
             const optimisticReadMsgId = this.optimisticReadMsgIdByRoom[r.roomId] || 0
+            // 首页红点判断必须同时考虑“服务端已确认水位”和“本地刚读完但服务端尚未回刷的水位”。
+            // 否则用户在聊天页读完消息后，一回到首页就可能被旧的 unreadCount 再次打出红点。
+            const effectiveReadMsgId = Math.max(serverReadMsgId, optimisticReadMsgId)
             let c = typeof r.unreadCount === 'number' ? r.unreadCount : 0
-            if (latestMsgId > 0 && serverReadMsgId >= latestMsgId) {
-              c = 0
-            } else if (!hasServerReadMsgId && latestMsgId > 0 && optimisticReadMsgId >= latestMsgId) {
+            if (latestMsgId > 0 && effectiveReadMsgId >= latestMsgId) {
               c = 0
             }
             if (c > 0) {
