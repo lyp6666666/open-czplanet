@@ -6,6 +6,7 @@ import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.exception.FrequencyControlException;
 import com.ai.tutor.utils.ResultUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -88,6 +89,15 @@ public class GlobalExceptionHandler {
     public BaseResponse<?> handleNoResourceFoundException(NoResourceFoundException e) {
         String msg = e.getMessage() == null || e.getMessage().isBlank() ? ErrorCode.NOT_FOUND_ERROR.getMessage() : e.getMessage();
         return ResultUtils.error(ErrorCode.NOT_FOUND_ERROR, msg);
+    }
+
+    /**
+     * 上传体积超限：给前端明确提示，避免被兜底异常吞成“系统内部异常”。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public BaseResponse<?> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
+        log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "上传文件过大，请控制在 20MB 以内");
     }
 
     /**

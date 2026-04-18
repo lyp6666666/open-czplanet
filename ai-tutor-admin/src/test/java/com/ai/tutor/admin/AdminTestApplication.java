@@ -8,6 +8,7 @@ import com.ai.tutor.admin.model.vo.DisputeDetailResponse;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminAuthService;
 import com.ai.tutor.admin.service.AdminDashboardService;
+import com.ai.tutor.admin.service.AdminHomeCarouselService;
 import com.ai.tutor.admin.service.AdminJobService;
 import com.ai.tutor.admin.service.AdminPaymentRecordService;
 import com.ai.tutor.admin.service.AdminRefundService;
@@ -19,12 +20,15 @@ import com.ai.tutor.admin.model.entity.PaymentOrderRecord;
 import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.entity.TeacherProfile;
 import com.ai.tutor.admin.model.entity.RefundRequestRecord;
+import com.ai.tutor.admin.model.vo.AdminHomeCarouselItemVO;
 import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.List;
 
 @SpringBootApplication(
         scanBasePackages = {
@@ -58,6 +62,25 @@ public class AdminTestApplication {
             @Override
             public DashboardStatsResponse getStats() {
                 return null;
+            }
+        };
+    }
+
+    @Bean
+    public AdminHomeCarouselService adminHomeCarouselService() {
+        return new AdminHomeCarouselService() {
+            @Override
+            public List<AdminHomeCarouselItemVO> list() {
+                return Collections.emptyList();
+            }
+
+            @Override
+            public AdminHomeCarouselItemVO create(String title, String subtitle, String linkUrl, MultipartFile file, Long adminUid) {
+                return null;
+            }
+
+            @Override
+            public void delete(Long id, Long adminUid) {
             }
         };
     }

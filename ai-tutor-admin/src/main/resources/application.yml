@@ -9,6 +9,11 @@ spring:
       - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+  servlet:
+    multipart:
+      # 管理端轮播图上传需要支持常规运营图片，和用户端资源上传保持一致，避免默认 1MB 限制导致“接口 200 但业务失败”。
+      max-file-size: 20MB
+      max-request-size: 20MB
   cloud:
     nacos:
       username: ${NACOS_USERNAME:}

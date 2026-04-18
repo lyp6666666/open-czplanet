@@ -71,6 +71,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { createHomeCarousel, deleteHomeCarousel, listHomeCarousel } from '@/api/homeCarousel'
 import type { AdminHomeCarouselItem } from '@/api/types'
 
+const MAX_UPLOAD_SIZE_BYTES = 20 * 1024 * 1024
+
 const rows = ref<AdminHomeCarouselItem[]>([])
 const loading = ref(false)
 const uploading = ref(false)
@@ -104,6 +106,19 @@ function onPickFile(e: Event) {
   pickedFile.value = input?.files?.[0] || null
 }
 
+function validateUploadForm() {
+  if (!form.title.trim()) {
+    return '请输入主标题'
+  }
+  if (!pickedFile.value) {
+    return '请先选择图片文件'
+  }
+  if (pickedFile.value.size > MAX_UPLOAD_SIZE_BYTES) {
+    return '图片不能超过 20MB'
+  }
+  return null
+}
+
 async function load() {
   if (loading.value) return
   loading.value = true
@@ -121,8 +136,9 @@ async function submit() {
   if (uploading.value) return
   hint.value = null
   errorText.value = null
-  if (!pickedFile.value) {
-    errorText.value = '请先选择图片文件'
+  const validationError = validateUploadForm()
+  if (validationError) {
+    errorText.value = validationError
     return
   }
   uploading.value = true
@@ -131,7 +147,7 @@ async function submit() {
       title: form.title,
       subtitle: form.subtitle,
       linkUrl: form.linkUrl,
-      file: pickedFile.value,
+      file: pickedFile.value!,
     })
     rows.value = [...rows.value, created].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
     hint.value = '轮播图已上传并加入首页轮播'
