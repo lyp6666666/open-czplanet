@@ -215,6 +215,7 @@ function textPreview(raw: unknown): string {
     if (typeof any.content === 'string' && any.content.trim()) {
       return `收到新消息：${any.content.trim()}`
     }
+    if (type === 'recall') return '收到新消息：[消息已撤回]'
     if (type === 'image') return '收到新消息：[图片]'
     if (type === 'tutor_application') return '收到新消息：家教申请'
     if (type === 'tutor_application_status') return '收到新消息：家教申请状态更新'

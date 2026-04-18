@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   batch: vi.fn(),
   sendText: vi.fn(),
   sendImage: vi.fn(),
+  recallMessage: vi.fn(),
 }))
 
 vi.mock('@/api/assets', () => ({
@@ -57,6 +58,7 @@ vi.mock('@/api/chat', () => ({
     reportTyping: mocks.reportTyping,
     sendText: mocks.sendText,
     sendImage: mocks.sendImage,
+    recallMessage: mocks.recallMessage,
     requestBrokerageRefund: vi.fn(),
     requestEndChat: vi.fn(),
     respondEndChat: vi.fn(),
@@ -221,6 +223,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.batch.mockReset()
     mocks.sendText.mockReset()
     mocks.sendImage.mockReset()
+    mocks.recallMessage.mockReset()
 
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -282,6 +285,15 @@ describe('ChatRoomPage realtime read receipt', () => {
           width: 320,
           height: 200,
         },
+      },
+    })
+    mocks.recallMessage.mockResolvedValue({
+      fromUser: { uid: 2001 },
+      message: {
+        id: 505,
+        roomId: 10,
+        sendTime: '2026-04-18T10:00:04',
+        body: { type: 'recall', targetMsgId: 502, operatorUid: 2001 },
       },
     })
   })
@@ -508,5 +520,73 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(mocks.sendImage).toHaveBeenCalledTimes(1)
     expect(mocks.sendImage.mock.calls[0]?.[0]).toBe(10)
     expect(wrapper.find('.chat-image').exists()).toBe(true)
+  })
+
+  it('renders recalled messages from history', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 502,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:01',
+            body: { type: 'text', content: '这条消息将被撤回' },
+          },
+        },
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 503,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:02',
+            body: { type: 'recall', targetMsgId: 502, operatorUid: 2001 },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(wrapper.text()).toContain('你撤回了一条消息')
+    expect(wrapper.text()).not.toContain('这条消息将被撤回')
+  })
+
+  it('recalls own text message from the chat page', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 502,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:01',
+            body: { type: 'text', content: '准备撤回的消息' },
+          },
+        },
+      ],
+    })
+    mocks.recallMessage.mockResolvedValue({
+      fromUser: { uid: 2001 },
+      message: {
+        id: 506,
+        roomId: 10,
+        sendTime: '2026-04-18T10:00:05',
+        body: { type: 'recall', targetMsgId: 502, operatorUid: 2001 },
+      },
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    await wrapper.find('.recall-link').trigger('click')
+    await flushPromises()
+
+    expect(mocks.recallMessage).toHaveBeenCalledWith(10, 502)
+    expect(wrapper.text()).toContain('你撤回了一条消息')
+    expect(wrapper.text()).not.toContain('准备撤回的消息')
   })
 })

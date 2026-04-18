@@ -20,6 +20,17 @@ public interface MessageMapper extends BaseMapper<Message> {
     @Select("SELECT * FROM message WHERE id = #{msgId}")
     Message getById(Long msgId);
 
+    @Select("""
+            SELECT COUNT(1)
+            FROM message
+            WHERE room_id = #{roomId}
+              AND from_uid = #{fromUid}
+              AND type = 2
+              AND reply_msg_id = #{targetMsgId}
+              AND status = 0
+            """)
+    Integer countRecallByTarget(@Param("roomId") Long roomId, @Param("fromUid") Long fromUid, @Param("targetMsgId") Long targetMsgId);
+
     List<RoomUnreadCount> listUnreadCounts(@Param("roomIds") List<Long> roomIds, @Param("uid") Long uid);
 
 

@@ -425,6 +425,7 @@ export interface ScheduleEventVO {
 
 export type ChatMessageBody =
   | { type: 'text'; content: string }
+  | { type: 'recall'; targetMsgId: number | null; operatorUid?: number | null }
   | {
       type: 'image'
       url: string

@@ -101,6 +101,7 @@ function lastMsgText(raw: unknown): string {
   if (typeof raw === 'object') {
     const any = raw as Record<string, unknown>
     const t = typeof any.type === 'string' ? any.type.trim() : ''
+    if (t === 'recall') return '[消息已撤回]'
     if (t === 'image') return '[图片]'
     if (t === 'brokerage_refund_request' || t === 'brokerage_refund_status') return '[退款申请]'
     if (typeof any.content === 'string') return any.content

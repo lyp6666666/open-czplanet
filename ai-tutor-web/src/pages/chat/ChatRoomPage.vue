@@ -43,6 +43,7 @@ const error = ref<string | null>(null)
 
 const sending = ref(false)
 const input = ref('')
+const recallingMsgId = ref<number | null>(null)
 
 const endRequestBusy = ref(false)
 const endActionBusy = ref(false)
@@ -311,6 +312,10 @@ function isImageBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { 
   return body.type === 'image'
 }
 
+function isRecallBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'recall' }> {
+  return body.type === 'recall'
+}
+
 function isLessonStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_status' }> {
   return body.type === 'lesson_status'
 }
@@ -523,6 +528,7 @@ function msgText(raw: unknown): string {
   if (typeof raw === 'string') return raw
   if (typeof raw === 'object') {
     const any = raw as Record<string, unknown>
+    if (any.type === 'recall') return '[消息已撤回]'
     if (typeof any.content === 'string') return any.content
   }
   try {
@@ -539,6 +545,21 @@ const sortedMessages = computed(() => {
 })
 
 type RenderMessage = ChatMessageResp & { body: ChatMessageBody }
+
+const recallByTargetMsgId = computed<Record<number, { operatorUid: number | null }>>(() => {
+  const out: Record<number, { operatorUid: number | null }> = {}
+  const messageIdSet = new Set(sortedMessages.value.map((m) => m.message?.id).filter((id): id is number => typeof id === 'number' && id > 0))
+  for (const m of sortedMessages.value) {
+    const body = normalizeBody(m.message?.body)
+    if (!isRecallBody(body)) continue
+    const targetMsgId = typeof body.targetMsgId === 'number' ? body.targetMsgId : Number(body.targetMsgId)
+    if (!(targetMsgId > 0) || !messageIdSet.has(targetMsgId)) continue
+    out[targetMsgId] = {
+      operatorUid: typeof body.operatorUid === 'number' ? body.operatorUid : m.fromUser.uid,
+    }
+  }
+  return out
+})
 
 const endStatusByRequestId = computed<Record<number, string>>(() => {
   const out: Record<number, string> = {}
@@ -615,6 +636,32 @@ const renderMessages = computed<RenderMessage[]>(() => {
   const list: RenderMessage[] = []
   for (const m of sortedMessages.value) {
     const body = normalizeBody(m.message?.body)
+    if (isRecallBody(body)) {
+      const targetMsgId = typeof body.targetMsgId === 'number' ? body.targetMsgId : Number(body.targetMsgId)
+      if (targetMsgId > 0 && recallByTargetMsgId.value[targetMsgId]) {
+        continue
+      }
+      list.push({
+        ...m,
+        body: {
+          ...body,
+          operatorUid: typeof body.operatorUid === 'number' ? body.operatorUid : m.fromUser.uid,
+        },
+      })
+      continue
+    }
+    const recallOverlay = recallByTargetMsgId.value[m.message.id]
+    if (recallOverlay) {
+      list.push({
+        ...m,
+        body: {
+          type: 'recall',
+          targetMsgId: m.message.id,
+          operatorUid: recallOverlay.operatorUid,
+        },
+      })
+      continue
+    }
     if (isEndChatStatusBody(body)) continue
     if (isEndChatRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
       const effective = endStatusByRequestId.value[body.requestId]
@@ -647,10 +694,39 @@ const latestOutgoingMsgId = computed(() => {
 
 function messageReceiptText(message: RenderMessage): string {
   if (message.fromUser.uid !== myUid.value) return ''
+  if (isRecallBody(message.body)) return ''
   if (message.message.id !== latestOutgoingMsgId.value) return ''
   if (peerLastReadMsgId.value >= message.message.id) return '对方已读'
   if (peerLastDeliveredMsgId.value >= message.message.id) return '已送达'
   return '已发送'
+}
+
+function recallText(body: Extract<ChatMessageBody, { type: 'recall' }>, fallbackUid: number): string {
+  const operatorUid = typeof body.operatorUid === 'number' ? body.operatorUid : fallbackUid
+  return operatorUid === myUid.value ? '你撤回了一条消息' : `${userName(operatorUid)}撤回了一条消息`
+}
+
+function canRecallMessage(message: RenderMessage): boolean {
+  if (message.fromUser.uid !== myUid.value) return false
+  if (isRecallBody(message.body)) return false
+  return message.body.type === 'text' || message.body.type === 'image'
+}
+
+async function recallMessage(messageId: number) {
+  if (!(roomId.value > 0) || !(messageId > 0)) return
+  if (recallingMsgId.value === messageId) return
+  recallingMsgId.value = messageId
+  error.value = null
+  try {
+    const msg = await chatApi.recallMessage(roomId.value, messageId)
+    mergeMessages([msg], 'append')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '撤回失败'
+  } finally {
+    if (recallingMsgId.value === messageId) {
+      recallingMsgId.value = null
+    }
+  }
 }
 
 const paidBrokerageOrderIds = computed<Record<number, true>>(() => {
@@ -1387,9 +1463,17 @@ watch(
               <template v-else-if="isImageBody(it.m.body)">
                 <img class="chat-image" :src="messageImageUrl(it.m.body)" alt="聊天图片" loading="lazy" />
               </template>
+              <template v-else-if="isRecallBody(it.m.body)">
+                <div class="sys recall-text">{{ recallText(it.m.body, it.m.fromUser.uid) }}</div>
+              </template>
               <template v-else>
                 {{ msgText(it.m.body) }}
               </template>
+            </div>
+            <div v-if="canRecallMessage(it.m)" class="msg-actions">
+              <button class="msg-op-link recall-link" type="button" :disabled="recallingMsgId === it.m.message.id" @click="recallMessage(it.m.message.id)">
+                {{ recallingMsgId === it.m.message.id ? '撤回中...' : '撤回' }}
+              </button>
             </div>
             <div v-if="messageReceiptText(it.m)" class="receipt">{{ messageReceiptText(it.m) }}</div>
           </div>
@@ -1813,6 +1897,24 @@ watch(
   border-radius: 12px;
   object-fit: cover;
   background: rgba(0, 0, 0, 0.04);
+}
+
+.msg-actions {
+  margin-top: 6px;
+}
+
+.msg-op-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.msg-op-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .hint {

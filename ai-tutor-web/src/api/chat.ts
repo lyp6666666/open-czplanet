@@ -54,6 +54,10 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 3, body: payload })
   },
 
+  recallMessage(roomId: number, targetMsgId: number) {
+    return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 2, body: { targetMsgId } })
+  },
+
   sendBody(roomId: number, body: unknown) {
     return http.post<unknown, ChatMessageResp>('/chat/msg', { roomId, msgType: 1, body })
   },

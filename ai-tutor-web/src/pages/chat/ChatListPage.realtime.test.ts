@@ -137,4 +137,42 @@ describe('ChatListPage realtime', () => {
     expect(wrapper.text()).toContain('第一条补偿消息')
     expect(wrapper.text()).toContain('第二条补偿消息')
   })
+
+  it('shows recall preview when realtime catch-up contains a recall event', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1201,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 6101,
+        roomId: 7101,
+        fromUid: 3001,
+        toUid: 2001,
+        sendTime: '2026-04-17T10:00:02',
+        body: { type: 'recall', targetMsgId: 6001, operatorUid: 3001 },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('[消息已撤回]')
+  })
 })
