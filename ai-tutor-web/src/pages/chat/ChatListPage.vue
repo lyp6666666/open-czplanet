@@ -57,6 +57,19 @@ function normalizeRoomItem(room: ChatRoomItemResp): ChatRoomItemResp {
   }
 }
 
+function mergeRoomsKeepFirst(existingRooms: ChatRoomItemResp[], incomingRooms: ChatRoomItemResp[]) {
+  const merged: ChatRoomItemResp[] = []
+  const seenRoomIds = new Set<number>()
+
+  for (const room of [...existingRooms, ...incomingRooms].map(normalizeRoomItem)) {
+    if (seenRoomIds.has(room.roomId)) continue
+    seenRoomIds.add(room.roomId)
+    merged.push(room)
+  }
+
+  return merged
+}
+
 function upsertRoomFromEvent(ev: StreamMsgEvent) {
   const myUid = auth.user?.id
   if (!myUid) return
@@ -157,7 +170,9 @@ async function loadMore() {
   try {
     const page = await chatApi.listRooms({ pageSize: 20, cursor: cursor.value })
     const newRooms = (page.list || []).map(normalizeRoomItem)
-    rooms.value = [...rooms.value, ...newRooms]
+    // 首页收到实时消息后再进入消息页时，实时事件可能已经先插入了会话；
+    // 列表接口回包到达后这里必须按 roomId 去重，避免同一联系人出现两个会话框。
+    rooms.value = mergeRoomsKeepFirst(rooms.value, newRooms)
     cursor.value = page.cursor ?? null
     isLast.value = !!page.isLast
     await enrichUsers(newRooms)

@@ -59,6 +59,16 @@ function createTestRouter() {
   })
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 describe('ChatListPage realtime', () => {
   beforeEach(() => {
     const localStorageMock = createStorage()
@@ -136,6 +146,78 @@ describe('ChatListPage realtime', () => {
     expect(items).toHaveLength(2)
     expect(wrapper.text()).toContain('第一条补偿消息')
     expect(wrapper.text()).toContain('第二条补偿消息')
+  })
+
+  it('deduplicates the same room when a realtime message arrives before the room list request finishes', async () => {
+    const deferred = createDeferred<{
+      cursor: null
+      isLast: boolean
+      list: Array<{
+        roomId: number
+        otherUid: number
+        lastMsgId: number
+        lastMsgBody: { content: string }
+        myLastReadMsgId: null
+        unreadCount: number
+        activeTime: string
+      }>
+    }>()
+    mocks.listRooms.mockReturnValueOnce(deferred.promise)
+    mocks.batch.mockResolvedValue([{ id: 3001, name: '教师甲', realName: '陆熠鹏', avatar: '', userType: 1 }])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1301,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 7002,
+        roomId: 7101,
+        fromUid: 3001,
+        toUid: 2001,
+        sendTime: '2026-04-18T09:57:15',
+        body: { content: '哦红' },
+      },
+    })
+
+    deferred.resolve({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          roomId: 7101,
+          otherUid: 3001,
+          lastMsgId: 7001,
+          lastMsgBody: { content: '你好' },
+          myLastReadMsgId: null,
+          unreadCount: 1,
+          activeTime: '2026-04-18T09:56:55',
+        },
+      ],
+    })
+    await flushPromises()
+
+    const items = wrapper.findAll('.item')
+    expect(items).toHaveLength(1)
+    expect(wrapper.text()).toContain('哦红')
+    expect(wrapper.text()).not.toContain('你好')
   })
 
   it('shows recall preview when realtime catch-up contains a recall event', async () => {
