@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listRooms: vi.fn(),
   getChatRefundState: vi.fn(),
   ackRead: vi.fn(),
+  ackDelivered: vi.fn(),
   reportTyping: vi.fn(),
   batch: vi.fn(),
   sendText: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('@/api/chat', () => ({
     listRooms: mocks.listRooms,
     getChatRefundState: mocks.getChatRefundState,
     ackRead: mocks.ackRead,
+    ackDelivered: mocks.ackDelivered,
     reportTyping: mocks.reportTyping,
     sendText: mocks.sendText,
     requestBrokerageRefund: vi.fn(),
@@ -162,6 +164,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.listRooms.mockReset()
     mocks.getChatRefundState.mockReset()
     mocks.ackRead.mockReset()
+    mocks.ackDelivered.mockReset()
     mocks.reportTyping.mockReset()
     mocks.batch.mockReset()
     mocks.sendText.mockReset()
@@ -199,6 +202,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     })
     mocks.getChatRefundState.mockResolvedValue({ canApply: false })
     mocks.ackRead.mockResolvedValue({ roomId: 10, lastReadMsgId: 501 })
+    mocks.ackDelivered.mockResolvedValue(true)
     mocks.reportTyping.mockResolvedValue(true)
     mocks.batch.mockResolvedValue([{ id: 3001, name: '教师3001', realName: '张老师', avatar: '', userType: 1 }])
     mocks.sendText.mockResolvedValue({
@@ -215,7 +219,7 @@ describe('ChatRoomPage realtime read receipt', () => {
   it('shows read receipt after peer read realtime event arrives', async () => {
     const { pinia, wrapper } = await mountChatRoomPage()
 
-    expect(wrapper.text()).toContain('未读')
+    expect(wrapper.text()).toContain('已发送')
 
     const chatRealtime = useChatRealtimeStore(pinia)
     chatRealtime.consumeRealtimeEnvelope({
@@ -231,6 +235,25 @@ describe('ChatRoomPage realtime read receipt', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('对方已读')
+  })
+
+  it('shows delivered receipt after peer delivery realtime event arrives', async () => {
+    const { pinia, wrapper } = await mountChatRoomPage()
+
+    const chatRealtime = useChatRealtimeStore(pinia)
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1400,
+      eventType: 'chat.delivery.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 10,
+        deliverUid: 3001,
+        lastDeliveredMsgId: 501,
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已送达')
   })
 
   it('keeps a failed outgoing text visible and retries it from the chat page', async () => {

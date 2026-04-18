@@ -11,6 +11,7 @@ vi.mock('@/api/chat', () => ({
   chatApi: {
     listRooms: vi.fn(),
     ackRead: vi.fn(),
+    ackDelivered: vi.fn(),
     reportTyping: vi.fn(),
     syncRealtimeEvents: vi.fn(),
   },
@@ -332,6 +333,50 @@ describe('chatRealtime store', () => {
     })
 
     expect(chatRealtime.peerReadMsgIdByRoom[7101]).toBe(6001)
+  })
+
+  it('updates peer delivered watermark from unified chat delivery events', () => {
+    seedAuth()
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1202,
+      eventType: 'chat.delivery.updated',
+      bizType: 'chat',
+      payload: {
+        roomId: 7101,
+        deliverUid: 3001,
+        lastDeliveredMsgId: 6001,
+      },
+    })
+
+    expect(chatRealtime.peerDeliveredMsgIdByRoom[7101]).toBe(6001)
+  })
+
+  it('acks delivery when a new incoming realtime message reaches the current user', async () => {
+    seedAuth()
+    useAuthStore()
+    vi.mocked(chatApi.ackDelivered).mockResolvedValue(true)
+
+    const chatRealtime = useChatRealtimeStore()
+    chatRealtime.consumeRealtimeEnvelope({
+      eventId: 1203,
+      eventType: 'chat.message.created',
+      bizType: 'chat',
+      payload: {
+        msgId: 6002,
+        roomId: 7101,
+        fromUid: 3001,
+        toUid: 2001,
+        sendTime: '2026-04-18T10:00:00',
+        body: { content: '你好' },
+      },
+    })
+
+    await Promise.resolve()
+
+    expect(chatApi.ackDelivered).toHaveBeenCalledWith(7101, 6002)
   })
 
   it('shows peer typing only for a short online window and then expires automatically', () => {

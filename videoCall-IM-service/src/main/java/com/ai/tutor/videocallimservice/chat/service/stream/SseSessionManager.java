@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
@@ -222,6 +223,12 @@ public class SseSessionManager {
             bizType = "chat";
             roomId = messageEvent.getRoomId();
             msgId = messageEvent.getMsgId();
+        } else if ("delivery".equals(normalizedEventName) && data instanceof ChatStreamDeliveryEvent) {
+            ChatStreamDeliveryEvent deliveryEvent = (ChatStreamDeliveryEvent) data;
+            eventType = "chat.delivery.updated";
+            bizType = "chat";
+            roomId = deliveryEvent.getRoomId();
+            msgId = deliveryEvent.getLastDeliveredMsgId();
         } else if ("read".equals(normalizedEventName) && data instanceof ChatStreamReadEvent) {
             ChatStreamReadEvent readEvent = (ChatStreamReadEvent) data;
             eventType = "chat.read.updated";

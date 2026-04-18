@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnvelope;
@@ -87,6 +88,25 @@ class SseSessionManagerTest {
         assertThat(replayEvents).hasSize(1);
         RealtimeEventEnvelope replayEvent = replayEvents.get(0);
         assertThat(replayEvent.getEventType()).isEqualTo("chat.read.updated");
+        assertThat(replayEvent.getBizType()).isEqualTo("chat");
+        assertThat(replayEvent.getRoomId()).isEqualTo(7001L);
+        assertThat(replayEvent.getMsgId()).isEqualTo(9001L);
+    }
+
+    @Test
+    void shouldBuildReplayEventForDeliveryReceiptPush() {
+        SseSessionManager manager = new SseSessionManager();
+        ChatStreamDeliveryEvent event = new ChatStreamDeliveryEvent();
+        event.setRoomId(7001L);
+        event.setDeliverUid(2001L);
+        event.setLastDeliveredMsgId(9001L);
+
+        manager.sendToUid(1001L, "delivery", event);
+
+        List<RealtimeEventEnvelope> replayEvents = manager.listReplayEventsAfter(1001L, 0L);
+        assertThat(replayEvents).hasSize(1);
+        RealtimeEventEnvelope replayEvent = replayEvents.get(0);
+        assertThat(replayEvent.getEventType()).isEqualTo("chat.delivery.updated");
         assertThat(replayEvent.getBizType()).isEqualTo("chat");
         assertThat(replayEvent.getRoomId()).isEqualTo(7001L);
         assertThat(replayEvent.getMsgId()).isEqualTo(9001L);

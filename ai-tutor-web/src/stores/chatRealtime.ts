@@ -41,6 +41,12 @@ type ChatReadRealtimeEvent = {
   lastReadMsgId: number
 }
 
+type ChatDeliveryRealtimeEvent = {
+  roomId: number
+  deliverUid?: number
+  lastDeliveredMsgId: number
+}
+
 type ChatTypingRealtimeEvent = {
   roomId: number
   typingUid?: number
@@ -74,6 +80,8 @@ function apiUrl(path: string) {
 
 const ackPendingByRoom = new Map<number, number>()
 const ackInFlightByRoom = new Map<number, Promise<void>>()
+const deliveryPendingByRoom = new Map<number, number>()
+const deliveryInFlightByRoom = new Map<number, Promise<void>>()
 const READ_MARKS_STORAGE_PREFIX = 'ai_tutor_chat_read_marks:'
 const REALTIME_LAST_EVENT_STORAGE_PREFIX = 'ai_tutor_realtime_last_event:'
 const REALTIME_CLIENT_ID_STORAGE_PREFIX = 'ai_tutor_realtime_client:'
@@ -227,6 +235,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     totalUnread: 0,
     roomUnread: {} as Record<number, number>,
     optimisticReadMsgIdByRoom: {} as Record<number, number>,
+    peerDeliveredMsgIdByRoom: {} as Record<number, number>,
     peerReadMsgIdByRoom: {} as Record<number, number>,
     peerTypingByRoom: {} as Record<number, boolean>,
     latestMsgIdByRoom: {} as Record<number, number>,
@@ -249,6 +258,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.totalUnread = 0
       this.roomUnread = {}
       this.optimisticReadMsgIdByRoom = {}
+      this.peerDeliveredMsgIdByRoom = {}
       this.peerReadMsgIdByRoom = {}
       this.peerTypingByRoom = {}
       this.latestMsgIdByRoom = {}
@@ -463,10 +473,23 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     syncPeerReadMark(roomId: number, peerLastReadMsgId: number | null | undefined) {
       const confirmed = typeof peerLastReadMsgId === 'number' ? peerLastReadMsgId : 0
       if (confirmed <= 0) return
+      this.syncPeerDeliveredMark(roomId, confirmed)
       const prev = this.peerReadMsgIdByRoom[roomId] || 0
       if (confirmed > prev) {
         this.peerReadMsgIdByRoom = {
           ...this.peerReadMsgIdByRoom,
+          [roomId]: confirmed,
+        }
+      }
+    },
+
+    syncPeerDeliveredMark(roomId: number, peerLastDeliveredMsgId: number | null | undefined) {
+      const confirmed = typeof peerLastDeliveredMsgId === 'number' ? peerLastDeliveredMsgId : 0
+      if (confirmed <= 0) return
+      const prev = this.peerDeliveredMsgIdByRoom[roomId] || 0
+      if (confirmed > prev) {
+        this.peerDeliveredMsgIdByRoom = {
+          ...this.peerDeliveredMsgIdByRoom,
           [roomId]: confirmed,
         }
       }
@@ -531,6 +554,16 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       this.syncPeerReadMark(roomId, lastReadMsgId)
     },
 
+    consumeDeliveryEvent(payload: unknown) {
+      if (!payload || typeof payload !== 'object') return
+      const any = payload as Partial<ChatDeliveryRealtimeEvent> & Record<string, unknown>
+      const roomId = typeof any.roomId === 'number' ? any.roomId : Number(any.roomId)
+      const lastDeliveredMsgId =
+        typeof any.lastDeliveredMsgId === 'number' ? any.lastDeliveredMsgId : Number(any.lastDeliveredMsgId)
+      if (!(roomId > 0) || !(lastDeliveredMsgId > 0)) return
+      this.syncPeerDeliveredMark(roomId, lastDeliveredMsgId)
+    },
+
     consumeTypingEvent(payload: unknown) {
       if (!payload || typeof payload !== 'object') return
       const any = payload as Partial<ChatTypingRealtimeEvent> & Record<string, unknown>
@@ -568,6 +601,11 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
 
       if (eventType === 'chat.read.updated') {
         this.consumeReadEvent(envelope.payload)
+        return
+      }
+
+      if (eventType === 'chat.delivery.updated') {
+        this.consumeDeliveryEvent(envelope.payload)
         return
       }
 
@@ -644,6 +682,45 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       } catch {
         void 0
       }
+    },
+
+    async ackRoomDelivered(roomId: number, lastDeliveredMsgId: number) {
+      const auth = useAuthStore()
+      if (!auth.isLoggedIn || !auth.token || !(lastDeliveredMsgId > 0)) return
+
+      const prevPending = deliveryPendingByRoom.get(roomId) || 0
+      const nextPending = Math.max(prevPending, lastDeliveredMsgId)
+      if (nextPending <= 0) return
+      deliveryPendingByRoom.set(roomId, nextPending)
+
+      const inflight = deliveryInFlightByRoom.get(roomId)
+      if (inflight) return
+
+      const runner = (async () => {
+        let lastAcked = 0
+        let retryCount = 0
+        while (true) {
+          if (!auth.isLoggedIn || !auth.token) return
+          const target = deliveryPendingByRoom.get(roomId) || 0
+          if (target <= lastAcked) return
+          try {
+            await chatApi.ackDelivered(roomId, target)
+            lastAcked = target
+            retryCount = 0
+          } catch {
+            retryCount += 1
+            if (retryCount >= 3) return
+            await sleep(300 * retryCount)
+          }
+        }
+      })()
+
+      deliveryInFlightByRoom.set(
+        roomId,
+        runner.finally(() => {
+          deliveryInFlightByRoom.delete(roomId)
+        }),
+      )
     },
 
     async refreshUnreadFromServer() {
@@ -833,6 +910,8 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       if (ev.msgId <= knownLatest) return
       this.rememberLatestMsg(ev.roomId, ev.msgId)
       if (ev.toUid !== myUid) return
+      // 收到在线消息后先回送“送达”，这样发送方能先看到“已送达”，再等待“已读”。
+      void this.ackRoomDelivered(ev.roomId, ev.msgId)
       // If active in this room, we assume it's read immediately
       if (this.activeRoomId != null && ev.roomId === this.activeRoomId) {
         this.markRoomReadOptimistic(ev.roomId, ev.msgId)

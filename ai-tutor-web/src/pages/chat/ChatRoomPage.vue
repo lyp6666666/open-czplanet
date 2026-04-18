@@ -84,6 +84,7 @@ const lastTypingReportAt = ref(0)
 const typingStopTimer = ref<number | null>(null)
 
 const myUid = computed(() => auth.user?.id ?? 0)
+const peerLastDeliveredMsgId = computed(() => chatRealtime.peerDeliveredMsgIdByRoom[roomId.value] || 0)
 const peerLastReadMsgId = computed(() => chatRealtime.peerReadMsgIdByRoom[roomId.value] || 0)
 const peerTyping = computed(() => chatRealtime.peerTypingByRoom[roomId.value] === true)
 const myRealName = computed(() => {
@@ -636,7 +637,9 @@ const latestOutgoingMsgId = computed(() => {
 function messageReceiptText(message: RenderMessage): string {
   if (message.fromUser.uid !== myUid.value) return ''
   if (message.message.id !== latestOutgoingMsgId.value) return ''
-  return peerLastReadMsgId.value >= message.message.id ? '对方已读' : '未读'
+  if (peerLastReadMsgId.value >= message.message.id) return '对方已读'
+  if (peerLastDeliveredMsgId.value >= message.message.id) return '已送达'
+  return '已发送'
 }
 
 const paidBrokerageOrderIds = computed<Record<number, true>>(() => {

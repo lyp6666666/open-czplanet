@@ -91,6 +91,10 @@ export const chatApi = {
     return http.post<unknown, ChatReadAckResp>('/chat/read/ack', { roomId, lastReadMsgId })
   },
 
+  ackDelivered(roomId: number, lastDeliveredMsgId: number) {
+    return http.post<unknown, boolean>('/chat/delivery/ack', { roomId, lastDeliveredMsgId })
+  },
+
   reportTyping(roomId: number, typing: boolean) {
     return http.post<unknown, boolean>('/chat/typing', { roomId, typing })
   },
