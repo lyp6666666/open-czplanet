@@ -18,6 +18,7 @@ const cityStore = useCityStore()
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const isOrg = computed(() => auth.user?.userType === 3)
+const canChat = computed(() => !isOrg.value)
 
 function normalizedText(raw: string | null | undefined) {
   const text = String(raw || '').trim()

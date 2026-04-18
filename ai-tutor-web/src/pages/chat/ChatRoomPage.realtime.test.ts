@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   uploadImage: vi.fn(),
   listMessages: vi.fn(),
   searchMessages: vi.fn(),
+  batchPresence: vi.fn(),
   listRooms: vi.fn(),
   getChatRefundState: vi.fn(),
   ackRead: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('@/api/chat', () => ({
   chatApi: {
     listMessages: mocks.listMessages,
     searchMessages: mocks.searchMessages,
+    batchPresence: mocks.batchPresence,
     listRooms: mocks.listRooms,
     getChatRefundState: mocks.getChatRefundState,
     ackRead: mocks.ackRead,
@@ -217,6 +219,7 @@ describe('ChatRoomPage realtime read receipt', () => {
 
     mocks.listMessages.mockReset()
     mocks.searchMessages.mockReset()
+    mocks.batchPresence.mockReset()
     mocks.listRooms.mockReset()
     mocks.getChatRefundState.mockReset()
     mocks.uploadImage.mockReset()
@@ -275,6 +278,7 @@ describe('ChatRoomPage realtime read receipt', () => {
         },
       ],
     })
+    mocks.batchPresence.mockResolvedValue([{ uid: 3001, online: true, lastOnlineAt: null }])
     mocks.ackRead.mockResolvedValue({ roomId: 10, lastReadMsgId: 501 })
     mocks.ackDelivered.mockResolvedValue(true)
     mocks.reportTyping.mockResolvedValue(true)
@@ -361,6 +365,29 @@ describe('ChatRoomPage realtime read receipt', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('对方已读')
+  })
+
+  it('loads and renders peer online presence in the chat header', async () => {
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(mocks.batchPresence).toHaveBeenCalledWith([3001])
+    expect(wrapper.find('.presence-text').text()).toBe('在线')
+  })
+
+  it('renders peer offline presence with last online time', async () => {
+    mocks.batchPresence.mockResolvedValueOnce([
+      {
+        uid: 3001,
+        online: false,
+        lastOnlineAt: '2026-04-18T10:12:00',
+      },
+    ])
+
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(wrapper.find('.presence-text').text()).toContain('离线')
+    expect(wrapper.find('.presence-text').text()).toContain('最后在线')
+    expect(wrapper.find('.presence-text').text()).toContain('10:12')
   })
 
   it('shows delivered receipt after peer delivery realtime event arrives', async () => {

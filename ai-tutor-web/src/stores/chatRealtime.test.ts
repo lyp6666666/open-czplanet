@@ -312,8 +312,8 @@ describe('chatRealtime store', () => {
 
     expect(chatRealtime.messageEventSerial).toBe(2)
     expect(queued).toHaveLength(2)
-    expect(queued[0].event.roomId).toBe(9001)
-    expect(queued[1].event.roomId).toBe(9002)
+    expect(queued[0]?.event.roomId).toBe(9001)
+    expect(queued[1]?.event.roomId).toBe(9002)
   })
 
   it('updates peer read watermark from unified chat read events', () => {

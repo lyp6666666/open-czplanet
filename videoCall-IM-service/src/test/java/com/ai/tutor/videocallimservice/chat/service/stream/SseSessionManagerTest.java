@@ -8,7 +8,9 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.RealtimeEventEnve
 import com.ai.tutor.videocallimservice.chat.service.realtime.RealtimeEventStoreService;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -134,5 +136,55 @@ class SseSessionManagerTest {
         ReflectionTestUtils.setField(manager, "realtimeEventStoreService", realtimeEventStoreService);
 
         assertThat(manager.getLatestEventId(2001L)).isEqualTo(9527L);
+    }
+
+    @Test
+    void shouldReportUserOnlineWhenSseSessionExists() {
+        SseSessionManager manager = new SseSessionManager();
+
+        manager.connectV2(2001L, "web-2001", null);
+
+        assertThat(manager.listPresence(List.of(2001L)))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getUid()).isEqualTo(2001L);
+                    assertThat(item.getOnline()).isTrue();
+                    assertThat(item.getLastOnlineAt()).isNull();
+                });
+    }
+
+    @Test
+    void shouldRecordLastOnlineTimeWhenLastSessionDisconnects() {
+        SseSessionManager manager = new SseSessionManager();
+        SseEmitter emitter = manager.connect(3001L);
+        @SuppressWarnings("unchecked")
+        Map<Long, List<Object>> emittersByUid = (Map<Long, List<Object>>) ReflectionTestUtils.getField(manager, "emittersByUid");
+        assertThat(emittersByUid).isNotNull();
+        Object holder = emittersByUid.get(3001L).getFirst();
+
+        ReflectionTestUtils.invokeMethod(manager, "remove", 3001L, holder);
+
+        assertThat(emitter).isNotNull();
+        assertThat(manager.listPresence(List.of(3001L)))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getOnline()).isFalse();
+                    assertThat(item.getLastOnlineAt()).isNotNull().isBeforeOrEqualTo(new Date());
+                });
+    }
+
+    @Test
+    void shouldKeepLastOnlineTimeWhenThereAreRepeatedBatchUids() {
+        SseSessionManager manager = new SseSessionManager();
+        @SuppressWarnings("unchecked")
+        Map<Long, Date> lastOfflineAtByUid = (Map<Long, Date>) ReflectionTestUtils.getField(manager, "lastOfflineAtByUid");
+        assertThat(lastOfflineAtByUid).isNotNull();
+        Date lastOnlineAt = new Date();
+        lastOfflineAtByUid.put(4001L, lastOnlineAt);
+
+        List<?> presenceList = manager.listPresence(List.of(4001L, 4001L));
+
+        assertThat(presenceList).hasSize(1);
+        assertThat(manager.listPresence(List.of(4001L)).getFirst().getLastOnlineAt()).isEqualTo(lastOnlineAt);
     }
 }

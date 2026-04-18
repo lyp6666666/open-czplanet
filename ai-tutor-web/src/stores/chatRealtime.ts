@@ -90,7 +90,7 @@ const REALTIME_IDLE_TIMEOUT_MS = 45_000
 const REALTIME_WATCHDOG_INTERVAL_MS = 10_000
 const PEER_TYPING_EXPIRE_MS = 3_500
 let realtimeSyncInFlight: Promise<void> | null = null
-const peerTypingTimerByRoom = new Map<number, number>()
+const peerTypingTimerByRoom = new Map<number, ReturnType<typeof globalThis.setTimeout>>()
 
 function clearPeerTypingTimer(roomId: number) {
   const timer = peerTypingTimerByRoom.get(roomId)
@@ -252,7 +252,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
     clientId: '',
     streamAbort: null as AbortController | null,
     lastStreamActivityAt: 0,
-    realtimeWatchdogTimer: null as number | null,
+    realtimeWatchdogTimer: null as ReturnType<typeof globalThis.setInterval> | null,
   }),
   actions: {
     resetState() {
@@ -580,7 +580,7 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
         typeof any.typing === 'boolean'
           ? any.typing
           : typeof any.typing === 'string'
-            ? any.typing.trim().toLowerCase() === 'true'
+            ? String(any.typing).trim().toLowerCase() === 'true'
             : Boolean(any.typing)
       this.setPeerTyping(roomId, typing)
     },

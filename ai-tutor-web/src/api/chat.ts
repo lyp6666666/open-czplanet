@@ -26,6 +26,12 @@ export type RealtimeEventSyncResp = {
   list?: RealtimeEnvelopeResp[]
 }
 
+export type ChatPresenceResp = {
+  uid: number
+  online: boolean
+  lastOnlineAt?: string | number | Date | null
+}
+
 export const chatApi = {
   getOrCreateRoom(targetUid: number) {
     return http.post<unknown, number>('/chat/room', { targetUid })
@@ -45,6 +51,11 @@ export const chatApi = {
 
   searchMessages(params: { roomId: number; keyword: string; pageSize?: number; cursor?: string | null }) {
     return http.get<unknown, CursorPageBaseResp<ChatMessageResp>>('/chat/public/msg/search', { params })
+  },
+
+  batchPresence(uids: number[]) {
+    if (uids.length <= 0) return Promise.resolve([] satisfies ChatPresenceResp[])
+    return http.get<unknown, ChatPresenceResp[]>('/chat/presence/batch', { params: { uids: uids.join(',') } })
   },
 
   sendText(roomId: number, content: string) {

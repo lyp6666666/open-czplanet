@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatPresenceResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamReadEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamTypingEvent;
@@ -15,8 +16,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.Deque;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,6 +39,7 @@ public class SseSessionManager {
 
     private final Map<Long, List<SessionHolder>> emittersByUid = new ConcurrentHashMap<>();
     private final Map<Long, Deque<RealtimeEventEnvelope>> replayBufferByUid = new ConcurrentHashMap<>();
+    private final Map<Long, Date> lastOfflineAtByUid = new ConcurrentHashMap<>();
     private final AtomicLong eventIdGenerator = new AtomicLong(System.currentTimeMillis());
     private final ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "im-sse-heartbeat");
@@ -97,6 +101,29 @@ public class SseSessionManager {
             remove(uid, holder);
         }
         return emitter;
+    }
+
+    public List<ChatPresenceResp> listPresence(Collection<Long> uids) {
+        if (uids == null || uids.isEmpty()) {
+            return List.of();
+        }
+        List<ChatPresenceResp> result = new ArrayList<>();
+        // 批量查询时去重并保留入参顺序，避免前端同一批请求出现重复项。
+        for (Long uid : new LinkedHashSet<>(uids)) {
+            if (uid == null || uid <= 0) {
+                continue;
+            }
+            result.add(ChatPresenceResp.builder()
+                    .uid(uid)
+                    .online(isOnline(uid))
+                    .lastOnlineAt(lastOfflineAtByUid.get(uid))
+                    .build());
+        }
+        return result;
+    }
+
+    public boolean isOnline(Long uid) {
+        return getActiveSessionCount(uid) > 0;
     }
 
     public void sendToUid(Long uid, String eventName, Object data) {
@@ -288,7 +315,17 @@ public class SseSessionManager {
         emitters.remove(holder);
         if (emitters.isEmpty()) {
             emittersByUid.remove(uid);
+            // 只有最后一个 SSE 会话断开时，才更新“最后在线时间”。
+            lastOfflineAtByUid.put(uid, new Date());
         }
+    }
+
+    private int getActiveSessionCount(Long uid) {
+        if (uid == null || uid <= 0) {
+            return 0;
+        }
+        List<SessionHolder> emitters = emittersByUid.get(uid);
+        return emitters == null ? 0 : emitters.size();
     }
 
     private enum Protocol {

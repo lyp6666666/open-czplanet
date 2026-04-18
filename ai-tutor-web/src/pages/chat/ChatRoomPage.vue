@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
-import type { ChatRefundStateResp } from '@/api/chat'
+import type { ChatPresenceResp, ChatRefundStateResp } from '@/api/chat'
 import { assetsApi } from '@/api/assets'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
@@ -38,6 +38,7 @@ const otherUid = computed(() => {
 })
 
 const otherUser = ref<UserSimpleVO | null>(null)
+const otherPresence = ref<ChatPresenceResp | null>(null)
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -93,9 +94,11 @@ const TYPING_IDLE_TIMEOUT_MS = 2_200
 const typingReportRoomId = ref<number | null>(null)
 const typingReported = ref(false)
 const lastTypingReportAt = ref(0)
-const typingStopTimer = ref<number | null>(null)
+const typingStopTimer = ref<ReturnType<typeof globalThis.setTimeout> | null>(null)
 const roomPinned = ref(false)
 let stopPinSync: (() => void) | null = null
+let presenceRefreshTimer: number | null = null
+const PRESENCE_REFRESH_INTERVAL_MS = 15_000
 
 const myUid = computed(() => auth.user?.id ?? 0)
 const peerLastDeliveredMsgId = computed(() => chatRealtime.peerDeliveredMsgIdByRoom[roomId.value] || 0)
@@ -145,6 +148,44 @@ function userName(uid: number): string {
   if (otherUid.value && uid === otherUid.value) return pickDisplayName(otherUser.value, uid)
   return pickDisplayName(getUser(uid), uid)
 }
+
+function clearPresenceRefreshTimer() {
+  if (presenceRefreshTimer == null) return
+  window.clearInterval(presenceRefreshTimer)
+  presenceRefreshTimer = null
+}
+
+function parseDateLike(value: string | number | Date | null | undefined): number | null {
+  if (value instanceof Date) {
+    const ts = value.getTime()
+    return Number.isFinite(ts) ? ts : null
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const directNumber = Number(raw)
+  if (Number.isFinite(directNumber)) return directNumber
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatPresenceTime(value: string | number | Date | null | undefined): string {
+  const ts = parseDateLike(value)
+  if (ts == null) return ''
+  const date = new Date(ts)
+  const day = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+  const hm = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  return day === localTodayDay() ? `今天 ${hm}` : `${day} ${hm}`
+}
+
+const otherPresenceText = computed(() => {
+  if (!otherUid.value) return ''
+  if (otherPresence.value?.online) return '在线'
+  const lastOnlineText = formatPresenceTime(otherPresence.value?.lastOnlineAt)
+  return lastOnlineText ? `离线 · 最后在线 ${lastOnlineText}` : '离线'
+})
 
 function userAvatar(uid: number): string {
   if (avatarBroken.value[uid]) return ''
@@ -585,11 +626,11 @@ function searchResultText(message: ChatMessageResp): string {
 
 function escapeHtml(text: string): string {
   return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function escapeRegex(text: string): string {
@@ -1015,6 +1056,33 @@ async function loadOtherUser() {
   otherUser.value = users[0] || null
 }
 
+async function loadOtherPresence() {
+  if (!otherUid.value) {
+    otherPresence.value = null
+    return
+  }
+  const v = roomVersion.value
+  try {
+    const list = await chatApi.batchPresence([otherUid.value])
+    if (v !== roomVersion.value) return
+    otherPresence.value = list[0] || { uid: otherUid.value, online: false, lastOnlineAt: null }
+  } catch {
+    if (v !== roomVersion.value) return
+    // 在线状态查询失败时不打断聊天主流程；若已有状态则继续沿用，避免页面闪烁误判。
+    if (otherPresence.value?.uid === otherUid.value) return
+    otherPresence.value = { uid: otherUid.value, online: false, lastOnlineAt: null }
+  }
+}
+
+function startPresenceRefresh() {
+  clearPresenceRefreshTimer()
+  if (typeof window === 'undefined') return
+  if (!otherUid.value) return
+  presenceRefreshTimer = window.setInterval(() => {
+    void loadOtherPresence()
+  }, PRESENCE_REFRESH_INTERVAL_MS)
+}
+
 function scrollToBottom() {
   if (!msgsRef.value) return
   const el = msgsRef.value
@@ -1357,6 +1425,7 @@ async function ackFromRoomList() {
 
 onBeforeUnmount(() => {
   clearTypingStopTimer()
+  clearPresenceRefreshTimer()
   const currentTypingRoomId = typingReportRoomId.value
   if (currentTypingRoomId) {
     void chatApi.reportTyping(currentTypingRoomId, false).catch(() => undefined)
@@ -1430,11 +1499,14 @@ watch(
     cursor.value = null
     isLast.value = false
     messages.value = []
+    otherPresence.value = null
     resetMessageSearch(true)
     pendingOutgoingMessages.value = []
     sending.value = false
     contactAutoShown.value = false
     void loadOtherUser()
+    void loadOtherPresence()
+    startPresenceRefresh()
     void chatRealtime.refreshUnreadFromServer()
     void ackFromRoomList()
     void loadMore().then(() => ackLatest())
@@ -1478,6 +1550,7 @@ watch(
       <button class="btn back" type="button" @click="router.push({ name: 'chatList' })">返回</button>
       <div class="head-main">
         <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
+        <div v-if="otherPresenceText" class="presence-text">{{ otherPresenceText }}</div>
         <div v-if="peerTyping" class="typing-hint">对方正在输入...</div>
       </div>
       <button class="btn pin-toggle" type="button" @click="toggleRoomPinned">
@@ -1751,6 +1824,12 @@ watch(
 .name {
   text-align: center;
   font-weight: 900;
+}
+
+.presence-text {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1;
 }
 
 .typing-hint {
