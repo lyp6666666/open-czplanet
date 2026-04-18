@@ -197,3 +197,17 @@ Append one short entry after validated repo changes made while using this skill.
   ran `cd ai-tutor-web && npm run lint` and confirmed there were no errors, only existing repo-wide Vue formatting warnings
 - New note added:
   chat realtime now uses existing SSE for lightweight new-message popups plus optimistic read-state suppression, and the skill now requires same-turn `sqlDoc/` sync for any schema change
+
+## 2026-04-18
+
+- Request:
+  Re-check the completed IM feature set, fold the supported capabilities into the project skill, and verify whether the shared remote dev server is missing synced code or DB migrations
+- Areas:
+  `skills/`, `scripts/`, chat/realtime feature area, shared remote dev workflow
+- Background checked:
+  skill references, remote startup scripts, migration helpers, recent IM-related commits
+- Validation:
+  re-ran focused chat frontend tests and IM backend tests
+  confirmed the shared remote dev repo was behind local and inspected migration helper behavior
+- New note added:
+  skill docs now list the current IM capability set and explicitly call out that existing databases need manual `db_apply_migrations.sh` after remote sync

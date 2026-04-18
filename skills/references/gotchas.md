@@ -55,6 +55,10 @@ Only record repo-specific truths here.
   domain-server callback access log -> payment-service success/finalize log -> IM-service `tutor_application_paid` log.
 - Any repo change that alters database schema is incomplete unless `sqlDoc/` is updated in the same turn.
   The final response should explicitly say whether `sqlDoc` was updated or not.
+- `scripts/db_bootstrap_if_missing.sh` only initializes an empty database.
+  On a machine that already has core tables, it exits early and will not apply newly added files under `sqlDoc/migrations/`; use `sh scripts/db_apply_migrations.sh` explicitly after syncing code.
+- Not every file under `sqlDoc/migrations/` is fully idempotent.
+  Example: `20260301_student_job_posting_admin_alter.sql` can fail on repeat runs with `Duplicate column name 'reject_reason'`, so when bulk-replaying migrations on an old shared dev DB, verify the target IM/payment tables afterward instead of assuming a clean all-green log.
 
 ## Maintenance Rule
 

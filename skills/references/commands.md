@@ -192,6 +192,18 @@ grep -n "manage.infra" scripts/dev_all_up.sh
 grep -n "REMOTE_MANAGE_INFRA" scripts/dev_remote_up.sh
 ```
 
+Force-sync the current repo to the shared remote dev machine and restart services:
+
+```bash
+bash scripts/dev_remote_sync_up.sh
+```
+
+Apply all SQL migrations on the shared remote dev machine after syncing code:
+
+```bash
+ssh root@111.228.20.88 "cd /opt/ai-platform && sh scripts/db_apply_migrations.sh"
+```
+
 Payment callback verification logs:
 
 ```bash

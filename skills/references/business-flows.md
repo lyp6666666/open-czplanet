@@ -61,6 +61,12 @@ Read the section that matches the feature you are touching.
   list rooms -> load room messages -> send message -> SSE receive -> unread update -> read ack
 - Important reminder:
   chat pages also render structured business cards such as collaboration proposals and unlock/contact states
+- Current supported IM capabilities in this repo:
+  text messages, image messages, failed-send retry, read receipts, delivery receipts, typing status, message recall, room pinning, in-room message search, presence query, realtime presence push, and last-online display
+- Current multi-end behavior:
+  presence uses first-connect / last-disconnect semantics, so multiple browser tabs or devices for the same user should not cause online/offline flicker for the peer
+- Realtime storage note:
+  unified realtime replay depends on the backend table `chat_realtime_event`; if presence or other SSE-driven features feel inconsistent across refresh/reconnect, verify migrations before debugging code
 
 ## 6. Payment, Cashier, Brokerage
 
