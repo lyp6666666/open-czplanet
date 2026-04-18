@@ -45,6 +45,18 @@ type StreamMsgEvent = {
   body: unknown
 }
 
+function normalizeRoomItem(room: ChatRoomItemResp): ChatRoomItemResp {
+  const latestMsgId = typeof room.lastMsgId === 'number' ? room.lastMsgId : Number(room.lastMsgId || 0)
+  const serverReadMsgId =
+    typeof room.myLastReadMsgId === 'number' ? room.myLastReadMsgId : Number(room.myLastReadMsgId || 0)
+  const effectiveReadMsgId = chatRealtime.resolveEffectiveReadMsgId(room.roomId, serverReadMsgId)
+  return {
+    ...room,
+    myLastReadMsgId: effectiveReadMsgId > 0 ? effectiveReadMsgId : room.myLastReadMsgId,
+    unreadCount: chatRealtime.resolveRoomUnread(room.roomId, room.unreadCount, latestMsgId, serverReadMsgId),
+  }
+}
+
 function upsertRoomFromEvent(ev: StreamMsgEvent) {
   const myUid = auth.user?.id
   if (!myUid) return
@@ -71,20 +83,20 @@ function upsertRoomFromEvent(ev: StreamMsgEvent) {
   if (idx >= 0) {
     const next = rooms.value.slice()
     next.splice(idx, 1)
-    rooms.value = [updated, ...next]
+    rooms.value = [normalizeRoomItem(updated), ...next.map(normalizeRoomItem)]
   } else {
-    rooms.value = [updated, ...rooms.value]
+    rooms.value = [normalizeRoomItem(updated), ...rooms.value.map(normalizeRoomItem)]
     void enrichUsers([updated])
   }
 }
 
 watch(
   () => chatRealtime.roomUnread,
-  (map) => {
+  () => {
     rooms.value = rooms.value.map((r) => {
-      const u = map[r.roomId]
-      if (typeof u === 'number' && u !== r.unreadCount) {
-        return { ...r, unreadCount: u }
+      const next = normalizeRoomItem(r)
+      if (next.unreadCount !== r.unreadCount || next.myLastReadMsgId !== r.myLastReadMsgId) {
+        return next
       }
       return r
     })
@@ -93,10 +105,8 @@ watch(
 )
 
 function effectiveUnread(roomId: number, fallback: number) {
-  if (Object.prototype.hasOwnProperty.call(chatRealtime.roomUnread, roomId)) {
-    return chatRealtime.roomUnread[roomId] || 0
-  }
-  return chatRealtime.unreadSnapshotLoaded ? 0 : fallback
+  const room = rooms.value.find((item) => item.roomId === roomId)
+  return chatRealtime.resolveRoomUnread(roomId, fallback, room?.lastMsgId, room?.myLastReadMsgId)
 }
 
 function lastMsgText(raw: unknown): string {
@@ -146,7 +156,7 @@ async function loadMore() {
   error.value = null
   try {
     const page = await chatApi.listRooms({ pageSize: 20, cursor: cursor.value })
-    const newRooms = page.list || []
+    const newRooms = (page.list || []).map(normalizeRoomItem)
     rooms.value = [...rooms.value, ...newRooms]
     cursor.value = page.cursor ?? null
     isLast.value = !!page.isLast

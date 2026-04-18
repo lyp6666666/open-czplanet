@@ -517,6 +517,31 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
       }
     },
 
+    resolveEffectiveReadMsgId(roomId: number, serverLastReadMsgId?: number | null) {
+      this.ensureReadMarksLoaded()
+      const serverReadMsgId =
+        typeof serverLastReadMsgId === 'number' && Number.isFinite(serverLastReadMsgId) ? serverLastReadMsgId : 0
+      const optimisticReadMsgId = this.optimisticReadMsgIdByRoom[roomId] || 0
+      return Math.max(serverReadMsgId, optimisticReadMsgId)
+    },
+
+    resolveRoomUnread(roomId: number, fallbackUnread: unknown, latestMsgId?: number | null, serverLastReadMsgId?: number | null) {
+      if (Object.prototype.hasOwnProperty.call(this.roomUnread, roomId)) {
+        return this.roomUnread[roomId] || 0
+      }
+
+      const latest =
+        typeof latestMsgId === 'number' && Number.isFinite(latestMsgId) ? latestMsgId : Number(latestMsgId || 0)
+      const effectiveReadMsgId = this.resolveEffectiveReadMsgId(roomId, serverLastReadMsgId)
+      if (latest > 0 && effectiveReadMsgId >= latest) {
+        return 0
+      }
+
+      const fallback =
+        typeof fallbackUnread === 'number' && Number.isFinite(fallbackUnread) ? fallbackUnread : Number(fallbackUnread || 0)
+      return this.unreadSnapshotLoaded ? 0 : Math.max(0, fallback)
+    },
+
     setPeerTyping(roomId: number, typing: boolean) {
       if (!(roomId > 0)) return
       clearPeerTypingTimer(roomId)
@@ -801,14 +826,9 @@ export const useChatRealtimeStore = defineStore('chatRealtime', {
                 ? Number(r.peerLastReadMsgId)
                   : 0
             this.syncPeerReadMark(r.roomId, peerLastReadMsgId)
-            const optimisticReadMsgId = this.optimisticReadMsgIdByRoom[r.roomId] || 0
             // 首页红点判断必须同时考虑“服务端已确认水位”和“本地刚读完但服务端尚未回刷的水位”。
             // 否则用户在聊天页读完消息后，一回到首页就可能被旧的 unreadCount 再次打出红点。
-            const effectiveReadMsgId = Math.max(serverReadMsgId, optimisticReadMsgId)
-            let c = typeof r.unreadCount === 'number' ? r.unreadCount : 0
-            if (latestMsgId > 0 && effectiveReadMsgId >= latestMsgId) {
-              c = 0
-            }
+            const c = this.resolveRoomUnread(r.roomId, r.unreadCount, latestMsgId, serverReadMsgId)
             if (c > 0) {
               map[r.roomId] = c
               total += c

@@ -251,4 +251,36 @@ describe('ChatListPage realtime', () => {
 
     expect(wrapper.find('.unread-badge').exists()).toBe(false)
   })
+
+  it('does not show the left unread badge on first render when the local read watermark already covers the latest message', async () => {
+    sessionStorage.setItem('ai_tutor_chat_read_marks:2001', JSON.stringify({ 7101: 6001 }))
+    mocks.listRooms.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        { roomId: 7101, otherUid: 3001, lastMsgId: 6001, lastMsgBody: { content: '第一条' }, myLastReadMsgId: null, unreadCount: 1, activeTime: '2026-04-17T10:00:00' },
+      ],
+    })
+    mocks.batch.mockResolvedValue([{ id: 3001, name: '教师甲', realName: '教师甲', avatar: '', userType: 1 }])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.unread-badge').exists()).toBe(false)
+  })
 })

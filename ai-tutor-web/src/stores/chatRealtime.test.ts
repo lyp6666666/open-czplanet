@@ -139,6 +139,16 @@ describe('chatRealtime store', () => {
     expect(chatRealtime.roomUnread[666004]).toBeUndefined()
   })
 
+  it('can resolve a room as read immediately from the local watermark before the server unread snapshot catches up', () => {
+    seedAuth()
+    window.sessionStorage.setItem('ai_tutor_chat_read_marks:2001', JSON.stringify({ 666004: 120 }))
+    useAuthStore()
+
+    const chatRealtime = useChatRealtimeStore()
+
+    expect(chatRealtime.resolveRoomUnread(666004, 1, 120, null)).toBe(0)
+  })
+
   it('keeps a room read after refresh when the server watermark is stale but the local read watermark is newer', async () => {
     seedAuth()
     window.sessionStorage.setItem('ai_tutor_chat_read_marks:2001', JSON.stringify({ 666004: 120 }))
