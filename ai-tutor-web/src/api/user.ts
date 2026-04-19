@@ -9,6 +9,11 @@ export interface LoginOrRegisterRequest {
   phone: string
   code: string
   userRoleEnum: UserRoleEnum
+  /**
+   * 邀请码为注册阶段的选填字段。
+   * 仅在新用户注册成功时由后端建立邀请关系，老用户登录时忽略该字段。
+   */
+  inviteCode?: string
 }
 
 export interface OrgLoginRequest {

@@ -13,6 +13,7 @@ import com.ai.tutor.appointment.config.TestBackdoorTeacherProperties;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.SmsService;
 import com.ai.tutor.appointment.service.TestBackdoorSeedService;
+import com.ai.tutor.appointment.service.InviteService;
 import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.WechatAuthService;
 import cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult;
@@ -69,6 +70,8 @@ public class UserServiceImpl implements UserService {
 
     @Resource
     private TestBackdoorSeedService testBackdoorSeedService;
+    @Resource
+    private InviteService inviteService;
 
     private static final String DEFAULT_AVATAR_PATH = "/avatars/default-avatar.svg";
 
@@ -99,7 +102,7 @@ public class UserServiceImpl implements UserService {
      * @param role
      * @return
      */
-    public LoginUserVO userLoginOrRegister(String phone, String code, UserRoleEnum role) {
+    public LoginUserVO userLoginOrRegister(String phone, String code, UserRoleEnum role, String inviteCode) {
         ThrowUtils.throwIf(phone == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
@@ -148,9 +151,10 @@ public class UserServiceImpl implements UserService {
         if (user != null && user.getUserType() != null && user.getUserType() == UserRoleEnum.ORG.getValue()) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "机构账号请使用机构登录入口");
         }
+        validateUserLoginStatus(user);
 
         if (user == null) {
-            CreateUserResult created = createOrGetExistingUser(phone, role);
+            CreateUserResult created = createOrGetExistingUser(phone, role, inviteCode);
             ThrowUtils.throwIf(created == null || created.user == null, ErrorCode.SYSTEM_ERROR);
             user = created.user;
             isNew = created.createdNew;
@@ -158,6 +162,10 @@ public class UserServiceImpl implements UserService {
             Long userId = user.getId();
             transactionTemplate.execute(status -> {
                 ensureProfile(userId, phone, role);
+                // 企业规范：历史用户每次成功登录时都要保证邀请码已补齐，避免依赖邀请页首访触发。
+                if (inviteService != null) {
+                    inviteService.ensureInviteCode(userId);
+                }
                 return true;
             });
         }
@@ -209,7 +217,7 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private CreateUserResult createOrGetExistingUser(String phone, UserRoleEnum role) {
+    private CreateUserResult createOrGetExistingUser(String phone, UserRoleEnum role, String inviteCode) {
         return transactionTemplate.execute(status -> {
             try {
                 User u = new User();
@@ -222,11 +230,18 @@ public class UserServiceImpl implements UserService {
                 u.setUpdateTime(LocalDateTime.now());
                 userMapper.insert(u);
                 ensureProfile(u.getId(), phone, role);
+                if (inviteService != null) {
+                    inviteService.ensureInviteCode(u.getId());
+                    inviteService.bindInviteCodeIfNeeded(u.getId(), inviteCode);
+                }
                 return new CreateUserResult(u, true);
             } catch (DuplicateKeyException e) {
                 User existing = userMapper.selectByPhone(phone);
                 if (existing != null) {
                     ensureProfile(existing.getId(), phone, role);
+                    if (inviteService != null) {
+                        inviteService.ensureInviteCode(existing.getId());
+                    }
                     return new CreateUserResult(existing, false);
                 }
                 ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
@@ -514,6 +529,14 @@ public class UserServiceImpl implements UserService {
             // Name and Avatar can be empty initially, or updated later
             userMapper.insert(user);
             ensureProfile(user.getId(), null, UserRoleEnum.STUDENT);
+            if (inviteService != null) {
+                inviteService.ensureInviteCode(user.getId());
+            }
+        } else {
+            validateUserLoginStatus(user);
+            if (inviteService != null) {
+                inviteService.ensureInviteCode(user.getId());
+            }
         }
 
         // 4. Generate Token
@@ -538,5 +561,16 @@ public class UserServiceImpl implements UserService {
                 .token(token)
                 .openid(user.getOpenId())
                 .build();
+    }
+
+    private void validateUserLoginStatus(User user) {
+        if (user == null) {
+            return;
+        }
+        /*
+         * 企业规范：被管理端禁用/删除的账号不得继续登录，也不得继续沿用旧 token 访问业务接口。
+         * 当前库表以 user.status=0 表示正常，1 表示已拉黑/禁用。
+         */
+        ThrowUtils.throwIf(user.getStatus() != null && user.getStatus() != 0, ErrorCode.NO_AUTH_ERROR, "当前账号已被禁用，请联系平台处理");
     }
 }

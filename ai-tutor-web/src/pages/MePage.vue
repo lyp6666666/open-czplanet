@@ -104,17 +104,18 @@ function onSelectTeacherCity(v: string) {
 const realnameVerifyStatus = ref<number>(0)
 const realnameVerifyRejectReason = ref('')
 const realnameIdnoMasked = ref('')
+const submittedIdFrontUrl = ref('')
+const submittedIdBackUrl = ref('')
 
 const eduVerifyStatus = ref<number>(0)
 const eduVerifyRejectReason = ref('')
+const submittedEduProofUrls = ref<string[]>([])
 
 const realnameModalOpen = ref(false)
-const realnameMethod = ref<'ID_PHOTO' | 'NAME_IDNO'>('ID_PHOTO')
 const idFrontUrl = ref('')
 const idBackUrl = ref('')
 const idFrontUploading = ref(false)
 const idBackUploading = ref(false)
-const realnameIdNo = ref('')
 const realnameSubmitBusy = ref(false)
 const realnameHint = ref<string | null>(null)
 
@@ -145,6 +146,22 @@ const studentProfileNudgeText = computed(() => {
   return `这些信息会在老师查看你的主页时展示，建议完善：${studentProfileMissing.value.join('、')}。完善后更容易通过申请并获得老师主动匹配。`
 })
 
+function parseJsonStringArray(raw?: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item || '').trim()).filter(Boolean)
+    }
+  } catch {
+    void 0
+  }
+  const text = String(raw).trim()
+  if (!text) return []
+  if (text.includes(',')) return text.split(',').map((item) => item.trim()).filter(Boolean)
+  return [text]
+}
+
 async function load() {
   if (!auth.isLoggedIn) return
   loading.value = true
@@ -170,8 +187,11 @@ async function load() {
       realnameVerifyStatus.value = me.teacherProfile.realnameVerifyStatus ?? 0
       realnameVerifyRejectReason.value = me.teacherProfile.realnameVerifyRejectReason || ''
       realnameIdnoMasked.value = me.teacherProfile.realnameVerifyIdnoMasked || ''
+      submittedIdFrontUrl.value = me.teacherProfile.realnameVerifyIdFrontUrl || ''
+      submittedIdBackUrl.value = me.teacherProfile.realnameVerifyIdBackUrl || ''
       eduVerifyStatus.value = me.teacherProfile.eduVerifyStatus ?? 0
       eduVerifyRejectReason.value = me.teacherProfile.eduVerifyRejectReason || ''
+      submittedEduProofUrls.value = parseJsonStringArray(me.teacherProfile.eduVerifyProofUrls)
     }
 
     if (me?.studentProfile) {
@@ -281,10 +301,35 @@ const realnameStatusText = computed(() => {
   return '未认证'
 })
 
+const realnameActionText = computed(() => {
+  if (realnameVerifyStatus.value === 2) return '已认证'
+  if (realnameVerifyStatus.value === 3) return '重新提交'
+  if (realnameVerifyStatus.value === 1) return '审核中'
+  return '去认证'
+})
+
+const eduActionText = computed(() => {
+  if (eduVerifyStatus.value === 2) return '已认证'
+  if (eduVerifyStatus.value === 3) return '重新提交'
+  if (eduVerifyStatus.value === 1) return '审核中'
+  return '去认证'
+})
+
+const realnameProofReady = computed(() => !!submittedIdFrontUrl.value && !!submittedIdBackUrl.value)
+const eduProofCount = computed(() => submittedEduProofUrls.value.length)
+
+function openRealnameVerify() {
+  if (realnameVerifyStatus.value === 1) return
+  realnameHint.value = null
+  idFrontUrl.value = submittedIdFrontUrl.value
+  idBackUrl.value = submittedIdBackUrl.value
+  realnameModalOpen.value = true
+}
+
 function openEduVerify() {
   if (eduVerifyStatus.value === 1) return
   eduHint.value = null
-  eduProofUrls.value = []
+  eduProofUrls.value = [...submittedEduProofUrls.value]
   eduModalOpen.value = true
 }
 
@@ -384,24 +429,15 @@ async function submitRealnameVerify() {
   realnameHint.value = null
   realnameSubmitBusy.value = true
   try {
-    if (realnameMethod.value === 'ID_PHOTO') {
-      if (!idFrontUrl.value.trim() || !idBackUrl.value.trim()) {
-        realnameHint.value = '请上传身份证人像面与国徽面截图'
-        return
-      }
-      await teacherVerificationApi.submitRealnameIdPhoto(idFrontUrl.value.trim(), idBackUrl.value.trim())
-    } else {
-      const rn = teacherRealName.value.trim()
-      if (!rn) {
-        realnameHint.value = '请先填写真实姓名'
-        return
-      }
-      if (!realnameIdNo.value.trim()) {
-        realnameHint.value = '请输入身份证号'
-        return
-      }
-      await teacherVerificationApi.submitRealnameNameIdno(rn, realnameIdNo.value.trim())
+    if (!teacherRealName.value.trim()) {
+      realnameHint.value = '请先填写真实姓名，再提交身份证材料'
+      return
     }
+    if (!idFrontUrl.value.trim() || !idBackUrl.value.trim()) {
+      realnameHint.value = '请上传身份证人像面与国徽面截图'
+      return
+    }
+    await teacherVerificationApi.submitRealnameIdPhoto(idFrontUrl.value.trim(), idBackUrl.value.trim())
     closeRealnameVerify()
     savedHint.value = '已提交实名认证，等待审核'
     await load()
@@ -494,27 +530,45 @@ onBeforeUnmount(() => {
       <div class="sec" v-if="isTeacher">
         <div class="sec-title">认证中心</div>
         <div class="verify-cards">
-          <!-- Realname Verification -->
           <div class="verify-card" :class="{ done: realnameVerifyStatus === 2 }">
-            <div class="vc-icon">🆔</div>
+            <div class="vc-icon vc-icon-realname">证</div>
             <div class="vc-info">
-              <div class="vc-title">实名认证</div>
-              <div class="vc-desc">{{ realnameStatusText }}</div>
+              <div class="vc-top">
+                <div class="vc-title">实名认证</div>
+                <span class="status-pill" :class="`status-${realnameVerifyStatus}`">{{ realnameStatusText }}</span>
+              </div>
+              <div class="vc-desc">上传身份证正反面，由管理员人工审核后生效</div>
+              <div class="vc-meta">
+                <span>材料状态：{{ realnameProofReady ? '已准备正反面' : '待补充材料' }}</span>
+                <span v-if="realnameIdnoMasked">证件号：{{ realnameIdnoMasked }}</span>
+              </div>
+              <div v-if="realnameVerifyStatus === 3 && realnameVerifyRejectReason" class="vc-alert error">
+                驳回原因：{{ realnameVerifyRejectReason }}
+              </div>
             </div>
-            <button class="btn sm" :disabled="realnameVerifyStatus === 1 || realnameVerifyStatus === 2" @click="realnameModalOpen = true">
-              {{ realnameVerifyStatus === 2 ? '已认证' : (realnameVerifyStatus === 3 ? '重新认证' : '去认证') }}
+            <button class="btn sm" :disabled="realnameVerifyStatus === 1 || realnameVerifyStatus === 2" @click="openRealnameVerify">
+              {{ realnameActionText }}
             </button>
           </div>
 
-          <!-- Education Verification -->
           <div class="verify-card" :class="{ done: eduVerifyStatus === 2 }">
-            <div class="vc-icon">🎓</div>
+            <div class="vc-icon vc-icon-edu">学</div>
             <div class="vc-info">
-              <div class="vc-title">学历认证 (学信网)</div>
-              <div class="vc-desc">{{ eduStatusText }}</div>
+              <div class="vc-top">
+                <div class="vc-title">学历认证（学信网）</div>
+                <span class="status-pill" :class="`status-${eduVerifyStatus}`">{{ eduStatusText }}</span>
+              </div>
+              <div class="vc-desc">建议上传 1-3 张截图，完整覆盖姓名、学校、学历层次与页面特征</div>
+              <div class="vc-meta">
+                <span>已保存截图：{{ eduProofCount }} 张</span>
+                <span>审核方式：人工复核</span>
+              </div>
+              <div v-if="eduVerifyStatus === 3 && eduVerifyRejectReason" class="vc-alert error">
+                驳回原因：{{ eduVerifyRejectReason }}
+              </div>
             </div>
             <button class="btn sm" :disabled="eduVerifyStatus === 1 || eduVerifyStatus === 2" @click="openEduVerify">
-              {{ eduVerifyStatus === 2 ? '已认证' : (eduVerifyStatus === 3 ? '重新认证' : '去认证') }}
+              {{ eduActionText }}
             </button>
           </div>
         </div>
@@ -596,40 +650,34 @@ onBeforeUnmount(() => {
     <div v-if="realnameModalOpen" class="mask" @click.self="closeRealnameVerify">
       <div class="modal card">
         <div class="m-title">实名认证</div>
-        <div class="tabs">
-          <button class="tab" :class="{ active: realnameMethod === 'ID_PHOTO' }" type="button" @click="realnameMethod = 'ID_PHOTO'">
-            上传身份证
-          </button>
-          <button class="tab" :class="{ active: realnameMethod === 'NAME_IDNO' }" type="button" @click="realnameMethod = 'NAME_IDNO'">
-            姓名+身份证号
-          </button>
+        <div class="m-desc">
+          请上传身份证正反面清晰照片，管理员会根据图片材料进行人工审核。提交前请确认姓名已填写正确。
+        </div>
+        <div class="tips">
+          <div class="tip">1. 保证文字清晰、边框完整，避免反光或遮挡。</div>
+          <div class="tip">2. 请上传本人证件，不支持仅填写身份证号。</div>
+          <div class="tip">3. 若曾被驳回，可直接替换图片后重新提交。</div>
         </div>
 
-        <div v-if="realnameMethod === 'ID_PHOTO'" class="pane">
+        <div class="pane">
           <div class="upload-grid">
             <div class="upload-item">
               <div class="upload-label">身份证人像面</div>
               <img v-if="idFrontUrl" class="proof-img" :src="idFrontUrl" alt="id-front" />
-              <div v-else class="proof-img placeholder">未上传</div>
+              <div v-else class="proof-img placeholder">上传人像面</div>
               <input type="file" accept="image/*" :disabled="idFrontUploading || realnameSubmitBusy" @change="onUploadIdFront" />
             </div>
             <div class="upload-item">
               <div class="upload-label">身份证国徽面</div>
               <img v-if="idBackUrl" class="proof-img" :src="idBackUrl" alt="id-back" />
-              <div v-else class="proof-img placeholder">未上传</div>
+              <div v-else class="proof-img placeholder">上传国徽面</div>
               <input type="file" accept="image/*" :disabled="idBackUploading || realnameSubmitBusy" @change="onUploadIdBack" />
             </div>
           </div>
-        </div>
 
-        <div v-else class="pane">
-          <div class="field">
-            <div class="label">姓名</div>
-            <input v-model="teacherRealName" class="input" placeholder="请输入真实姓名" :disabled="realnameSubmitBusy" />
-          </div>
-          <div class="field">
-            <div class="label">身份证号</div>
-            <input v-model="realnameIdNo" class="input" placeholder="请输入18位身份证号" :disabled="realnameSubmitBusy" />
+          <div class="proof-note">
+            <div>当前姓名：{{ teacherRealName.trim() || '未填写，请先在基础信息中补充' }}</div>
+            <div v-if="realnameIdnoMasked">最近一次脱敏证件号：{{ realnameIdnoMasked }}</div>
           </div>
         </div>
 
@@ -646,7 +694,12 @@ onBeforeUnmount(() => {
     <div v-if="eduModalOpen" class="mask" @click.self="closeEduVerify">
       <div class="modal card">
         <div class="m-title">学历认证</div>
-        <div class="m-desc">请上传学信网截图，确保包含姓名、学历信息与页面特征</div>
+        <div class="m-desc">请上传学信网截图，确保包含姓名、学校、学历层次与页面特征，方便管理员快速核验。</div>
+        <div class="tips">
+          <div class="tip">1. 推荐上传学籍在线验证报告页、学历信息页或带学校与学历层次的完整截图。</div>
+          <div class="tip">2. 最多可上传 3 张，建议优先上传最关键的 1-2 张。</div>
+          <div class="tip">3. 如有驳回记录，可保留有效截图并补充缺失页面后重新提交。</div>
+        </div>
         <div class="proof-list">
           <div v-for="(u, idx) in eduProofUrls" :key="u" class="proof-item">
             <img class="proof-img" :src="u" alt="edu-proof" />
@@ -897,31 +950,24 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.tab {
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: #fff;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.tab.active {
-  border-color: var(--primary);
-  color: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-weak);
-}
-
 .pane {
   display: grid;
   gap: 12px;
+}
+
+.tips {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(0, 190, 189, 0.08), rgba(0, 190, 189, 0.03));
+  border: 1px solid rgba(0, 190, 189, 0.16);
+}
+
+.tip {
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.68);
 }
 
 .upload-grid {
@@ -967,6 +1013,17 @@ onBeforeUnmount(() => {
 .proof-img.placeholder {
   background: rgba(0, 190, 189, 0.06);
   border-color: rgba(0, 190, 189, 0.2);
+}
+
+.proof-note {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(247, 250, 252, 0.7);
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 12px;
 }
 
 .mini-btn {
@@ -1020,17 +1077,36 @@ onBeforeUnmount(() => {
   background: rgba(0, 0, 0, 0.04);
   display: grid;
   place-items: center;
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .verify-card.done .vc-icon {
   background: rgba(0, 190, 189, 0.15);
 }
 
+.vc-icon-realname {
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.2), rgba(245, 158, 11, 0.12));
+  color: rgba(180, 83, 9, 1);
+}
+
+.vc-icon-edu {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.16), rgba(37, 99, 235, 0.08));
+  color: rgba(29, 78, 216, 1);
+}
+
 .vc-info {
   flex: 1;
   display: grid;
   gap: 4px;
+}
+
+.vc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .vc-title {
@@ -1041,6 +1117,64 @@ onBeforeUnmount(() => {
 .vc-desc {
   font-size: 12px;
   color: var(--muted);
+  line-height: 1.6;
+}
+
+.vc-meta {
+  display: flex;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  color: rgba(0, 0, 0, 0.56);
+  font-size: 12px;
+}
+
+.vc-alert {
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.vc-alert.error {
+  color: rgba(208, 48, 80, 1);
+  background: rgba(255, 0, 0, 0.06);
+  border: 1px solid rgba(255, 0, 0, 0.14);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-pill.status-0 {
+  color: rgba(0, 0, 0, 0.56);
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.status-pill.status-1 {
+  color: rgba(180, 83, 9, 1);
+  background: rgba(255, 125, 0, 0.1);
+  border-color: rgba(255, 125, 0, 0.2);
+}
+
+.status-pill.status-2 {
+  color: rgba(4, 120, 87, 1);
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.status-pill.status-3 {
+  color: rgba(208, 48, 80, 1);
+  background: rgba(255, 0, 0, 0.06);
+  border-color: rgba(255, 0, 0, 0.16);
 }
 
 .btn.sm {

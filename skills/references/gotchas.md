@@ -55,10 +55,18 @@ Only record repo-specific truths here.
   domain-server callback access log -> payment-service success/finalize log -> IM-service `tutor_application_paid` log.
 - Any repo change that alters database schema is incomplete unless `sqlDoc/` is updated in the same turn.
   The final response should explicitly say whether `sqlDoc` was updated or not.
+- For this repo, schema sync means both migration SQL and the full bootstrap schema.
+  When adding or altering tables, update `sqlDoc/migrations/*.sql` and `sqlDoc/huoyue.sql` together, otherwise fresh environments and existing environments will drift.
 - `scripts/db_bootstrap_if_missing.sh` only initializes an empty database.
   On a machine that already has core tables, it exits early and will not apply newly added files under `sqlDoc/migrations/`; use `sh scripts/db_apply_migrations.sh` explicitly after syncing code.
 - Not every file under `sqlDoc/migrations/` is fully idempotent.
   Example: `20260301_student_job_posting_admin_alter.sql` can fail on repeat runs with `Duplicate column name 'reject_reason'`, so when bulk-replaying migrations on an old shared dev DB, verify the target IM/payment tables afterward instead of assuming a clean all-green log.
+- Any schema change for this repo must also be applied to the shared remote dev server `111.228.20.88` in the same turn.
+  Updating local SQL files without remote DB sync is considered incomplete delivery.
+- The shared remote dev server currently does not expose a host `mysql` binary in the shell.
+  For manual schema sync and verification there, use `docker exec` against the actual running MySQL container.
+- Do not assume the remote MySQL container is literally named `mysql`.
+  On `111.228.20.88` it may be a compose-generated name like `759d793c134e_mysql`, so detect it with `docker ps --format '{{.Names}}' | grep mysql | head -1` before running DB commands.
 
 ## Maintenance Rule
 

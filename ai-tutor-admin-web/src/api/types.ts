@@ -103,6 +103,68 @@ export interface AdminHomeCarouselItem {
   updateTime?: string | null
 }
 
+export interface AdminInviteRelation {
+  id: number
+  inviterUid: number
+  inviterName?: string | null
+  inviterPhone?: string | null
+  inviteeUid: number
+  inviteeName?: string | null
+  inviteePhone?: string | null
+  inviteeUserType?: number | null
+  inviteCode: string
+  bindSource: string
+  status: string
+  riskFlag?: number | null
+  bindTime?: string | null
+  createTime?: string | null
+}
+
+export interface AdminInviteReward {
+  id: number
+  inviterUid: number
+  inviterName?: string | null
+  inviterPhone?: string | null
+  inviteeUid: number
+  inviteeName?: string | null
+  inviteePhone?: string | null
+  rewardScene: string
+  bizOrderType: string
+  bizOrderId: number
+  baseAmountFen: number
+  rewardRate: number
+  rewardAmountFen: number
+  status: string
+  settlementMonth?: string | null
+  createTime?: string | null
+}
+
+export interface AdminInviteSettlement {
+  id: number
+  userId: number
+  userName?: string | null
+  userPhone?: string | null
+  settlementMonth: string
+  totalAmountFen: number
+  paidAmountFen: number
+  status: string
+  receiverSnapshotJson?: string | null
+  failReason?: string | null
+  payTime?: string | null
+  createTime?: string | null
+  updateTime?: string | null
+}
+
+export interface AdminInviteSystemConfig {
+  enabled: boolean
+  systemInviteCode: string
+  systemInviteLink: string
+  tutorInfoFeeDiscountRate: number
+  studentRewardRate: number
+  promoTitle: string
+  promoDesc: string
+}
+
 export interface StudentJobPosting {
   id: number
   parentId: number
@@ -130,6 +192,7 @@ export interface TeacherProfile {
   highestEduSchool?: string | null
 
   realnameVerifyStatus?: number | null
+  realnameVerifyMethod?: string | null
   realnameVerifyIdFrontUrl?: string | null
   realnameVerifyIdBackUrl?: string | null
   realnameVerifyIdnoMasked?: string | null

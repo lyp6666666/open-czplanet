@@ -211,3 +211,104 @@ Append one short entry after validated repo changes made while using this skill.
   confirmed the shared remote dev repo was behind local and inspected migration helper behavior
 - New note added:
   skill docs now list the current IM capability set and explicitly call out that existing databases need manual `db_apply_migrations.sh` after remote sync
+
+## 2026-04-19
+
+- Request:
+  Backfill invite-feature tables into `sqlDoc/huoyue.sql`, sync the schema to remote server `111.228.20.88`, and add a permanent project-skill rule that every future schema change must be remotely synced
+- Areas:
+  `sqlDoc/`, `skills/`, shared remote MySQL workflow
+- Background checked:
+  project skill routing docs, remote runtime notes, current shared remote Docker/MySQL setup
+- Validation:
+  verified remote host reachability
+  applied invite migration to the remote `ai_tutor` database through `docker exec mysql`
+  verified remote `invite_*` tables exist after sync
+- New note added:
+  schema work is now explicitly incomplete until `sqlDoc` is updated and the change is applied plus verified on `111.228.20.88`
+
+## 2026-04-19
+
+- Request:
+  Fix missing invite-code display for legacy users, optimize the invite reward page layout, and complete the invite-share registration loop
+- Areas:
+  `ai-tutor-web/`, `tutor-appointment-service/`
+- Background checked:
+  invite overview generation flow, legacy user invite-code compensation path, auth registration page behavior, current invite page information architecture
+- Validation:
+  ran `./mvnw -pl tutor-appointment-service -am -Dtest=InviteServiceImplTest,InviteControllerTest,UserServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `cd ai-tutor-web && npm test -- src/api/invite.test.ts src/pages/InviteRewardPage.test.ts src/pages/AuthPage.invite.test.ts src/stores/auth.test.ts src/ui/home/HomeHeader.test.ts`
+  ran `cd ai-tutor-web && npm run typecheck`
+- New note added:
+  invite links now auto-prefill the auth page invite code, and invite overview adds a retry safeguard for historical users whose code record was not fully initialized
+
+## 2026-04-19
+
+- Request:
+  Thoroughly fix invite-code visibility in the remote synced dev environment and block disabled users from logging in or continuing to use old tokens
+- Areas:
+  `ai-tutor-web/`, `tutor-appointment-service/`, shared remote dev data
+- Background checked:
+  remote `dev_remote_sync_up` startup path, user web Vite proxy config, live login logs, invite-code backfill state, admin disable semantics
+- Validation:
+  ran `./mvnw -pl tutor-appointment-service -am -Dtest=InviteServiceImplTest,InviteControllerTest,UserServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `cd ai-tutor-web && npm test -- src/api/invite.test.ts src/pages/InviteRewardPage.test.ts src/pages/AuthPage.invite.test.ts src/stores/auth.test.ts src/ui/home/HomeHeader.test.ts`
+  ran `cd ai-tutor-web && npm run typecheck`
+  re-synced and restarted remote env with `bash scripts/dev_remote_sync_up.sh`
+  verified remote active users all have invite codes and confirmed target account `666892` owns invite code `U0EAKS`
+- New note added:
+  user web dev proxy now forwards `/invite`, existing users auto-heal invite codes on login, and disabled users are blocked both at login and token-auth stages
+
+## 2026-04-19
+
+- Request:
+  Continue closing the invite feature by adding system-invite promotion flow, aligning the invite page with the main site style, validating admin/invite tests, and re-syncing schema to the shared remote server
+- Areas:
+  `ai-tutor-web/`, `ai-tutor-admin/`, `ai-tutor-admin-web/`, `tutor-appointment-service/`, `videoCall-IM-service/`, `sqlDoc/`, `skills/`
+- Background checked:
+  invite backend flow, admin invite config pages, IM brokerage discount path, remote MySQL/container workflow, project schema-sync rules
+- Validation:
+  ran `./mvnw -pl ai-tutor-admin -am -Dtest=AdminInviteControllerTest,AdminInviteServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false clean test`
+  ran `./mvnw -pl tutor-appointment-service -am -Dtest=InviteServiceImplTest,InviteControllerTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `./mvnw -pl videoCall-IM-service -am -Dtest=BrokerageOrderServiceInviteNotifyTest,AppointmentInternalClientTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `cd ai-tutor-web && npm test -- --run src/api/invite.test.ts src/pages/InviteRewardPage.test.ts src/pages/AuthPage.invite.test.ts`
+  ran `cd ai-tutor-web && npm run typecheck`
+  applied `sqlDoc/migrations/20260419_system_invite_promotion.sql` on `111.228.20.88`
+  verified remote `invite_system_config` and `brokerage_order` promotion columns through Docker MySQL
+- New note added:
+  schema delivery rules now explicitly require syncing both `sqlDoc/migrations` and `sqlDoc/huoyue.sql`, then applying and verifying the change on `111.228.20.88`
+
+## 2026-04-19
+
+- Request:
+  Hide the system promotion code from the user invite page, rename the default promotion code away from the old Huoyue brand, and fix garbled remote promotion copy
+- Areas:
+  `ai-tutor-web/`, `tutor-appointment-service/`, `ai-tutor-admin/`, `ai-tutor-admin-web/`, `videoCall-IM-service/`, `sqlDoc/`
+- Background checked:
+  user invite page display logic, system invite admin config defaults, invite rule output, SQL migration and remote MySQL character-set behavior
+- Validation:
+  ran `cd ai-tutor-web && npm test -- --run src/api/invite.test.ts src/pages/InviteRewardPage.test.ts`
+  ran `cd ai-tutor-web && npm run typecheck`
+  ran `./mvnw -pl tutor-appointment-service -am -Dtest=InviteServiceImplTest,InviteControllerTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `./mvnw -pl ai-tutor-admin -am -Dtest=AdminInviteControllerTest,AdminInviteServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `./mvnw -pl videoCall-IM-service -am -Dtest=BrokerageOrderServiceInviteNotifyTest,AppointmentInternalClientTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  ran `cd ai-tutor-admin-web && npm test -- --run src/api/invite.test.ts`
+  applied the updated invite-system migration to `111.228.20.88` with `--default-character-set=utf8mb4`
+  verified remote `invite_system_config` now returns code `CHUANGZHI` and normal Chinese copy
+- New note added:
+  system promotion code is an operator-distributed campaign code and should remain configurable in admin, not displayed on the personal invite page
+
+## 2026-04-19
+
+- Request:
+  Fix the invite reward page 404 by wiring the missing gateway route for `/invite/**`
+- Areas:
+  `ai-tutor-gateway/`, shared remote gateway runtime
+- Background checked:
+  user web invite API path, Vite proxy, gateway route table, remote gateway/tutor logs
+- Validation:
+  ran `./mvnw -pl ai-tutor-gateway -am -Dtest=GatewayRoutesSmokeTest,GatewayApplicationContextTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  re-synced remote env with `bash scripts/dev_remote_sync_up.sh`
+  verified remote `http://127.0.0.1:18080/invite/overview` changed from `404` to `401`, proving the gateway route is active and request reaches auth layer
+- New note added:
+  invite APIs are now officially routed through gateway as part of the appointment domain

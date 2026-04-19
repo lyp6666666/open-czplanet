@@ -523,3 +523,107 @@ export interface CursorPageBaseResp<T> {
   isLast: boolean
   list: T[]
 }
+
+/**
+ * 邀请总览信息。
+ * 用于“邀请有礼”页头部概览区，统一承载邀请码、返利比例与汇总金额。
+ */
+export interface InviteOverviewVO {
+  myInviteCode: string
+  totalInviteCount: number
+  effectiveInviteCount: number
+  totalRewardAmountFen: number
+  pendingSettlementAmountFen: number
+  estimatedCurrentMonthAmountFen: number
+  teacherRewardRate: number
+  studentRewardRate: number
+  settlementDay: number
+  receiverConfigured: boolean
+  systemInviteConfig?: InviteSystemConfigVO | null
+}
+
+/**
+ * 邀请记录项。
+ * 用于展示“我邀请了谁”以及当前邀请进展。
+ */
+export interface InviteRecordVO {
+  inviteeUid: number
+  inviteeDisplayName: string
+  inviteePhoneMasked: string | null
+  inviteeUserType: number
+  registeredAt: string
+  status: 'REGISTERED' | 'EFFECTIVE' | 'SETTLEABLE' | 'PAID' | 'FROZEN' | 'INVALID'
+  hasReward: boolean
+}
+
+/**
+ * 邀请返利明细项。
+ * 用于展示单笔返利的来源、金额与状态。
+ */
+export interface InviteRewardRecordVO {
+  id: number
+  inviteeUid: number
+  inviteeDisplayName: string
+  rewardScene: 'INVITED_TUTOR_DEAL' | 'INVITED_STUDENT_PAID'
+  bizOrderType: string
+  bizOrderId: number
+  baseAmountFen: number
+  rewardRate: number
+  rewardAmountFen: number
+  status: 'PENDING' | 'FROZEN' | 'SETTLEABLE' | 'SETTLEMENT_PENDING' | 'PAID' | 'FAILED' | 'REVERSED'
+  createdAt: string
+}
+
+/**
+ * 邀请结算记录项。
+ * 用于展示按月汇总的打款进度。
+ */
+export interface InviteSettlementVO {
+  id: number
+  settlementMonth: string
+  totalAmountFen: number
+  status: 'CREATED' | 'PAYING' | 'PAID' | 'FAILED' | 'CANCELED'
+  payTime: string | null
+  failReason: string | null
+}
+
+/**
+ * 微信收款信息。
+ * V1 使用页面配置方式收集信息，供财务统一打款时参考。
+ */
+export interface InviteReceiverAccountVO {
+  receiverName: string
+  wechatNo: string
+  phone: string
+  remark: string | null
+  configured: boolean
+}
+
+/**
+ * 邀请规则。
+ * 前端应尽量依赖服务端下发规则，而非写死活动配置。
+ */
+export interface InviteRulesVO {
+  teacherRewardRate: number
+  studentRewardRate: number
+  settlementDay: number
+  minSettlementAmountFen: number
+  enabled: boolean
+  receiverHint: string
+  systemInviteConfig?: InviteSystemConfigVO | null
+  ruleTextList: string[]
+}
+
+/**
+ * 系统邀请码推广配置。
+ * 用于展示平台推广期的系统邀请码、分享链接和教师/学生权益。
+ */
+export interface InviteSystemConfigVO {
+  enabled: boolean
+  systemInviteCode: string
+  systemInviteLink: string
+  tutorInfoFeeDiscountRate: number
+  studentRewardRate: number
+  promoTitle: string
+  promoDesc: string
+}

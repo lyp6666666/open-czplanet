@@ -1,6 +1,7 @@
 package com.ai.tutor.admin;
 
 import com.ai.tutor.admin.model.dto.AdminLoginRequest;
+import com.ai.tutor.admin.model.dto.AdminInviteSystemConfigRequest;
 import com.ai.tutor.admin.model.entity.BrokerageOrder;
 import com.ai.tutor.admin.model.vo.AdminLoginResponse;
 import com.ai.tutor.admin.model.vo.DashboardStatsResponse;
@@ -9,6 +10,7 @@ import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminAuthService;
 import com.ai.tutor.admin.service.AdminDashboardService;
 import com.ai.tutor.admin.service.AdminHomeCarouselService;
+import com.ai.tutor.admin.service.AdminInviteService;
 import com.ai.tutor.admin.service.AdminJobService;
 import com.ai.tutor.admin.service.AdminPaymentRecordService;
 import com.ai.tutor.admin.service.AdminRefundService;
@@ -21,10 +23,14 @@ import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.entity.TeacherProfile;
 import com.ai.tutor.admin.model.entity.RefundRequestRecord;
 import com.ai.tutor.admin.model.vo.AdminHomeCarouselItemVO;
+import com.ai.tutor.admin.model.vo.AdminInviteSystemConfigVO;
 import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
+import com.ai.tutor.admin.storage.MinioProperties;
+import io.minio.MinioClient;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.mockito.Mockito;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -45,6 +51,18 @@ import java.util.List;
         }
 )
 public class AdminTestApplication {
+
+    @Bean
+    public MinioClient minioClient() {
+        return Mockito.mock(MinioClient.class);
+    }
+
+    @Bean
+    public MinioProperties minioProperties() {
+        MinioProperties properties = new MinioProperties();
+        properties.setBucket("ai-tutor-assets");
+        return properties;
+    }
 
     @Bean
     public AdminAuthService adminAuthService() {
@@ -81,6 +99,67 @@ public class AdminTestApplication {
 
             @Override
             public void delete(Long id, Long adminUid) {
+            }
+        };
+    }
+
+    @Bean
+    public AdminInviteService adminInviteService() {
+        return new AdminInviteService() {
+            @Override
+            public PageResult<com.ai.tutor.admin.model.vo.AdminInviteRelationVO> listRelations(int page, int size, Long inviterUid, Long inviteeUid, String status) {
+                return PageResult.<com.ai.tutor.admin.model.vo.AdminInviteRelationVO>builder()
+                        .records(Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public PageResult<com.ai.tutor.admin.model.vo.AdminInviteRewardVO> listRewards(int page, int size, Long inviterUid, Long inviteeUid, String status, String scene, String settlementMonth) {
+                return PageResult.<com.ai.tutor.admin.model.vo.AdminInviteRewardVO>builder()
+                        .records(Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public PageResult<com.ai.tutor.admin.model.vo.AdminInviteSettlementVO> listSettlements(int page, int size, Long userId, String status, String settlementMonth) {
+                return PageResult.<com.ai.tutor.admin.model.vo.AdminInviteSettlementVO>builder()
+                        .records(Collections.emptyList())
+                        .total(0)
+                        .size(size)
+                        .current(page)
+                        .build();
+            }
+
+            @Override
+            public void markSettlementPaid(Long settlementId) {
+            }
+
+            @Override
+            public void markSettlementFailed(Long settlementId, String reason) {
+            }
+
+            @Override
+            public AdminInviteSystemConfigVO systemConfig() {
+                return AdminInviteSystemConfigVO.builder()
+                        .enabled(true)
+                        .systemInviteCode("CHUANGZHI")
+                        .systemInviteLink("http://localhost:5173/auth/student?inviteCode=CHUANGZHI")
+                        .tutorInfoFeeDiscountRate(0.5D)
+                        .studentRewardRate(0.13D)
+                        .promoTitle("创智推广专属福利")
+                        .promoDesc("desc")
+                        .build();
+            }
+
+            @Override
+            public AdminInviteSystemConfigVO saveSystemConfig(AdminInviteSystemConfigRequest request) {
+                return systemConfig();
             }
         };
     }

@@ -1,20 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import type { UserRoleEnum } from '@/api/types'
 import { BRAND_NAME } from '@/constants/brand'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 
 const props = defineProps<{
   role: UserRoleEnum
 }>()
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 const phone = ref('')
 const code = ref('')
+const inviteCode = ref('')
 const agreed = ref(true)
 const busy = ref(false)
 const hint = ref<string | null>(null)
@@ -80,6 +84,13 @@ function validateCode(v: string): string | null {
   return null
 }
 
+function validateInviteCode(v: string): string | null {
+  const s = String(v || '').trim()
+  if (!s) return null
+  if (!/^[A-Za-z0-9]{4,12}$/.test(s)) return '邀请码格式不正确'
+  return null
+}
+
 function persistNextAtMap() {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextAtMap.value))
@@ -121,6 +132,11 @@ onBeforeUnmount(() => {
 })
 
 onMounted(() => {
+  // 企业规范：分享链路进入注册页时，优先自动回填邀请码，减少用户手输成本并降低丢单率。
+  const routeInviteCode = typeof route.query.inviteCode === 'string' ? route.query.inviteCode.trim().toUpperCase() : ''
+  if (routeInviteCode) {
+    inviteCode.value = routeInviteCode
+  }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     nextAtMap.value = raw ? (JSON.parse(raw) as Record<string, number>) : {}
@@ -177,7 +193,7 @@ async function onSendCode() {
   try {
     const p = normalizePhone(phone.value)
     await auth.sendCode(p)
-    hint.value = '验证码已发送（开发环境可在后端控制台查看模拟验证码）'
+    toast.show('验证码已发送', 'success')
     startCountdownForPhone(p, RESEND_SECONDS)
   } catch (e) {
     hint.value = e instanceof Error ? e.message : '发送失败'
@@ -190,8 +206,9 @@ async function doSubmit() {
   hint.value = null
   const phoneErr = validatePhone(phone.value)
   const codeErr = validateCode(code.value)
-  if (phoneErr || codeErr) {
-    hint.value = phoneErr ?? codeErr
+  const inviteCodeErr = validateInviteCode(inviteCode.value)
+  if (phoneErr || codeErr || inviteCodeErr) {
+    hint.value = phoneErr ?? codeErr ?? inviteCodeErr
     return
   }
   if (!agreed.value) {
@@ -202,7 +219,12 @@ async function doSubmit() {
 
   busy.value = true
   try {
-    const u = await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''))
+    const normalizedInviteCode = inviteCode.value.trim().toUpperCase()
+    // 企业规范：注册提交时统一做邀请码标准化，避免大小写差异导致绑定失败。
+    const u = await auth.loginOrRegister(props.role, normalizePhone(phone.value), code.value.replace(/\s+/g, ''), normalizedInviteCode)
+    if (u.isNew && normalizedInviteCode) {
+      toast.show('邀请码绑定成功', 'success')
+    }
     if (u.redirectRoomId) {
       await router.replace({
         name: 'chatRoom',
@@ -291,6 +313,17 @@ async function confirmSwitch() {
                   <span v-else>发送验证码</span>
                 </button>
               </div>
+            </label>
+
+            <label class="field">
+              <div class="label">邀请码（选填）</div>
+              <input
+                v-model="inviteCode"
+                class="input"
+                autocomplete="off"
+                maxlength="12"
+                placeholder="请输入邀请码（选填）"
+              />
             </label>
 
             <div class="agree">

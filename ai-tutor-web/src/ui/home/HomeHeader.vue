@@ -109,6 +109,13 @@ async function logout() {
   await router.replace({ name: 'home' })
 }
 
+async function goMenu(path: string) {
+  userMenuOpen.value = false
+  await router.push(path)
+}
+
+const isTeacher = computed(() => auth.user?.userType === 1)
+
 const userInitial = computed(() => {
   const n = auth.user?.name?.trim()
   return n && n.length > 0 ? n.slice(0, 1) : 'U'
@@ -192,7 +199,9 @@ watch(
             <div v-else class="avatar fallback">{{ userInitial }}</div>
 
             <div v-if="userMenuOpen" class="menu card">
-              <button class="menu-item" type="button">个人主页（模拟）</button>
+              <button class="menu-item" type="button" @click="goMenu('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
+              <button class="menu-item" type="button" @click="goMenu(isTeacher ? '/tutor/favorites' : '/student/favorites')">收藏</button>
+              <button class="menu-item" type="button" @click="goMenu('/invite')">邀请有礼</button>
               <button class="menu-item danger" type="button" @click="logout">退出登录</button>
             </div>
           </div>

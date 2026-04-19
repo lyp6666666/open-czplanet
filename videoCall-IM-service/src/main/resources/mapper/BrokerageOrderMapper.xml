@@ -10,6 +10,10 @@
         <result column="room_id" property="roomId"/>
         <result column="payer_uid" property="payerUid"/>
         <result column="amount_fen" property="amountFen"/>
+        <result column="original_amount_fen" property="originalAmountFen"/>
+        <result column="discount_amount_fen" property="discountAmountFen"/>
+        <result column="promotion_type" property="promotionType"/>
+        <result column="promotion_snapshot_json" property="promotionSnapshotJson"/>
         <result column="pay_method" property="payMethod"/>
         <result column="status" property="status"/>
         <result column="proof_url" property="proofUrl"/>
@@ -29,6 +33,10 @@
             room_id,
             payer_uid,
             amount_fen,
+            original_amount_fen,
+            discount_amount_fen,
+            promotion_type,
+            promotion_snapshot_json,
             pay_method,
             status,
             proof_url,
@@ -44,6 +52,10 @@
             #{roomId},
             #{payerUid},
             #{amountFen},
+            #{originalAmountFen},
+            #{discountAmountFen},
+            #{promotionType},
+            #{promotionSnapshotJson},
             #{payMethod},
             #{status},
             #{proofUrl},
@@ -56,7 +68,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, original_amount_fen, discount_amount_fen, promotion_type, promotion_snapshot_json, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE id = #{id}
         LIMIT 1
@@ -64,7 +76,7 @@
 
     <select id="selectByProposalId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, original_amount_fen, discount_amount_fen, promotion_type, promotion_snapshot_json, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE proposal_id = #{proposalId}
         LIMIT 1
@@ -72,7 +84,7 @@
 
     <select id="selectByApplicationId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, original_amount_fen, discount_amount_fen, promotion_type, promotion_snapshot_json, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE application_id = #{applicationId}
         LIMIT 1
@@ -80,7 +92,7 @@
 
     <select id="selectPaidByRoomId" resultMap="baseMap">
         SELECT
-            id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
+            id, proposal_id, application_id, room_id, payer_uid, amount_fen, original_amount_fen, discount_amount_fen, promotion_type, promotion_snapshot_json, pay_method, status, proof_url, proof_note, paid_at, refund_locked, refunded_amount_fen, create_time, update_time
         FROM brokerage_order
         WHERE room_id = #{roomId}
           AND status = 'PAID'

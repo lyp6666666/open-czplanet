@@ -204,6 +204,20 @@ Apply all SQL migrations on the shared remote dev machine after syncing code:
 ssh root@111.228.20.88 "cd /opt/ai-platform && sh scripts/db_apply_migrations.sh"
 ```
 
+When the remote host does not have a local `mysql` client, first detect the running MySQL container, then apply or verify schema changes through that container:
+
+```bash
+ssh root@111.228.20.88 "docker ps --format '{{.Names}}' | grep -E 'mysql' | head -1"
+ssh root@111.228.20.88 "docker exec -i <running-mysql-container> mysql -uroot -pAa123456 ai_tutor" < sqlDoc/migrations/<migration>.sql
+ssh root@111.228.20.88 "docker exec -i <running-mysql-container> mysql -uroot -pAa123456 -N -e \"USE ai_tutor; SHOW TABLES LIKE 'invite_%';\""
+```
+
+For schema delivery, also remember to keep the bootstrap schema in sync:
+
+```bash
+git diff -- sqlDoc/huoyue.sql sqlDoc/migrations
+```
+
 Payment callback verification logs:
 
 ```bash

@@ -19,6 +19,9 @@ public class BrokerageOrderVO {
     private Long roomId;
     private Long payerUid;
     private Long amountFen;
+    private Long originalAmountFen;
+    private Long discountAmountFen;
+    private String promotionType;
     private String payMethod;
     private String status;
     private String proofUrl;

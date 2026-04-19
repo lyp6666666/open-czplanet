@@ -523,9 +523,14 @@ onMounted(() => {
                 <option v-for="d in orgDemands" :key="d.id" :value="d.id">{{ d.title }}</option>
               </select>
               <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="openApply">
-                {{ applyBusy ? '发送中...' : '发起申请' }}
+                {{ applyBusy ? '发送中...' : '发起聊天申请' }}
               </button>
             </div>
+          </div>
+
+          <div v-if="canApplyToTutor" class="apply-note">
+            <div class="apply-note-title">学生主动申请说明</div>
+            <div class="apply-note-text">这里发起的是开始聊天申请。教师通过后，仍由教师支付平台信息费，支付完成后双方才会进入可沟通状态，后续试听、合作、退款流程保持不变。</div>
           </div>
 
           <div class="detail-meta">
@@ -845,6 +850,29 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+.apply-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(0, 190, 189, 0.12), transparent 32%),
+    rgba(240, 253, 250, 0.82);
+  border: 1px solid rgba(0, 190, 189, 0.16);
+}
+
+.apply-note-title {
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.apply-note-text {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .detail-meta {

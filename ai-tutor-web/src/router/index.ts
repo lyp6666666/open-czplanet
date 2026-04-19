@@ -32,6 +32,7 @@ const OrgMineJobsPage = () => import('@/pages/org/OrgMineJobsPage.vue')
 const OrgMineJobDetailPage = () => import('@/pages/org/OrgMineJobDetailPage.vue')
 const OrgPublicProfilePage = () => import('@/pages/org/OrgPublicProfilePage.vue')
 const GuideFlowPage = () => import('@/pages/GuideFlowPage.vue')
+const InviteRewardPage = () => import('@/pages/InviteRewardPage.vue')
 
 const STORAGE_TOKEN_KEY = 'ai_tutor_token'
 const STORAGE_USER_KEY = 'ai_tutor_user'
@@ -137,6 +138,11 @@ export const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: SettingsPage,
+    },
+    {
+      path: '/invite',
+      name: 'inviteReward',
+      component: InviteRewardPage,
     },
     {
       path: '/settings/phone',
@@ -251,6 +257,7 @@ router.beforeEach((to) => {
 
   const needAuth =
     to.path === '/me' ||
+    to.path === '/invite' ||
     to.path.startsWith('/settings') ||
     to.path === '/schedule' ||
     to.path.startsWith('/pay/') ||

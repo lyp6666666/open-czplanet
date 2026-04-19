@@ -84,6 +84,10 @@ function onSwitchClick() {
   switchModalOpen.value = true
 }
 
+function favoritePath() {
+  return isTeacher.value ? '/tutor/favorites' : '/student/favorites'
+}
+
 async function onGreetingClick() {
   closeMenu()
   greetingError.value = null
@@ -162,14 +166,6 @@ onMounted(() => {
             <button class="tab" :class="{ active: route.path.startsWith('/tutor/jobs') }" type="button" @click="go('/tutor/jobs')">
               需求
             </button>
-            <button
-              class="tab"
-              :class="{ active: route.path.startsWith('/tutor/favorites') }"
-              type="button"
-              @click="go('/tutor/favorites')"
-            >
-              收藏
-            </button>
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
             </button>
@@ -197,14 +193,6 @@ onMounted(() => {
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/student/jobs') }" type="button" @click="go('/student/jobs/mine')">
               我的需求
-            </button>
-            <button
-              class="tab"
-              :class="{ active: route.path.startsWith('/student/favorites') }"
-              type="button"
-              @click="go('/student/favorites')"
-            >
-              收藏
             </button>
             <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
               课程安排
@@ -241,6 +229,8 @@ onMounted(() => {
           <div v-if="menuOpen" class="menu card" @click.stop>
             <button v-if="!isOrg" class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
             <button v-else class="menu-item" type="button" @click="go('/org/change-password'); closeMenu()">修改密码</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="go(favoritePath()); closeMenu()">收藏</button>
+            <button v-if="!isOrg" class="menu-item" type="button" @click="go('/invite'); closeMenu()">邀请有礼</button>
             <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
             <button class="menu-item" type="button" @click="go('/settings'); closeMenu()">设置</button>
             <button v-if="!isOrg" class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>

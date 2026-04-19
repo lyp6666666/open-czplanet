@@ -46,6 +46,14 @@ function accessText(v: TutorApplicationVO): string {
   return ''
 }
 
+function flowTip(v: TutorApplicationVO): string {
+  if (v.status === 'PENDING') return '当前为聊天申请待处理阶段，接收方通过后才会进入信息费支付与聊天解锁流程。'
+  if (v.status === 'ACCEPTED' && v.chatAccessStatus === 'PAYMENT_REQUIRED') return '申请已通过，信息费仍由教师支付；支付完成后双方即可进入聊天继续确认试听与合作。'
+  if (v.status === 'ACCEPTED' && v.chatAccessStatus === 'CHAT_ENABLED') return '信息费已完成，双方可在聊天中确认试听、合作与后续上课安排。'
+  if (v.status === 'REJECTED') return '申请已被拒绝，如仍希望沟通，可调整申请内容后重新发起。'
+  return ''
+}
+
 async function load() {
   if (!id.value) return
   loading.value = true
@@ -185,6 +193,11 @@ onUnmounted(() => {
         <div class="c-body">{{ data.content }}</div>
       </div>
 
+      <div v-if="flowTip(data)" class="card flow-tip">
+        <div class="c-title">成单步骤说明</div>
+        <div class="c-body">{{ flowTip(data) }}</div>
+      </div>
+
       <div v-if="opError" class="hint error">{{ opError }}</div>
 
       <div class="card ops">
@@ -256,6 +269,14 @@ onUnmounted(() => {
   padding: 12px;
   display: grid;
   gap: 8px;
+}
+
+.flow-tip {
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  border-color: rgba(0, 190, 189, 0.18);
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.92), rgba(255, 255, 255, 0.96));
 }
 
 .c-title {

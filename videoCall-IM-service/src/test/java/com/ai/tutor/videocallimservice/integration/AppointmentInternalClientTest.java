@@ -1,6 +1,8 @@
 package com.ai.tutor.videocallimservice.integration;
 
 import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.event.InviteBrokeragePaidEvent;
+import com.ai.tutor.common.integration.InviteSystemBenefitInfo;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.integration.feign.AppointmentInternalFeignClient;
@@ -53,5 +55,33 @@ class AppointmentInternalClientTest {
         assertThatThrownBy(() -> internalClient.getUserBasicById(206L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("请求数据不存在");
+    }
+
+    @Test
+    void shouldNotifyInviteBrokeragePaidToFeign() {
+        InviteBrokeragePaidEvent event = new InviteBrokeragePaidEvent();
+        event.setBrokerageOrderId(9001L);
+        when(client.notifyInviteBrokeragePaid(event)).thenReturn(new BaseResponse<>(0, true, "ok"));
+
+        internalClient.notifyInviteBrokeragePaid(event);
+
+        verify(client).notifyInviteBrokeragePaid(event);
+    }
+
+    @Test
+    void shouldFetchInviteSystemBenefitFromFeign() {
+        InviteSystemBenefitInfo info = new InviteSystemBenefitInfo();
+        info.setEnabled(true);
+        info.setSystemInvited(true);
+        info.setSystemInviteCode("CHUANGZHI");
+        info.setTutorInfoFeeDiscountRate(0.5D);
+        info.setStudentRewardRate(0.13D);
+        when(client.getInviteSystemBenefit(206L)).thenReturn(new BaseResponse<>(0, info, "ok"));
+
+        InviteSystemBenefitInfo out = internalClient.getInviteSystemBenefit(206L);
+
+        assertThat(out.getSystemInvited()).isTrue();
+        assertThat(out.getSystemInviteCode()).isEqualTo("CHUANGZHI");
+        verify(client).getInviteSystemBenefit(206L);
     }
 }

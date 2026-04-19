@@ -4,8 +4,35 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import { useAuthStore } from './auth'
 
+function createStorage(): Storage {
+  const store = new Map<string, string>()
+  return {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store.clear()
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value))
+    },
+  }
+}
+
 describe('auth store', () => {
   beforeEach(() => {
+    const localStorageMock = createStorage()
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true })
+    Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, configurable: true })
     localStorage.clear()
     setActivePinia(createPinia())
   })
@@ -32,5 +59,13 @@ describe('auth store', () => {
     expect(localStorage.getItem('ai_tutor_token')).toBeNull()
     expect(localStorage.getItem('ai_tutor_user')).toBeNull()
   })
-})
 
+  it('passes invite code during login or register request', async () => {
+    const auth = useAuthStore()
+
+    const user = await auth.loginOrRegister('STUDENT', '13800138002', '1234', 'abc123')
+
+    expect(user.userType).toBe(2)
+    expect(auth.isLoggedIn).toBe(true)
+  })
+})

@@ -18,6 +18,9 @@ public interface UserMapper {
     @Select("SELECT * FROM user WHERE id = #{id} LIMIT 1")
     User selectById(@Param("id") Long id);
 
+    @Select("SELECT * FROM user WHERE status = 0")
+    List<User> selectActiveUsers();
+
     int insert(User user);
 
     /**

@@ -1,6 +1,8 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.event.InviteBrokeragePaidEvent;
+import com.ai.tutor.common.integration.InviteSystemBenefitInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
@@ -25,7 +27,9 @@ import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import com.ai.tutor.common.metrics.BizKpiMetrics;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -69,6 +73,8 @@ public class BrokerageOrderService {
 
     @Resource
     private BrokerageInfoFeeHotConfig brokerageInfoFeeHotConfig;
+    @Resource
+    private ObjectProvider<AppointmentInternalClient> appointmentInternalClientProvider;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -77,6 +83,7 @@ public class BrokerageOrderService {
     private String adminToken;
 
     private static final int LESSON_HOURS = 2;
+    private static final String PROMOTION_SYSTEM_INVITE = "SYSTEM_INVITE";
     private static final Pattern PRICE_NUMBER = Pattern.compile("(\\d+(?:\\.\\d+)?)");
 
     public BrokerageOrderVO getOrCreateByProposal(Long proposalId, Long uid) {
@@ -98,12 +105,17 @@ public class BrokerageOrderService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        long amountFen = computeInfoFeeAmountFen(proposal);
+        long originalAmountFen = computeInfoFeeAmountFen(proposal);
+        PromotionAmount promotionAmount = applySystemInvitePromotion(teacherUid, originalAmountFen);
         BrokerageOrder order = BrokerageOrder.builder()
                 .proposalId(proposalId)
                 .roomId(proposal.getRoomId())
                 .payerUid(teacherUid)
-                .amountFen(amountFen)
+                .amountFen(promotionAmount.amountFen())
+                .originalAmountFen(promotionAmount.originalAmountFen())
+                .discountAmountFen(promotionAmount.discountAmountFen())
+                .promotionType(promotionAmount.promotionType())
+                .promotionSnapshotJson(promotionAmount.snapshotJson())
                 .status(BrokerageOrderStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
@@ -134,6 +146,8 @@ public class BrokerageOrderService {
                 .roomId(0L)
                 .payerUid(uid)
                 .amountFen(amountFen)
+                .originalAmountFen(amountFen)
+                .discountAmountFen(0L)
                 .status(BrokerageOrderStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
@@ -166,6 +180,44 @@ public class BrokerageOrderService {
         BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
         long out = infoFeeFen.longValue();
         return out <= 0L ? 1L : out;
+    }
+
+    PromotionAmount applySystemInvitePromotion(Long teacherUid, long originalAmountFen) {
+        if (originalAmountFen <= 0L) {
+            return PromotionAmount.none(originalAmountFen);
+        }
+        AppointmentInternalClient internalClient = appointmentInternalClientProvider == null ? null : appointmentInternalClientProvider.getIfAvailable();
+        if (internalClient == null || teacherUid == null) {
+            return PromotionAmount.none(originalAmountFen);
+        }
+        try {
+            InviteSystemBenefitInfo benefit = internalClient.getInviteSystemBenefit(teacherUid);
+            if (benefit == null || !Boolean.TRUE.equals(benefit.getEnabled()) || !Boolean.TRUE.equals(benefit.getSystemInvited())) {
+                return PromotionAmount.none(originalAmountFen);
+            }
+            double discountRate = benefit.getTutorInfoFeeDiscountRate() == null ? 1D : benefit.getTutorInfoFeeDiscountRate();
+            if (discountRate <= 0D || discountRate >= 1D) {
+                return PromotionAmount.none(originalAmountFen);
+            }
+            long amountFen = BigDecimal.valueOf(originalAmountFen)
+                    .multiply(BigDecimal.valueOf(discountRate))
+                    .setScale(0, RoundingMode.CEILING)
+                    .longValue();
+            amountFen = Math.max(1L, amountFen);
+            long discountAmountFen = Math.max(0L, originalAmountFen - amountFen);
+            String snapshot = String.format(
+                    "{\"systemInviteCode\":\"%s\",\"discountRate\":%.4f,\"source\":\"appointment-system-benefit\"}",
+                    jsonText(benefit.getSystemInviteCode()),
+                    discountRate
+            );
+            /*
+             * 企业规范：系统邀请码属于平台推广权益，订单内保留原价、优惠金额和快照，便于财务核对半价来源。
+             */
+            return new PromotionAmount(originalAmountFen, amountFen, discountAmountFen, PROMOTION_SYSTEM_INVITE, snapshot);
+        } catch (Exception ex) {
+            log.warn("system_invite_promotion_query_failed teacherUid={} message={}", teacherUid, ex.getMessage());
+            return PromotionAmount.none(originalAmountFen);
+        }
     }
 
     private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
@@ -320,6 +372,7 @@ public class BrokerageOrderService {
                 }
             }
         }
+        notifyInviteBrokeragePaid(latest);
         return toVO(latest);
     }
 
@@ -370,6 +423,7 @@ public class BrokerageOrderService {
         }
 
         afterPaid(order);
+        notifyInviteBrokeragePaid(order);
         log.info("brokerage_payment_success done orderId={} status={} applicationId={} roomId={}",
                 order.getId(), order.getStatus(), order.getApplicationId(), order.getRoomId());
     }
@@ -455,6 +509,75 @@ public class BrokerageOrderService {
         }
     }
 
+    private void notifyInviteBrokeragePaid(BrokerageOrder order) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+        AppointmentInternalClient internalClient = appointmentInternalClientProvider == null ? null : appointmentInternalClientProvider.getIfAvailable();
+        if (internalClient == null) {
+            return;
+        }
+        try {
+            InviteBrokeragePaidEvent event = buildInviteBrokeragePaidEvent(order);
+            if (event.getTeacherUid() == null || event.getStudentUid() == null) {
+                return;
+            }
+            internalClient.notifyInviteBrokeragePaid(event);
+        } catch (Exception ex) {
+            // 邀请返利为支付后的异步权益，不阻断订单已支付、聊天解锁等主链路。
+            log.warn("invite_brokerage_paid_notify_failed orderId={} message={}", order.getId(), ex.getMessage());
+        }
+    }
+
+    private InviteBrokeragePaidEvent buildInviteBrokeragePaidEvent(BrokerageOrder order) {
+        InviteBrokeragePaidEvent event = new InviteBrokeragePaidEvent();
+        event.setBrokerageOrderId(order.getId());
+        event.setProposalId(order.getProposalId());
+        event.setApplicationId(order.getApplicationId());
+        event.setRoomId(order.getRoomId());
+        event.setPayerUid(order.getPayerUid());
+        event.setAmountFen(order.getAmountFen());
+        event.setPayMethod(order.getPayMethod());
+        event.setPaidAt(order.getPaidAt());
+        event.setSource("videoCall-IM-service");
+
+        if (order.getApplicationId() != null) {
+            TutorApplication application = tutorApplicationMapper.selectById(order.getApplicationId());
+            fillTeacherStudentFromApplication(event, application);
+            return event;
+        }
+        if (order.getProposalId() != null && order.getProposalId() > 0 && order.getRoomId() != null) {
+            fillTeacherStudentFromRoom(event, order.getRoomId());
+            return event;
+        }
+        if (order.getRoomId() != null) {
+            fillTeacherStudentFromRoom(event, order.getRoomId());
+        }
+        return event;
+    }
+
+    private void fillTeacherStudentFromApplication(InviteBrokeragePaidEvent event, TutorApplication application) {
+        if (application == null) {
+            return;
+        }
+        if ("TEACHER".equalsIgnoreCase(application.getSenderRole())) {
+            event.setTeacherUid(application.getSenderUid());
+            event.setStudentUid(application.getReceiverUid());
+        } else if ("TEACHER".equalsIgnoreCase(application.getReceiverRole())) {
+            event.setTeacherUid(application.getReceiverUid());
+            event.setStudentUid(application.getSenderUid());
+        }
+    }
+
+    private void fillTeacherStudentFromRoom(InviteBrokeragePaidEvent event, Long roomId) {
+        Room room = roomMapper.selectById(roomId);
+        if (room == null) {
+            return;
+        }
+        event.setTeacherUid(teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId()));
+        event.setStudentUid(studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId()));
+    }
+
     private static BrokerageOrderVO toVO(BrokerageOrder order) {
         if (order == null) return null;
         return BrokerageOrderVO.builder()
@@ -463,6 +586,9 @@ public class BrokerageOrderService {
                 .roomId(order.getRoomId())
                 .payerUid(order.getPayerUid())
                 .amountFen(order.getAmountFen())
+                .originalAmountFen(order.getOriginalAmountFen())
+                .discountAmountFen(order.getDiscountAmountFen())
+                .promotionType(order.getPromotionType())
                 .payMethod(order.getPayMethod())
                 .status(order.getStatus())
                 .proofUrl(order.getProofUrl())
@@ -483,6 +609,50 @@ public class BrokerageOrderService {
 
     private static String trim(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    private static String jsonText(String value) {
+        return trim(value).replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    static class PromotionAmount {
+        private final long originalAmountFen;
+        private final long amountFen;
+        private final long discountAmountFen;
+        private final String promotionType;
+        private final String snapshotJson;
+
+        PromotionAmount(long originalAmountFen, long amountFen, long discountAmountFen, String promotionType, String snapshotJson) {
+            this.originalAmountFen = originalAmountFen;
+            this.amountFen = amountFen;
+            this.discountAmountFen = discountAmountFen;
+            this.promotionType = promotionType;
+            this.snapshotJson = snapshotJson;
+        }
+
+        long originalAmountFen() {
+            return originalAmountFen;
+        }
+
+        long amountFen() {
+            return amountFen;
+        }
+
+        long discountAmountFen() {
+            return discountAmountFen;
+        }
+
+        String promotionType() {
+            return promotionType;
+        }
+
+        String snapshotJson() {
+            return snapshotJson;
+        }
+
+        static PromotionAmount none(long originalAmountFen) {
+            return new PromotionAmount(originalAmountFen, originalAmountFen, 0L, null, null);
+        }
     }
 
 }

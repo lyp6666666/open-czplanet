@@ -31,5 +31,10 @@ class GatewayRoutesSmokeTest {
                 "im-chat-route",
                 "payment-route"
         );
+
+        // 企业规范：邀请有礼属于 appointment 域能力，网关必须持续暴露 /invite/** 转发入口。
+        boolean hasInviteRoute = routes.stream().anyMatch(route -> route.getId().equals("appointment-domain-route")
+                && String.valueOf(route.getPredicate()).contains("/invite/**"));
+        assertThat(hasInviteRoute).isTrue();
     }
 }

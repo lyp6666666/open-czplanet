@@ -1,6 +1,8 @@
 package com.ai.tutor.videocallimservice.integration;
 
 import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.event.InviteBrokeragePaidEvent;
+import com.ai.tutor.common.integration.InviteSystemBenefitInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.utils.ThrowUtils;
@@ -31,6 +33,18 @@ public class AppointmentInternalClient {
         BaseResponse<String> response = client.getUserPhoneById(uid);
         String phone = unwrapData(response, "getUserPhoneById");
         return phone == null ? "" : phone;
+    }
+
+    public void notifyInviteBrokeragePaid(InviteBrokeragePaidEvent event) {
+        ThrowUtils.throwIf(event == null || event.getBrokerageOrderId() == null, ErrorCode.PARAMS_ERROR);
+        BaseResponse<Boolean> response = client.notifyInviteBrokeragePaid(event);
+        unwrapData(response, "notifyInviteBrokeragePaid");
+    }
+
+    public InviteSystemBenefitInfo getInviteSystemBenefit(Long uid) {
+        ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
+        BaseResponse<InviteSystemBenefitInfo> response = client.getInviteSystemBenefit(uid);
+        return unwrapData(response, "getInviteSystemBenefit");
     }
 
     private static ImUser toImUser(Map<String, Object> info) {

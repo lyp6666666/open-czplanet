@@ -36,7 +36,7 @@ spring:
         - id: appointment-domain-route
           uri: lb://tutor-appointment-service
           predicates:
-            - Path=/appointment/**,/org/**
+            - Path=/appointment/**,/org/**,/invite/**
         - id: im-chat-route
           uri: lb://videoCall-IM-service
           predicates:

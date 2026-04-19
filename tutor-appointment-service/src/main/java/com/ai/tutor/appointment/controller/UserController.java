@@ -91,7 +91,7 @@ public class UserController {
         String phone = userLoginRequest.getPhone();
         String code = userLoginRequest.getCode();
         UserRoleEnum userRoleEnum = userLoginRequest.getUserRoleEnum();
-        LoginUserVO loginUserVO = userService.userLoginOrRegister(phone, code, userRoleEnum);
+        LoginUserVO loginUserVO = userService.userLoginOrRegister(phone, code, userRoleEnum, userLoginRequest.getInviteCode());
         return ResultUtils.success(loginUserVO);
     }
 

@@ -68,8 +68,16 @@ export const useAuthStore = defineStore('auth', {
       return userApi.sendCode(phone)
     },
 
-    async loginOrRegister(role: UserRoleEnum, phone: string, code: string) {
-      const user = normalizeLoginUser(await userApi.loginOrRegister({ userRoleEnum: role, phone, code }))
+    async loginOrRegister(role: UserRoleEnum, phone: string, code: string, inviteCode?: string | null) {
+      const normalizedInviteCode = String(inviteCode || '').trim()
+      const user = normalizeLoginUser(
+        await userApi.loginOrRegister({
+          userRoleEnum: role,
+          phone,
+          code,
+          inviteCode: normalizedInviteCode || undefined,
+        }),
+      )
       this.token = user.token
       this.user = user
       this.me = null

@@ -1,6 +1,8 @@
 package com.ai.tutor.appointment.interceptor;
 
 import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
@@ -21,6 +23,8 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Autowired
     private JwtUtil jwtUtil;
+    @Autowired
+    private UserMapper userMapper;
 
     private static final String ATTRIBUTE_ROLE = "role";
 
@@ -60,6 +64,10 @@ public class JwtInterceptor implements HandlerInterceptor {
         // 统一用 userId 作为用户身份标识，避免手机号变更导致身份漂移
         if (userId == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "token 缺少 userId");
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() != 0)) {
+            throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "当前账号不可用，请重新登录");
         }
 
         request.setAttribute(ATTRIBUTE_UID, String.valueOf(userId));

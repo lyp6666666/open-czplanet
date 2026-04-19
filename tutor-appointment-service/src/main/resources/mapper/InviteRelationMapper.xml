@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.InviteRelationMapper">
+
+    <resultMap id="InviteRelationMap" type="com.ai.tutor.appointment.model.entity.InviteRelation">
+        <id column="id" property="id"/>
+        <result column="inviter_uid" property="inviterUid"/>
+        <result column="invitee_uid" property="inviteeUid"/>
+        <result column="invite_code" property="inviteCode"/>
+        <result column="bind_source" property="bindSource"/>
+        <result column="status" property="status"/>
+        <result column="risk_flag" property="riskFlag"/>
+        <result column="remark" property="remark"/>
+        <result column="bind_time" property="bindTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.InviteRelation" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO invite_relation
+        (
+            inviter_uid,
+            invitee_uid,
+            invite_code,
+            bind_source,
+            status,
+            risk_flag,
+            remark,
+            bind_time,
+            create_time,
+            update_time
+        )
+        VALUES
+        (
+            #{inviterUid},
+            #{inviteeUid},
+            #{inviteCode},
+            #{bindSource},
+            #{status},
+            #{riskFlag},
+            #{remark},
+            #{bindTime},
+            #{createTime},
+            #{updateTime}
+        )
+    </insert>
+
+    <select id="pageByInviterUid" resultMap="InviteRelationMap">
+        SELECT *
+        FROM invite_relation
+        WHERE inviter_uid = #{inviterUid}
+        <if test="cursor != null">
+            AND id &lt; #{cursor}
+        </if>
+        <if test="status != null and status != ''">
+            AND status = #{status}
+        </if>
+        ORDER BY id DESC
+        LIMIT #{pageSize}
+    </select>
+
+</mapper>

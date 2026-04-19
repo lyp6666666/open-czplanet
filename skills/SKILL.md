@@ -12,7 +12,9 @@ Use it whenever work touches this repo's code, configuration, tests, or specs.
 ## Core Rules
 
 - Treat code as the source of truth. Some docs and OpenSpec files lag behind the current implementation.
-- If a task changes database schema, migration SQL, or table structure, update the matching files under `sqlDoc/` in the same turn and explicitly mention that sync in the final response.
+- If a task changes database schema, migration SQL, or table structure, update the matching files under `sqlDoc/` in the same turn, including the relevant migration file and `sqlDoc/huoyue.sql`, and explicitly mention that sync in the final response.
+- If a task changes database schema, migration SQL, or table structure, also sync the change to the shared remote server `111.228.20.88` in the same turn.
+- Remote DB sync is not complete until the schema change is actually applied on `111.228.20.88` and the target tables/columns are verified.
 - Before changing code, first identify the affected area and read the matching sections in:
   - `references/module-map.md`
   - `references/business-flows.md`

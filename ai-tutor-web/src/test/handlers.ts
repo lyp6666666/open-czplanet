@@ -186,7 +186,12 @@ export const handlers = [
   http.post('http://localhost/user/sendcode', async () => ok('验证码发送成功(模拟)')),
 
   http.post('http://localhost/user/loginOrRegister', async ({ request }: { request: Request }) => {
-    const body = (await request.json()) as { phone: string; code: string; userRoleEnum: 'TEACHER' | 'STUDENT' }
+    const body = (await request.json()) as {
+      phone: string
+      code: string
+      userRoleEnum: 'TEACHER' | 'STUDENT'
+      inviteCode?: string
+    }
     const isTutor = body.userRoleEnum === 'TEACHER'
     return ok({
       id: isTutor ? 1001 : 2001,
@@ -196,6 +201,126 @@ export const handlers = [
       sex: null,
       userType: isTutor ? 1 : 2,
       token: isTutor ? 'mock.teacher.token' : 'mock.student.token',
+      isNew: true,
     })
   }),
+
+  http.get('http://localhost/invite/overview', () =>
+    ok({
+      myInviteCode: 'ABC123',
+      totalInviteCount: 2,
+      effectiveInviteCount: 1,
+      totalRewardAmountFen: 1300,
+      pendingSettlementAmountFen: 1300,
+      estimatedCurrentMonthAmountFen: 1300,
+      teacherRewardRate: 0.13,
+      studentRewardRate: 0.13,
+      settlementDay: 10,
+      receiverConfigured: false,
+      systemInviteConfig: {
+        enabled: true,
+        systemInviteCode: 'CHUANGZHI',
+        systemInviteLink: 'http://localhost/auth/student?inviteCode=CHUANGZHI',
+        tutorInfoFeeDiscountRate: 0.5,
+        studentRewardRate: 0.13,
+        promoTitle: '创智推广专属福利',
+        promoDesc: '教师信息费减半，学生可获得返现。',
+      },
+    }),
+  ),
+
+  http.get('http://localhost/invite/records', () =>
+    ok({
+      nextCursor: null,
+      isLast: true,
+      list: [
+        {
+          inviteeUid: 2001,
+          inviteeDisplayName: '王同学',
+          inviteePhoneMasked: '138****8000',
+          inviteeUserType: 2,
+          registeredAt: '2026-04-18T10:00:00',
+          status: 'REGISTERED',
+          hasReward: false,
+        },
+      ],
+    }),
+  ),
+
+  http.get('http://localhost/invite/rewards', () =>
+    ok({
+      nextCursor: null,
+      isLast: true,
+      list: [
+        {
+          id: 1,
+          inviteeUid: 3001,
+          inviteeDisplayName: '李老师',
+          rewardScene: 'INVITED_TUTOR_DEAL',
+          bizOrderType: 'BROKERAGE_ORDER',
+          bizOrderId: 9001,
+          baseAmountFen: 10000,
+          rewardRate: 0.13,
+          rewardAmountFen: 1300,
+          status: 'PENDING',
+          createdAt: '2026-04-18T12:00:00',
+        },
+      ],
+    }),
+  ),
+
+  http.get('http://localhost/invite/settlements', () =>
+    ok({
+      nextCursor: null,
+      isLast: true,
+      list: [],
+    }),
+  ),
+
+  http.get('http://localhost/invite/receiver-account', () =>
+    ok({
+      receiverName: '',
+      wechatNo: '',
+      phone: '',
+      remark: null,
+      configured: false,
+    }),
+  ),
+
+  http.post('http://localhost/invite/receiver-account', async ({ request }: { request: Request }) => {
+    const body = (await request.json()) as {
+      receiverName?: string
+      wechatNo?: string
+      phone?: string
+      remark?: string | null
+    }
+    return ok({
+      receiverName: body.receiverName || '',
+      wechatNo: body.wechatNo || '',
+      phone: body.phone || '',
+      remark: body.remark ?? null,
+      configured: true,
+    })
+  }),
+
+  http.get('http://localhost/invite/rules', () =>
+    ok({
+      teacherRewardRate: 0.13,
+      studentRewardRate: 0.13,
+      settlementDay: 10,
+      minSettlementAmountFen: 1000,
+      enabled: true,
+      receiverHint: '请确保微信收款信息真实有效',
+      systemInviteConfig: {
+        enabled: true,
+        systemInviteCode: 'CHUANGZHI',
+        systemInviteLink: 'http://localhost/auth/student?inviteCode=CHUANGZHI',
+        tutorInfoFeeDiscountRate: 0.5,
+        studentRewardRate: 0.13,
+        promoTitle: '创智推广专属福利',
+        promoDesc: '教师信息费减半，学生可获得返现。',
+      },
+      ruleTextList: ['邀请教师成单返利 13%', '邀请学生有效支付返利 13%', '每月 10 号统一结算'],
+    }),
+  ),
 ]

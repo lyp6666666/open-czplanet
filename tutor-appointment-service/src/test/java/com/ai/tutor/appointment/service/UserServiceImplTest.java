@@ -13,6 +13,7 @@ import com.ai.tutor.appointment.model.dto.user.TeacherExtInfo;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import com.ai.tutor.appointment.service.impl.UserServiceImpl;
+import com.ai.tutor.appointment.service.InviteService;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.exception.BusinessException;
@@ -57,6 +58,8 @@ class UserServiceImplTest {
     private StudentProfileMapper studentProfileMapper;
     @Mock
     private TransactionTemplate transactionTemplate;
+    @Mock
+    private InviteService inviteService;
 
     private UserServiceImpl userService;
 
@@ -70,6 +73,7 @@ class UserServiceImplTest {
         ReflectionTestUtils.setField(userService, "teacherProfileMapper", teacherProfileMapper);
         ReflectionTestUtils.setField(userService, "studentProfileMapper", studentProfileMapper);
         ReflectionTestUtils.setField(userService, "transactionTemplate", transactionTemplate);
+        ReflectionTestUtils.setField(userService, "inviteService", inviteService);
 
         MinioProperties minioProperties = new MinioProperties();
         minioProperties.setEnabled(true);
@@ -99,7 +103,7 @@ class UserServiceImplTest {
 
         when(jwtUtil.generateToken(1001L, phone, UserRoleEnum.TEACHER)).thenReturn("token");
 
-        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.TEACHER);
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.TEACHER, null);
         assertThat(vo.getId()).isEqualTo(1001L);
         assertThat(vo.getToken()).isEqualTo("token");
         assertThat(vo.getUserType()).isEqualTo(UserRoleEnum.TEACHER.getValue());
@@ -125,7 +129,7 @@ class UserServiceImplTest {
         when(userMapper.updateUserType(2002L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
         when(jwtUtil.generateToken(2002L, phone, UserRoleEnum.STUDENT)).thenReturn("token2");
 
-        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT);
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
         assertThat(vo.getId()).isEqualTo(2002L);
         assertThat(vo.getUserType()).isEqualTo(UserRoleEnum.STUDENT.getValue());
         assertThat(vo.getIsNew()).isTrue();
@@ -136,6 +140,46 @@ class UserServiceImplTest {
         assertThat(inserted.getValue().getName()).isNull();
 
         verify(studentProfileMapper, times(1)).insert(any(StudentProfile.class));
+        verify(inviteService, times(1)).ensureInviteCode(2002L);
+    }
+
+    @Test
+    void shouldEnsureInviteCodeWhenExistingUserLogsIn() {
+        String phone = "13800009999";
+        when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
+
+        User existing = new User();
+        existing.setId(9001L);
+        existing.setPhone(phone);
+        existing.setStatus(0);
+        existing.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectByPhone(phone)).thenReturn(existing);
+        when(studentProfileMapper.selectByUserId(9001L)).thenReturn(new StudentProfile());
+        when(userMapper.updateUserType(9001L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
+        when(jwtUtil.generateToken(9001L, phone, UserRoleEnum.STUDENT)).thenReturn("token9001");
+
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
+
+        assertThat(vo.getId()).isEqualTo(9001L);
+        verify(inviteService, times(1)).ensureInviteCode(9001L);
+    }
+
+    @Test
+    void shouldRejectDisabledUserLogin() {
+        String phone = "13800008888";
+        when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
+
+        User existing = new User();
+        existing.setId(8800L);
+        existing.setPhone(phone);
+        existing.setStatus(1);
+        existing.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectByPhone(phone)).thenReturn(existing);
+
+        assertThatThrownBy(() -> userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("当前账号已被禁用");
+        verify(inviteService, never()).ensureInviteCode(anyLong());
     }
 
     @Test
@@ -154,10 +198,10 @@ class UserServiceImplTest {
         when(userMapper.updateUserType(3003L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
         when(jwtUtil.generateToken(3003L, phone, UserRoleEnum.STUDENT)).thenReturn("token3");
 
-        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT);
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
         assertThat(vo.getId()).isEqualTo(3003L);
         assertThat(vo.getToken()).isEqualTo("token3");
-        assertThat(vo.getIsNew()).isTrue();
+        assertThat(vo.getIsNew()).isFalse();
 
         verify(studentProfileMapper, times(1)).insert(any(StudentProfile.class));
     }
@@ -179,12 +223,33 @@ class UserServiceImplTest {
         when(userMapper.updateUserType(4004L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
         when(jwtUtil.generateToken(4004L, phone, UserRoleEnum.STUDENT)).thenReturn("token4");
 
-        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT);
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
         assertThat(vo.getId()).isEqualTo(4004L);
 
         ArgumentCaptor<User> inserted = ArgumentCaptor.forClass(User.class);
         verify(userMapper, times(1)).insert(inserted.capture());
         assertThat(inserted.getValue().getName()).isNull();
+    }
+
+    @Test
+    void shouldBindInviteCodeWhenRegisteringNewUser() {
+        String phone = "13800004567";
+        when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
+        when(userMapper.selectByPhone(phone)).thenReturn(null);
+        doAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(5005L);
+            return 1;
+        }).when(userMapper).insert(any(User.class));
+        when(studentProfileMapper.selectByUserId(5005L)).thenReturn(null);
+        when(userMapper.updateUserType(5005L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
+        when(jwtUtil.generateToken(5005L, phone, UserRoleEnum.STUDENT)).thenReturn("token5");
+
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, "ABC123");
+
+        assertThat(vo.getId()).isEqualTo(5005L);
+        verify(inviteService).ensureInviteCode(5005L);
+        verify(inviteService).bindInviteCodeIfNeeded(5005L, "ABC123");
     }
 
     @Test

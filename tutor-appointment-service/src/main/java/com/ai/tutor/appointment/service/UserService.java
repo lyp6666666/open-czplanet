@@ -8,7 +8,7 @@ import com.ai.tutor.appointment.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
 
 public interface UserService {
-    LoginUserVO userLoginOrRegister(String phone, String code, UserRoleEnum userRoleEnum);
+    LoginUserVO userLoginOrRegister(String phone, String code, UserRoleEnum userRoleEnum, String inviteCode);
 
     void updateUserInfo(UserUpdateRequest requestDto, HttpServletRequest request);
 

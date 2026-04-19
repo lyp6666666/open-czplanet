@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
+import com.ai.tutor.common.integration.InviteSystemBenefitInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ThrowUtils;
@@ -29,7 +30,9 @@ import com.ai.tutor.videocallimservice.chat.service.stream.SseSessionManager;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import com.ai.tutor.common.metrics.BizKpiMetrics;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -57,6 +60,7 @@ public class TutorApplicationService {
     private static final String CONTEXT_DEMAND = "DEMAND";
     private static final String CONTEXT_TUTOR = "TUTOR";
     private static final String CONTEXT_ORG_POSTING = "ORG_POSTING";
+    private static final String PROMOTION_SYSTEM_INVITE = "SYSTEM_INVITE";
 
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
@@ -89,6 +93,8 @@ public class TutorApplicationService {
 
     @Resource
     private BrokerageInfoFeeHotConfig brokerageInfoFeeHotConfig;
+    @Resource
+    private ObjectProvider<AppointmentInternalClient> appointmentInternalClientProvider;
 
     @Value("${brokerage.amount-fen:19900}")
     private long defaultAmountFen;
@@ -518,13 +524,18 @@ public class TutorApplicationService {
 
         Long teacherUid = resolveTeacherUid(application);
         LocalDateTime now = LocalDateTime.now();
-        long amountFen = computeInfoFeeAmountFenForApplication(application);
+        long originalAmountFen = computeInfoFeeAmountFenForApplication(application);
+        PromotionAmount promotionAmount = applySystemInvitePromotion(teacherUid, originalAmountFen);
         BrokerageOrder order = BrokerageOrder.builder()
                 .proposalId(null)
                 .applicationId(application.getId())
                 .roomId(application.getRoomId())
                 .payerUid(teacherUid)
-                .amountFen(amountFen)
+                .amountFen(promotionAmount.amountFen())
+                .originalAmountFen(promotionAmount.originalAmountFen())
+                .discountAmountFen(promotionAmount.discountAmountFen())
+                .promotionType(promotionAmount.promotionType())
+                .promotionSnapshotJson(promotionAmount.snapshotJson())
                 .status(BrokerageOrderStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
@@ -584,6 +595,44 @@ public class TutorApplicationService {
         BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
         long out = infoFeeFen.longValue();
         return out <= 0L ? 1L : out;
+    }
+
+    PromotionAmount applySystemInvitePromotion(Long teacherUid, long originalAmountFen) {
+        if (originalAmountFen <= 0L) {
+            return PromotionAmount.none(originalAmountFen);
+        }
+        AppointmentInternalClient internalClient = appointmentInternalClientProvider == null ? null : appointmentInternalClientProvider.getIfAvailable();
+        if (internalClient == null || teacherUid == null) {
+            return PromotionAmount.none(originalAmountFen);
+        }
+        try {
+            InviteSystemBenefitInfo benefit = internalClient.getInviteSystemBenefit(teacherUid);
+            if (benefit == null || !Boolean.TRUE.equals(benefit.getEnabled()) || !Boolean.TRUE.equals(benefit.getSystemInvited())) {
+                return PromotionAmount.none(originalAmountFen);
+            }
+            double discountRate = benefit.getTutorInfoFeeDiscountRate() == null ? 1D : benefit.getTutorInfoFeeDiscountRate();
+            if (discountRate <= 0D || discountRate >= 1D) {
+                return PromotionAmount.none(originalAmountFen);
+            }
+            long amountFen = BigDecimal.valueOf(originalAmountFen)
+                    .multiply(BigDecimal.valueOf(discountRate))
+                    .setScale(0, RoundingMode.CEILING)
+                    .longValue();
+            amountFen = Math.max(1L, amountFen);
+            long discountAmountFen = Math.max(0L, originalAmountFen - amountFen);
+            String snapshot = String.format(
+                    "{\"systemInviteCode\":\"%s\",\"discountRate\":%.4f,\"source\":\"appointment-system-benefit\"}",
+                    jsonText(benefit.getSystemInviteCode()),
+                    discountRate
+            );
+            /*
+             * 企业规范：申请通过后生成的信息费订单也必须应用系统邀请码促销，保证学生主动申请与教师主动申请支付口径一致。
+             */
+            return new PromotionAmount(originalAmountFen, amountFen, discountAmountFen, PROMOTION_SYSTEM_INVITE, snapshot);
+        } catch (Exception ex) {
+            log.warn("system_invite_promotion_query_failed teacherUid={} message={}", teacherUid, ex.getMessage());
+            return PromotionAmount.none(originalAmountFen);
+        }
     }
 
     private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
@@ -662,5 +711,49 @@ public class TutorApplicationService {
     private static String trimNullable(String s) {
         String v = trim(s);
         return v.isEmpty() ? null : v;
+    }
+
+    private static String jsonText(String value) {
+        return trim(value).replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    static class PromotionAmount {
+        private final long originalAmountFen;
+        private final long amountFen;
+        private final long discountAmountFen;
+        private final String promotionType;
+        private final String snapshotJson;
+
+        PromotionAmount(long originalAmountFen, long amountFen, long discountAmountFen, String promotionType, String snapshotJson) {
+            this.originalAmountFen = originalAmountFen;
+            this.amountFen = amountFen;
+            this.discountAmountFen = discountAmountFen;
+            this.promotionType = promotionType;
+            this.snapshotJson = snapshotJson;
+        }
+
+        long originalAmountFen() {
+            return originalAmountFen;
+        }
+
+        long amountFen() {
+            return amountFen;
+        }
+
+        long discountAmountFen() {
+            return discountAmountFen;
+        }
+
+        String promotionType() {
+            return promotionType;
+        }
+
+        String snapshotJson() {
+            return snapshotJson;
+        }
+
+        static PromotionAmount none(long originalAmountFen) {
+            return new PromotionAmount(originalAmountFen, originalAmountFen, 0L, null, null);
+        }
     }
 }

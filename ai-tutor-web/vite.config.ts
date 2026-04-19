@@ -31,6 +31,10 @@ export default defineConfig({
         target: 'http://localhost:18080',
         changeOrigin: true,
       },
+      '/invite': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
     },
   },
 })
