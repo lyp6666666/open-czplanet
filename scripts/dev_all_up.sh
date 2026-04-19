@@ -42,6 +42,8 @@ ADMIN_PORT="${ADMIN_PORT:-18084}"
 WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+WEB_BASE_PATH="${WEB_BASE_PATH:-/}"
+ADMIN_WEB_BASE_PATH="${ADMIN_WEB_BASE_PATH:-/}"
 MANAGE_INFRA="${MANAGE_INFRA:-auto}"
 SERVICE_STARTUP_WAIT_LOOPS="${SERVICE_STARTUP_WAIT_LOOPS:-300}"
 FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
@@ -328,6 +330,7 @@ start_frontend() {
   app_dir="$1"
   app_name="$2"
   port="$3"
+  base_path="$4"
   log_file="$LOG_DIR/$app_name.log"
   pid_file="$PID_DIR/$app_name.pid"
 
@@ -369,10 +372,10 @@ start_frontend() {
     (cd "$ROOT_DIR/$app_dir" && npm ci >/dev/null)
   fi
 
-  echo "[dev_all_up] 启动 $app_name host=$FRONTEND_HOST port=$port"
+  echo "[dev_all_up] 启动 $app_name host=$FRONTEND_HOST port=$port base=$base_path"
   (
     cd "$ROOT_DIR/$app_dir"
-    nohup npm run dev -- --host "$FRONTEND_HOST" --port "$port" --strictPort >"$log_file" 2>&1 &
+    VITE_BASE_PATH="$base_path" nohup npm run dev -- --host "$FRONTEND_HOST" --port "$port" --strictPort >"$log_file" 2>&1 &
     launcher_pid=$!
     echo "$launcher_pid" >"$pid_file"
   )
@@ -402,8 +405,8 @@ start_service "tutor-appointment-service" "tutor-appointment-service" "$APPOINTM
 start_service "videoCall-IM-service" "videoCall-IM-service" "$IM_PORT"
 start_service "payment-service" "payment-service" "$PAYMENT_PORT"
 start_service "ai-tutor-admin" "ai-tutor-admin" "$ADMIN_PORT"
-start_frontend "ai-tutor-web" "ai-tutor-web" "$WEB_PORT"
-start_frontend "ai-tutor-admin-web" "ai-tutor-admin-web" "$ADMIN_WEB_PORT"
+start_frontend "ai-tutor-web" "ai-tutor-web" "$WEB_PORT" "$WEB_BASE_PATH"
+start_frontend "ai-tutor-admin-web" "ai-tutor-admin-web" "$ADMIN_WEB_PORT" "$ADMIN_WEB_BASE_PATH"
 
 echo "[dev_all_up] 已拉起网关 + 4 个服务 + 2 个前端"
 echo "[dev_all_up] 日志目录：$LOG_DIR"
