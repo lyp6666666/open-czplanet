@@ -2,6 +2,7 @@ package com.ai.tutor.liveclass.controller;
 
 import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
 import com.ai.tutor.utils.RequestHolder;
@@ -90,6 +91,27 @@ class LiveSessionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.sessionId").value(8))
                 .andExpect(jsonPath("$.data.peerDisplayName").value("王同学"));
+    }
+
+    @Test
+    void shouldReturnReminderList() throws Exception {
+        when(liveClassService.myReminders(1001L)).thenReturn(List.of(
+                LiveReminderItemResp.builder()
+                        .sessionId(8L)
+                        .courseId(66L)
+                        .title("课程 #66")
+                        .status("JOIN_OPEN")
+                        .joinableNow(true)
+                        .canJoin(true)
+                        .peerDisplayName("王同学")
+                        .build()
+        ));
+
+        mockMvc.perform(get("/live/sessions/reminders"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].courseId").value(66))
+                .andExpect(jsonPath("$.data[0].joinableNow").value(true));
     }
 
     @Test

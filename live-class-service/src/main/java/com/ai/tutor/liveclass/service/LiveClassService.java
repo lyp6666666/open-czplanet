@@ -17,6 +17,7 @@ import com.ai.tutor.liveclass.domain.vo.request.LiveKitWebhookRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.SyncCourseSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -108,17 +110,49 @@ public class LiveClassService {
     public PrepareLiveSessionResp prepare(Long courseId, Long viewerUid, PrepareLiveSessionRequest request) {
         LiveClassSession session = requireByCourseId(courseId);
         String peerName = resolvePeerDisplayName(session, viewerUid);
+        boolean joinableNow = joinableNow(session);
         return PrepareLiveSessionResp.builder()
                 .sessionId(session.getId())
                 .status(session.getStatus())
                 .courseTitle("实时课程")
                 .peerDisplayName(peerName)
                 .canJoin(canJoin(session, viewerUid))
-                .joinableNow(joinableNow(session))
-                .joinBlockedReason(joinableNow(session) ? null : "未到可入会时间")
+                .joinableNow(joinableNow)
+                .joinBlockedReason(resolveJoinBlockedReason(session, joinableNow))
                 .defaultMediaPolicy("AUDIO_VIDEO")
                 .deviceCheckRequired(Boolean.TRUE)
                 .build();
+    }
+
+    public List<LiveReminderItemResp> myReminders(Long uid) {
+        ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime windowStart = now.minusHours(2);
+        LocalDateTime windowEnd = now.plusHours(24);
+        return liveClassSessionMapper.listByParticipantUid(uid).stream()
+                .filter(session -> session.getScheduledStartAt() != null)
+                .filter(session -> !isTerminalStatus(session))
+                .filter(session -> {
+                    LocalDateTime startAt = session.getScheduledStartAt();
+                    return !startAt.isBefore(windowStart) && !startAt.isAfter(windowEnd);
+                })
+                .sorted(Comparator
+                        .comparing((LiveClassSession session) -> Boolean.TRUE.equals(joinableNow(session)) ? 0 : 1)
+                        .thenComparing(LiveClassSession::getScheduledStartAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(10)
+                .map(session -> LiveReminderItemResp.builder()
+                        .sessionId(session.getId())
+                        .courseId(session.getCourseId())
+                        .title("课程 #" + session.getCourseId())
+                        .status(session.getStatus())
+                        .joinableNow(joinableNow(session))
+                        .canJoin(canJoin(session, uid))
+                        .scheduledStartAt(session.getScheduledStartAt())
+                        .scheduledEndAt(session.getScheduledEndAt())
+                        .joinOpenAt(session.getJoinOpenAt())
+                        .peerDisplayName(resolvePeerDisplayName(session, uid))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -374,7 +408,27 @@ public class LiveClassService {
 
     private boolean joinableNow(LiveClassSession session) {
         LocalDateTime now = LocalDateTime.now();
+        if (session == null) return false;
+        if (isTerminalStatus(session)) return false;
+        if (session.getScheduledEndAt() != null && !now.isBefore(session.getScheduledEndAt())) return false;
         return session.getJoinOpenAt() == null || !now.isBefore(session.getJoinOpenAt());
+    }
+
+    private boolean isTerminalStatus(LiveClassSession session) {
+        String status = session == null ? null : session.getStatus();
+        if (blank(status)) return false;
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        return "ENDED".equals(normalized) || "CANCELED".equals(normalized) || "EXPIRED".equals(normalized);
+    }
+
+    private String resolveJoinBlockedReason(LiveClassSession session, boolean joinableNow) {
+        if (joinableNow) return null;
+        if (isTerminalStatus(session)) return "课程已结束";
+        LocalDateTime now = LocalDateTime.now();
+        if (session.getScheduledEndAt() != null && !now.isBefore(session.getScheduledEndAt())) {
+          return "课程已结束";
+        }
+        return "未到可入会时间";
     }
 
     private String buildRoomName(Long courseId) {

@@ -52,9 +52,26 @@ export type LiveTimelineItemResp = {
   occurredAt: string
 }
 
+export type LiveReminderItemResp = {
+  sessionId: number
+  courseId: number
+  title: string
+  status: string
+  joinableNow: boolean
+  canJoin: boolean
+  scheduledStartAt?: string | null
+  scheduledEndAt?: string | null
+  joinOpenAt?: string | null
+  peerDisplayName?: string | null
+}
+
 export const liveApi = {
   getByCourse(courseId: number) {
     return http.get<unknown, LiveSessionResp>(`/live/sessions/by-course/${courseId}`)
+  },
+
+  reminders() {
+    return http.get<unknown, LiveReminderItemResp[]>('/live/sessions/reminders')
   },
 
   prepare(courseId: number, payload: { clientType: string; sourcePage?: string }) {

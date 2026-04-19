@@ -13,6 +13,7 @@ import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
+import { useToastStore } from '@/stores/toast'
 import { isRoomPinned, setRoomPinned, subscribeChatPinChange } from '@/utils/chatPins'
 import { normalizeAssetUrl, normalizeAvatarUrl } from '@/utils/avatar'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
@@ -28,6 +29,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const chatRealtime = useChatRealtimeStore()
+const toast = useToastStore()
 
 const isTeacher = computed(() => auth.user?.userType === 1)
 
@@ -74,6 +76,14 @@ const collabEdit = ref<{
   proposalId: number
   initial: { pricePerHour: string; classTime: string; frequencyPerWeek: number }
 } | null>(null)
+
+const scheduleOpen = ref(false)
+const scheduleBusy = ref(false)
+const scheduleError = ref<string | null>(null)
+const scheduleTitle = ref('')
+const scheduleDescription = ref('')
+const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now()))
+const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
 
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
@@ -384,6 +394,119 @@ function closeCollaboration() {
   if (collabCreateBusy.value) return
   collabOpen.value = false
   collabEdit.value = null
+}
+
+function roundToNextHalfHour(nowMs: number) {
+  const d = new Date(nowMs)
+  d.setSeconds(0, 0)
+  const m = d.getMinutes()
+  const next = m <= 0 ? 0 : m <= 30 ? 30 : 60
+  d.setMinutes(next)
+  if (next === 60) d.setHours(d.getHours() + 1, 0, 0, 0)
+  return d.getTime()
+}
+
+function toLocalDateTimeInputValue(ms: number) {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+function parseLocalDateTimeInputValue(value: string) {
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : Date.now()
+}
+
+function openScheduleCreate() {
+  if (!composerEnabled.value) {
+    error.value = composerLockedHint.value
+    return
+  }
+  const peerName = otherUid.value ? pickDisplayName(otherUser.value, otherUid.value) : '对方'
+  const start = roundToNextHalfHour(Date.now())
+  scheduleTitle.value = `与${peerName}的线上课程`
+  scheduleDescription.value = ''
+  scheduleStartAt.value = start
+  scheduleEndAt.value = start + 60 * 60 * 1000
+  scheduleError.value = null
+  scheduleOpen.value = true
+}
+
+function closeScheduleCreate() {
+  if (scheduleBusy.value) return
+  scheduleOpen.value = false
+}
+
+function applyScheduleStartInput(value: string) {
+  const nextStart = parseLocalDateTimeInputValue(value)
+  const previousDuration = Math.max(30 * 60 * 1000, scheduleEndAt.value - scheduleStartAt.value)
+  scheduleStartAt.value = nextStart
+  if (!(scheduleEndAt.value > scheduleStartAt.value)) {
+    scheduleEndAt.value = nextStart + previousDuration
+  }
+}
+
+function applyScheduleEndInput(value: string) {
+  scheduleEndAt.value = parseLocalDateTimeInputValue(value)
+}
+
+function makeLessonRequestMessage(event: { id: number; title: string; startAt: number; endAt: number; status: unknown; creatorUserId: number }): ChatMessageResp {
+  return {
+    fromUser: { uid: myUid.value },
+    message: {
+      id: Date.now(),
+      roomId: roomId.value,
+      sendTime: new Date().toISOString(),
+      body: {
+        type: 'lesson_request',
+        eventId: event.id,
+        title: event.title,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        status: event.status === 'ACCEPTED' || event.status === 'REJECTED' || event.status === 'CANCELED' ? event.status : 'PENDING',
+        creatorUserId: event.creatorUserId,
+      },
+    },
+  }
+}
+
+async function submitScheduleCreate() {
+  if (scheduleBusy.value) return
+  scheduleError.value = null
+  const titleText = scheduleTitle.value.trim()
+  if (!titleText) {
+    scheduleError.value = '请输入课程名称'
+    return
+  }
+  if (!otherUid.value) {
+    scheduleError.value = '缺少授课对象'
+    return
+  }
+  if (!(scheduleEndAt.value > scheduleStartAt.value)) {
+    scheduleError.value = '结束时间必须晚于开始时间'
+    return
+  }
+  if (scheduleStartAt.value < Date.now() - 60_000) {
+    scheduleError.value = '请选择当前时间之后的课程'
+    return
+  }
+
+  scheduleBusy.value = true
+  try {
+    const event = await scheduleApi.createEvent({
+      title: titleText,
+      participantUserId: otherUid.value,
+      startAt: scheduleStartAt.value,
+      endAt: scheduleEndAt.value,
+      description: scheduleDescription.value.trim() || undefined,
+    })
+    mergeMessages([makeLessonRequestMessage(event)], 'append')
+    scheduleOpen.value = false
+    toast.show('授课申请已发送，对方确认后会自动开放线上课堂', 'success', 3200)
+  } catch (e) {
+    scheduleError.value = e instanceof Error ? e.message : '发起约课失败'
+  } finally {
+    scheduleBusy.value = false
+  }
 }
 
 // #region debug-point
@@ -1586,6 +1709,9 @@ watch(
     collabCreateBusy.value = false
     collabCreateError.value = null
     collabEdit.value = null
+    scheduleOpen.value = false
+    scheduleBusy.value = false
+    scheduleError.value = null
     endActionBusy.value = false
     appActionBusy.value = {}
     appActionError.value = {}
@@ -1898,6 +2024,9 @@ watch(
               <button class="btn" type="button" :disabled="hasActiveCollabProposal || !composerEnabled" @click="openCollaboration">
                 {{ hasActiveCollabProposal ? '已发起合作' : '发起合作' }}
               </button>
+              <button class="btn schedule-action" type="button" :disabled="!composerEnabled || !otherUid" @click="openScheduleCreate">
+                发起约课
+              </button>
               <span v-if="chatUnlocked && isTeacher && !hasAnyRefundRequest" :title="refundHoverText">
                 <button class="btn" type="button" :disabled="!canApplyRefund" @click="applyRefund">
                   申请退费
@@ -1941,6 +2070,57 @@ watch(
       @close="closeCollaboration"
       @submit="createCollaboration"
     />
+
+    <div v-if="scheduleOpen" class="mask" @click.self="closeScheduleCreate">
+      <div class="modal card schedule-modal">
+        <div class="m-title">发起线上约课</div>
+        <div class="m-desc">对方接收后，系统会自动生成实时课堂，并在开课前提醒双方进入。</div>
+        <div v-if="scheduleError" class="m-error">{{ scheduleError }}</div>
+
+        <div class="field">
+          <div class="lab">课程名称</div>
+          <input v-model="scheduleTitle" class="ipt" placeholder="例如：初二数学｜函数强化" />
+        </div>
+
+        <div class="field">
+          <div class="lab">授课对象</div>
+          <div class="readonly-peer">{{ otherUid ? pickDisplayName(otherUser, otherUid) : '当前会话对象' }}</div>
+        </div>
+
+        <div class="time-grid">
+          <div class="field">
+            <div class="lab">开始时间</div>
+            <input
+              class="ipt"
+              type="datetime-local"
+              :value="toLocalDateTimeInputValue(scheduleStartAt)"
+              @change="applyScheduleStartInput(($event.target as HTMLInputElement).value)"
+            />
+          </div>
+          <div class="field">
+            <div class="lab">结束时间</div>
+            <input
+              class="ipt"
+              type="datetime-local"
+              :value="toLocalDateTimeInputValue(scheduleEndAt)"
+              @change="applyScheduleEndInput(($event.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="lab">备注</div>
+          <textarea v-model="scheduleDescription" class="txt" rows="3" placeholder="可填写课前准备、教材、会议说明等" />
+        </div>
+
+        <div class="m-ops">
+          <button class="btn" type="button" :disabled="scheduleBusy" @click="closeScheduleCreate">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="scheduleBusy" @click="submitScheduleCreate">
+            {{ scheduleBusy ? '发送中...' : '发送约课邀请' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2453,8 +2633,15 @@ watch(
 
 .action-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.schedule-action {
+  border-color: rgba(32, 128, 240, 0.18);
+  background: linear-gradient(135deg, rgba(32, 128, 240, 0.1), rgba(32, 128, 240, 0.04));
+  color: #1767c4;
 }
 
 .refund-card {
@@ -2529,6 +2716,10 @@ watch(
   padding: 12px;
 }
 
+.schedule-modal {
+  width: min(92vw, 520px);
+}
+
 .m-title {
   font-weight: 900;
   font-size: 16px;
@@ -2549,6 +2740,52 @@ watch(
 .m-ops {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.lab {
+  font-size: 13px;
+  font-weight: 800;
+  color: #334155;
+}
+
+.ipt,
+.txt {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.ipt:focus,
+.txt:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--primary-weak);
+}
+
+.readonly-peer {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #fbfdff 0%, #f6f8fb 100%);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -2619,6 +2856,13 @@ watch(
 @media (min-width: 981px) {
   .back {
     display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .time-grid,
+  .send {
+    grid-template-columns: 1fr;
   }
 }
 </style>

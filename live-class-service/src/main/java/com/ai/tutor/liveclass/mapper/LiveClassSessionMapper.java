@@ -14,6 +14,8 @@ public interface LiveClassSessionMapper {
 
     LiveClassSession selectByProviderRoomName(@Param("providerRoomName") String providerRoomName);
 
+    java.util.List<LiveClassSession> listByParticipantUid(@Param("uid") Long uid);
+
     int insert(LiveClassSession session);
 
     int updateByCourseId(LiveClassSession session);

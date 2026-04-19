@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   sendText: vi.fn(),
   sendImage: vi.fn(),
   recallMessage: vi.fn(),
+  createEvent: vi.fn(),
 }))
 
 vi.mock('@/api/assets', () => ({
@@ -87,6 +88,7 @@ vi.mock('@/api/application', () => ({
 
 vi.mock('@/api/schedule', () => ({
   scheduleApi: {
+    createEvent: mocks.createEvent,
     respond: vi.fn(),
   },
 }))
@@ -170,7 +172,10 @@ async function mountChatRoomPage() {
         CollaborationProposalCard: { template: '<div />' },
         CollaborationProposalModal: { template: '<div />' },
         ContactUnlockedCard: { template: '<div />' },
-        LessonRequestCard: { template: '<div />' },
+        LessonRequestCard: {
+          props: ['body'],
+          template: '<div class="lesson-request-stub">授课申请 {{ body?.title }}</div>',
+        },
         TutorApplicationCard: { template: '<div />' },
         UnlockedContactModal: { template: '<div />' },
         UserCardModal: { template: '<div />' },
@@ -230,6 +235,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.sendText.mockReset()
     mocks.sendImage.mockReset()
     mocks.recallMessage.mockReset()
+    mocks.createEvent.mockReset()
 
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -318,6 +324,17 @@ describe('ChatRoomPage realtime read receipt', () => {
         body: { type: 'recall', targetMsgId: 502, operatorUid: 2001 },
       },
     })
+    mocks.createEvent.mockImplementation(async (payload: { title: string; startAt: number; endAt: number; participantUserId: number }) => ({
+      id: 601,
+      title: payload.title,
+      description: null,
+      startAt: payload.startAt,
+      endAt: payload.endAt,
+      status: 'PENDING',
+      creatorUserId: 2001,
+      participant: { id: payload.participantUserId, name: '张老师', userType: 1 },
+      chatRoomId: 10,
+    }))
   })
 
   afterEach(() => {
@@ -659,21 +676,31 @@ describe('ChatRoomPage realtime read receipt', () => {
   it('toggles room pin status from the chat header', async () => {
     const { wrapper } = await mountChatRoomPage()
 
-    expect(wrapper.text()).toContain('会话置顶')
+    expect(wrapper.find('.more-trigger').exists()).toBe(true)
 
-    const pinButton = wrapper.find('.pin-toggle')
+    await wrapper.find('.more-trigger').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('置顶聊天')
+
+    const pinButton = wrapper.find('.pin-action')
     await pinButton.trigger('click')
     await flushPromises()
 
     expect(localStorage.getItem('ai_tutor_chat_pins:2001')).toContain('10')
-    expect(wrapper.text()).toContain('取消置顶')
+    expect(wrapper.text()).toContain('已置顶')
   })
 
   it('searches messages through the frontend api and renders the results list', async () => {
     const { wrapper } = await mountChatRoomPage()
 
+    await wrapper.find('.more-trigger').trigger('click')
+    await flushPromises()
+    await wrapper.find('.search-action').trigger('click')
+    await flushPromises()
+
     await wrapper.find('.search-input').setValue('数学')
-    await wrapper.find('.search-row .btn').trigger('click')
+    await wrapper.find('.search-submit').trigger('click')
     await flushPromises()
 
     expect(mocks.searchMessages).toHaveBeenCalledWith({ roomId: 10, keyword: '数学', pageSize: 20, cursor: null })
@@ -700,8 +727,13 @@ describe('ChatRoomPage realtime read receipt', () => {
 
     const { wrapper } = await mountChatRoomPage()
 
+    await wrapper.find('.more-trigger').trigger('click')
+    await flushPromises()
+    await wrapper.find('.search-action').trigger('click')
+    await flushPromises()
+
     await wrapper.find('.search-input').setValue('数学')
-    await wrapper.find('.search-row .btn').trigger('click')
+    await wrapper.find('.search-submit').trigger('click')
     await flushPromises()
 
     await wrapper.find('.search-hit').trigger('click')
@@ -709,5 +741,70 @@ describe('ChatRoomPage realtime read receipt', () => {
 
     expect(wrapper.text()).toContain('数学作业今晚发给你')
     expect(wrapper.find('[data-msg-id="801"]').classes()).toContain('search-focused')
+  })
+
+  it('renders centered 24 hour time dividers for evening messages', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 901,
+            roomId: 10,
+            sendTime: '2026-04-18T21:00:00',
+            body: { type: 'text', content: '晚上见' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    const divider = wrapper.find('.time-divider')
+
+    expect(divider.exists()).toBe(true)
+    expect(divider.text()).toContain('21:00')
+  })
+
+  it('creates a lesson request directly from the chat composer area', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:59:00',
+            body: { type: 'contact_unlocked', proposalId: 1, orderId: 1, status: 'PAID' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    const openButton = wrapper.find('.schedule-action')
+    expect(openButton.exists()).toBe(true)
+
+    await openButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('发起线上约课')
+
+    const titleInput = wrapper.find('.schedule-modal .ipt')
+    await titleInput.setValue('初二数学冲刺课')
+    await wrapper.find('.schedule-modal .btn.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(mocks.createEvent).toHaveBeenCalledTimes(1)
+    expect(mocks.createEvent.mock.calls[0]?.[0]).toMatchObject({
+      title: '初二数学冲刺课',
+      participantUserId: 3001,
+    })
+    expect(wrapper.text()).toContain('授课申请')
+    expect(wrapper.text()).toContain('初二数学冲刺课')
   })
 })

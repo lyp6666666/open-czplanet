@@ -9,6 +9,7 @@ import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
@@ -34,6 +35,13 @@ public class LiveSessionController {
     public BaseResponse<LiveSessionResp> getByCourse(@PathVariable("courseId") Long courseId) {
         Long uid = RequestHolder.get().getUid();
         return ResultUtils.success(liveClassService.getByCourseId(courseId, uid));
+    }
+
+    @GetMapping("/sessions/reminders")
+    @Operation(summary = "查询当前用户的课堂提醒列表")
+    public BaseResponse<List<LiveReminderItemResp>> reminders() {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.myReminders(uid));
     }
 
     @PostMapping("/sessions/by-course/{courseId}/prepare")

@@ -43,6 +43,22 @@
         SELECT * FROM live_class_session WHERE provider_room_name = #{providerRoomName} LIMIT 1
     </select>
 
+    <select id="listByParticipantUid" resultMap="BaseMap">
+        SELECT *
+        FROM live_class_session
+        WHERE teacher_uid = #{uid}
+           OR student_uid = #{uid}
+        ORDER BY
+            CASE
+                WHEN status = 'IN_PROGRESS' THEN 0
+                WHEN status = 'CREATED' THEN 1
+                WHEN status = 'JOIN_OPEN' THEN 2
+                ELSE 3
+            END ASC,
+            scheduled_start_at ASC,
+            id DESC
+    </select>
+
     <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassSession" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO live_class_session (
             course_id, schedule_event_id, room_id, provider, provider_room_name, teacher_uid, student_uid, status,

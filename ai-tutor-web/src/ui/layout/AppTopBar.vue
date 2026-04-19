@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useCityStore } from '@/stores/city'
 import { BRAND_NAME } from '@/constants/brand'
+import { useToastStore } from '@/stores/toast'
 import BrandLogoMark from '@/ui/common/BrandLogoMark.vue'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
@@ -16,6 +17,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const chatRealtime = useChatRealtimeStore()
 const cityStore = useCityStore()
+const toast = useToastStore()
 
 const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
@@ -62,7 +64,13 @@ const avatarLoadFailed = ref(false)
 const greetingText = ref('')
 const greetingBusy = ref(false)
 const greetingError = ref<string | null>(null)
-const liveQuickJoin = ref<{ courseId: number; title: string } | null>(null)
+const liveQuickJoin = ref<{ courseId: number; title: string; countdownText: string; badgeText: string } | null>(null)
+const liveReminderOpen = ref(false)
+const liveReminder = ref<{ courseId: number; title: string; body: string; countdownText: string } | null>(null)
+const liveReminderLastShownKey = ref('')
+let liveReminderPollTimer: ReturnType<typeof globalThis.setInterval> | null = null
+const LIVE_REMINDER_WINDOW_MS = 15 * 60 * 1000
+const LIVE_REMINDER_POLL_MS = 45_000
 
 const switchLabel = computed(() => (isTeacher.value ? '切换为招聘者' : '切换为教师端'))
 const switchTitle = computed(() => (isTeacher.value ? '是否将身份切换为招聘者' : '是否将身份切换为教师端'))
@@ -77,6 +85,10 @@ function go(path: string) {
 function goLiveQuickJoin() {
   if (!liveQuickJoin.value) return
   void router.push({ name: 'livePrepare', params: { courseId: String(liveQuickJoin.value.courseId) } })
+}
+
+function closeLiveReminder() {
+  liveReminderOpen.value = false
 }
 
 function toggleMenu() {
@@ -147,27 +159,112 @@ onMounted(() => {
   }
   if (auth.isLoggedIn) {
     void loadLiveQuickJoin()
+    startLiveReminderPolling()
   }
 })
 
+onBeforeUnmount(() => {
+  stopLiveReminderPolling()
+})
+
+watch(
+  () => auth.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn) {
+      void loadLiveQuickJoin()
+      startLiveReminderPolling()
+      return
+    }
+    stopLiveReminderPolling()
+    liveQuickJoin.value = null
+    liveReminder.value = null
+    liveReminderOpen.value = false
+  },
+)
+
+function stopLiveReminderPolling() {
+  if (liveReminderPollTimer == null) return
+  globalThis.clearInterval(liveReminderPollTimer)
+  liveReminderPollTimer = null
+}
+
+function startLiveReminderPolling() {
+  stopLiveReminderPolling()
+  if (!auth.isLoggedIn || typeof globalThis.setInterval !== 'function') return
+  liveReminderPollTimer = globalThis.setInterval(() => {
+    void loadLiveQuickJoin()
+  }, LIVE_REMINDER_POLL_MS)
+}
+
+function parseTimestamp(value: string | null | undefined) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatCountdownText(ms: number) {
+  if (ms <= 0) return '现在可入会'
+  const totalMinutes = Math.max(1, Math.ceil(ms / 60_000))
+  if (totalMinutes < 60) return `${totalMinutes} 分钟后开课`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return minutes > 0 ? `${hours} 小时 ${minutes} 分钟后开课` : `${hours} 小时后开课`
+}
+
+function maybeShowLiveReminder(courseId: number, title: string, startAtMs: number, joinableNow: boolean) {
+  const now = Date.now()
+  const diff = startAtMs - now
+  if (!joinableNow && (diff < 0 || diff > LIVE_REMINDER_WINDOW_MS)) return
+  const key = `${courseId}-${joinableNow ? 'joinable' : 'countdown'}`
+  if (liveReminderLastShownKey.value === key) return
+  liveReminderLastShownKey.value = key
+  const countdownText = joinableNow ? '已开放进入课堂' : formatCountdownText(diff)
+  const body = joinableNow ? '课程已经开放，请尽快进入准备页完成设备检查。' : `课程即将开始，请提前检查摄像头、麦克风与网络。`
+  liveReminder.value = { courseId, title, body, countdownText }
+  liveReminderOpen.value = true
+  toast.show(joinableNow ? '课程已开放，点击进入课堂' : `课程提醒：${countdownText}`, 'info', 3600)
+}
+
 async function loadLiveQuickJoin() {
   try {
-    const role = auth.user?.userType === 1 ? 'TEACHER' : auth.user?.userType === 2 ? 'STUDENT' : null
-    if (!role) {
+    if (auth.user?.userType !== 1 && auth.user?.userType !== 2) {
       liveQuickJoin.value = null
       return
     }
-    const courses = await (await import('@/api/course')).courseApi.myCourses({ page: 1, size: 20, role })
-    for (const item of courses) {
+    const reminders = await liveApi.reminders()
+    let fallbackUpcoming: { courseId: number; title: string; countdownText: string; badgeText: string; startAtMs: number } | null = null
+    for (const item of reminders) {
       try {
-        const live = await liveApi.getByCourse(item.courseId)
-        if (live.joinableNow) {
-          liveQuickJoin.value = { courseId: item.courseId, title: `课程 #${item.courseId}` }
+        const startAtMs = parseTimestamp(item.scheduledStartAt)
+        const title = item.title || `课程 #${item.courseId}`
+        if (item.joinableNow) {
+          liveQuickJoin.value = { courseId: item.courseId, title, countdownText: '已开放进入课堂', badgeText: '进行中' }
+          if (startAtMs) {
+            maybeShowLiveReminder(item.courseId, title, startAtMs, true)
+          }
           return
         }
+        if (startAtMs && startAtMs - Date.now() <= LIVE_REMINDER_WINDOW_MS && startAtMs - Date.now() >= 0) {
+          const countdownText = formatCountdownText(startAtMs - Date.now())
+          const candidate = { courseId: item.courseId, title, countdownText, badgeText: '即将开始', startAtMs }
+          if (!fallbackUpcoming || candidate.startAtMs < fallbackUpcoming.startAtMs) {
+            fallbackUpcoming = candidate
+          }
+        }
       } catch {
-        // ignore single course lookup failure
+        void 0
       }
+    }
+    if (fallbackUpcoming) {
+      liveQuickJoin.value = {
+        courseId: fallbackUpcoming.courseId,
+        title: fallbackUpcoming.title,
+        countdownText: fallbackUpcoming.countdownText,
+        badgeText: fallbackUpcoming.badgeText,
+      }
+      maybeShowLiveReminder(fallbackUpcoming.courseId, fallbackUpcoming.title, fallbackUpcoming.startAtMs, false)
+      return
     }
     liveQuickJoin.value = null
   } catch {
@@ -251,7 +348,10 @@ async function loadLiveQuickJoin() {
           </button>
           <button v-if="liveQuickJoin" class="live-pill" type="button" @click="goLiveQuickJoin">
             <span class="live-dot" />
-            <span class="live-text">进入课堂</span>
+            <span class="live-copy">
+              <span class="live-text">进入课堂</span>
+              <span class="live-subtext">{{ liveQuickJoin.badgeText }} · {{ liveQuickJoin.countdownText }}</span>
+            </span>
           </button>
           <button v-if="isTeacher" class="link" type="button" @click="go('/me')">简历</button>
           <button v-else-if="isOrg" class="link" type="button" @click="go('/org/change-password')">修改密码</button>
@@ -309,6 +409,19 @@ async function loadLiveQuickJoin() {
           <button class="btn btn-primary" type="button" :disabled="greetingBusy" @click="saveGreeting">
             {{ greetingBusy ? '保存中...' : '保存' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="liveReminderOpen && liveReminder" class="mask" @click.self="closeLiveReminder">
+      <div class="modal card live-reminder-modal">
+        <div class="live-reminder-badge">实时课堂提醒</div>
+        <div class="m-title">{{ liveReminder.title }}</div>
+        <div class="m-desc">{{ liveReminder.body }}</div>
+        <div class="live-reminder-countdown">{{ liveReminder.countdownText }}</div>
+        <div class="m-ops">
+          <button class="btn" type="button" @click="closeLiveReminder">稍后提醒</button>
+          <button class="btn btn-primary" type="button" @click="goLiveQuickJoin">进入课堂</button>
         </div>
       </div>
     </div>
@@ -498,7 +611,7 @@ async function loadLiveQuickJoin() {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
+  min-height: 36px;
   padding: 0 14px;
   border: 1px solid rgba(0, 190, 189, 0.18);
   border-radius: 999px;
@@ -518,6 +631,20 @@ async function loadLiveQuickJoin() {
 
 .live-text {
   white-space: nowrap;
+}
+
+.live-copy {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+}
+
+.live-subtext {
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(15, 118, 110, 0.78);
+  font-weight: 800;
 }
 
 .guest {
@@ -617,6 +744,35 @@ async function loadLiveQuickJoin() {
 .m-error {
   color: #d4380d;
   font-size: 13px;
+}
+
+.live-reminder-modal {
+  width: min(460px, 100%);
+  background:
+    radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, #f7fbfb 100%);
+}
+
+.live-reminder-badge {
+  display: inline-flex;
+  width: fit-content;
+  height: 28px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.live-reminder-countdown {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .m-textarea {
