@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.service.impl;
 import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.integration.feign.LiveClassInternalFeignClient;
 import com.ai.tutor.appointment.model.dto.schedule.CreateScheduleEventRequest;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.model.entity.User;
@@ -52,6 +53,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Resource
     private ImFacade imFacade;
+
+    @Resource
+    private LiveClassInternalFeignClient liveClassInternalFeignClient;
 
     @Override
     public List<ScheduleEventVO> listEvents(Long uid, Long startAtMs, Long endAtMs, boolean includePending) {
@@ -165,6 +169,7 @@ public class ScheduleServiceImpl implements ScheduleService {
             ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "授课申请已被处理");
             sendLessonStatusMsg(db, "ACCEPTED", uid);
             TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
+            syncLiveSession(latest);
             return toEventVO(latest, uid);
         }
 
@@ -224,6 +229,29 @@ public class ScheduleServiceImpl implements ScheduleService {
         payload.put("status", status);
         payload.put("actorUserId", actorUid);
         imFacade.sendSystemMessage(actorUid, appointment.getRoomId(), payload);
+    }
+
+    private void syncLiveSession(TutorAppointment appointment) {
+        if (appointment == null || appointment.getId() == null || appointment.getStartTime() == null) {
+            return;
+        }
+        int minutes = appointment.getDurationMinutes() == null ? 60 : appointment.getDurationMinutes();
+        LiveClassInternalFeignClient.SyncCourseSessionRequest request = new LiveClassInternalFeignClient.SyncCourseSessionRequest();
+        request.setCourseId(appointment.getId());
+        request.setScheduleEventId(appointment.getId());
+        request.setRoomId(appointment.getRoomId());
+        request.setTeacherUid(appointment.getTutorId());
+        request.setStudentUid(appointment.getParentId());
+        request.setTitle(appointment.getTitle());
+        request.setScheduledStartAt(appointment.getStartTime());
+        request.setScheduledEndAt(appointment.getStartTime().plusMinutes(minutes));
+        request.setRecordPolicy("OFF");
+        request.setAiPolicy("OFF");
+        try {
+            liveClassInternalFeignClient.syncFromCourse(request);
+        } catch (Exception ignored) {
+            // 课堂域同步失败不影响约课主链路，后续可通过重试任务补齐。
+        }
     }
 
     private TutorAppointment requireParticipant(Long id, Long uid) {
@@ -308,4 +336,3 @@ public class ScheduleServiceImpl implements ScheduleService {
         return time.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 }
-

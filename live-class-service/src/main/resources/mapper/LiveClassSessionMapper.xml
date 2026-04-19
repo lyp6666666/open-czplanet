@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveClassSessionMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.liveclass.domain.entity.LiveClassSession">
+        <id column="id" property="id"/>
+        <result column="course_id" property="courseId"/>
+        <result column="schedule_event_id" property="scheduleEventId"/>
+        <result column="room_id" property="roomId"/>
+        <result column="provider" property="provider"/>
+        <result column="provider_room_name" property="providerRoomName"/>
+        <result column="teacher_uid" property="teacherUid"/>
+        <result column="student_uid" property="studentUid"/>
+        <result column="status" property="status"/>
+        <result column="join_open_at" property="joinOpenAt"/>
+        <result column="scheduled_start_at" property="scheduledStartAt"/>
+        <result column="scheduled_end_at" property="scheduledEndAt"/>
+        <result column="actual_start_at" property="actualStartAt"/>
+        <result column="actual_end_at" property="actualEndAt"/>
+        <result column="host_joined_at" property="hostJoinedAt"/>
+        <result column="peer_joined_at" property="peerJoinedAt"/>
+        <result column="ended_by_uid" property="endedByUid"/>
+        <result column="end_reason" property="endReason"/>
+        <result column="record_policy" property="recordPolicy"/>
+        <result column="ai_policy" property="aiPolicy"/>
+        <result column="extra_json" property="extraJson"/>
+        <result column="version" property="version"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectByCourseId" resultMap="BaseMap">
+        SELECT * FROM live_class_session WHERE course_id = #{courseId} LIMIT 1
+    </select>
+
+    <select id="selectById" resultMap="BaseMap">
+        SELECT * FROM live_class_session WHERE id = #{id} LIMIT 1
+    </select>
+
+    <select id="selectByProviderRoomName" resultMap="BaseMap">
+        SELECT * FROM live_class_session WHERE provider_room_name = #{providerRoomName} LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassSession" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_class_session (
+            course_id, schedule_event_id, room_id, provider, provider_room_name, teacher_uid, student_uid, status,
+            join_open_at, scheduled_start_at, scheduled_end_at, actual_start_at, actual_end_at, host_joined_at, peer_joined_at,
+            ended_by_uid, end_reason, record_policy, ai_policy, extra_json, version, create_time, update_time
+        ) VALUES (
+            #{courseId}, #{scheduleEventId}, #{roomId}, #{provider}, #{providerRoomName}, #{teacherUid}, #{studentUid}, #{status},
+            #{joinOpenAt}, #{scheduledStartAt}, #{scheduledEndAt}, #{actualStartAt}, #{actualEndAt}, #{hostJoinedAt}, #{peerJoinedAt},
+            #{endedByUid}, #{endReason}, #{recordPolicy}, #{aiPolicy}, #{extraJson}, #{version}, NOW(3), NOW(3)
+        )
+    </insert>
+
+    <update id="updateByCourseId" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassSession">
+        UPDATE live_class_session
+        SET schedule_event_id = #{scheduleEventId},
+            room_id = #{roomId},
+            teacher_uid = #{teacherUid},
+            student_uid = #{studentUid},
+            join_open_at = #{joinOpenAt},
+            scheduled_start_at = #{scheduledStartAt},
+            scheduled_end_at = #{scheduledEndAt},
+            record_policy = #{recordPolicy},
+            ai_policy = #{aiPolicy},
+            update_time = NOW(3)
+        WHERE course_id = #{courseId}
+    </update>
+
+    <update id="markParticipantJoined">
+        UPDATE live_class_session
+        SET status = CASE WHEN actual_start_at IS NULL THEN 'IN_PROGRESS' ELSE status END,
+            actual_start_at = CASE WHEN actual_start_at IS NULL THEN #{joinedAt} ELSE actual_start_at END,
+            host_joined_at = CASE WHEN teacher_uid = #{uid} AND host_joined_at IS NULL THEN #{joinedAt} ELSE host_joined_at END,
+            peer_joined_at = CASE WHEN student_uid = #{uid} AND peer_joined_at IS NULL THEN #{joinedAt} ELSE peer_joined_at END,
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="markParticipantLeft">
+        UPDATE live_class_session
+        SET update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="markEnded">
+        UPDATE live_class_session
+        SET status = 'ENDED',
+            actual_end_at = #{endedAt},
+            ended_by_uid = #{uid},
+            end_reason = #{endReason},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+</mapper>

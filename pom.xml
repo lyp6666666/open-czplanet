@@ -25,6 +25,7 @@
   <modules>
     <module>tutor-appointment-service</module>
     <module>videoCall-IM-service</module>
+    <module>live-class-service</module>
     <module>ai-tutor-common</module>
       <module>ai-tutor-mq</module>
     <module>ai-tutor-admin</module>
@@ -56,6 +57,11 @@
       <dependency>
         <groupId>com.ai.tutor</groupId>
         <artifactId>videoCall-IM-service</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.ai.tutor</groupId>
+        <artifactId>live-class-service</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

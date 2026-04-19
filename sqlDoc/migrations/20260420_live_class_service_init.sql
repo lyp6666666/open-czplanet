@@ -1,0 +1,100 @@
+CREATE TABLE IF NOT EXISTS `live_class_session` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `course_id` bigint(20) NOT NULL,
+  `schedule_event_id` bigint(20) DEFAULT NULL,
+  `room_id` bigint(20) DEFAULT NULL,
+  `provider` varchar(32) NOT NULL DEFAULT 'LIVEKIT',
+  `provider_room_name` varchar(128) NOT NULL,
+  `teacher_uid` bigint(20) NOT NULL,
+  `student_uid` bigint(20) NOT NULL,
+  `status` varchar(32) NOT NULL DEFAULT 'CREATED',
+  `join_open_at` datetime(3) DEFAULT NULL,
+  `scheduled_start_at` datetime(3) NOT NULL,
+  `scheduled_end_at` datetime(3) NOT NULL,
+  `actual_start_at` datetime(3) DEFAULT NULL,
+  `actual_end_at` datetime(3) DEFAULT NULL,
+  `host_joined_at` datetime(3) DEFAULT NULL,
+  `peer_joined_at` datetime(3) DEFAULT NULL,
+  `ended_by_uid` bigint(20) DEFAULT NULL,
+  `end_reason` varchar(64) DEFAULT NULL,
+  `record_policy` varchar(32) NOT NULL DEFAULT 'OFF',
+  `ai_policy` varchar(32) NOT NULL DEFAULT 'OFF',
+  `extra_json` json DEFAULT NULL,
+  `version` int(11) NOT NULL DEFAULT 0,
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_live_class_course_id` (`course_id`),
+  UNIQUE KEY `uk_live_class_provider_room_name` (`provider_room_name`),
+  KEY `idx_live_class_teacher_status_start` (`teacher_uid`,`status`,`scheduled_start_at`),
+  KEY `idx_live_class_student_status_start` (`student_uid`,`status`,`scheduled_start_at`),
+  KEY `idx_live_class_room_id` (`room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂主表';
+
+CREATE TABLE IF NOT EXISTS `live_class_participant` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `session_id` bigint(20) NOT NULL,
+  `uid` bigint(20) NOT NULL,
+  `role` varchar(32) NOT NULL,
+  `identity_type` varchar(32) NOT NULL DEFAULT 'HUMAN',
+  `join_count` int(11) NOT NULL DEFAULT 0,
+  `first_join_at` datetime(3) DEFAULT NULL,
+  `last_join_at` datetime(3) DEFAULT NULL,
+  `last_leave_at` datetime(3) DEFAULT NULL,
+  `online_status` varchar(32) NOT NULL DEFAULT 'NOT_JOINED',
+  `camera_enabled` tinyint(1) NOT NULL DEFAULT 0,
+  `mic_enabled` tinyint(1) NOT NULL DEFAULT 0,
+  `device_info_json` json DEFAULT NULL,
+  `network_score` int(11) DEFAULT NULL,
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_live_class_session_uid` (`session_id`,`uid`),
+  KEY `idx_live_class_participant_uid_status` (`uid`,`online_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂参与者状态表';
+
+CREATE TABLE IF NOT EXISTS `live_class_event` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `session_id` bigint(20) NOT NULL,
+  `event_type` varchar(64) NOT NULL,
+  `event_source` varchar(32) NOT NULL,
+  `operator_uid` bigint(20) DEFAULT NULL,
+  `payload_json` json DEFAULT NULL,
+  `occurred_at` datetime(3) NOT NULL,
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  KEY `idx_live_class_event_session_occurred` (`session_id`,`occurred_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂事件流水表';
+
+CREATE TABLE IF NOT EXISTS `live_class_device_report` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `session_id` bigint(20) NOT NULL,
+  `uid` bigint(20) NOT NULL,
+  `report_stage` varchar(32) NOT NULL,
+  `camera_status` varchar(32) DEFAULT NULL,
+  `mic_status` varchar(32) DEFAULT NULL,
+  `speaker_status` varchar(32) DEFAULT NULL,
+  `network_level` varchar(32) DEFAULT NULL,
+  `browser_info` varchar(256) DEFAULT NULL,
+  `os_info` varchar(256) DEFAULT NULL,
+  `device_json` json DEFAULT NULL,
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  KEY `idx_live_class_device_report_session_uid_stage` (`session_id`,`uid`,`report_stage`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂设备检测上报表';
+
+CREATE TABLE IF NOT EXISTS `live_class_webhook_event` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `provider` varchar(32) NOT NULL,
+  `provider_event_id` varchar(128) NOT NULL,
+  `session_id` bigint(20) DEFAULT NULL,
+  `provider_room_name` varchar(128) DEFAULT NULL,
+  `event_type` varchar(64) NOT NULL,
+  `payload_json` json NOT NULL,
+  `processed` tinyint(1) NOT NULL DEFAULT 0,
+  `processed_at` datetime(3) DEFAULT NULL,
+  `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_live_class_webhook_provider_event` (`provider`,`provider_event_id`),
+  KEY `idx_live_class_webhook_room_name` (`provider_room_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂媒体 webhook 事件表';

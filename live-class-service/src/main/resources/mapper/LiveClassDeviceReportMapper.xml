@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveClassDeviceReportMapper">
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassDeviceReport" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_class_device_report (
+            session_id, uid, report_stage, camera_status, mic_status, speaker_status,
+            network_level, browser_info, os_info, device_json, create_time
+        ) VALUES (
+            #{sessionId}, #{uid}, #{reportStage}, #{cameraStatus}, #{micStatus}, #{speakerStatus},
+            #{networkLevel}, #{browserInfo}, #{osInfo}, #{deviceJson}, NOW(3)
+        )
+    </insert>
+</mapper>

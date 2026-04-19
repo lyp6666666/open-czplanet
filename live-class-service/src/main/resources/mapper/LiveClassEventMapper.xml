@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveClassEventMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.liveclass.domain.entity.LiveClassEvent">
+        <id column="id" property="id"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="event_source" property="eventSource"/>
+        <result column="operator_uid" property="operatorUid"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="occurred_at" property="occurredAt"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassEvent" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_class_event (
+            session_id, event_type, event_source, operator_uid, payload_json, occurred_at, create_time
+        ) VALUES (
+            #{sessionId}, #{eventType}, #{eventSource}, #{operatorUid}, #{payloadJson}, #{occurredAt}, NOW(3)
+        )
+    </insert>
+
+    <select id="listBySessionId" resultMap="BaseMap">
+        SELECT * FROM live_class_event WHERE session_id = #{sessionId} ORDER BY occurred_at ASC, id ASC
+    </select>
+</mapper>

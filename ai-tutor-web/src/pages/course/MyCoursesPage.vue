@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { courseApi, type CourseItemVO } from '@/api/course'
+import { liveApi, type LiveSessionResp } from '@/api/live'
 import { assetsApi } from '@/api/assets'
 import { useAuthStore } from '@/stores/auth'
 
@@ -15,6 +16,7 @@ const role = computed<'TEACHER' | 'STUDENT'>(() => (isTeacher.value ? 'TEACHER' 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const list = ref<CourseItemVO[]>([])
+const liveMap = ref<Record<number, LiveSessionResp>>({})
 
 const modalOpen = ref(false)
 const modalCourseId = ref<number | null>(null)
@@ -110,11 +112,26 @@ function goChat(roomId?: number | null) {
   void router.push({ name: 'chatRoom', params: { roomId: String(roomId) } })
 }
 
+function goLivePrepare(courseId: number) {
+  void router.push({ name: 'livePrepare', params: { courseId: String(courseId) } })
+}
+
 async function load() {
   loading.value = true
   error.value = null
   try {
     list.value = await courseApi.myCourses({ page: 1, size: 50, role: role.value })
+    const liveEntries = await Promise.all(
+      list.value.map(async (it) => {
+        try {
+          const live = await liveApi.getByCourse(it.courseId)
+          return [it.courseId, live] as const
+        } catch {
+          return null
+        }
+      }),
+    )
+    liveMap.value = Object.fromEntries(liveEntries.filter(Boolean) as Array<readonly [number, LiveSessionResp]>)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -153,10 +170,12 @@ onMounted(() => {
               <span>教师：{{ it.teacherUid }}</span>
               <span>学生：{{ it.studentUid }}</span>
               <span v-if="it.trialEndAt">试课截止：{{ it.trialEndAt }}</span>
+              <span v-if="liveMap[it.courseId]?.joinableNow">课堂已开放</span>
             </div>
           </div>
           <div class="ops">
             <button class="btn" type="button" :disabled="!it.roomId" @click="goChat(it.roomId)">进入聊天</button>
+            <button class="btn" type="button" :disabled="!liveMap[it.courseId]" @click="goLivePrepare(it.courseId)">进入课堂</button>
             <button v-if="canApplyTrialRefund(it)" class="btn btn-primary" type="button" @click="openTrialRefund(it.courseId)">试课不通过</button>
           </div>
         </div>
@@ -328,4 +347,3 @@ onMounted(() => {
   margin-top: 12px;
 }
 </style>
-

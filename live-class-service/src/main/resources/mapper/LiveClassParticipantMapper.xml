@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveClassParticipantMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.liveclass.domain.entity.LiveClassParticipant">
+        <id column="id" property="id"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="uid" property="uid"/>
+        <result column="role" property="role"/>
+        <result column="identity_type" property="identityType"/>
+        <result column="join_count" property="joinCount"/>
+        <result column="first_join_at" property="firstJoinAt"/>
+        <result column="last_join_at" property="lastJoinAt"/>
+        <result column="last_leave_at" property="lastLeaveAt"/>
+        <result column="online_status" property="onlineStatus"/>
+        <result column="camera_enabled" property="cameraEnabled"/>
+        <result column="mic_enabled" property="micEnabled"/>
+        <result column="device_info_json" property="deviceInfoJson"/>
+        <result column="network_score" property="networkScore"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectBySessionIdAndUid" resultMap="BaseMap">
+        SELECT * FROM live_class_participant WHERE session_id = #{sessionId} AND uid = #{uid} LIMIT 1
+    </select>
+
+    <select id="listBySessionId" resultMap="BaseMap">
+        SELECT * FROM live_class_participant WHERE session_id = #{sessionId} ORDER BY id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassParticipant" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_class_participant (
+            session_id, uid, role, identity_type, join_count, first_join_at, last_join_at, last_leave_at,
+            online_status, camera_enabled, mic_enabled, device_info_json, network_score, create_time, update_time
+        ) VALUES (
+            #{sessionId}, #{uid}, #{role}, #{identityType}, #{joinCount}, #{firstJoinAt}, #{lastJoinAt}, #{lastLeaveAt},
+            #{onlineStatus}, #{cameraEnabled}, #{micEnabled}, #{deviceInfoJson}, #{networkScore}, NOW(3), NOW(3)
+        )
+    </insert>
+
+    <update id="updateJoinState" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassParticipant">
+        UPDATE live_class_participant
+        SET join_count = #{joinCount},
+            first_join_at = #{firstJoinAt},
+            last_join_at = #{lastJoinAt},
+            online_status = #{onlineStatus},
+            camera_enabled = #{cameraEnabled},
+            mic_enabled = #{micEnabled},
+            device_info_json = #{deviceInfoJson},
+            network_score = #{networkScore},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateLeaveState" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassParticipant">
+        UPDATE live_class_participant
+        SET last_leave_at = #{lastLeaveAt},
+            online_status = #{onlineStatus},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+</mapper>

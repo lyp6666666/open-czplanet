@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveClassWebhookEventMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.liveclass.domain.entity.LiveClassWebhookEvent">
+        <id column="id" property="id"/>
+        <result column="provider" property="provider"/>
+        <result column="provider_event_id" property="providerEventId"/>
+        <result column="session_id" property="sessionId"/>
+        <result column="provider_room_name" property="providerRoomName"/>
+        <result column="event_type" property="eventType"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="processed" property="processed"/>
+        <result column="processed_at" property="processedAt"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <select id="selectByProviderAndEventId" resultMap="BaseMap">
+        SELECT * FROM live_class_webhook_event WHERE provider = #{provider} AND provider_event_id = #{providerEventId} LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveClassWebhookEvent" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_class_webhook_event (
+            provider, provider_event_id, session_id, provider_room_name, event_type, payload_json, processed, processed_at, create_time
+        ) VALUES (
+            #{provider}, #{providerEventId}, #{sessionId}, #{providerRoomName}, #{eventType}, #{payloadJson}, #{processed}, #{processedAt}, NOW(3)
+        )
+    </insert>
+
+    <update id="markProcessed">
+        UPDATE live_class_webhook_event
+        SET processed = 1, processed_at = NOW(3)
+        WHERE id = #{id}
+    </update>
+</mapper>
