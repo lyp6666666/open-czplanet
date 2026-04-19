@@ -16,6 +16,11 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const events = ref<ScheduleEventVO[]>([])
 const liveMap = ref<Record<number, LiveSessionResp>>({})
+const detailOpen = ref(false)
+const detailBusy = ref(false)
+const detailError = ref<string | null>(null)
+const detailTitle = ref('')
+const detailTimeline = ref<Array<{ eventType: string; eventSource: string; occurredAt: string }>>([])
 
 const createOpen = ref(false)
 const createBusy = ref(false)
@@ -138,6 +143,42 @@ function liveStatusLabel(eventId: number) {
 
 function openLivePrepare(eventId: number) {
   void router.push({ name: 'livePrepare', params: { courseId: String(eventId) } })
+}
+
+async function openEventDetail(event: ScheduleEventVO) {
+  detailOpen.value = true
+  detailBusy.value = true
+  detailError.value = null
+  detailTitle.value = event.title
+  detailTimeline.value = []
+  try {
+    const live = liveMap.value[event.id] || (await liveApi.getByCourse(event.id))
+    if (!live.sessionId) {
+      detailError.value = '当前课程尚未生成课堂详情'
+      return
+    }
+    detailTimeline.value = await liveApi.timeline(live.sessionId)
+  } catch (e) {
+    detailError.value = e instanceof Error ? e.message : '加载课堂详情失败'
+  } finally {
+    detailBusy.value = false
+  }
+}
+
+function closeEventDetail() {
+  detailOpen.value = false
+}
+
+function timelineEventLabel(eventType: string) {
+  const normalized = String(eventType || '').trim().toUpperCase()
+  if (normalized === 'SESSION_CREATED') return '课堂已创建'
+  if (normalized === 'SESSION_SYNCED') return '课堂信息已同步'
+  if (normalized === 'JOIN_TOKEN_ISSUED') return '用户进入准备中'
+  if (normalized === 'PARTICIPANT_JOINED') return '成员进入课堂'
+  if (normalized === 'PARTICIPANT_LEFT') return '成员离开课堂'
+  if (normalized === 'CLASS_ENDED' || normalized === 'ROOM_FINISHED') return '课堂已结束'
+  if (normalized === 'DEVICE_REPORTED') return '设备检测已上报'
+  return normalized || '状态更新'
 }
 
 function onPrev() {
@@ -387,6 +428,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
               <span class="t">{{ formatHm(ev.startAt) }}</span>
               <span class="n">{{ ev.title }}</span>
               <span v-if="liveStatusLabel(ev.id)" class="live-flag">{{ liveStatusLabel(ev.id) }}</span>
+              <button v-if="liveMap[ev.id]" class="mini-link" type="button" @click.stop="openEventDetail(ev)">详情</button>
             </div>
             <div v-if="eventsOnDay(d.date).length > 3" class="more">+{{ eventsOnDay(d.date).length - 3 }}</div>
           </div>
@@ -429,6 +471,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
                 <div class="et">{{ p.event.title }}</div>
                 <div class="es">{{ formatHm(p.event.startAt) }}-{{ formatHm(p.event.endAt) }}</div>
                 <div v-if="liveStatusLabel(p.event.id)" class="elive">{{ liveStatusLabel(p.event.id) }}</div>
+                <button v-if="liveMap[p.event.id]" class="event-link" type="button" @click.stop="openEventDetail(p.event)">课堂详情</button>
               </div>
             </div>
           </div>
@@ -506,6 +549,28 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
           <button class="btn btn-primary" type="button" :disabled="createBusy" @click="submitCreate">
             {{ createBusy ? '创建中...' : '创建并发送申请' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="detailOpen" class="mask" @click.self="closeEventDetail">
+      <div class="modal card detail-modal">
+        <div class="m-title">课堂详情</div>
+        <div class="detail-subtitle">{{ detailTitle }}</div>
+        <div v-if="detailError" class="m-error">{{ detailError }}</div>
+        <div v-else-if="detailBusy" class="detail-empty">加载中...</div>
+        <div v-else-if="detailTimeline.length === 0" class="detail-empty">暂未产生课堂事件</div>
+        <div v-else class="detail-list">
+          <div v-for="item in detailTimeline" :key="`${item.eventType}-${item.occurredAt}`" class="detail-item">
+            <div class="detail-dot" />
+            <div class="detail-content">
+              <div class="detail-title">{{ timelineEventLabel(item.eventType) }}</div>
+              <div class="detail-meta">{{ item.eventSource }} · {{ item.occurredAt }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="m-ops">
+          <button class="btn" type="button" @click="closeEventDetail">关闭</button>
         </div>
       </div>
     </div>
@@ -615,6 +680,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .item {
   display: flex;
   gap: 6px;
+  align-items: center;
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -641,6 +707,15 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   flex: 0 0 auto;
   color: #0f766e;
   font-weight: 700;
+}
+
+.mini-link {
+  border: none;
+  background: transparent;
+  color: #1767c4;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 12px;
 }
 
 .time-head {
@@ -746,6 +821,16 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   color: #0f766e;
 }
 
+.event-link {
+  margin-top: 4px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #1767c4;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .mask {
   position: fixed;
   inset: 0;
@@ -760,6 +845,15 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .modal {
   width: min(520px, 100%);
   padding: 14px;
+}
+
+.detail-modal {
+  width: min(640px, 100%);
+}
+
+.detail-subtitle {
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 13px;
 }
 
 .m-title {
@@ -800,6 +894,43 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 12px;
+}
+
+.detail-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.detail-item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+}
+
+.detail-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #0f766e;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+  margin-top: 5px;
+}
+
+.detail-content {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.detail-title {
+  font-weight: 700;
+}
+
+.detail-meta,
+.detail-empty {
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 12px;
 }
 
 .btn.small {

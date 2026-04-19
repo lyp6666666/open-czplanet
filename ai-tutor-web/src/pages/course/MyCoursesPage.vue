@@ -24,6 +24,11 @@ const modalReason = ref('')
 const modalFiles = ref<File[]>([])
 const modalBusy = ref(false)
 const modalErr = ref<string | null>(null)
+const liveTimelineOpen = ref(false)
+const liveTimelineBusy = ref(false)
+const liveTimelineError = ref<string | null>(null)
+const liveTimelineItems = ref<Array<{ eventType: string; eventSource: string; occurredAt: string }>>([])
+const liveTimelineCourseId = ref<number | null>(null)
 
 function statusText(s: string): string {
   const v = String(s || '').trim().toUpperCase()
@@ -116,6 +121,42 @@ function goLivePrepare(courseId: number) {
   void router.push({ name: 'livePrepare', params: { courseId: String(courseId) } })
 }
 
+async function openLiveTimeline(courseId: number) {
+  liveTimelineCourseId.value = courseId
+  liveTimelineOpen.value = true
+  liveTimelineBusy.value = true
+  liveTimelineError.value = null
+  liveTimelineItems.value = []
+  try {
+    const live = await liveApi.getByCourse(courseId)
+    if (!live.sessionId) {
+      liveTimelineError.value = '当前课程尚未生成课堂时间线'
+      return
+    }
+    liveTimelineItems.value = await liveApi.timeline(live.sessionId)
+  } catch (e) {
+    liveTimelineError.value = e instanceof Error ? e.message : '加载课堂详情失败'
+  } finally {
+    liveTimelineBusy.value = false
+  }
+}
+
+function closeLiveTimeline() {
+  liveTimelineOpen.value = false
+}
+
+function timelineEventLabel(eventType: string) {
+  const normalized = String(eventType || '').trim().toUpperCase()
+  if (normalized === 'SESSION_CREATED') return '课堂已创建'
+  if (normalized === 'SESSION_SYNCED') return '课堂信息已同步'
+  if (normalized === 'JOIN_TOKEN_ISSUED') return '用户进入准备中'
+  if (normalized === 'PARTICIPANT_JOINED') return '成员进入课堂'
+  if (normalized === 'PARTICIPANT_LEFT') return '成员离开课堂'
+  if (normalized === 'CLASS_ENDED' || normalized === 'ROOM_FINISHED') return '课堂已结束'
+  if (normalized === 'DEVICE_REPORTED') return '设备检测已上报'
+  return normalized || '状态更新'
+}
+
 async function load() {
   loading.value = true
   error.value = null
@@ -176,6 +217,7 @@ onMounted(() => {
           <div class="ops">
             <button class="btn" type="button" :disabled="!it.roomId" @click="goChat(it.roomId)">进入聊天</button>
             <button class="btn" type="button" :disabled="!liveMap[it.courseId]" @click="goLivePrepare(it.courseId)">进入课堂</button>
+            <button class="btn" type="button" :disabled="!liveMap[it.courseId]" @click="openLiveTimeline(it.courseId)">课堂详情</button>
             <button v-if="canApplyTrialRefund(it)" class="btn btn-primary" type="button" @click="openTrialRefund(it.courseId)">试课不通过</button>
           </div>
         </div>
@@ -197,6 +239,28 @@ onMounted(() => {
           <button class="btn btn-primary" type="button" :disabled="modalBusy" @click="submitTrialRefund">
             {{ modalBusy ? '提交中...' : '提交申请' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="liveTimelineOpen" class="mask" @click.self="closeLiveTimeline">
+      <div class="modal card timeline-modal">
+        <div class="m-title">课堂详情</div>
+        <div class="m-desc">课程 #{{ liveTimelineCourseId }} 的实时课堂状态时间线</div>
+        <div v-if="liveTimelineError" class="m-error">{{ liveTimelineError }}</div>
+        <div v-else-if="liveTimelineBusy" class="timeline-empty">加载中...</div>
+        <div v-else-if="liveTimelineItems.length === 0" class="timeline-empty">暂未产生课堂事件</div>
+        <div v-else class="timeline-list">
+          <div v-for="item in liveTimelineItems" :key="`${item.eventType}-${item.occurredAt}`" class="timeline-item">
+            <div class="timeline-dot" />
+            <div class="timeline-content">
+              <div class="timeline-title">{{ timelineEventLabel(item.eventType) }}</div>
+              <div class="timeline-meta">{{ item.eventSource }} · {{ item.occurredAt }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="m-ops">
+          <button class="btn" type="button" @click="closeLiveTimeline">关闭</button>
         </div>
       </div>
     </div>
@@ -300,6 +364,10 @@ onMounted(() => {
   padding: 14px;
 }
 
+.timeline-modal {
+  width: min(640px, 100%);
+}
+
 .m-title {
   font-weight: 800;
   font-size: 16px;
@@ -345,5 +413,44 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 12px;
+}
+
+.timeline-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 14px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #0f766e;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+  margin-top: 5px;
+}
+
+.timeline-content {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.timeline-title {
+  font-weight: 700;
+}
+
+.timeline-meta,
+.timeline-empty {
+  margin-top: 4px;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 12px;
 }
 </style>
