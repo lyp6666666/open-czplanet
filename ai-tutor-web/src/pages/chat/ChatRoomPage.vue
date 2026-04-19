@@ -7,6 +7,7 @@ import type { ChatPresenceResp, ChatRefundStateResp } from '@/api/chat'
 import { assetsApi } from '@/api/assets'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
+import { liveApi } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
 import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
@@ -46,6 +47,8 @@ const error = ref<string | null>(null)
 const sending = ref(false)
 const input = ref('')
 const recallingMsgId = ref<number | null>(null)
+const actionMenuOpen = ref(false)
+const searchPanelOpen = ref(false)
 const searchKeyword = ref('')
 const searchedKeyword = ref('')
 const searchLoading = ref(false)
@@ -86,6 +89,8 @@ type PendingOutgoingMessage = {
 const pendingOutgoingMessages = ref<PendingOutgoingMessage[]>([])
 const msgsRef = ref<HTMLElement | null>(null)
 const imageInputRef = ref<HTMLInputElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const headerActionsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
 const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
@@ -229,6 +234,46 @@ function toggleRoomPinned() {
   const next = !roomPinned.value
   setRoomPinned(auth.user?.id, roomId.value, next)
   roomPinned.value = next
+}
+
+function closeActionMenu() {
+  actionMenuOpen.value = false
+}
+
+function toggleActionMenu() {
+  actionMenuOpen.value = !actionMenuOpen.value
+}
+
+async function openSearchPanel() {
+  searchPanelOpen.value = true
+  closeActionMenu()
+  await nextTick()
+  searchInputRef.value?.focus()
+  searchInputRef.value?.select()
+}
+
+function closeSearchPanel() {
+  searchPanelOpen.value = false
+}
+
+function toggleRoomPinnedFromMenu() {
+  toggleRoomPinned()
+  closeActionMenu()
+}
+
+// 点击菜单外区域时自动收起，避免右上角浮层残留。
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!actionMenuOpen.value) return
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (headerActionsRef.value?.contains(target)) return
+  closeActionMenu()
+}
+
+function handleDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    closeActionMenu()
+  }
 }
 
 function resetMessageSearch(clearKeyword = false) {
@@ -544,6 +589,20 @@ async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId
     lessonActionError.value = { ...lessonActionError.value, [eventId]: e instanceof Error ? e.message : '操作失败' }
   } finally {
     lessonActionBusy.value = { ...lessonActionBusy.value, [eventId]: false }
+  }
+}
+
+function openLiveFromLesson(eventId: number) {
+  void router.push({ name: 'livePrepare', params: { courseId: String(eventId) } })
+}
+
+async function openLiveByStatus(eventId: number) {
+  try {
+    const live = await liveApi.getByCourse(eventId)
+    if (!live.sessionId) return
+    openLiveFromLesson(eventId)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '课堂暂不可进入'
   }
 }
 
@@ -897,14 +956,27 @@ function localTodayDay(): string {
 function formatMsgTime(v: string): string {
   const raw = String(v || '').trim()
   if (!raw) return ''
-  const s = raw.includes('T') ? raw.replace('T', ' ') : raw
-  if (s.length >= 16) {
-    const day = s.slice(0, 10)
-    const hm = s.slice(11, 16)
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T')
+  const parsedTs = Date.parse(normalized)
+  if (Number.isFinite(parsedTs)) {
+    const date = new Date(parsedTs)
+    const day = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+    const hm = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
     return day === localTodayDay() ? hm : `${day} ${hm}`
   }
-  const m = s.match(/\b(\d{2}):(\d{2})\b/)
-  return m ? `${m[1]}:${m[2]}` : s
+
+  const twelveHourMatch = raw.match(/\b(\d{1,2}):(\d{2})\s*([AaPp][Mm])\b/)
+  if (twelveHourMatch) {
+    const rawHour = Number(twelveHourMatch[1] || 0)
+    const minute = twelveHourMatch[2] || '00'
+    const suffix = String(twelveHourMatch[3] || '').toUpperCase()
+    const hour24 = suffix === 'PM' ? (rawHour % 12) + 12 : rawHour % 12
+    return `${pad2(hour24)}:${minute}`
+  }
+
+  const s = raw.includes('T') ? raw.replace('T', ' ') : raw
+  const m = s.match(/\b(\d{1,2}):(\d{2})\b/)
+  return m ? `${pad2(Number(m[1] || 0))}:${m[2]}` : s
 }
 
 function parseMsgTime(v: string): number | null {
@@ -1130,6 +1202,7 @@ async function searchMessages(reset = true) {
     return
   }
   if (!(roomId.value > 0) || searchLoading.value) return
+  searchPanelOpen.value = true
   searchLoading.value = true
   searchError.value = null
   if (reset) {
@@ -1454,10 +1527,14 @@ onBeforeUnmount(() => {
 })
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
   window.addEventListener('pagehide', keepaliveAckLatest)
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
   window.removeEventListener('pagehide', keepaliveAckLatest)
 })
 
@@ -1492,6 +1569,7 @@ watch(
       clearTypingStopTimer()
       void reportTypingState(previousRoomId, false, true)
     }
+    closeActionMenu()
     refreshRoomPinned()
   },
 )
@@ -1499,6 +1577,8 @@ watch(
 watch(
   () => [roomId.value, otherUid.value] as const,
   () => {
+    closeActionMenu()
+    searchPanelOpen.value = false
     roomVersion.value += 1
     loading.value = false
     error.value = null
@@ -1564,32 +1644,77 @@ watch(
 <template>
   <div class="wrap">
     <div class="head card">
-      <button class="btn back" type="button" @click="router.push({ name: 'chatList' })">返回</button>
-      <div class="head-main">
-        <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
-        <div v-if="otherPresenceText" class="presence-text">{{ otherPresenceText }}</div>
-        <div v-if="peerTyping" class="typing-hint">对方正在输入...</div>
+      <div class="head-left">
+        <button class="back-trigger" type="button" aria-label="返回会话列表" @click="router.push({ name: 'chatList' })">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14.5 5.5L8 12l6.5 6.5" />
+          </svg>
+        </button>
+        <div class="head-main">
+          <div class="name-row">
+            <div class="name">{{ otherUid ? pickDisplayName(otherUser, otherUid) : `会话 ${roomId}` }}</div>
+            <span v-if="roomPinned" class="pin-badge">已置顶</span>
+          </div>
+          <div v-if="otherPresenceText" class="presence-text">{{ otherPresenceText }}</div>
+          <div v-if="peerTyping" class="typing-hint">对方正在输入...</div>
+        </div>
       </div>
-      <button class="btn pin-toggle" type="button" @click="toggleRoomPinned">
-        {{ roomPinned ? '取消置顶' : '会话置顶' }}
-      </button>
+      <div ref="headerActionsRef" class="head-actions">
+        <button
+          class="more-trigger"
+          type="button"
+          aria-label="更多会话操作"
+          :aria-expanded="actionMenuOpen"
+          @click.stop="toggleActionMenu"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="19" cy="12" r="1.8" />
+          </svg>
+        </button>
+        <div v-if="actionMenuOpen" class="more-menu card" @click.stop>
+          <button class="chat-menu-item search-action" type="button" @click="openSearchPanel">
+            <span>查找聊天内容</span>
+            <span class="menu-arrow">›</span>
+          </button>
+          <button class="chat-menu-item pin-action" type="button" @click="toggleRoomPinnedFromMenu">
+            <span>{{ roomPinned ? '取消置顶聊天' : '置顶聊天' }}</span>
+            <span class="menu-state" :class="{ active: roomPinned }">{{ roomPinned ? '已开启' : '未开启' }}</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>
 
-    <div class="card search-panel">
+    <div v-if="searchPanelOpen" class="card search-panel">
+      <div class="search-panel-head">
+        <div class="search-panel-title">查找聊天内容</div>
+        <div class="search-panel-actions">
+          <button v-if="searchedKeyword || searchResults.length > 0 || searchKeyword.trim()" class="btn-text search-tool" type="button" @click="resetMessageSearch(true)">
+            清空
+          </button>
+          <button class="btn-text search-tool" type="button" @click="closeSearchPanel">收起</button>
+        </div>
+      </div>
       <div class="search-row">
-        <input
-          v-model="searchKeyword"
-          class="search-input"
-          type="text"
-          placeholder="搜索本会话消息"
-          @keydown.enter.prevent="searchMessages(true)"
-        />
-        <button class="btn" type="button" :disabled="searchLoading || !searchKeyword.trim()" @click="searchMessages(true)">
-          {{ searchLoading ? '搜索中...' : '搜索消息' }}
+        <label class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10.5 5a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11Zm0 0l7 7" />
+          </svg>
+          <input
+            ref="searchInputRef"
+            v-model="searchKeyword"
+            class="search-input"
+            type="text"
+            placeholder="搜索本会话消息"
+            @keydown.enter.prevent="searchMessages(true)"
+          />
+        </label>
+        <button class="btn btn-primary search-submit" type="button" :disabled="searchLoading || !searchKeyword.trim()" @click="searchMessages(true)">
+          {{ searchLoading ? '搜索中...' : '搜索' }}
         </button>
-        <button v-if="searchedKeyword || searchResults.length > 0" class="btn" type="button" @click="resetMessageSearch(true)">清空</button>
       </div>
       <div v-if="searchError" class="hint error search-hint">{{ searchError }}</div>
       <div v-else-if="searchResults.length > 0" class="search-results">
@@ -1645,8 +1770,11 @@ watch(
                 </div>
               </template>
               <template v-else-if="isLessonStatusBody(it.m.body)">
-                <div class="sys">
-                  课程状态：{{ it.m.body.status }}（{{ it.m.body.title }}）
+                <div class="sys sys-with-action">
+                  <span>课程状态：{{ it.m.body.status }}（{{ it.m.body.title }}）</span>
+                  <button v-if="it.m.body.status === 'ACCEPTED'" class="btn btn-text join-lesson-btn" type="button" @click="openLiveByStatus(it.m.body.eventId)">
+                    进入课堂
+                  </button>
                 </div>
               </template>
               <template v-else-if="isTutorApplicationBody(it.m.body)">
@@ -1826,21 +1954,50 @@ watch(
 }
 
 .head {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
-  padding: 10px 12px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+}
+
+.head-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 .head-main {
   display: grid;
-  justify-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .name {
-  text-align: center;
+  font-size: 20px;
   font-weight: 900;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pin-badge {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(32, 128, 240, 0.1);
+  color: #1767c4;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .presence-text {
@@ -1855,6 +2012,97 @@ watch(
   line-height: 1;
 }
 
+.back-trigger,
+.more-trigger {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #f7f8fa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #1f2937;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.back-trigger:hover,
+.more-trigger:hover {
+  background: #eef2f7;
+  border-color: rgba(15, 23, 42, 0.14);
+  transform: translateY(-1px);
+}
+
+.back-trigger svg,
+.more-trigger svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.more-trigger svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.head-actions {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.more-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  min-width: 220px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+}
+
+.chat-menu-item {
+  border: none;
+  border-radius: 14px;
+  background: #fff;
+  min-height: 48px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.chat-menu-item:hover {
+  background: #f5f7fb;
+}
+
+.menu-arrow {
+  color: #94a3b8;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.menu-state {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.menu-state.active {
+  color: #1767c4;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -1865,33 +2113,91 @@ watch(
 
 .search-panel {
   display: grid;
-  gap: 10px;
-  padding: 12px;
+  gap: 12px;
+  padding: 14px 16px;
+  background:
+    radial-gradient(circle at top right, rgba(32, 128, 240, 0.08), transparent 34%),
+    linear-gradient(180deg, #fbfcff 0%, #f6f8fb 100%);
+}
+
+.search-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.search-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .search-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 10px;
 }
 
-.search-input {
-  height: 40px;
+.search-box {
+  height: 44px;
   min-width: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  padding: 0 12px;
-  outline: none;
   background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
 }
 
-.search-input:focus {
+.search-box:focus-within {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px var(--primary-weak);
 }
 
+.search-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  color: #9aa4b2;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .search-input {
+  height: 100%;
   min-width: 0;
+  border: none;
+  padding: 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.search-submit {
+  min-width: 88px;
+}
+
+.search-tool {
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #516173;
+}
+
+.search-tool:hover {
+  text-decoration: none;
+  background: rgba(15, 23, 42, 0.05);
 }
 
 .search-results {
@@ -1978,14 +2284,15 @@ watch(
 }
 
 .time-divider {
-  justify-self: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1;
-  color: rgba(0, 0, 0, 0.55);
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(31, 35, 41, 0.08);
+  align-self: center;
+  margin: 4px 0 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.2px;
 }
 
 .msg {
@@ -2087,6 +2394,29 @@ watch(
 
 .msg.pending .bubble {
   opacity: 0.85;
+}
+
+.sys {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sys-with-action {
+  justify-content: space-between;
+  min-width: 280px;
+}
+
+.join-lesson-btn {
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-weight: 800;
 }
 
 .pending-state {

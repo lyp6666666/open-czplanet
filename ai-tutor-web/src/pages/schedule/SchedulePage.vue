@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+import { liveApi, type LiveSessionResp } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import type { ScheduleEventVO, UserSimpleVO } from '@/api/types'
 
@@ -8,10 +10,12 @@ type ViewMode = 'month' | 'week' | 'day'
 
 const view = ref<ViewMode>('month')
 const cursorDate = ref(new Date())
+const router = useRouter()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const events = ref<ScheduleEventVO[]>([])
+const liveMap = ref<Record<number, LiveSessionResp>>({})
 
 const createOpen = ref(false)
 const createBusy = ref(false)
@@ -104,12 +108,36 @@ async function loadEvents() {
   error.value = null
   try {
     events.value = await scheduleApi.listEvents({ startAt: range.value.startAt, endAt: range.value.endAt, includePending: true })
+    const liveEntries = await Promise.all(
+      events.value.map(async (it) => {
+        try {
+          const live = await liveApi.getByCourse(it.id)
+          return [it.id, live] as const
+        } catch {
+          return null
+        }
+      }),
+    )
+    liveMap.value = Object.fromEntries(liveEntries.filter(Boolean) as Array<readonly [number, LiveSessionResp]>)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
     events.value = []
+    liveMap.value = {}
   } finally {
     loading.value = false
   }
+}
+
+function liveStatusLabel(eventId: number) {
+  const live = liveMap.value[eventId]
+  if (!live) return ''
+  if (live.status === 'IN_PROGRESS') return '进行中'
+  if (live.joinableNow) return '可入会'
+  return ''
+}
+
+function openLivePrepare(eventId: number) {
+  void router.push({ name: 'livePrepare', params: { courseId: String(eventId) } })
 }
 
 function onPrev() {
@@ -358,6 +386,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
             <div v-for="ev in eventsOnDay(d.date).slice(0, 3)" :key="ev.id" class="item" :title="ev.title">
               <span class="t">{{ formatHm(ev.startAt) }}</span>
               <span class="n">{{ ev.title }}</span>
+              <span v-if="liveStatusLabel(ev.id)" class="live-flag">{{ liveStatusLabel(ev.id) }}</span>
             </div>
             <div v-if="eventsOnDay(d.date).length > 3" class="more">+{{ eventsOnDay(d.date).length - 3 }}</div>
           </div>
@@ -395,9 +424,11 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
                 class="event"
                 :class="p.event.status.toLowerCase()"
                 :style="{ top: `${p.top}px`, height: `${p.height}px`, left: `${p.leftPct}%`, width: `${p.widthPct}%` }"
+                @click.stop="liveMap[p.event.id] ? openLivePrepare(p.event.id) : void 0"
               >
                 <div class="et">{{ p.event.title }}</div>
                 <div class="es">{{ formatHm(p.event.startAt) }}-{{ formatHm(p.event.endAt) }}</div>
+                <div v-if="liveStatusLabel(p.event.id)" class="elive">{{ liveStatusLabel(p.event.id) }}</div>
               </div>
             </div>
           </div>
@@ -605,6 +636,13 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   color: var(--muted);
 }
 
+.live-flag {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: #0f766e;
+  font-weight: 700;
+}
+
 .time-head {
   display: grid;
   grid-template-columns: 60px 1fr;
@@ -699,6 +737,13 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .es {
   font-size: 12px;
   color: var(--muted);
+}
+
+.elive {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f766e;
 }
 
 .mask {

@@ -3,10 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { userApi } from '@/api/user'
+import { liveApi } from '@/api/live'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useCityStore } from '@/stores/city'
 import { BRAND_NAME } from '@/constants/brand'
+import BrandLogoMark from '@/ui/common/BrandLogoMark.vue'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
 
 const route = useRoute()
@@ -60,6 +62,7 @@ const avatarLoadFailed = ref(false)
 const greetingText = ref('')
 const greetingBusy = ref(false)
 const greetingError = ref<string | null>(null)
+const liveQuickJoin = ref<{ courseId: number; title: string } | null>(null)
 
 const switchLabel = computed(() => (isTeacher.value ? '切换为招聘者' : '切换为教师端'))
 const switchTitle = computed(() => (isTeacher.value ? '是否将身份切换为招聘者' : '是否将身份切换为教师端'))
@@ -69,6 +72,11 @@ const switchDesc = computed(() =>
 
 function go(path: string) {
   void router.push(path)
+}
+
+function goLiveQuickJoin() {
+  if (!liveQuickJoin.value) return
+  void router.push({ name: 'livePrepare', params: { courseId: String(liveQuickJoin.value.courseId) } })
 }
 
 function toggleMenu() {
@@ -137,14 +145,45 @@ onMounted(() => {
   if (auth.isLoggedIn && !auth.me) {
     void auth.refreshMe()
   }
+  if (auth.isLoggedIn) {
+    void loadLiveQuickJoin()
+  }
 })
+
+async function loadLiveQuickJoin() {
+  try {
+    const role = auth.user?.userType === 1 ? 'TEACHER' : auth.user?.userType === 2 ? 'STUDENT' : null
+    if (!role) {
+      liveQuickJoin.value = null
+      return
+    }
+    const courses = await (await import('@/api/course')).courseApi.myCourses({ page: 1, size: 20, role })
+    for (const item of courses) {
+      try {
+        const live = await liveApi.getByCourse(item.courseId)
+        if (live.joinableNow) {
+          liveQuickJoin.value = { courseId: item.courseId, title: `课程 #${item.courseId}` }
+          return
+        }
+      } catch {
+        // ignore single course lookup failure
+      }
+    }
+    liveQuickJoin.value = null
+  } catch {
+    liveQuickJoin.value = null
+  }
+}
 </script>
 
 <template>
   <header class="bar" @click="closeMenu">
     <div class="container inner">
       <div class="left">
-        <button class="logo" type="button" @click="go('/')">{{ BRAND_NAME }}</button>
+        <button class="brand-lockup" type="button" aria-label="创智星球" @click="go('/')">
+          <BrandLogoMark class="logo-mark" />
+          <span class="logo">{{ BRAND_NAME }}</span>
+        </button>
 
         <div v-if="isLoggedIn" class="city">
           <button class="city-trigger" type="button" @click.stop="cityModalOpen = true">
@@ -209,6 +248,10 @@ onMounted(() => {
           <button v-if="canChat" class="link link-msg" type="button" @click="go('/chat')">
             <span class="link-msg-text">消息</span>
             <span v-if="unread > 0" class="badge">{{ unread > 99 ? '99+' : unread }}</span>
+          </button>
+          <button v-if="liveQuickJoin" class="live-pill" type="button" @click="goLiveQuickJoin">
+            <span class="live-dot" />
+            <span class="live-text">进入课堂</span>
           </button>
           <button v-if="isTeacher" class="link" type="button" @click="go('/me')">简历</button>
           <button v-else-if="isOrg" class="link" type="button" @click="go('/org/change-password')">修改密码</button>
@@ -326,13 +369,34 @@ onMounted(() => {
   min-width: 0;
 }
 
+.brand-lockup {
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.logo-mark {
+  width: 56px;
+  height: 40px;
+  flex: 0 0 56px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px rgba(58, 106, 255, 0.18));
+}
+
 .logo {
   border: none;
   background: transparent;
   font-weight: 900;
   font-size: 16px;
-  cursor: pointer;
-  padding: 0;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .city {
@@ -428,6 +492,32 @@ onMounted(() => {
 .link:hover {
   background: rgba(31, 35, 41, 0.06);
   color: var(--text);
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(0, 190, 189, 0.18);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(0, 190, 189, 0.16), rgba(0, 190, 189, 0.06));
+  color: #0f766e;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #0f766e;
+  box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.12);
+}
+
+.live-text {
+  white-space: nowrap;
 }
 
 .guest {
