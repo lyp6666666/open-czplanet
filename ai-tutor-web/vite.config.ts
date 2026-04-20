@@ -17,6 +17,10 @@ export default defineConfig({
         target: 'http://localhost:18080',
         changeOrigin: true,
       },
+      '/appointment': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
       '/org': {
         target: 'http://localhost:18080',
         changeOrigin: true,
@@ -26,6 +30,10 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/chat': {
+        target: 'http://localhost:18080',
+        changeOrigin: true,
+      },
+      '/courses': {
         target: 'http://localhost:18080',
         changeOrigin: true,
       },

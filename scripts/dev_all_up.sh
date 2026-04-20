@@ -314,6 +314,8 @@ start_service() {
   echo "[dev_all_up] 启动 $svc_name port=$port"
   (
     cd "$ROOT_DIR"
+    # 远程同步通常会保留源码时间戳；先 clean 再 compile，避免 resources 插件因 target 更新时间更晚而继续复用旧配置。
+    ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" clean compile >/dev/null
     SERVER_PORT="$port" SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" NACOS_NAMESPACE="$NACOS_NAMESPACE" \
       nohup ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run >"$log_file" 2>&1 &
     launcher_pid=$!
