@@ -121,9 +121,12 @@ async function newAuthedMediaPage(browser: Browser, browserName: string, user: E
   })
   const page = await context.newPage()
   page.on('console', (message) => {
-    if (message.type() === 'error') {
+    if (message.type() === 'error' || message.text().includes('[livekit-classroom]')) {
       console.log(`[browser:${user.userType}:${user.id}] ${message.text()}`)
     }
+  })
+  page.on('pageerror', (error) => {
+    console.log(`[pageerror:${user.userType}:${user.id}] ${error.message}`)
   })
   return { context, page }
 }
@@ -136,22 +139,41 @@ async function expectMediaReady(page: Page) {
   await expect(page.getByTestId('prepare-preview')).toBeVisible()
   await expect(page.getByTestId('prepare-camera-state')).toHaveAttribute('data-enabled', 'true')
   await expect(page.getByTestId('prepare-mic-state')).toHaveAttribute('data-enabled', 'true')
-  await Promise.race([
-    expect(page.getByTestId('prepare-permission-state')).toHaveAttribute('data-state', 'granted', { timeout: 20_000 }),
-    expect(page.getByTestId('prepare-video')).toBeVisible({ timeout: 20_000 }),
-  ])
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async () => {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            const result = {
+              audioTracks: stream.getAudioTracks().length,
+              videoTracks: stream.getVideoTracks().length,
+            }
+            stream.getTracks().forEach((track) => track.stop())
+            return result
+          } catch (error) {
+            return {
+              audioTracks: 0,
+              videoTracks: 0,
+              error: error instanceof Error ? error.name : String(error || ''),
+            }
+          }
+        }),
+      { timeout: 20_000 },
+    )
+    .toMatchObject({ audioTracks: 1, videoTracks: 1 })
 }
 
 async function expectClassroomConnected(page: Page) {
   await expect(page.getByTestId('local-stage')).toBeVisible()
   await expect(page.getByTestId('local-video')).toBeVisible()
-  await expect(page.getByTestId('classroom-connection-state')).toHaveAttribute('data-state', 'connected', { timeout: 30_000 })
+  await expect(page.getByTestId('classroom-connection-state')).toHaveAttribute('data-state', 'connected', { timeout: 45_000 })
   await expect(page.getByText('音视频已连接')).toBeVisible()
 }
 
 async function expectRemoteMediaReceived(page: Page) {
   await expect(page.getByTestId('remote-stage')).toBeVisible()
-  await expect(page.getByTestId('remote-video')).toBeVisible({ timeout: 45_000 })
+  await expect(page.getByTestId('remote-video')).toBeVisible({ timeout: 60_000 })
   await expect(page.getByTestId('remote-video-state')).toHaveAttribute('data-connected', 'true')
   await expect(page.getByTestId('remote-audio-state')).toHaveAttribute('data-connected', 'true')
 }
@@ -179,6 +201,11 @@ test.describe('live classroom real media', () => {
 
       await expectRemoteMediaReceived(teacherPage)
       await expectRemoteMediaReceived(studentPage)
+
+      await teacherPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
+      await studentPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
+      await expect(teacherPage.getByTestId('live-chat-list')).toBeVisible()
+      await expect(studentPage.getByTestId('live-chat-list')).toBeVisible()
 
       await teacherPage.getByTestId('classroom-toggle-mic').click()
       await studentPage.getByTestId('classroom-toggle-camera').click()

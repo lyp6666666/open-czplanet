@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173'
+const browserArgs = [
+  '--use-fake-ui-for-media-stream',
+  '--use-fake-device-for-media-stream',
+  '--autoplay-policy=no-user-gesture-required',
+  '--disable-features=WebRtcHideLocalIpsWithMdns',
+  '--enable-features=WebRtcAllowInputVolumeAdjustment',
+]
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,10 +31,7 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         permissions: ['camera', 'microphone'],
         launchOptions: {
-          args: [
-            '--use-fake-ui-for-media-stream',
-            '--use-fake-device-for-media-stream',
-          ],
+          args: browserArgs,
         },
       },
     },
@@ -39,6 +43,10 @@ export default defineConfig({
           firefoxUserPrefs: {
             'media.navigator.streams.fake': true,
             'media.navigator.permission.disabled': true,
+            'permissions.default.camera': 1,
+            'permissions.default.microphone': 1,
+            'media.devices.insecure.enabled': true,
+            'media.getusermedia.insecure.enabled': true,
           },
         },
       },

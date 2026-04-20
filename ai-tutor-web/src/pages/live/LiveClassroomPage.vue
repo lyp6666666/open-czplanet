@@ -10,6 +10,7 @@ import {
   LiveRoomClient,
 } from '@/modules/live/livekit'
 import { readLiveMediaPreferences, saveLiveMediaPreferences } from '@/modules/live/mediaPreferences'
+import LiveClassChatPanel from '@/ui/live/LiveClassChatPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +25,7 @@ const connectionState = ref<'idle' | 'connecting' | 'connected' | 'reconnecting'
 const remoteParticipantName = ref('对方')
 const remoteAudioConnected = ref(false)
 const remoteVideoConnected = ref(false)
+const roomId = computed(() => session.value?.roomId ?? null)
 
 const prefs = readLiveMediaPreferences()
 const micOn = ref(prefs.micEnabled)
@@ -277,7 +279,10 @@ onUnmounted(async () => {
         </div>
 
         <div v-else class="side-section chat-panel">
-          <div class="chat-empty">当前版本先保留课堂主画面，课中聊天区域下一轮继续接入 IM 实时消息面板。</div>
+          <LiveClassChatPanel
+            :room-id="roomId"
+            :peer-name="remoteParticipantName"
+          />
         </div>
       </aside>
     </div>

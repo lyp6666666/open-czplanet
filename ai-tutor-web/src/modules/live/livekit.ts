@@ -1,12 +1,25 @@
 import {
+  LogLevel,
   Room,
   RoomEvent,
+  setLogLevel,
   Track,
   type LocalTrackPublication,
   type Participant,
   type RemoteTrack,
   type RemoteTrackPublication,
 } from 'livekit-client'
+
+const LIVEKIT_DEBUG_ENABLED =
+  import.meta.env.DEV || import.meta.env.MODE === 'test' || import.meta.env.VITE_LIVEKIT_DEBUG === '1'
+const LIVEKIT_FORCE_V0 =
+  import.meta.env.VITE_LIVEKIT_FORCE_V0 == null
+    ? import.meta.env.DEV || import.meta.env.MODE === 'test'
+    : String(import.meta.env.VITE_LIVEKIT_FORCE_V0).trim() !== '0'
+
+if (LIVEKIT_DEBUG_ENABLED) {
+  setLogLevel(LogLevel.debug)
+}
 
 export type LiveRoomParticipantView = {
   identity: string
@@ -114,6 +127,33 @@ export function attachMediaStream(element: HTMLMediaElement | null, stream: Medi
 
 type TrackListener = (track: RemoteTrack, publication: RemoteTrackPublication, participant: Participant) => void
 
+function redactLiveKitUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl)
+    if (url.searchParams.has('access_token')) url.searchParams.set('access_token', '<redacted>')
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
+}
+
+function logLiveKit(message: string, payload?: Record<string, unknown>) {
+  if (!LIVEKIT_DEBUG_ENABLED) return
+  console.info(`[livekit-classroom] ${message}`, payload || {})
+}
+
+function normalizeLiveKitServerUrl(rawUrl: string) {
+  const fallback = rawUrl.trim()
+  try {
+    const url = new URL(fallback)
+    url.hash = ''
+    url.search = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return fallback
+  }
+}
+
 export class LiveRoomClient {
   room: Room
   localCameraPublication: LocalTrackPublication | undefined
@@ -123,12 +163,38 @@ export class LiveRoomClient {
     this.room = new Room({
       adaptiveStream: true,
       dynacast: true,
+      singlePeerConnection: !LIVEKIT_FORCE_V0,
+      publishDefaults: {
+        simulcast: false,
+        backupCodec: false,
+        videoCodec: 'vp8',
+      },
     })
   }
 
   async connect(payload: LiveRoomConnectPayload) {
-    await this.room.prepareConnection(payload.serverUrl, payload.token)
-    await this.room.connect(payload.serverUrl, payload.token)
+    const serverUrl = normalizeLiveKitServerUrl(payload.serverUrl)
+    logLiveKit('connect:start', {
+      serverUrl: redactLiveKitUrl(serverUrl),
+      forceV0: LIVEKIT_FORCE_V0,
+      cameraEnabled: payload.cameraEnabled,
+      micEnabled: payload.micEnabled,
+      hasCameraDeviceId: !!payload.cameraDeviceId,
+      hasMicDeviceId: !!payload.micDeviceId,
+    })
+    await this.room.prepareConnection(serverUrl, payload.token)
+    await this.room.connect(serverUrl, payload.token, {
+      autoSubscribe: true,
+      maxRetries: 2,
+      websocketTimeout: 25_000,
+      peerConnectionTimeout: 30_000,
+    })
+    logLiveKit('connect:signal-ready', {
+      roomName: this.room.name,
+      localIdentity: this.room.localParticipant.identity,
+      remoteParticipants: this.room.remoteParticipants.size,
+      state: this.room.state,
+    })
     this.localCameraPublication = await this.room.localParticipant.setCameraEnabled(
       payload.cameraEnabled,
       payload.cameraDeviceId ? { deviceId: payload.cameraDeviceId } : undefined,
@@ -137,6 +203,11 @@ export class LiveRoomClient {
       payload.micEnabled,
       payload.micDeviceId ? { deviceId: payload.micDeviceId } : undefined,
     )
+    logLiveKit('connect:local-published', {
+      cameraPublished: !!this.localCameraPublication,
+      microphonePublished: !!this.localMicrophonePublication,
+      state: this.room.state,
+    })
   }
 
   async setCameraEnabled(enabled: boolean, deviceId?: string | null) {
@@ -152,7 +223,14 @@ export class LiveRoomClient {
   }
 
   onTrackSubscribed(listener: TrackListener) {
-    this.room.on(RoomEvent.TrackSubscribed, listener)
+    this.room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      logLiveKit('track:subscribed', {
+        kind: track.kind,
+        source: publication.source,
+        participant: participant.identity,
+      })
+      listener(track, publication, participant)
+    })
   }
 
   onTrackUnsubscribed(listener: (track: RemoteTrack) => void) {
@@ -160,7 +238,13 @@ export class LiveRoomClient {
   }
 
   onParticipantConnected(listener: (participant: Participant) => void) {
-    this.room.on(RoomEvent.ParticipantConnected, listener)
+    this.room.on(RoomEvent.ParticipantConnected, (participant) => {
+      logLiveKit('participant:connected', {
+        identity: participant.identity,
+        name: participant.name,
+      })
+      listener(participant)
+    })
   }
 
   onParticipantDisconnected(listener: (participant: Participant) => void) {
@@ -172,7 +256,10 @@ export class LiveRoomClient {
   }
 
   onConnectionStateChanged(listener: (state: string) => void) {
-    this.room.on(RoomEvent.ConnectionStateChanged, listener)
+    this.room.on(RoomEvent.ConnectionStateChanged, (state) => {
+      logLiveKit('connection:state', { state })
+      listener(state)
+    })
   }
 
   onMediaError(listener: (error: Error) => void) {

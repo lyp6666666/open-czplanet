@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,6 +8,8 @@ const statusMock = vi.fn()
 const joinTokenMock = vi.fn()
 const leaveMock = vi.fn()
 const endMock = vi.fn()
+const listMessagesMock = vi.fn()
+const sendTextMock = vi.fn()
 const connectMock = vi.fn()
 const disconnectMock = vi.fn()
 const setMicrophoneEnabledMock = vi.fn()
@@ -19,6 +22,13 @@ vi.mock('@/api/live', () => ({
     joinToken: (...args: unknown[]) => joinTokenMock(...args),
     leave: (...args: unknown[]) => leaveMock(...args),
     end: (...args: unknown[]) => endMock(...args),
+  },
+}))
+
+vi.mock('@/api/chat', () => ({
+  chatApi: {
+    listMessages: (...args: unknown[]) => listMessagesMock(...args),
+    sendText: (...args: unknown[]) => sendTextMock(...args),
   },
 }))
 
@@ -72,16 +82,21 @@ function createMemoryStorage() {
 
 describe('LiveClassroomPage', () => {
   beforeEach(() => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
     Object.defineProperty(window, 'localStorage', { value: createMemoryStorage(), configurable: true })
     getByCourseMock.mockReset()
     statusMock.mockReset()
     joinTokenMock.mockReset()
     leaveMock.mockReset()
     endMock.mockReset()
+    listMessagesMock.mockReset()
+    sendTextMock.mockReset()
     connectMock.mockReset()
     disconnectMock.mockReset()
     setMicrophoneEnabledMock.mockReset()
     setCameraEnabledMock.mockReset()
+    listMessagesMock.mockResolvedValue({ list: [], cursor: null, isLast: true })
   })
 
   it('shows waiting state when peer not joined', async () => {
@@ -94,6 +109,7 @@ describe('LiveClassroomPage', () => {
       teacherUid: 1001,
       studentUid: 1002,
       peerJoined: false,
+      roomId: 7001,
     })
     statusMock.mockResolvedValue({
       sessionId: 8,
@@ -104,6 +120,7 @@ describe('LiveClassroomPage', () => {
       teacherUid: 1001,
       studentUid: 1002,
       peerJoined: false,
+      roomId: 7001,
     })
     joinTokenMock.mockResolvedValue({
       serverUrl: 'ws://127.0.0.1:7880',
@@ -119,7 +136,7 @@ describe('LiveClassroomPage', () => {
     await router.isReady()
 
     const wrapper = mount(LiveClassroomPage, {
-      global: { plugins: [router] },
+      global: { plugins: [createPinia(), router] },
     })
     await flushPromises()
 
@@ -138,6 +155,7 @@ describe('LiveClassroomPage', () => {
       teacherUid: 1001,
       studentUid: 1002,
       peerJoined: false,
+      roomId: 7001,
     })
     statusMock.mockResolvedValue({
       sessionId: 8,
@@ -148,6 +166,7 @@ describe('LiveClassroomPage', () => {
       teacherUid: 1001,
       studentUid: 1002,
       peerJoined: false,
+      roomId: 7001,
     })
     joinTokenMock.mockResolvedValue({
       serverUrl: 'ws://127.0.0.1:7880',
@@ -164,7 +183,7 @@ describe('LiveClassroomPage', () => {
     await router.isReady()
 
     const wrapper = mount(LiveClassroomPage, {
-      global: { plugins: [router] },
+      global: { plugins: [createPinia(), router] },
     })
     await flushPromises()
 
@@ -172,5 +191,76 @@ describe('LiveClassroomPage', () => {
     await flushPromises()
 
     expect(setMicrophoneEnabledMock).toHaveBeenCalledWith(false, null)
+  })
+
+  it('shows live classroom chat panel and sends class message', async () => {
+    getByCourseMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: true,
+      roomId: 7001,
+    })
+    statusMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: true,
+      roomId: 7001,
+    })
+    joinTokenMock.mockResolvedValue({
+      serverUrl: 'ws://127.0.0.1:7880',
+      accessToken: 'token',
+    })
+    connectMock.mockResolvedValue(undefined)
+    sendTextMock.mockResolvedValue({
+      fromUser: { uid: 1001 },
+      toUser: { uid: 1002 },
+      message: {
+        id: 9001,
+        roomId: 7001,
+        sendTime: new Date().toISOString(),
+        body: { type: 'text', content: '我们开始上课' },
+      },
+    })
+
+    window.localStorage.setItem(
+      'ai_tutor_user',
+      JSON.stringify({ id: 1001, name: '老师', phone: '18800000000', userType: 1, token: 'token' }),
+    )
+    window.localStorage.setItem('ai_tutor_token', 'token')
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: [{ path: '/live/classroom/:courseId', component: LiveClassroomPage }],
+    })
+    router.push('/live/classroom/66')
+    await router.isReady()
+
+    const wrapper = mount(LiveClassroomPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.tab').find((button) => button.text() === '课中聊天')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="live-chat-list"]').exists()).toBe(true)
+    expect(listMessagesMock).toHaveBeenCalledWith({ roomId: 7001, pageSize: 20, cursor: null })
+
+    await wrapper.get('[data-testid="live-chat-input"]').setValue('我们开始上课')
+    await wrapper.get('[data-testid="live-chat-send"]').trigger('click')
+    await flushPromises()
+
+    expect(sendTextMock).toHaveBeenCalledWith(7001, '我们开始上课')
+    expect(wrapper.text()).toContain('我们开始上课')
   })
 })
