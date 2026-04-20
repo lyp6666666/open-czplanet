@@ -56,6 +56,7 @@ const favoriteBusy = ref(false)
 
 const applyBusy = ref(false)
 const applyError = ref<string | null>(null)
+const teachingModeModalOpen = ref(false)
 
 function close() {
   emit('close')
@@ -162,11 +163,16 @@ function genClientRequestId() {
 
 async function startTutorApplication() {
   if (!canFavoriteTutor.value || applyBusy.value) return
+  applyError.value = null
+  teachingModeModalOpen.value = true
+}
+
+async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
   const targetUid = card.value?.user?.id
   const tutorId = card.value?.teacherProfile?.id
   if (!targetUid || !tutorId) return
+  teachingModeModalOpen.value = false
   applyBusy.value = true
-  applyError.value = null
   try {
     if (!settings.loaded) {
       try {
@@ -181,6 +187,7 @@ async function startTutorApplication() {
       contextType: 'TUTOR',
       contextId: tutorId,
       content,
+      teachingMode,
       clientRequestId: genClientRequestId(),
     })
     emit('close')
@@ -286,6 +293,7 @@ async function startTutorApplication() {
         <div v-if="canFavoriteTutor" class="sec">
           <div class="sec-title">发起申请</div>
           <div v-if="applyError" class="hint error">{{ applyError }}</div>
+          <div class="apply-tip">先选择线上或线下授课。授课形式创建后不可修改，线上会进入平台课程与支付流程。</div>
           <div class="apply-actions">
             <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="startTutorApplication">
               {{ applyBusy ? '发送中...' : '发起家教申请' }}
@@ -294,6 +302,23 @@ async function startTutorApplication() {
           </div>
         </div>
       </template>
+
+      <div v-if="teachingModeModalOpen" class="sub-mask" @click.self="teachingModeModalOpen = false">
+        <div class="sub-modal card">
+          <div class="sec-title">请选择授课形式</div>
+          <div class="hint">授课形式创建后不可修改。线下只负责撮合，线上会进入平台课程和课后支付流程。</div>
+          <div class="mode-actions">
+            <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('ONLINE')">
+              <strong>线上授课</strong>
+              <span>推荐，在平台内上课并使用 AI 增值服务与课程履约能力</span>
+            </button>
+            <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('OFFLINE')">
+              <strong>线下授课</strong>
+              <span>平台只负责帮你联系老师，后续自行沟通安排与质量承担</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -328,6 +353,60 @@ async function startTutorApplication() {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.apply-tip {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.sub-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 61;
+}
+
+.sub-modal {
+  width: min(480px, 100%);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.mode-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.mode-card {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-card:hover {
+  border-color: rgba(0, 190, 189, 0.4);
+  background: rgba(0, 190, 189, 0.05);
+}
+
+.mode-card strong {
+  font-size: 15px;
+}
+
+.mode-card span {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .txt {

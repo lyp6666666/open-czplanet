@@ -152,6 +152,7 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("creatorUserId", body.getCreatorUserId());
             out.put("contextType", body.getContextType());
             out.put("contextId", body.getContextId());
+            out.put("teachingMode", body.getTeachingMode());
             return out;
         }
         if ("TUTOR_APPLICATION_STATUS".equals(bizType)) {

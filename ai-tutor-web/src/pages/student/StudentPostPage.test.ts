@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
@@ -31,7 +31,38 @@ function createTestRouter() {
   })
 }
 
+function createStorageMock(): Storage {
+  const store = new Map<string, string>()
+  return {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store.clear()
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value))
+    },
+  }
+}
+
 describe('StudentPostPage', () => {
+  beforeEach(() => {
+    const localStorageMock = createStorageMock()
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock, configurable: true })
+    Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock, configurable: true })
+    localStorage.setItem('ai_tutor_city', '北京')
+  })
+
   it('blocks publish when offline without address', async () => {
     mocks.createDemand.mockReset()
     mocks.toastShow.mockReset()

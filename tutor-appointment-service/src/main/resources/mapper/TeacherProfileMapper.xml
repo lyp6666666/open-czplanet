@@ -95,9 +95,6 @@
             <if test="teacherExtInfo.highestEduSchool != null">
                 highest_edu_school = #{teacherExtInfo.highestEduSchool},
             </if>
-            <if test="teacherExtInfo.teachingMode != null">
-                teaching_mode = #{teacherExtInfo.teachingMode},
-            </if>
             <if test="teacherExtInfo.defaultGreeting != null">
                 default_greeting = #{teacherExtInfo.defaultGreeting},
             </if>
@@ -151,14 +148,8 @@
         <if test="cursor != null">
             AND tp.id &lt; #{cursor}
         </if>
-        <if test="city != null and city != '' and (mode == null or mode == '' or mode == 'both')">
-            AND (tp.city = #{city} OR tp.teaching_mode IN ('online','both'))
-        </if>
-        <if test="city != null and city != '' and (mode != null and mode != '' and mode != 'both')">
+        <if test="city != null and city != ''">
             AND tp.city = #{city}
-        </if>
-        <if test="mode != null and mode != '' and mode != 'both'">
-            AND tp.teaching_mode = #{mode}
         </if>
         <if test="subject != null and subject != ''">
             AND (tp.subject LIKE CONCAT('%', #{subject}, '%') OR LOCATE(tp.subject, #{subject}) > 0)

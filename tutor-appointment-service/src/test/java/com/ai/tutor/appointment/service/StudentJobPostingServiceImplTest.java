@@ -5,6 +5,7 @@ import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
+import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.entity.PositionPost;
 import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.User;
@@ -109,6 +110,62 @@ class StudentJobPostingServiceImplTest {
         assertThat(saved.getEducationRequirement()).isEqualTo("UNLIMITED");
         assertThat(saved.getPublisherIdentity()).isEqualTo("PARENT");
         assertThat(saved.getFrequencyPerWeek()).isEqualTo(2);
+    }
+
+    @Test
+    void createShouldRejectBothClassMode() {
+        CreateStudentJobPostingRequest req = new CreateStudentJobPostingRequest();
+        req.setSubjectId(201L);
+        req.setSubjectName("数学");
+        req.setTitle("初中数学一对一");
+        req.setDescription("学生基础一般，需要巩固提升。");
+        req.setStudentGender("female");
+        req.setGradeCode("JUNIOR1");
+        req.setClassMode("both");
+        req.setFrequencyPerWeek(2);
+        req.setTeacherRequirementDetail("希望老师有耐心，经验丰富。");
+        req.setStageCode("JUNIOR");
+        req.setEducationRequirement("BACHELOR");
+        req.setPublisherIdentity("PARENT");
+        req.setBudgetMin(new BigDecimal("100"));
+        req.setBudgetMax(new BigDecimal("200"));
+
+        assertThatThrownBy(() -> service.create(req, 101L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("授课方式不合法");
+    }
+
+    @Test
+    void updateShouldRejectChangingClassMode() {
+        StudentJobPosting existing = StudentJobPosting.builder()
+                .id(3001L)
+                .parentId(101L)
+                .subjectId(201L)
+                .subjectName("数学")
+                .subjectIsOther(0)
+                .title("初中数学一对一")
+                .description("学生基础一般，需要巩固提升。")
+                .studentGender("female")
+                .gradeCode("JUNIOR1")
+                .teacherGenderPreference("both")
+                .teacherRequirementDetail("希望老师有耐心，经验丰富。")
+                .classMode("online")
+                .frequencyPerWeek(2)
+                .budgetMin(new BigDecimal("100"))
+                .budgetMax(new BigDecimal("200"))
+                .stageCode("JUNIOR")
+                .educationRequirement("BACHELOR")
+                .publisherIdentity("PARENT")
+                .status(1)
+                .build();
+        when(studentJobPostingMapper.selectById(3001L)).thenReturn(existing);
+
+        UpdateStudentJobPostingRequest req = new UpdateStudentJobPostingRequest();
+        req.setClassMode("offline");
+
+        assertThatThrownBy(() -> service.update(3001L, req, 101L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("授课形式创建后不可修改");
     }
 
     @Test

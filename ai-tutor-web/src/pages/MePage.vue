@@ -76,14 +76,7 @@ const teacherRatePerHour = ref<number | null>(null)
 const teacherIntroduction = ref('')
 const teacherCity = ref('')
 const teacherHighestEduSchool = ref('')
-const teacherTeachingMode = ref<string>('')
 const teacherCityModalOpen = ref(false)
-
-const teacherAllowNational = computed(() => {
-  const v = String(teacherTeachingMode.value || '').trim().toUpperCase()
-  if (!v) return true
-  return v === 'ONLINE'
-})
 
 const teacherCityHotCities = computed(() => {
   const base = [teacherCity.value, localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
@@ -92,11 +85,6 @@ const teacherCityHotCities = computed(() => {
 
 function onSelectTeacherCity(v: string) {
   const raw = String(v || '').trim()
-  const mode = String(teacherTeachingMode.value || '').trim().toUpperCase()
-  if ((mode === 'OFFLINE' || mode === 'BOTH') && raw === '全国') {
-    toast.show('线下授课请选择具体城市', 'error')
-    return
-  }
   if (raw) localStorage.setItem('ai_tutor_city', raw)
   teacherCity.value = raw
 }
@@ -183,7 +171,6 @@ async function load() {
       teacherIntroduction.value = me.teacherProfile.introduction || ''
       teacherCity.value = me.teacherProfile.city || ''
       teacherHighestEduSchool.value = me.teacherProfile.highestEduSchool || ''
-      teacherTeachingMode.value = me.teacherProfile.teachingMode || ''
       realnameVerifyStatus.value = me.teacherProfile.realnameVerifyStatus ?? 0
       realnameVerifyRejectReason.value = me.teacherProfile.realnameVerifyRejectReason || ''
       realnameIdnoMasked.value = me.teacherProfile.realnameVerifyIdnoMasked || ''
@@ -267,7 +254,6 @@ async function onSave() {
             introduction: teacherIntroduction.value.trim() || undefined,
             city: teacherCity.value.trim() || undefined,
             highestEduSchool: teacherHighestEduSchool.value.trim() || undefined,
-            teachingMode: teacherTeachingMode.value.trim() || undefined,
           }
         : undefined,
       studentExtInfo: !isTeacher.value
@@ -594,7 +580,7 @@ onBeforeUnmount(() => {
               :open="teacherCityModalOpen"
               :model-value="teacherCity"
               :hot-cities="teacherCityHotCities"
-              :allow-national="teacherAllowNational"
+              :allow-national="false"
               @update:model-value="onSelectTeacherCity"
               @close="teacherCityModalOpen = false"
             />
@@ -606,15 +592,6 @@ onBeforeUnmount(() => {
           <label class="field">
             <div class="label">教授科目</div>
             <input v-model="teacherSubject" class="input" placeholder="例如：数学/英语" />
-          </label>
-          <label class="field">
-            <div class="label">教学方式</div>
-            <select v-model="teacherTeachingMode" class="input">
-              <option value="">不设置</option>
-              <option value="ONLINE">线上教学</option>
-              <option value="OFFLINE">线下教学</option>
-              <option value="BOTH">均可</option>
-            </select>
           </label>
           <label class="field">
             <div class="label">教学经验（年）</div>

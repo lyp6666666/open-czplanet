@@ -30,7 +30,6 @@ public class ParentTutorBrowseController {
     @Operation(summary = "教师列表（关键词/筛选/游标分页）")
     public BaseResponse<CursorPageResponse<ParentTutorVOs.TutorCardVO>> page(@RequestParam(value = "q", required = false) String q,
                                                                             @RequestParam(value = "city", required = false) String city,
-                                                                            @RequestParam(value = "mode", required = false) String mode,
                                                                             @RequestParam(value = "subject", required = false) String subject,
                                                                             @RequestParam(value = "rateMin", required = false) BigDecimal rateMin,
                                                                             @RequestParam(value = "rateMax", required = false) BigDecimal rateMax,
@@ -39,7 +38,6 @@ public class ParentTutorBrowseController {
                 RequestHolder.get().getUid(),
                 q,
                 city,
-                mode,
                 subject,
                 rateMin,
                 rateMax,

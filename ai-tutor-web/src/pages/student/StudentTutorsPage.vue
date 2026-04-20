@@ -23,13 +23,13 @@ const settings = useSettingsStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const LIST_PAGE_SIZE = 6
 
 const canUseStudentActions = computed(() => auth.user?.userType === 2)
 const canApplyToTutor = computed(() => auth.user?.userType === 2 || auth.user?.userType === 3)
 const isOrg = computed(() => auth.user?.userType === 3)
 
 const q = ref('')
-const mode = ref<string>('')
 const subject = ref<string>('')
 
 const city = computed(() => cityStore.city)
@@ -42,6 +42,7 @@ const rateMaxInput = ref('')
 const list = ref<ParentTutorCardVO[]>([])
 const cursor = ref<number | null>(null)
 const isLast = ref(false)
+const listPageIndex = ref(0)
 const avatarFailedMap = ref<Record<number, boolean>>({})
 
 const selectedUid = ref<number | null>(null)
@@ -52,6 +53,8 @@ const detail = ref<UserCardVO | null>(null)
 const applyBusy = ref(false)
 const applyTipOpen = ref(false)
 const applyTipText = ref('')
+const teachingModeModalOpen = ref(false)
+const pendingApplyTarget = ref<{ uid: number; tutorId: number } | null>(null)
 
 const cardOpen = ref(false)
 const cardUid = ref<number | null>(null)
@@ -66,7 +69,7 @@ function closeCard() {
   cardOpen.value = false
 }
 
-const openKey = ref<'' | 'mode' | 'subject' | 'rate'>('')
+const openKey = ref<'' | 'subject' | 'rate'>('')
 
 const checkedFavoriteIds = new Set<number>()
 const favoriteMap = ref<Record<number, boolean>>({})
@@ -74,13 +77,22 @@ const favoriteMap = ref<Record<number, boolean>>({})
 const orgDemands = ref<StudentJobPosting[]>([])
 const orgDemandId = ref<number | null>(null)
 
-const modeLabel = computed(() => {
-  if (!mode.value) return '不限'
-  if (mode.value === 'online') return '线上'
-  if (mode.value === 'offline') return '线下'
-  if (mode.value === 'both') return '线上/线下'
-  return mode.value
+const visibleList = computed(() => {
+  const start = listPageIndex.value * LIST_PAGE_SIZE
+  return list.value.slice(start, start + LIST_PAGE_SIZE)
 })
+
+const listPageCount = computed(() => Math.max(1, Math.ceil(list.value.length / LIST_PAGE_SIZE)))
+
+const listRangeText = computed(() => {
+  if (!list.value.length) return '暂无结果'
+  const start = listPageIndex.value * LIST_PAGE_SIZE + 1
+  const end = Math.min(list.value.length, start + LIST_PAGE_SIZE - 1)
+  return `${start}-${end} / 已加载 ${list.value.length}`
+})
+
+const canPrevListPage = computed(() => listPageIndex.value > 0)
+const canNextListPage = computed(() => (listPageIndex.value + 1) * LIST_PAGE_SIZE < list.value.length || !isLast.value)
 
 const subjectLabel = computed(() => {
   if (!subject.value) return '不限'
@@ -104,11 +116,6 @@ function toggle(key: typeof openKey.value) {
 
 function closeMenus() {
   openKey.value = ''
-}
-
-function selectMode(v: string) {
-  mode.value = v
-  closeMenus()
 }
 
 function selectSubject(v: string) {
@@ -157,10 +164,6 @@ function markAvatarFailed(uid: number) {
 function metaText(it: ParentTutorCardVO): string {
   const parts: string[] = []
   if (it.city) parts.push(it.city)
-  const m = (it.teachingMode || '').toLowerCase()
-  if (m === 'online') parts.push('线上')
-  else if (m === 'offline') parts.push('线下')
-  else if (m === 'both') parts.push('线上/线下')
   if (it.highestEduSchool) parts.push(it.highestEduSchool)
   if (it.education) parts.push(it.education)
   if (it.experienceYears != null) parts.push(`${it.experienceYears}年`)
@@ -198,7 +201,6 @@ async function loadMore() {
       cursor: cursor.value,
       q: q.value.trim() || undefined,
       city: city.value || undefined,
-      mode: mode.value || undefined,
       subject: subject.value || undefined,
       rateMin: rateMin.value,
       rateMax: rateMax.value,
@@ -221,6 +223,32 @@ async function loadMore() {
   }
 }
 
+function selectFirstVisibleTeacher() {
+  const first = visibleList.value[0]
+  if (!first) return
+  if (!visibleList.value.some((it) => it.userId === selectedUid.value)) {
+    selectedUid.value = first.userId
+  }
+}
+
+function prevListPage() {
+  if (!canPrevListPage.value) return
+  listPageIndex.value -= 1
+  selectFirstVisibleTeacher()
+}
+
+async function nextListPage() {
+  if (!canNextListPage.value) return
+  const hasLoadedNext = (listPageIndex.value + 1) * LIST_PAGE_SIZE < list.value.length
+  if (!hasLoadedNext) {
+    const before = list.value.length
+    await loadMore()
+    if (list.value.length <= before) return
+  }
+  listPageIndex.value += 1
+  selectFirstVisibleTeacher()
+}
+
 async function loadOrgDemands() {
   if (!auth.isLoggedIn) return
   if (!isOrg.value) return
@@ -240,6 +268,7 @@ async function refresh() {
   list.value = []
   cursor.value = null
   isLast.value = false
+  listPageIndex.value = 0
   selectedUid.value = null
   detail.value = null
   detailError.value = null
@@ -251,6 +280,73 @@ async function refresh() {
 function selectTeacher(it: ParentTutorCardVO) {
   selectedUid.value = it.userId
 }
+
+function formatTeachingMode(raw: string | null | undefined): string {
+  const v = String(raw || '').toLowerCase()
+  if (v === 'online') return '线上授课'
+  if (v === 'offline') return '线下授课'
+  return '以需求为准'
+}
+
+function splitSubjectTags(raw: string | null | undefined): string[] {
+  return String(raw || '')
+    .split(/[,，、/\s]+/)
+    .map((it) => it.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+}
+
+function formatHistoryTime(raw: string | null | undefined): string {
+  const text = String(raw || '').trim()
+  if (!text) return '时间待定'
+  const parsed = Date.parse(text)
+  if (!Number.isFinite(parsed)) return text
+  const d = new Date(parsed)
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const minute = String(d.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hour}:${minute}`
+}
+
+function formatHistoryDuration(minutes: number | null | undefined): string {
+  if (!minutes || minutes <= 0) return '时长待定'
+  if (minutes < 60) return `${minutes}分钟`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h}小时${m}分钟` : `${h}小时`
+}
+
+function formatHistoryStatus(status: number | null | undefined): string {
+  if (status === 1) return '待确认'
+  if (status === 2) return '已确认'
+  if (status === 3) return '已完成'
+  if (status === 4) return '已取消'
+  return '状态待更新'
+}
+
+function profileFieldFilled(value: unknown): boolean {
+  return String(value ?? '').trim().length > 0
+}
+
+const teacherSubjectTags = computed(() => splitSubjectTags(detail.value?.teacherProfile?.subject))
+
+const teacherStats = computed(() => {
+  const profile = detail.value?.teacherProfile
+  const history = detail.value?.teacherHistory || []
+  return [
+    { label: '历史课程', value: `${history.length}`, hint: history.length ? '平台记录' : '暂无记录' },
+    { label: '教学经验', value: profile?.experienceYears != null ? `${profile.experienceYears}年` : '待补充', hint: '以老师资料为准' },
+    { label: '资料完整度', value: `${Math.round(([
+      profile?.realName,
+      profile?.subject,
+      profile?.introduction,
+      profile?.highestEduSchool,
+      profile?.education,
+      profile?.ratePerHour,
+    ].filter(profileFieldFilled).length / 6) * 100)}%`, hint: '基础信息' },
+  ]
+})
 
 async function onToggleFavorite(uid: number) {
   if (!canUseStudentActions.value) return
@@ -318,12 +414,20 @@ async function openApply() {
   const targetUid = detail.value?.user?.id
   const tutorId = detail.value?.teacherProfile?.id
   if (!targetUid || !tutorId) return
+  pendingApplyTarget.value = { uid: targetUid, tutorId }
+  teachingModeModalOpen.value = true
+}
+
+async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
+  const target = pendingApplyTarget.value
+  if (!target) return
+  teachingModeModalOpen.value = false
   applyBusy.value = true
   try {
     try {
-      const reuse = await shouldReuseExistingChat(targetUid)
+      const reuse = await shouldReuseExistingChat(target.uid)
       if (reuse?.roomId) {
-        await router.push({ name: 'chatRoom', params: { roomId: String(reuse.roomId) }, query: { otherUid: String(targetUid) } })
+        await router.push({ name: 'chatRoom', params: { roomId: String(reuse.roomId) }, query: { otherUid: String(target.uid) } })
         return
       }
     } catch {
@@ -344,19 +448,21 @@ async function openApply() {
       return
     }
     const msg = await applicationApi.startChat({
-      receiverUid: targetUid,
+      receiverUid: target.uid,
       contextType: isOrg.value ? 'ORG_POSTING' : 'TUTOR',
-      contextId: isOrg.value ? orgDemandId.value! : tutorId,
+      contextId: isOrg.value ? orgDemandId.value! : target.tutorId,
       content,
+      teachingMode,
       clientRequestId: genClientRequestId(),
     })
-    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(targetUid) } })
+    await router.push({ name: 'chatRoom', params: { roomId: String(msg.message.roomId) }, query: { otherUid: String(target.uid) } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '发送申请失败'
     applyTipText.value = msg
     applyTipOpen.value = true
   } finally {
     applyBusy.value = false
+    pendingApplyTarget.value = null
   }
 }
 
@@ -380,7 +486,7 @@ watch(
   { immediate: true },
 )
 
-watch([mode, subject], () => {
+watch([subject], () => {
   void refresh()
 })
 
@@ -407,19 +513,6 @@ onMounted(() => {
       </div>
 
       <div class="tabs">
-        <div class="tab-wrap">
-          <button class="tab" type="button" :class="{ active: !!mode || openKey === 'mode' }" @click.stop="toggle('mode')">
-            <span>授课方式</span>
-            <span class="val">{{ modeLabel }}</span>
-          </button>
-          <div v-if="openKey === 'mode'" class="menu card">
-            <button class="menu-item" type="button" @click="selectMode('')">不限</button>
-            <button class="menu-item" type="button" @click="selectMode('online')">线上</button>
-            <button class="menu-item" type="button" @click="selectMode('offline')">线下</button>
-            <button class="menu-item" type="button" @click="selectMode('both')">线上/线下</button>
-          </div>
-        </div>
-
         <div class="tab-wrap">
           <button class="tab" type="button" :class="{ active: !!subject || openKey === 'subject' }" @click.stop="toggle('subject')">
             <span>教学科目</span>
@@ -457,6 +550,19 @@ onMounted(() => {
 
     <div class="workbench">
       <aside class="card left">
+        <div class="list-head">
+          <div>
+            <div class="list-title">教师列表</div>
+            <div class="list-sub">{{ listRangeText }}</div>
+          </div>
+          <div class="pager-mini">
+            <button class="pager-btn" type="button" :disabled="!canPrevListPage" @click="prevListPage">上一页</button>
+            <button class="pager-btn" type="button" :disabled="!canNextListPage || loading" @click="nextListPage">
+              {{ loading && !isLast ? '加载中' : '下一页' }}
+            </button>
+          </div>
+        </div>
+
         <div v-if="list.length === 0 && !loading" class="empty">
           <div class="empty-title">暂无匹配教师</div>
           <div class="empty-desc">换个关键词或筛选条件试试</div>
@@ -464,7 +570,7 @@ onMounted(() => {
 
         <div v-else class="items">
           <button
-            v-for="it in list"
+            v-for="it in visibleList"
             :key="it.userId"
             class="item"
             type="button"
@@ -493,10 +599,7 @@ onMounted(() => {
         </div>
 
         <div class="footer" v-if="list.length > 0">
-          <button class="btn" type="button" :disabled="loading || isLast" @click="loadMore">
-            <span v-if="isLast">没有更多了</span>
-            <span v-else>{{ loading ? '加载中...' : '加载更多' }}</span>
-          </button>
+          <span class="footer-note">第 {{ listPageIndex + 1 }} / {{ listPageCount }} 页</span>
         </div>
       </aside>
 
@@ -510,9 +613,14 @@ onMounted(() => {
         </div>
         <div v-else-if="detail?.teacherProfile" class="card detail">
           <div class="detail-head">
-            <div class="detail-title">
-              {{ detail.teacherProfile.realName || detail.user.name || `教师${detail.user.id}` }}
-              <span v-if="detail.teacherProfile.eduVerifyStatus === 2" class="verified-badge">学信网认证</span>
+            <div>
+              <div class="detail-title">
+                {{ detail.teacherProfile.realName || detail.user.name || `教师${detail.user.id}` }}
+                <span v-if="detail.teacherProfile.eduVerifyStatus === 2" class="verified-badge">学信网认证</span>
+              </div>
+              <div class="detail-subtitle">
+                {{ [detail.teacherProfile.city, detail.teacherProfile.highestEduSchool].filter(Boolean).join(' · ') }}
+              </div>
             </div>
             <div v-if="canApplyToTutor" class="detail-ops">
               <button v-if="canUseStudentActions" class="btn" type="button" @click="onToggleFavorite(detail.user.id)">
@@ -528,28 +636,90 @@ onMounted(() => {
             </div>
           </div>
 
+          <div class="stat-grid">
+            <div v-for="stat in teacherStats" :key="stat.label" class="stat-card">
+              <div class="stat-value">{{ stat.value }}</div>
+              <div class="stat-label">{{ stat.label }}</div>
+              <div class="stat-hint">{{ stat.hint }}</div>
+            </div>
+          </div>
+
           <div v-if="canApplyToTutor" class="apply-note">
-            <div class="apply-note-title">学生主动申请说明</div>
-            <div class="apply-note-text">这里发起的是开始聊天申请。教师通过后，仍由教师支付平台信息费，支付完成后双方才会进入可沟通状态，后续试听、合作、退款流程保持不变。</div>
+            <div class="apply-note-title">沟通前提示</div>
+            <div class="apply-note-text">发起的是聊天申请。教师通过后仍由教师支付平台信息费，支付完成后双方才进入可沟通状态。</div>
           </div>
 
-          <div class="detail-meta">
-            <span v-if="detail.teacherProfile.city">{{ detail.teacherProfile.city }}</span>
-            <span v-if="detail.teacherProfile.teachingMode">{{ detail.teacherProfile.teachingMode }}</span>
-            <span v-if="detail.teacherProfile.highestEduSchool">{{ detail.teacherProfile.highestEduSchool }}</span>
-            <span v-if="detail.teacherProfile.education">{{ detail.teacherProfile.education }}</span>
-            <span v-if="detail.teacherProfile.experienceYears != null">{{ detail.teacherProfile.experienceYears }}年</span>
-            <span v-if="detail.teacherProfile.ratePerHour">{{ detail.teacherProfile.ratePerHour }}元/小时</span>
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">教学资料</div>
+              <div class="section-sub">快速判断老师是否匹配你的需求</div>
+            </div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span>授课形式</span>
+                <strong>发起申请时选择，创建后不可修改</strong>
+              </div>
+              <div class="info-item">
+                <span>课时费</span>
+                <strong>{{ detail.teacherProfile.ratePerHour ? `${detail.teacherProfile.ratePerHour}元/小时` : '待沟通' }}</strong>
+              </div>
+              <div class="info-item">
+                <span>学历背景</span>
+                <strong>{{ [detail.teacherProfile.highestEduSchool, detail.teacherProfile.education].filter(Boolean).join(' · ') || '待补充' }}</strong>
+              </div>
+              <div class="info-item">
+                <span>所在城市</span>
+                <strong>{{ detail.teacherProfile.city || '待补充' }}</strong>
+              </div>
+            </div>
+            <div class="subject-tags">
+              <span v-if="!teacherSubjectTags.length" class="soft-empty">老师暂未填写教学科目</span>
+              <span v-for="s in teacherSubjectTags" :key="s" class="subject-tag">{{ s }}</span>
+            </div>
           </div>
 
-          <div v-if="detail.teacherProfile.subject" class="detail-block">
-            <div class="detail-label">教学科目</div>
-            <div class="detail-text">{{ detail.teacherProfile.subject }}</div>
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">教师简介</div>
+              <div class="section-sub">教学风格、擅长方向和可沟通重点</div>
+            </div>
+            <div class="detail-text rich-text">{{ detail.teacherProfile.introduction || '老师暂未补充详细简介，可先发起沟通了解教学经验、课程安排和匹配度。' }}</div>
           </div>
 
-          <div class="detail-block">
-            <div class="detail-label">教师简介</div>
-            <div class="detail-text">{{ detail.teacherProfile.introduction || '—' }}</div>
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">历史课程</div>
+              <div class="section-sub">平台内可见的预约/课程记录</div>
+            </div>
+            <div v-if="detail.teacherHistory?.length" class="history-list">
+              <div v-for="h in detail.teacherHistory.slice(0, 4)" :key="h.id" class="history-card">
+                <div class="history-title">{{ h.title || '课程记录' }}</div>
+                <div class="history-meta">
+                  <span>{{ h.city || '城市待定' }}</span>
+                  <span>{{ formatTeachingMode(h.classMode) }}</span>
+                  <span>{{ formatHistoryDuration(h.durationMinutes) }}</span>
+                </div>
+                <div class="history-foot">
+                  <span>{{ formatHistoryTime(h.startTime) }}</span>
+                  <span>{{ formatHistoryStatus(h.status) }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="placeholder-card">
+              <div class="placeholder-title">暂无历史课程记录</div>
+              <div class="placeholder-desc">老师可能是新入驻，或历史课程暂未对外展示。</div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">历史评价</div>
+              <div class="section-sub">评价能力预留区，后续接入真实评价后自动展示</div>
+            </div>
+            <div class="placeholder-card">
+              <div class="placeholder-title">暂无公开评价</div>
+              <div class="placeholder-desc">平台暂未开放评价数据，可先关注老师资料完整度、认证状态与沟通反馈。</div>
+            </div>
           </div>
         </div>
         <div v-else class="card detail empty-detail">
@@ -565,6 +735,23 @@ onMounted(() => {
         <div class="m-desc">{{ applyTipText }}</div>
         <div class="m-ops">
           <button class="btn btn-primary" type="button" @click="applyTipOpen = false">知道了</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="teachingModeModalOpen" class="mask" @click.self="teachingModeModalOpen = false">
+      <div class="modal card">
+        <div class="m-title">请选择授课形式</div>
+        <div class="m-desc">授课形式创建后不可修改。线下只做撮合，线上会进入平台课程与支付流程。</div>
+        <div class="mode-actions">
+          <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('ONLINE')">
+            <strong>线上授课</strong>
+            <span>推荐，在平台内上课并使用后续课程与支付服务</span>
+          </button>
+          <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('OFFLINE')">
+            <strong>线下授课</strong>
+            <span>平台只负责帮你联系老师，后续自行沟通安排</span>
+          </button>
         </div>
       </div>
     </div>
@@ -666,6 +853,33 @@ onMounted(() => {
   min-width: 220px;
 }
 
+.mode-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.mode-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-card strong {
+  font-size: 15px;
+}
+
+.mode-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .budget-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -707,20 +921,71 @@ onMounted(() => {
 
 .workbench {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 12px;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
 }
 
 .left {
-  padding: 12px;
+  height: min(760px, calc(100vh - 178px));
+  min-height: 620px;
+  padding: 14px;
   display: grid;
-  gap: 10px;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 2px;
+}
+
+.list-title {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.list-sub {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pager-mini {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.pager-btn {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pager-btn:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: rgba(31, 35, 41, 0.04);
 }
 
 .items {
   display: grid;
   gap: 10px;
+  align-content: start;
+  overflow: auto;
+  padding: 2px 4px 2px 0;
 }
 
 .item {
@@ -732,11 +997,18 @@ onMounted(() => {
   display: grid;
   gap: 8px;
   cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
 .item.active {
   border-color: rgba(0, 190, 189, 0.45);
+  background: linear-gradient(135deg, rgba(0, 190, 189, 0.08), #fff 62%);
   box-shadow: 0 0 0 4px rgba(0, 190, 189, 0.08);
+}
+
+.item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 190, 189, 0.28);
 }
 
 .line1 {
@@ -798,6 +1070,10 @@ onMounted(() => {
   color: #1f2329;
   font-size: 13px;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .empty {
@@ -818,42 +1094,94 @@ onMounted(() => {
 .footer {
   display: flex;
   justify-content: center;
-  padding-top: 8px;
+  padding-top: 2px;
+}
+
+.footer-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .right {
-  display: grid;
-  gap: 10px;
-  align-content: start;
+  align-self: start;
 }
 
 .detail {
-  padding: 14px;
-  border-radius: 16px;
+  height: min(760px, calc(100vh - 178px));
+  min-height: 620px;
+  padding: 18px;
+  border-radius: 20px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
+  align-content: start;
+  overflow: auto;
+  background:
+    radial-gradient(circle at top right, rgba(0, 190, 189, 0.08), transparent 34%),
+    #fff;
 }
 
 .detail-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
 .detail-title {
-  font-size: 16px;
+  font-size: 22px;
+  line-height: 1.2;
   font-weight: 900;
+}
+
+.detail-subtitle {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .detail-ops {
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.stat-card {
+  min-height: 86px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  background: rgba(246, 251, 251, 0.86);
+}
+
+.stat-value {
+  color: #0f766e;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.stat-label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.stat-hint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .apply-note {
-  margin-top: 12px;
   padding: 12px 14px;
   border-radius: 16px;
   background:
@@ -875,34 +1203,136 @@ onMounted(() => {
   line-height: 1.7;
 }
 
-.detail-meta {
+.detail-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.section-title {
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.section-sub {
   color: var(--muted);
   font-size: 12px;
-  display: flex;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.info-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(31, 35, 41, 0.035);
+}
+
+.info-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.info-item strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.subject-tags {
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.detail-block {
-  display: grid;
-  gap: 6px;
+.subject-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(0, 190, 189, 0.09);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.detail-label {
-  font-weight: 900;
-  font-size: 12px;
+.soft-empty {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .detail-text {
   font-size: 13px;
   color: #1f2329;
-  line-height: 1.5;
+  line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.rich-text {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(31, 35, 41, 0.035);
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+}
+
+.history-card,
+.placeholder-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: rgba(31, 35, 41, 0.025);
+}
+
+.history-title,
+.placeholder-title {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.history-meta,
+.history-foot {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.history-foot {
+  justify-content: space-between;
+}
+
+.placeholder-desc {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .empty-detail {
   padding: 18px;
   text-align: center;
+  place-items: center;
+  align-content: center;
 }
 
 .skeleton {

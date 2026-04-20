@@ -36,7 +36,6 @@ export interface UserUpdateRequest {
     introduction?: string
     city?: string
     highestEduSchool?: string
-    teachingMode?: string
     defaultGreeting?: string
   }
   studentExtInfo?: {

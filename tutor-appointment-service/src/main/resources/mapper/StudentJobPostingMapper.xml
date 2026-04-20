@@ -195,10 +195,10 @@
         <if test="classMode != null and classMode != ''">
             <choose>
                 <when test="classMode == 'online'">
-                    AND (class_mode = 'online' OR class_mode = 'both')
+                    AND class_mode = 'online'
                 </when>
                 <when test="classMode == 'offline'">
-                    AND (class_mode = 'offline' OR class_mode = 'both')
+                    AND class_mode = 'offline'
                 </when>
                 <otherwise>
                     AND class_mode = #{classMode}

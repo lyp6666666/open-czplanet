@@ -350,9 +350,7 @@ public class UserServiceImpl implements UserService {
                             && latestProfile.getIntroduction() != null
                             && !latestProfile.getIntroduction().trim().isEmpty()
                             && latestProfile.getSubject() != null
-                            && !latestProfile.getSubject().trim().isEmpty()
-                            && latestProfile.getTeachingMode() != null
-                            && !latestProfile.getTeachingMode().trim().isEmpty();
+                            && !latestProfile.getSubject().trim().isEmpty();
                     if (resumeCompleted) {
                         teacherProfileMapper.markResumeCompleted(user.getId());
                     }

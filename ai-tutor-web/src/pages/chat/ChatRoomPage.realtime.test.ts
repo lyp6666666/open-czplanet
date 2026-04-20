@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   sendImage: vi.fn(),
   recallMessage: vi.fn(),
   createEvent: vi.fn(),
+  unlockContact: vi.fn(),
 }))
 
 vi.mock('@/api/assets', () => ({
@@ -75,7 +76,7 @@ vi.mock('@/api/chat', () => ({
 
 vi.mock('@/api/contact', () => ({
   contactApi: {
-    unlock: vi.fn(),
+    unlock: mocks.unlockContact,
   },
 }))
 
@@ -83,6 +84,7 @@ vi.mock('@/api/application', () => ({
   applicationApi: {
     startChat: vi.fn(),
     decideMessage: vi.fn(),
+    enterChat: vi.fn(),
   },
 }))
 
@@ -127,7 +129,10 @@ function createStorage(): Storage {
 function createTestRouter() {
   return createRouter({
     history: createWebHashHistory(),
-    routes: [{ path: '/chat/:roomId', name: 'chatRoom', component: ChatRoomPage }],
+    routes: [
+      { path: '/chat/:roomId', name: 'chatRoom', component: ChatRoomPage },
+      { path: '/pay/cashier', name: 'cashierPay', component: { template: '<div>cashier</div>' } },
+    ],
   })
 }
 
@@ -236,6 +241,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.sendImage.mockReset()
     mocks.recallMessage.mockReset()
     mocks.createEvent.mockReset()
+    mocks.unlockContact.mockReset()
 
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -335,6 +341,10 @@ describe('ChatRoomPage realtime read receipt', () => {
       participant: { id: payload.participantUserId, name: '张老师', userType: 1 },
       chatRoomId: 10,
     }))
+    mocks.unlockContact.mockResolvedValue({
+      uid: 3001,
+      phone: '13800138001',
+    })
   })
 
   afterEach(() => {
@@ -515,6 +525,221 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(wrapper.text()).not.toContain('对方正在输入...')
   })
 
+  it('redirects teacher to cashier after accepting an application that requires info fee payment', async () => {
+    const { applicationApi } = await import('@/api/application')
+    const decideMessage = vi.mocked(applicationApi.decideMessage)
+    const enterChat = vi.mocked(applicationApi.enterChat)
+
+    decideMessage.mockResolvedValueOnce({
+      fromUser: { uid: 3001 },
+      message: {
+        id: 602,
+        roomId: 10,
+        sendTime: '2026-04-18T10:00:02',
+        body: { type: 'tutor_application_status', applicationId: 9527, status: 'ACCEPTED', actorUserId: 2001 },
+      },
+    })
+    enterChat.mockResolvedValueOnce({
+      paymentRequired: true,
+      waitingForTeacherPayment: false,
+      orderId: 9001,
+      roomId: null,
+    })
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 601,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:01',
+            body: {
+              type: 'tutor_application',
+              applicationId: 9527,
+              content: '您好，方便聊聊吗？',
+              status: 'PENDING',
+              creatorUserId: 3001,
+              contextType: 'DEMAND',
+              contextId: 81,
+            },
+          },
+        },
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 603,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:03',
+            body: {
+              type: 'brokerage_required',
+              orderId: 9001,
+              proposalId: 9527,
+              amountFen: 19900,
+              status: 'PENDING',
+              payerUserId: 2001,
+            },
+          },
+        },
+      ],
+    })
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    mountedPinia.push(pinia)
+    const auth = useAuthStore(pinia)
+    auth.me = {
+      id: 2001,
+      name: '教师2001',
+      phone: '13800138001',
+      avatar: '',
+      sex: 1,
+      userType: 1,
+      studentProfile: null,
+      teacherProfile: {
+        id: 1,
+        userId: 2001,
+        realName: '张老师',
+        education: '本科',
+        subject: '数学',
+        experienceYears: 5,
+        ratePerHour: '300',
+        introduction: '',
+        certificateUrls: null,
+        status: 1,
+        createTime: '2026-04-18T10:00:00',
+        updateTime: '2026-04-18T10:00:00',
+      },
+      organizationProfile: null,
+    }
+    auth.user = {
+      id: 2001,
+      name: '教师2001',
+      phone: '13800138001',
+      avatar: '',
+      sex: 1,
+      userType: 1,
+      token: 'token',
+    }
+
+    const router = createTestRouter()
+    await router.push('/chat/10?otherUid=3001')
+    await router.isReady()
+
+    const wrapper = mount(ChatRoomPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          BrokerageRequiredCard: { template: '<div />' },
+          CollaborationProposalCard: { template: '<div />' },
+          CollaborationProposalModal: { template: '<div />' },
+          ContactUnlockedCard: { template: '<div />' },
+          LessonRequestCard: { template: '<div />' },
+          TutorApplicationCard: {
+            emits: ['accept', 'reject'],
+            template: '<button class="accept-app" type="button" @click="$emit(\'accept\')">accept</button>',
+          },
+          UnlockedContactModal: { template: '<div />' },
+          UserCardModal: { template: '<div />' },
+        },
+      },
+    })
+    mountedWrappers.push(wrapper)
+    await flushPromises()
+
+    await wrapper.find('.accept-app').trigger('click')
+    await flushPromises()
+
+    expect(decideMessage).toHaveBeenCalledWith(9527, 'ACCEPT')
+    expect(mocks.listMessages).toHaveBeenCalledWith({ roomId: 10, pageSize: 20, cursor: null })
+    expect(enterChat).toHaveBeenCalledWith(9527)
+    expect(router.currentRoute.value.name).toBe('cashierPay')
+    expect(router.currentRoute.value.query.contextId).toBe('9001')
+    expect(router.currentRoute.value.query.applicationId).toBe('9527')
+  })
+
+  it('reuses teachingMode when sending tutor application again', async () => {
+    const { applicationApi } = await import('@/api/application')
+    const startChat = vi.mocked(applicationApi.startChat)
+    startChat.mockResolvedValueOnce({
+      fromUser: { uid: 2001 },
+      message: {
+        id: 701,
+        roomId: 10,
+        sendTime: '2026-04-18T10:10:03',
+        body: {
+          type: 'tutor_application',
+          applicationId: 9902,
+          content: '想继续沟通课程安排',
+          status: 'PENDING',
+          creatorUserId: 2001,
+          contextType: 'TUTOR',
+          contextId: 81,
+          teachingMode: 'ONLINE',
+        },
+      },
+    })
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 700,
+            roomId: 10,
+            sendTime: '2026-04-18T10:10:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 9901,
+              content: '想继续沟通课程安排',
+              status: 'REJECTED',
+              creatorUserId: 2001,
+              contextType: 'TUTOR',
+              contextId: 81,
+              teachingMode: 'ONLINE',
+            },
+          },
+        },
+      ],
+    })
+
+    const router = createTestRouter()
+    await router.push('/chat/10?otherUid=3001')
+    await router.isReady()
+
+    const wrapper = mount(ChatRoomPage, {
+      global: {
+        plugins: [createPinia(), router],
+        stubs: {
+          BrokerageRequiredCard: { template: '<div />' },
+          CollaborationProposalCard: { template: '<div />' },
+          CollaborationProposalModal: { template: '<div />' },
+          ContactUnlockedCard: { template: '<div />' },
+          LessonRequestCard: { template: '<div />' },
+          TutorApplicationCard: { template: '<div />' },
+          UnlockedContactModal: { template: '<div />' },
+          UserCardModal: { template: '<div />' },
+        },
+      },
+    })
+    mountedWrappers.push(wrapper)
+    await flushPromises()
+
+    await wrapper.find('button.btn.btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(startChat).toHaveBeenCalledWith({
+      receiverUid: 3001,
+      contextType: 'TUTOR',
+      contextId: 81,
+      content: '想继续沟通课程安排',
+      teachingMode: 'ONLINE',
+      clientRequestId: expect.stringContaining('reapply-'),
+    })
+  })
+
   it('reports typing when the local user is composing and clears it after sending', async () => {
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -542,6 +767,49 @@ describe('ChatRoomPage realtime read receipt', () => {
     await flushPromises()
 
     expect(mocks.reportTyping).toHaveBeenCalledWith(10, false)
+  })
+
+  it('auto loads unlocked contact only after contact_unlocked message appears', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: {
+              type: 'collaboration_status',
+              proposalId: 88,
+              status: 'ACCEPTED',
+              actorUserId: 3001,
+            },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 801,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:02',
+            body: {
+              type: 'contact_unlocked',
+              proposalId: 88,
+              orderId: 9,
+              status: 'PAID',
+            },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    expect(mocks.unlockContact).toHaveBeenCalledWith(10, 3001)
+    expect(wrapper.text()).not.toContain('请求数据不存在')
   })
 
   it('renders image messages from history', async () => {

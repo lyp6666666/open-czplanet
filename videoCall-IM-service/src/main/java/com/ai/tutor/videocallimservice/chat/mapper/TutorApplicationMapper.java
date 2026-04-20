@@ -33,6 +33,8 @@ public interface TutorApplicationMapper {
 
     TutorApplication selectLatestAcceptedBetween(@Param("uidA") Long uidA, @Param("uidB") Long uidB);
 
+    TutorApplication selectLatestUnlockedBetween(@Param("uidA") Long uidA, @Param("uidB") Long uidB);
+
     TutorApplication selectLatestPendingBetween(@Param("senderUid") Long senderUid, @Param("receiverUid") Long receiverUid);
 
     TutorApplication selectLatestBySenderReceiverContext(@Param("senderUid") Long senderUid,

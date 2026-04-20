@@ -21,6 +21,7 @@ public class TutorApplicationVO {
     private String receiverRole;
     private String contextType;
     private Long contextId;
+    private String teachingMode;
     private String content;
     private String status;
     private String chatAccessStatus;

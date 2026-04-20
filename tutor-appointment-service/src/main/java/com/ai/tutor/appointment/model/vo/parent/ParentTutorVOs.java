@@ -19,7 +19,6 @@ public class ParentTutorVOs {
         private String education;
         private Integer experienceYears;
         private String ratePerHour;
-        private String teachingMode;
         private List<String> subjectTags;
         private List<String> highlights;
         private String introduction;

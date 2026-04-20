@@ -29,7 +29,7 @@ const subjectOtherName = ref('')
 
 const gradeCode = ref('')
 const studentGender = ref<'' | 'male' | 'female'>('')
-const classMode = ref<'online' | 'offline' | 'both'>('both')
+const classMode = ref<'online' | 'offline'>('online')
 const teacherGenderPreference = ref<'male' | 'female' | 'both'>('both')
 const availableTime = ref('')
 
@@ -125,7 +125,7 @@ function buildTitle() {
 }
 
 function onSelectCity(v: string) {
-  if (classMode.value === 'offline' || classMode.value === 'both') {
+  if (classMode.value === 'offline') {
     if (String(v || '').trim() === '全国') {
       toast.show('上门辅导请选择具体城市', 'error')
       return
@@ -168,7 +168,7 @@ async function onSubmit() {
     toast.show('学生情况描述至少10个字', 'error')
     return
   }
-  if ((classMode.value === 'offline' || classMode.value === 'both') && (!city.value.trim() || !address.value.trim())) {
+  if (classMode.value === 'offline' && (!city.value.trim() || !address.value.trim())) {
     toast.show('上门辅导必须填写城市与上课地址', 'error')
     return
   }
@@ -320,12 +320,11 @@ watch(
             <select v-model="classMode" class="input">
               <option value="offline">上门辅导</option>
               <option value="online">网络辅导</option>
-              <option value="both">均可</option>
             </select>
           </label>
         </div>
 
-        <div class="row" v-if="classMode !== 'online'">
+        <div class="row" v-if="classMode === 'offline'">
           <label class="field">
             <div class="label"><span class="req">*</span>城市</div>
             <button class="input" type="button" @click="cityModalOpen = true">{{ city || '请选择城市' }}</button>

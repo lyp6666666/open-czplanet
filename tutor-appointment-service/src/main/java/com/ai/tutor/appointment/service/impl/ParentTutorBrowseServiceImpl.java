@@ -32,7 +32,6 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
     public CursorPageResponse<ParentTutorVOs.TutorCardVO> pageTutors(Long uid,
                                                                     String q,
                                                                     String city,
-                                                                    String mode,
                                                                     String subject,
                                                                     BigDecimal rateMin,
                                                                     BigDecimal rateMax,
@@ -45,12 +44,11 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
 
         String qv = normalize(q);
         String cv = CityCatalog.normalizeCityForFilter(city);
-        String mv = normalize(mode);
         String sv = normalize(subject);
         Integer pageSize = pageRequest.getPageSize();
         Long cursor = pageRequest.getCursor();
 
-        List<TutorBrowseRow> rows = teacherProfileMapper.pageTutorCards(qv, cv, mv, sv, rateMin, rateMax, cursor, pageSize);
+        List<TutorBrowseRow> rows = teacherProfileMapper.pageTutorCards(qv, cv, null, sv, rateMin, rateMax, cursor, pageSize);
         if (rows == null || rows.isEmpty()) {
             return new CursorPageResponse<>(null, true, List.of());
         }
@@ -66,7 +64,6 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
                     normalize(r.getEducation()),
                     r.getExperienceYears(),
                     r.getRatePerHour() == null ? null : r.getRatePerHour().stripTrailingZeros().toPlainString(),
-                    normalize(r.getTeachingMode()),
                     buildSubjectTags(r.getSubject()),
                     buildHighlights(r.getRealnameVerifyStatus(), r.getEduVerifyStatus()),
                     shorten(normalize(r.getIntroduction()), 80)

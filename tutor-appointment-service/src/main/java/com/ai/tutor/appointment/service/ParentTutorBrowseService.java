@@ -10,7 +10,6 @@ public interface ParentTutorBrowseService {
     CursorPageResponse<ParentTutorVOs.TutorCardVO> pageTutors(Long uid,
                                                              String q,
                                                              String city,
-                                                             String mode,
                                                              String subject,
                                                              BigDecimal rateMin,
                                                              BigDecimal rateMax,

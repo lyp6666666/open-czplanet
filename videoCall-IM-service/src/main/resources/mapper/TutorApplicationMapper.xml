@@ -11,6 +11,7 @@
         <result column="receiver_role" property="receiverRole"/>
         <result column="context_type" property="contextType"/>
         <result column="context_id" property="contextId"/>
+        <result column="teaching_mode" property="teachingMode"/>
         <result column="content" property="content"/>
         <result column="client_request_id" property="clientRequestId"/>
         <result column="status" property="status"/>
@@ -32,6 +33,7 @@
             receiver_role,
             context_type,
             context_id,
+            teaching_mode,
             content,
             client_request_id,
             status,
@@ -51,6 +53,7 @@
             #{receiverRole},
             #{contextType},
             #{contextId},
+            #{teachingMode},
             #{content},
             #{clientRequestId},
             #{status},
@@ -66,7 +69,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE id = #{id}
@@ -75,7 +78,7 @@
 
     <select id="selectBySenderAndClientRequestId" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE sender_uid = #{senderUid}
@@ -86,7 +89,7 @@
 
     <select id="listBySender" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE sender_uid = #{senderUid}
@@ -99,7 +102,7 @@
 
     <select id="listByReceiver" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE receiver_uid = #{receiverUid}
@@ -150,7 +153,7 @@
 
     <select id="selectLatestAcceptedBetween" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE status = 'ACCEPTED'
@@ -163,9 +166,25 @@
         LIMIT 1
     </select>
 
+    <select id="selectLatestUnlockedBetween" resultMap="baseMap">
+        SELECT
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
+            status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
+        FROM tutor_application
+        WHERE status = 'ACCEPTED'
+          AND chat_access_status = 'CHAT_ENABLED'
+          AND (
+            (sender_uid = #{uidA} AND receiver_uid = #{uidB})
+             OR
+            (sender_uid = #{uidB} AND receiver_uid = #{uidA})
+          )
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <select id="selectLatestPendingBetween" resultMap="baseMap">
         SELECT
-            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id,
+            id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, teaching_mode, content, client_request_id,
             status, chat_access_status, room_id, decided_at, receiver_read, receiver_read_time, create_time, update_time
         FROM tutor_application
         WHERE sender_uid = #{senderUid}

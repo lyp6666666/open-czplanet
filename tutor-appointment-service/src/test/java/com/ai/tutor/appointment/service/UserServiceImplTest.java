@@ -396,7 +396,6 @@ class UserServiceImplTest {
         latest.setHighestEduSchool("北京大学");
         latest.setIntroduction("自我介绍");
         latest.setSubject("数学,英语");
-        latest.setTeachingMode("ONLINE");
 
         when(teacherProfileMapper.selectByUserId(1001L)).thenReturn(existing, latest);
         when(teacherProfileMapper.updateTeacherProfile(any(), anyLong())).thenReturn(1);
@@ -410,7 +409,6 @@ class UserServiceImplTest {
         ext.setHighestEduSchool("北京大学");
         ext.setIntroduction("自我介绍");
         ext.setSubject("数学,英语");
-        ext.setTeachingMode("ONLINE");
 
         UserUpdateRequest dto = new UserUpdateRequest();
         dto.setBaseUserInfo(base);

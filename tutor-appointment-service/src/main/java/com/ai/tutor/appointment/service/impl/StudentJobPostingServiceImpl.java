@@ -62,7 +62,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
             }
         }
 
-        String normalizedCity = CityCatalog.normalizeCityForStorage(request.getClassMode(), request.getCity());
+        String normalizedClassMode = normalizeClassModeForStorage(request.getClassMode());
+        String normalizedCity = CityCatalog.normalizeCityForStorage(normalizedClassMode, request.getCity());
 
         StudentJobPosting posting = StudentJobPosting.builder()
                 .parentId(uid)
@@ -77,7 +78,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .teacherGenderPreference(normalizeTeacherGenderPreferenceForStorage(request.getTeacherGenderPreference()))
                 .teacherRequirementDetail(trimToNull(request.getTeacherRequirementDetail()))
                 .childAge(request.getChildAge())
-                .classMode(request.getClassMode())
+                .classMode(normalizedClassMode)
                 .city(normalizedCity)
                 .address(request.getAddress())
                 .frequencyPerWeek(request.getFrequencyPerWeek())
@@ -114,7 +115,10 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
             stageCode = deriveStageCodeFromGradeCode(gradeCode);
         }
 
-        String effectiveClassMode = firstNonBlank(request.getClassMode(), db.getClassMode());
+        // 授课形式会直接决定后续沟通、课程与支付规则，因此需求创建后不允许修改。
+        ThrowUtils.throwIf(request.getClassMode() != null, ErrorCode.PARAMS_ERROR, "授课形式创建后不可修改");
+
+        String effectiveClassMode = db.getClassMode();
         String city = request.getCity() == null ? db.getCity() : request.getCity();
         String normalizedCity = CityCatalog.normalizeCityForStorage(effectiveClassMode, city);
 
@@ -160,7 +164,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .teacherGenderPreference(request.getTeacherGenderPreference() == null ? null : normalizeTeacherGenderPreferenceForStorage(request.getTeacherGenderPreference()))
                 .teacherRequirementDetail(request.getTeacherRequirementDetail() == null ? null : trimToNull(request.getTeacherRequirementDetail()))
                 .childAge(request.getChildAge())
-                .classMode(request.getClassMode())
+                .classMode(null)
                 .city(request.getCity() == null ? null : normalizedCity)
                 .address(request.getAddress())
                 .frequencyPerWeek(request.getFrequencyPerWeek())
@@ -283,7 +287,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         return buildCursorResponse(list, pageSize);
     }
 
-    private static final Set<String> CLASS_MODES = Set.of("online", "offline", "both");
+    private static final Set<String> CLASS_MODES = Set.of("online", "offline");
     private static final Set<String> GENDER_CODES = Set.of("male", "female", "both");
 
     private static void validateCreate(CreateStudentJobPostingRequest request) {
@@ -317,12 +321,12 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(!Set.of("male", "female").contains(request.getStudentGender().trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "学员性别不合法");
         ThrowUtils.throwIf(request.getBudgetMin() == null || request.getBudgetMax() == null, ErrorCode.PARAMS_ERROR, "预算不能为空");
 
-        validateModeAddress(request.getClassMode(), request.getCity(), request.getAddress());
+        validateModeAddress(normalizeClassModeForStorage(request.getClassMode()), request.getCity(), request.getAddress());
         validateBudgetRange(request.getBudgetMin(), request.getBudgetMax());
     }
 
     private static void validateUpdate(UpdateStudentJobPostingRequest request, StudentJobPosting db) {
-        String classMode = firstNonBlank(request.getClassMode(), db.getClassMode());
+        String classMode = db.getClassMode();
         String title = firstNonBlank(request.getTitle(), db.getTitle());
         String description = firstNonBlank(request.getDescription(), db.getDescription());
         String teacherRequirementDetail = firstNonBlank(request.getTeacherRequirementDetail(), db.getTeacherRequirementDetail());
@@ -352,7 +356,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         ThrowUtils.throwIf(description != null && description.trim().length() < 10, ErrorCode.PARAMS_ERROR, "学生情况描述至少10个字");
         ThrowUtils.throwIf(isBlank(studentGender), ErrorCode.PARAMS_ERROR, "学员性别不能为空");
         ThrowUtils.throwIf(isBlank(classMode), ErrorCode.PARAMS_ERROR, "授课方式不能为空");
-        ThrowUtils.throwIf(!CLASS_MODES.contains(classMode.trim().toLowerCase()), ErrorCode.PARAMS_ERROR, "授课方式不合法");
+        ThrowUtils.throwIf(request.getClassMode() != null, ErrorCode.PARAMS_ERROR, "授课形式创建后不可修改");
         ThrowUtils.throwIf(freq == null || freq < 1 || freq > 7, ErrorCode.PARAMS_ERROR, "授课频次需在 1~7 之间");
         ThrowUtils.throwIf(isBlank(gradeCode), ErrorCode.PARAMS_ERROR, "学生年级不能为空");
         ThrowUtils.throwIf(isBlank(stage), ErrorCode.PARAMS_ERROR, "授课学段不能为空");
@@ -376,10 +380,17 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
             return;
         }
         String v = classMode.trim().toLowerCase();
-        if ("offline".equals(v) || "both".equals(v)) {
+        if ("offline".equals(v)) {
             ThrowUtils.throwIf(isBlank(city), ErrorCode.PARAMS_ERROR, "线下授课必须选择城市");
             ThrowUtils.throwIf(isBlank(address), ErrorCode.PARAMS_ERROR, "线下授课必须填写授课地址");
         }
+    }
+
+    private static String normalizeClassModeForStorage(String raw) {
+        if (raw == null) return null;
+        String v = raw.trim().toLowerCase();
+        ThrowUtils.throwIf(!CLASS_MODES.contains(v), ErrorCode.PARAMS_ERROR, "授课方式仅支持线上或线下");
+        return v;
     }
 
     private static void validateBudgetRange(BigDecimal budgetMin, BigDecimal budgetMax) {

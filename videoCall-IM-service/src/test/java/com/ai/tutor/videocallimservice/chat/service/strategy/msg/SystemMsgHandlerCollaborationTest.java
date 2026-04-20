@@ -54,4 +54,26 @@ class SystemMsgHandlerCollaborationTest {
         assertThat(m.get("status")).isEqualTo("ACCEPTED");
         assertThat(m.get("actorUserId")).isEqualTo(200L);
     }
+
+    @Test
+    void shouldRenderTutorApplicationTeachingMode() {
+        SystemMsgReq body = new SystemMsgReq();
+        body.setBizType("TUTOR_APPLICATION");
+        body.setEventId(99L);
+        body.setContent("您好，想先约试听课");
+        body.setStatus("PENDING");
+        body.setCreatorUserId(100L);
+        body.setContextType("TUTOR");
+        body.setContextId(18L);
+        body.setTeachingMode("OFFLINE");
+
+        Message msg = Message.builder().content("家教申请").extra(JSONUtil.toJsonStr(body)).build();
+        Object out = new SystemMsgHandler().showMsg(msg);
+        assertThat(out).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> m = (Map<String, Object>) out;
+        assertThat(m.get("type")).isEqualTo("tutor_application");
+        assertThat(m.get("applicationId")).isEqualTo(99L);
+        assertThat(m.get("teachingMode")).isEqualTo("OFFLINE");
+    }
 }

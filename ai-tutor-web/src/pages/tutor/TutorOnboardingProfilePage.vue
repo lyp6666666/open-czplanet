@@ -25,11 +25,7 @@ const introduction = ref('')
 const subjectSelected = ref<string[]>([])
 const subjectOther = ref('')
 
-const teachingMode = ref<'ONLINE' | 'OFFLINE' | 'BOTH' | ''>('')
-
 const eduOptions = ['本科', '硕士', '博士', '专科', '海外', '其他']
-
-const allowNational = computed(() => teachingMode.value === 'ONLINE')
 
 const cities = computed(() => {
   const base = [city.value, localStorage.getItem('ai_tutor_city') || '', '北京', '上海', '广州', '深圳', '杭州']
@@ -38,10 +34,6 @@ const cities = computed(() => {
 
 function onSelectCity(v: string) {
   const raw = String(v || '').trim()
-  if ((teachingMode.value === 'OFFLINE' || teachingMode.value === 'BOTH') && raw === '全国') {
-    toast.show('线下授课请选择具体城市', 'error')
-    return
-  }
   if (raw) localStorage.setItem('ai_tutor_city', raw)
   city.value = raw
 }
@@ -67,8 +59,7 @@ const canSubmit = computed(() => {
     city.value.trim() &&
     highestEduSchool.value.trim() &&
     introduction.value.trim() &&
-    finalSubjects.value.length > 0 &&
-    teachingMode.value
+    finalSubjects.value.length > 0
   )
 })
 
@@ -83,7 +74,6 @@ async function submit() {
         highestEduSchool: highestEduSchool.value.trim(),
         introduction: introduction.value.trim(),
         subject: finalSubjects.value.join(','),
-        teachingMode: teachingMode.value,
       },
     })
     await auth.refreshMe()
@@ -119,9 +109,6 @@ onMounted(async () => {
   if (me?.teacherProfile?.city) city.value = me.teacherProfile.city
   if (me?.teacherProfile?.highestEduSchool) highestEduSchool.value = me.teacherProfile.highestEduSchool
   if (me?.teacherProfile?.introduction) introduction.value = me.teacherProfile.introduction
-  const tm = me?.teacherProfile?.teachingMode
-  if (tm === 'ONLINE' || tm === 'OFFLINE' || tm === 'BOTH') teachingMode.value = tm
-
   const rawSubject = me?.teacherProfile?.subject || ''
   const parts = rawSubject
     .split(',')
@@ -181,7 +168,7 @@ onMounted(async () => {
                 :open="cityModalOpen"
                 :model-value="city"
                 :hot-cities="cities"
-                :allow-national="allowNational"
+                :allow-national="false"
                 @update:model-value="onSelectCity"
                 @close="cityModalOpen = false"
               />
@@ -217,16 +204,6 @@ onMounted(async () => {
                 :disabled="loading"
               />
             </div>
-
-            <label class="field">
-              <div class="label">支持教学方式</div>
-              <select v-model="teachingMode" class="input" :disabled="loading">
-                <option value="" disabled>请选择教学方式</option>
-                <option value="ONLINE">线上教学</option>
-                <option value="OFFLINE">线下教学</option>
-                <option value="BOTH">均可</option>
-              </select>
-            </label>
 
             <div class="actions">
               <button class="btn btn-primary" type="button" :disabled="loading || !canSubmit" @click="submit">保存并完成</button>

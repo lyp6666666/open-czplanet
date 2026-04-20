@@ -44,7 +44,7 @@ public class UpdateStudentJobPostingRequest {
     @Schema(description = "孩子年龄", example = "9")
     private Integer childAge;
 
-    @Schema(description = "授课方式：online/offline/both", example = "online")
+    @Schema(description = "授课方式：online/offline，仅用于回显，需求创建后不可修改", example = "online")
     private String classMode;
 
     @Schema(description = "城市（线下时必填）", example = "北京")

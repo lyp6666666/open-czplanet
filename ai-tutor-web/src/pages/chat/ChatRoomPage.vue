@@ -681,6 +681,7 @@ async function sendTutorApplicationAgain() {
       contextType: latest.body.contextType,
       contextId: latest.body.contextId,
       content: latest.body.content,
+      teachingMode: latest.body.teachingMode || undefined,
       clientRequestId: `reapply-${Date.now()}`,
     })
     mergeMessages([msg], 'append')
@@ -784,6 +785,15 @@ async function respondTutorApplication(applicationId: number, action: 'ACCEPT' |
     const statusMsg = await applicationApi.decideMessage(applicationId, action)
     mergeMessages([statusMsg], 'append')
 
+    if (action === 'ACCEPT' && isTeacher.value) {
+      await loadLatestMessages()
+      const enterResp = await applicationApi.enterChat(applicationId)
+      if (enterResp.paymentRequired && enterResp.orderId) {
+        goPay(enterResp.orderId, applicationId)
+        return
+      }
+    }
+
     const statusBody = normalizeBody(statusMsg.message.body)
     const nextStatus = isTutorApplicationStatusBody(statusBody) ? appStatusText(statusBody.status) : action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED'
     const next = messages.value.map((m) => {
@@ -798,6 +808,14 @@ async function respondTutorApplication(applicationId: number, action: 'ACCEPT' |
   } finally {
     appActionBusy.value = { ...appActionBusy.value, [applicationId]: false }
   }
+}
+
+async function loadLatestMessages() {
+  if (!(roomId.value > 0)) return
+  const page = await chatApi.listMessages({ roomId: roomId.value, pageSize: 20, cursor: null })
+  mergeMessages(page.list || [], 'append')
+  cursor.value = page.cursor ?? null
+  isLast.value = !!page.isLast
 }
 function msgText(raw: unknown): string {
   if (!raw) return ''
@@ -1154,12 +1172,8 @@ const collabStatusByProposalId = computed<Record<number, CollaborationProposalSt
   return out
 })
 
-const hasAcceptedCollaboration = computed(() => {
-  return Object.values(collabStatusByProposalId.value).some((s) => s === 'ACCEPTED')
-})
-
 const canViewContact = computed(() => {
-  return hasAcceptedCollaboration.value
+  return chatUnlocked.value
 })
 
 const hasActiveCollabProposal = computed(() => {
@@ -1221,7 +1235,7 @@ watch([roomId, () => messages.value.length], () => {
 }, { immediate: true })
 
 watch(
-  hasAcceptedCollaboration,
+  chatUnlocked,
   (v) => {
     if (!v) return
     if (contactAutoShown.value) return

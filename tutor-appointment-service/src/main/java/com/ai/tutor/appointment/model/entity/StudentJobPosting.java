@@ -56,7 +56,7 @@ public class StudentJobPosting {
     /** 孩子年龄 */
     private Integer childAge;
 
-    /** 授课方式：online/offline/both */
+    /** 授课方式：online/offline。需求创建后不可切换。 */
     private String classMode;
 
     /** 线下授课城市 */

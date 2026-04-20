@@ -199,10 +199,6 @@ async function onSave() {
     toast.show('请选择学生年级', 'error')
     return
   }
-  if (!form.value.classMode) {
-    toast.show('请选择授课方式', 'error')
-    return
-  }
   const desc = String(form.value.description || '').trim()
   if (!desc) {
     toast.show('请填写学生情况描述', 'error')
@@ -260,7 +256,7 @@ async function onSave() {
     budgetMinNum = vMin
     budgetMaxNum = vMax
   }
-  if ((form.value.classMode === 'offline' || form.value.classMode === 'both') && (!String(form.value.city || '').trim() || !String(form.value.address || '').trim())) {
+  if (form.value.classMode === 'offline' && (!String(form.value.city || '').trim() || !String(form.value.address || '').trim())) {
     toast.show('上门辅导必须填写城市与上课地址', 'error')
     return
   }
@@ -278,7 +274,6 @@ async function onSave() {
       teacherGenderPreference: form.value.teacherGenderPreference || undefined,
       availableTime: String(form.value.availableTime || '').trim() || undefined,
       teacherRequirementDetail: reqDetail,
-      classMode: form.value.classMode || undefined,
       city: form.value.classMode === 'online' ? undefined : form.value.city || undefined,
       address: form.value.classMode === 'online' ? undefined : form.value.address || undefined,
       budgetMin: budgetMinNum,
@@ -296,7 +291,7 @@ async function onSave() {
 
 function onSelectCity(v: string) {
   if (!form.value) return
-  if (form.value.classMode === 'offline' || form.value.classMode === 'both') {
+  if (form.value.classMode === 'offline') {
     if (String(v || '').trim() === '全国') {
       toast.show('上门辅导请选择具体城市', 'error')
       return
@@ -386,15 +381,11 @@ watch(
         <div class="row">
           <label class="field">
             <div class="label"><span class="req">*</span>授课方式</div>
-            <select v-model="form.classMode" class="input">
-              <option value="offline">上门辅导</option>
-              <option value="online">网络辅导</option>
-              <option value="both">均可</option>
-            </select>
+            <input class="input" :value="form.classMode === 'online' ? '网络辅导（创建后不可修改）' : '上门辅导（创建后不可修改）'" disabled />
           </label>
         </div>
 
-        <div class="row" v-if="form.classMode !== 'online'">
+        <div class="row" v-if="form.classMode === 'offline'">
           <label class="field">
             <div class="label"><span class="req">*</span>城市</div>
             <button class="input" type="button" @click="cityModalOpen = true">{{ String(form.city || '').trim() || '请选择城市' }}</button>

@@ -70,4 +70,7 @@ public class SystemMsgReq {
 
     @Schema(description = "上下文id（部分系统消息使用）")
     private Long contextId;
+
+    @Schema(description = "授课形式（线上/线下）")
+    private String teachingMode;
 }

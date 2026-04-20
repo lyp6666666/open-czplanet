@@ -25,6 +25,9 @@ public class CreateTutorApplicationReq {
     @Schema(description = "申请内容")
     private String content;
 
+    @Schema(description = "授课形式：ONLINE/OFFLINE。学生主动找教师时必填；教师/机构申请需求时以后端需求为准")
+    private String teachingMode;
+
     @Schema(description = "客户端幂等键（可选）")
     private String clientRequestId;
 }

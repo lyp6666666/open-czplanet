@@ -61,6 +61,8 @@ public class TutorApplicationService {
     private static final String CONTEXT_TUTOR = "TUTOR";
     private static final String CONTEXT_ORG_POSTING = "ORG_POSTING";
     private static final String PROMOTION_SYSTEM_INVITE = "SYSTEM_INVITE";
+    private static final String TEACHING_MODE_ONLINE = "ONLINE";
+    private static final String TEACHING_MODE_OFFLINE = "OFFLINE";
 
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
@@ -114,20 +116,25 @@ public class TutorApplicationService {
         String receiverRole = Integer.valueOf(1).equals(role) ? ROLE_STUDENT : ROLE_TEACHER;
 
         String contextType = trim(req.getContextType()).toUpperCase();
+        String teachingMode;
         if (ROLE_TEACHER.equals(senderRole)) {
             ThrowUtils.throwIf(!CONTEXT_DEMAND.equals(contextType), ErrorCode.PARAMS_ERROR);
             Long receiverStudentProfileId = studentProfileLiteMapper == null ? null : studentProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
             ThrowUtils.throwIf(receiverStudentProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是学生账号，无法发起申请");
+            teachingMode = resolveTeachingModeFromDemand(req.getContextId());
         } else if (ROLE_STUDENT.equals(senderRole)) {
             ThrowUtils.throwIf(!CONTEXT_TUTOR.equals(contextType), ErrorCode.PARAMS_ERROR);
             Long receiverTeacherProfileId = teacherProfileLiteMapper == null ? null : teacherProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
             ThrowUtils.throwIf(receiverTeacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法发起申请");
+            teachingMode = normalizeTeachingMode(req.getTeachingMode(), true);
         } else if (ROLE_ORG.equals(senderRole)) {
             ThrowUtils.throwIf(!CONTEXT_ORG_POSTING.equals(contextType), ErrorCode.PARAMS_ERROR, "机构发起申请必须绑定岗位/需求");
             Long receiverTeacherProfileId = teacherProfileLiteMapper == null ? null : teacherProfileLiteMapper.selectIdByUserId(req.getReceiverUid());
             ThrowUtils.throwIf(receiverTeacherProfileId == null, ErrorCode.OPERATION_ERROR, "对方不是教师账号，无法发起申请");
+            teachingMode = resolveTeachingModeFromDemand(req.getContextId());
         } else {
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "用户角色不合法");
+            teachingMode = null;
         }
         ThrowUtils.throwIf(req.getContextId() == null, ErrorCode.PARAMS_ERROR);
 
@@ -164,6 +171,7 @@ public class TutorApplicationService {
                 .receiverRole(receiverRole)
                 .contextType(contextType)
                 .contextId(req.getContextId())
+                .teachingMode(teachingMode)
                 .content(content)
                 .clientRequestId(clientRequestId)
                 .status(TutorApplicationStatus.PENDING.name())
@@ -227,6 +235,7 @@ public class TutorApplicationService {
         body.setContent(vo.getContent());
         body.setContextType(vo.getContextType());
         body.setContextId(vo.getContextId());
+        body.setTeachingMode(vo.getTeachingMode());
 
         ChatMessageReq msgReq = ChatMessageReq.builder()
                 .roomId(roomId)
@@ -270,8 +279,12 @@ public class TutorApplicationService {
         return toVO(application, orderId);
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public TutorApplicationVO decide(Long applicationId, DecideTutorApplicationReq req, Long uid) {
+        return decideInternal(applicationId, req, uid);
+    }
+
+    private TutorApplicationVO decideInternal(Long applicationId, DecideTutorApplicationReq req, Long uid) {
         ThrowUtils.throwIf(applicationId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
         TutorApplication application = tutorApplicationMapper.selectById(applicationId);
         ThrowUtils.throwIf(application == null, ErrorCode.NOT_FOUND_ERROR);
@@ -319,7 +332,7 @@ public class TutorApplicationService {
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
         if (updated <= 0) {
             if (TutorApplicationStatus.ACCEPTED.name().equals(latest.getStatus())) {
-                Long orderId = resolveOrderId(applicationId);
+                Long orderId = ensureOrderIdForAcceptedApplication(latest);
                 return toVO(latest, orderId);
             }
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
@@ -363,8 +376,9 @@ public class TutorApplicationService {
         return "unknown";
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public ChatMessageResp decideAndSendToChat(Long applicationId, DecideTutorApplicationReq req, Long uid) {
-        TutorApplicationVO vo = decide(applicationId, req, uid);
+        TutorApplicationVO vo = decideInternal(applicationId, req, uid);
         TutorApplication latest = tutorApplicationMapper.selectById(applicationId);
         ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
         Long roomId = ensureRoom(latest, uid);
@@ -565,6 +579,18 @@ public class TutorApplicationService {
         return order.getId();
     }
 
+    private Long ensureOrderIdForAcceptedApplication(TutorApplication application) {
+        ThrowUtils.throwIf(application == null || application.getId() == null, ErrorCode.PARAMS_ERROR);
+        if (!TutorApplicationStatus.ACCEPTED.name().equals(application.getStatus())) {
+            return resolveOrderId(application.getId());
+        }
+        Long orderId = resolveOrderId(application.getId());
+        if (orderId != null) {
+            return orderId;
+        }
+        return getOrCreateBrokerageOrderForApplication(application);
+    }
+
     private long computeInfoFeeAmountFenForApplication(TutorApplication application) {
         if (brokerageInfoFeeHotConfig != null && brokerageInfoFeeHotConfig.isUnifiedEnabled()) {
             long v = brokerageInfoFeeHotConfig.getUnifiedAmountFen();
@@ -676,6 +702,7 @@ public class TutorApplicationService {
                 .receiverRole(application.getReceiverRole())
                 .contextType(application.getContextType())
                 .contextId(application.getContextId())
+                .teachingMode(application.getTeachingMode())
                 .content(application.getContent())
                 .status(application.getStatus())
                 .chatAccessStatus(application.getChatAccessStatus())
@@ -686,6 +713,40 @@ public class TutorApplicationService {
                 .decidedAt(application.getDecidedAt())
                 .createTime(application.getCreateTime())
                 .build();
+    }
+
+    /**
+     * 授课形式会贯穿后续课程和支付，所以这里只接受稳定的 ONLINE/OFFLINE 两种值。
+     */
+    private String normalizeTeachingMode(String raw, boolean required) {
+        String value = trimNullable(raw);
+        if (value == null) {
+            ThrowUtils.throwIf(required, ErrorCode.PARAMS_ERROR, "请选择授课形式");
+            return null;
+        }
+        String upper = value.toUpperCase();
+        ThrowUtils.throwIf(!TEACHING_MODE_ONLINE.equals(upper) && !TEACHING_MODE_OFFLINE.equals(upper),
+                ErrorCode.PARAMS_ERROR, "授课形式仅支持线上或线下");
+        return upper;
+    }
+
+    private String resolveTeachingModeFromDemand(Long demandId) {
+        ThrowUtils.throwIf(demandId == null, ErrorCode.PARAMS_ERROR);
+        StudentJobPostingLite demand = studentJobPostingLiteMapper.selectById(demandId);
+        ThrowUtils.throwIf(demand == null, ErrorCode.NOT_FOUND_ERROR, "需求不存在");
+        String mode = trimNullable(demand.getClassMode());
+        if (mode == null) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "需求缺少授课形式");
+        }
+        String normalized = mode.toLowerCase();
+        if ("online".equals(normalized)) {
+            return TEACHING_MODE_ONLINE;
+        }
+        if ("offline".equals(normalized)) {
+            return TEACHING_MODE_OFFLINE;
+        }
+        ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "需求授课形式异常");
+        return null;
     }
 
     private static Long resolveTeacherUid(TutorApplication application) {

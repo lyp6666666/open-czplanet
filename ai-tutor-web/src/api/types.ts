@@ -158,7 +158,6 @@ export interface ParentTutorCardVO {
   education: string | null
   experienceYears: number | null
   ratePerHour: string | null
-  teachingMode: string | null
   subjectTags: string[]
   highlights: string[]
   introduction: string | null
@@ -380,6 +379,7 @@ export interface TutorApplicationVO {
   receiverRole: 'TEACHER' | 'STUDENT' | 'ORG'
   contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'
   contextId: number
+  teachingMode: 'ONLINE' | 'OFFLINE'
   content: string
   status: TutorApplicationStatus
   chatAccessStatus: TutorApplicationChatAccessStatus
@@ -443,6 +443,7 @@ export type ChatMessageBody =
       creatorUserId: number
       contextType: 'DEMAND' | 'TUTOR'
       contextId: number
+      teachingMode?: 'ONLINE' | 'OFFLINE' | null
     }
   | { type: 'tutor_application_status'; applicationId: number; status: TutorApplicationCardStatus; actorUserId: number }
   | {

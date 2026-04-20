@@ -13,8 +13,8 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class StudentJobPostingLite {
     private Long id;
+    private String classMode;
     private Integer frequencyPerWeek;
     private BigDecimal budgetMin;
     private BigDecimal budgetMax;
 }
-

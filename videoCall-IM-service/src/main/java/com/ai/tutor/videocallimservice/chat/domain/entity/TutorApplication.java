@@ -19,6 +19,7 @@ public class TutorApplication {
     private String receiverRole;
     private String contextType;
     private Long contextId;
+    private String teachingMode;
     private String content;
     private String clientRequestId;
     private String status;

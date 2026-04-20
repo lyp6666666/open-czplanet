@@ -2,22 +2,24 @@ import { http } from './http'
 import type { ChatMessageResp, CursorPageResp, TutorApplicationEnterResp, TutorApplicationUnreadResp, TutorApplicationVO } from './types'
 
 export const applicationApi = {
-  create(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string | null }) {
+  create(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; teachingMode?: 'ONLINE' | 'OFFLINE'; clientRequestId?: string | null }) {
     return http.post<unknown, TutorApplicationVO>('/chat/application', {
       receiverUid: params.receiverUid,
       contextType: params.contextType,
       contextId: params.contextId,
       content: params.content,
+      teachingMode: params.teachingMode,
       clientRequestId: params.clientRequestId || undefined,
     })
   },
 
-  startChat(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string | null }) {
+  startChat(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; teachingMode?: 'ONLINE' | 'OFFLINE'; clientRequestId?: string | null }) {
     return http.post<unknown, ChatMessageResp>('/chat/application/start-chat', {
       receiverUid: params.receiverUid,
       contextType: params.contextType,
       contextId: params.contextId,
       content: params.content,
+      teachingMode: params.teachingMode,
       clientRequestId: params.clientRequestId || undefined,
     })
   },

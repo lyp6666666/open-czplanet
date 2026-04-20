@@ -55,7 +55,7 @@ public class CreateStudentJobPostingRequest {
     private Integer childAge;
 
     @NotBlank
-    @Schema(description = "授课方式：online/offline/both", example = "online")
+    @Schema(description = "授课方式：online/offline", example = "online")
     private String classMode;
 
     @Schema(description = "城市（线下时必填）", example = "北京")

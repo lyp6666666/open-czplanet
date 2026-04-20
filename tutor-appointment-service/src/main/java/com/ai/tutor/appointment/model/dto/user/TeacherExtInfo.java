@@ -26,8 +26,6 @@ public class TeacherExtInfo {
 
     private String highestEduSchool;
 
-    private String teachingMode;
-
     private String defaultGreeting;
 
     private String certificateUrls; // 证书链接（JSON）
