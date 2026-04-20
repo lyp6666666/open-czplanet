@@ -101,6 +101,22 @@ apply_migrations() {
   done
 }
 
+apply_live_class_migration_if_needed() {
+  if table_exists "live_class_session"; then
+    echo "[db_bootstrap_if_missing] 实时课堂表已存在，跳过课堂增量迁移"
+    return 0
+  fi
+
+  live_class_sql="$ROOT_DIR/sqlDoc/migrations/20260420_live_class_service_init.sql"
+  if [ ! -f "$live_class_sql" ]; then
+    echo "[db_bootstrap_if_missing] 未找到课堂迁移文件: $(basename "$live_class_sql")"
+    exit 1
+  fi
+
+  echo "[db_bootstrap_if_missing] 补齐实时课堂表结构: $(basename "$live_class_sql")"
+  mysql_exec_stdin "$DB_NAME" < "$live_class_sql"
+}
+
 apply_seed() {
   echo "[db_bootstrap_if_missing] 导入开发种子数据: sqlDoc/seed_dev_data.sql"
   sed "s/^USE ai_tutor;$/USE \`${DB_NAME}\`;/" "$ROOT_DIR/sqlDoc/seed_dev_data.sql" | mysql_exec_stdin "$DB_NAME"
@@ -116,7 +132,8 @@ fi
 ensure_database
 
 if table_exists "user"; then
-  echo "[db_bootstrap_if_missing] 检测到核心表已存在，跳过初始化"
+  echo "[db_bootstrap_if_missing] 检测到核心表已存在，跳过基线初始化，按需补齐增量表结构"
+  apply_live_class_migration_if_needed
   exit 0
 fi
 

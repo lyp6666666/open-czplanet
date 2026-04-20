@@ -143,7 +143,12 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
         String bizType = extractBizType(request.getBody());
         if (!unlocked) {
-            boolean allowed = "TUTOR_APPLICATION".equals(bizType) || "TUTOR_APPLICATION_STATUS".equals(bizType) || "BROKERAGE_REQUIRED".equals(bizType) || "CONTACT_UNLOCKED".equals(bizType);
+            boolean allowed = "TUTOR_APPLICATION".equals(bizType)
+                    || "TUTOR_APPLICATION_STATUS".equals(bizType)
+                    || "BROKERAGE_REQUIRED".equals(bizType)
+                    || "CONTACT_UNLOCKED".equals(bizType)
+                    || "LESSON_REQUEST".equals(bizType)
+                    || "LESSON_STATUS".equals(bizType);
             ThrowUtils.throwIf(!allowed, ErrorCode.OPERATION_ERROR, "当前仅可发送家教申请");
         }
     }

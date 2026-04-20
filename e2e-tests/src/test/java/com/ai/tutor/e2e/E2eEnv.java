@@ -9,6 +9,7 @@ public class E2eEnv {
     public final String imBaseUrl;
     public final String paymentBaseUrl;
     public final String adminBaseUrl;
+    public final String gatewayBaseUrl;
 
     public final String gatewaySignSecret;
     public final String brokerageAdminToken;
@@ -19,6 +20,7 @@ public class E2eEnv {
                   String imBaseUrl,
                   String paymentBaseUrl,
                   String adminBaseUrl,
+                  String gatewayBaseUrl,
                   String gatewaySignSecret,
                   String brokerageAdminToken) {
         this.mysqlUrl = mysqlUrl;
@@ -27,6 +29,7 @@ public class E2eEnv {
         this.imBaseUrl = imBaseUrl;
         this.paymentBaseUrl = paymentBaseUrl;
         this.adminBaseUrl = adminBaseUrl;
+        this.gatewayBaseUrl = gatewayBaseUrl;
         this.gatewaySignSecret = gatewaySignSecret;
         this.brokerageAdminToken = brokerageAdminToken;
     }
@@ -39,10 +42,11 @@ public class E2eEnv {
         String imBaseUrl = getenv("E2E_IM_BASE_URL", "http://localhost:18082");
         String paymentBaseUrl = getenv("E2E_PAYMENT_BASE_URL", "http://localhost:18083");
         String adminBaseUrl = getenv("E2E_ADMIN_BASE_URL", "http://localhost:18084");
+        String gatewayBaseUrl = getenv("E2E_GATEWAY_BASE_URL", "http://localhost:18080");
 
         String gatewaySignSecret = getenv("E2E_GATEWAY_SIGN_SECRET", "0123456789abcdef0123456789abcdef");
         String brokerageAdminToken = getenv("E2E_BROKERAGE_ADMIN_TOKEN", "E2E_ADMIN_TOKEN");
-        return new E2eEnv(mysqlUrl, mysqlUser, mysqlPassword, imBaseUrl, paymentBaseUrl, adminBaseUrl, gatewaySignSecret, brokerageAdminToken);
+        return new E2eEnv(mysqlUrl, mysqlUser, mysqlPassword, imBaseUrl, paymentBaseUrl, adminBaseUrl, gatewayBaseUrl, gatewaySignSecret, brokerageAdminToken);
     }
 
     private static String getenv(String key, String defaultValue) {
@@ -53,4 +57,3 @@ public class E2eEnv {
         return v.trim();
     }
 }
-

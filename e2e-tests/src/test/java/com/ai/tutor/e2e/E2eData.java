@@ -15,12 +15,15 @@ public class E2eData {
     public Long brokerageOrderId;
     public Long refundRequestId;
     public Long courseId;
+    public Long scheduleEventId;
+    public Long liveSessionId;
 
     public String teacherPhone;
     public String studentPhone;
+    public String teacherToken;
+    public String studentToken;
     public String paymentOrderNo;
 
     public final List<Long> messageIds = new ArrayList<>();
     public final List<Long> proposalIds = new ArrayList<>();
 }
-
