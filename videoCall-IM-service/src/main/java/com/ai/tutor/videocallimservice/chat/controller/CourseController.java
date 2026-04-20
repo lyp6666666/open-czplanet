@@ -4,6 +4,7 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseItemVO;
 import com.ai.tutor.videocallimservice.chat.service.CourseEnrollmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +35,20 @@ public class CourseController {
         return ResultUtils.success(courseEnrollmentService.listMyCourses(uid, r, p, s));
     }
 
+    @GetMapping("/{courseId}")
+    @Operation(summary = "长期课程详情")
+    public BaseResponse<CourseDetailVO> detail(@PathVariable("courseId") Long courseId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(courseEnrollmentService.getCourseDetail(courseId, uid));
+    }
+
+    @GetMapping("/by-room/{roomId}")
+    @Operation(summary = "按会话查询当前长期课程")
+    public BaseResponse<CourseDetailVO> byRoom(@PathVariable("roomId") Long roomId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(courseEnrollmentService.getCourseByRoom(roomId, uid));
+    }
+
     @PostMapping("/{courseId}/trial-refund/apply")
     @Operation(summary = "试课不通过退款申请（退 60% 信息费）")
     public BaseResponse<Long> applyTrialRefund(@PathVariable("courseId") Long courseId,
@@ -43,4 +58,3 @@ public class CourseController {
         return ResultUtils.success(id);
     }
 }
-

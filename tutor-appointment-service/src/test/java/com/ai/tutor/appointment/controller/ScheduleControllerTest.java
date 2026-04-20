@@ -62,6 +62,7 @@ class ScheduleControllerTest {
     void listEventsShouldMatchPathAndReturnData() throws Exception {
         ScheduleEventVO item = ScheduleEventVO.builder()
                 .id(1L)
+                .courseId(66L)
                 .title("测试课")
                 .description("备注")
                 .startAt(1_771_412_400_000L)
@@ -80,6 +81,7 @@ class ScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].id").value(1))
+                .andExpect(jsonPath("$.data[0].courseId").value(66))
                 .andExpect(jsonPath("$.data[0].title").value("测试课"))
                 .andExpect(jsonPath("$.data[0].participant.id").value(1002));
     }
@@ -88,6 +90,7 @@ class ScheduleControllerTest {
     void createShouldMatchPathAndReturnEvent() throws Exception {
         ScheduleEventVO item = ScheduleEventVO.builder()
                 .id(2L)
+                .courseId(66L)
                 .title("初二数学")
                 .startAt(1_771_412_400_000L)
                 .endAt(1_771_416_000_000L)
@@ -99,6 +102,7 @@ class ScheduleControllerTest {
         when(scheduleService.createEvent(any(), eq(1001L))).thenReturn(item);
 
         String body = "{"
+                + "\"courseId\":66,"
                 + "\"title\":\"初二数学\","
                 + "\"participantUserId\":1002,"
                 + "\"startAt\":1771412400000,"
@@ -112,6 +116,7 @@ class ScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.id").value(2))
+                .andExpect(jsonPath("$.data.courseId").value(66))
                 .andExpect(jsonPath("$.data.chatRoomId").value(11));
     }
 
@@ -155,6 +160,23 @@ class ScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data.status").value("CANCELED"));
+    }
+
+    @Test
+    void listCourseEventsShouldMatchPathAndReturnData() throws Exception {
+        ScheduleEventVO item = ScheduleEventVO.builder()
+                .id(5L)
+                .courseId(66L)
+                .title("长期课程试课")
+                .status("PENDING")
+                .build();
+        when(scheduleService.listCourseEvents(eq(66L), eq(1001L))).thenReturn(List.of(item));
+
+        mockMvc.perform(get("/api/v1/schedule/courses/66/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].courseId").value(66))
+                .andExpect(jsonPath("$.data[0].id").value(5));
     }
 
     @SpringBootConfiguration

@@ -38,6 +38,13 @@ public class ScheduleController {
         return ResultUtils.success(scheduleService.listEvents(uid, startAt, endAt, includePending != null && includePending));
     }
 
+    @GetMapping("/courses/{courseId}/events")
+    @Operation(summary = "查询长期课程下的课节列表")
+    public BaseResponse<List<ScheduleEventVO>> listCourseEvents(@PathVariable("courseId") Long courseId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(scheduleService.listCourseEvents(courseId, uid));
+    }
+
     @PostMapping("/events")
     @Operation(summary = "创建授课申请（创建日程并发送聊天卡片）")
     public BaseResponse<ScheduleEventVO> create(@Valid @RequestBody CreateScheduleEventRequest request) {
@@ -62,4 +69,3 @@ public class ScheduleController {
         return ResultUtils.success(scheduleService.cancel(eventId, uid, remark));
     }
 }
-

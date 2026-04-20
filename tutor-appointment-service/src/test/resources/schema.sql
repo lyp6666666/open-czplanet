@@ -1,5 +1,6 @@
 CREATE TABLE tutor_appointment (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  course_id BIGINT,
   parent_id BIGINT NOT NULL,
   tutor_id BIGINT NOT NULL,
   parent_job_posting_id BIGINT,

@@ -4,6 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
+import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment;
 import com.ai.tutor.videocallimservice.chat.domain.entity.RefundRequest;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
@@ -14,10 +15,13 @@ import com.ai.tutor.videocallimservice.chat.domain.enums.RefundRequestType;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseItemVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RefundRequestMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,10 @@ public class CourseEnrollmentService {
     private RefundRequestMapper refundRequestMapper;
     @Resource
     private BrokerageOrderMapper brokerageOrderMapper;
+    @Resource
+    private CollaborationProposalMapper collaborationProposalMapper;
+    @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public CourseEnrollment ensureForApplication(TutorApplication application) {
@@ -65,6 +73,11 @@ public class CourseEnrollmentService {
                 .proposalId(null)
                 .teacherUid(teacherUid)
                 .studentUid(studentUid)
+                .teachingMode(normalizeTeachingMode(application.getTeachingMode()))
+                .courseName(null)
+                .classTime(null)
+                .frequencyPerWeek(null)
+                .lessonPrice(null)
                 .status(deriveStatus(application))
                 .trialStartAt(null)
                 .trialEndAt(null)
@@ -107,9 +120,23 @@ public class CourseEnrollmentService {
                 && !CourseEnrollmentStatus.WAIT_PAY.name().equals(enrollment.getStatus())) {
             return;
         }
+        TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(roomId);
+        CollaborationProposal proposal = proposalId == null ? null : collaborationProposalMapper.selectById(proposalId);
         LocalDateTime start = LocalDateTime.now();
         LocalDateTime end = start.plus(7, ChronoUnit.DAYS);
-        courseEnrollmentMapper.updateStatus(enrollment.getId(), enrollment.getStatus(), CourseEnrollmentStatus.TRIALING.name(), proposalId, start, end);
+        // 中文注释：线上合作一旦被接受，就把聊天阶段沉淀为“长期课程”，后续短期课节必须挂在这门课下面。
+        courseEnrollmentMapper.startOnlineCourse(
+                enrollment.getId(),
+                enrollment.getStatus(),
+                proposalId,
+                normalizeTeachingMode(application == null ? null : application.getTeachingMode()),
+                buildCourseName(proposal, application, enrollment),
+                proposal == null ? null : trimTo255(proposal.getClassTime()),
+                proposal == null ? null : proposal.getFrequencyPerWeek(),
+                proposal == null ? null : trimTo64(proposal.getPricePerHour()),
+                start,
+                end
+        );
     }
 
     public List<CourseItemVO> listMyCourses(Long uid, String role, int page, int size) {
@@ -135,11 +162,33 @@ public class CourseEnrollmentService {
                     .roomId(e.getRoomId())
                     .teacherUid(e.getTeacherUid())
                     .studentUid(e.getStudentUid())
+                    .teachingMode(e.getTeachingMode())
+                    .courseName(e.getCourseName())
+                    .classTime(e.getClassTime())
+                    .frequencyPerWeek(e.getFrequencyPerWeek())
+                    .lessonPrice(e.getLessonPrice())
                     .status(e.getStatus())
+                    .trialStartAt(e.getTrialStartAt())
                     .trialEndAt(e.getTrialEndAt())
                     .build());
         }
         return out;
+    }
+
+    public CourseDetailVO getCourseDetail(Long courseId, Long uid) {
+        ThrowUtils.throwIf(courseId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
+        ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
+        assertParticipant(course, uid);
+        return toCourseDetail(course);
+    }
+
+    public CourseDetailVO getCourseByRoom(Long roomId, Long uid) {
+        ThrowUtils.throwIf(roomId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        CourseEnrollment course = courseEnrollmentMapper.selectLatestByRoomId(roomId);
+        ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "当前会话暂无长期课程");
+        assertParticipant(course, uid);
+        return toCourseDetail(course);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -237,6 +286,52 @@ public class CourseEnrollmentService {
         return application.getReceiverUid();
     }
 
+    private static void assertParticipant(CourseEnrollment course, Long uid) {
+        ThrowUtils.throwIf(course == null || uid == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(!uid.equals(course.getTeacherUid()) && !uid.equals(course.getStudentUid()), ErrorCode.NO_AUTH_ERROR);
+    }
+
+    private static CourseDetailVO toCourseDetail(CourseEnrollment course) {
+        return CourseDetailVO.builder()
+                .courseId(course.getId())
+                .applicationId(course.getApplicationId())
+                .roomId(course.getRoomId())
+                .teacherUid(course.getTeacherUid())
+                .studentUid(course.getStudentUid())
+                .teachingMode(course.getTeachingMode())
+                .courseName(course.getCourseName())
+                .classTime(course.getClassTime())
+                .frequencyPerWeek(course.getFrequencyPerWeek())
+                .lessonPrice(course.getLessonPrice())
+                .status(course.getStatus())
+                .trialStartAt(course.getTrialStartAt())
+                .trialEndAt(course.getTrialEndAt())
+                .build();
+    }
+
+    private static String normalizeTeachingMode(String teachingMode) {
+        String mode = teachingMode == null ? "" : teachingMode.trim().toUpperCase();
+        if ("ONLINE".equals(mode) || "OFFLINE".equals(mode)) {
+            return mode;
+        }
+        return null;
+    }
+
+    private static String buildCourseName(CollaborationProposal proposal, TutorApplication application, CourseEnrollment enrollment) {
+        String lessonPrice = proposal == null ? null : trimTo64(proposal.getPricePerHour());
+        String classTime = proposal == null ? null : trimTo255(proposal.getClassTime());
+        if (lessonPrice != null && classTime != null) {
+            return trimTo255("线上一对一｜" + lessonPrice + "｜" + classTime);
+        }
+        if (classTime != null) {
+            return trimTo255("线上一对一｜" + classTime);
+        }
+        if (application != null && "ONLINE".equalsIgnoreCase(application.getTeachingMode())) {
+            return "线上长期课程";
+        }
+        return enrollment.getCourseName() == null ? "长期课程" : enrollment.getCourseName();
+    }
+
     private static String trimTo1024(String s) {
         if (s == null) return null;
         String v = s.trim();
@@ -244,5 +339,20 @@ public class CourseEnrollmentService {
         if (v.length() <= 1024) return v;
         return v.substring(0, 1024);
     }
-}
 
+    private static String trimTo255(String s) {
+        if (s == null) return null;
+        String v = s.trim();
+        if (v.isEmpty()) return null;
+        if (v.length() <= 255) return v;
+        return v.substring(0, 255);
+    }
+
+    private static String trimTo64(String s) {
+        if (s == null) return null;
+        String v = s.trim();
+        if (v.isEmpty()) return null;
+        if (v.length() <= 64) return v;
+        return v.substring(0, 64);
+    }
+}

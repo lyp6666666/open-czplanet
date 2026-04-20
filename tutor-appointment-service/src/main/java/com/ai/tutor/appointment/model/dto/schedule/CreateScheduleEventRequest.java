@@ -15,6 +15,9 @@ import lombok.Data;
 @Schema(name = "CreateScheduleEventRequest", description = "创建课程日程（发起授课申请）")
 public class CreateScheduleEventRequest {
 
+    @Schema(description = "长期课程 id（线上课建议传入）", example = "66")
+    private Long courseId;
+
     @NotBlank
     @Schema(description = "课程名称/标题", example = "初二数学｜一次函数强化")
     private String title;
@@ -37,4 +40,3 @@ public class CreateScheduleEventRequest {
     @Schema(description = "备注（可选）", example = "希望先讲例题再做练习")
     private String description;
 }
-

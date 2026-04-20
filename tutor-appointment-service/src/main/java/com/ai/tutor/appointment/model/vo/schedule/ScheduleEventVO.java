@@ -18,6 +18,9 @@ public class ScheduleEventVO implements Serializable {
     @Schema(description = "事件/预约 id")
     private Long id;
 
+    @Schema(description = "所属长期课程 id")
+    private Long courseId;
+
     @Schema(description = "课程名称/标题")
     private String title;
 
@@ -44,4 +47,3 @@ public class ScheduleEventVO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 }
-

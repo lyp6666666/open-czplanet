@@ -8,6 +8,7 @@ export interface ListScheduleEventsParams {
 }
 
 export interface CreateScheduleEventRequest {
+  courseId?: number
   title: string
   participantUserId: number
   startAt: number
@@ -26,6 +27,10 @@ export type RespondScheduleAction = 'ACCEPT' | 'REJECT'
 export const scheduleApi = {
   listEvents(params: ListScheduleEventsParams) {
     return http.get<unknown, ScheduleEventVO[]>('/api/v1/schedule/events', { params })
+  },
+
+  listCourseEvents(courseId: number) {
+    return http.get<unknown, ScheduleEventVO[]>(`/api/v1/schedule/courses/${courseId}/events`)
   },
 
   createEvent(request: CreateScheduleEventRequest) {
@@ -48,4 +53,3 @@ export const scheduleApi = {
     return http.get<unknown, UserSimpleVO[]>('/api/v1/contacts/search', { params: { q, limit } })
   },
 }
-

@@ -379,7 +379,7 @@ export interface TutorApplicationVO {
   receiverRole: 'TEACHER' | 'STUDENT' | 'ORG'
   contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'
   contextId: number
-  teachingMode: 'ONLINE' | 'OFFLINE'
+  teachingMode?: 'ONLINE' | 'OFFLINE' | null
   content: string
   status: TutorApplicationStatus
   chatAccessStatus: TutorApplicationChatAccessStatus
@@ -413,6 +413,7 @@ export type TutorApplicationCardStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 
 export interface ScheduleEventVO {
   id: number
+  courseId?: number | null
   title: string
   description: string | null
   startAt: number
@@ -421,6 +422,38 @@ export interface ScheduleEventVO {
   creatorUserId: number
   participant: UserSimpleVO | null
   chatRoomId: number | null
+}
+
+export interface CourseItemVO {
+  courseId: number
+  applicationId: number
+  roomId?: number | null
+  teacherUid: number
+  studentUid: number
+  teachingMode?: 'ONLINE' | 'OFFLINE' | null
+  courseName?: string | null
+  classTime?: string | null
+  frequencyPerWeek?: number | null
+  lessonPrice?: string | null
+  status: string
+  trialStartAt?: string | null
+  trialEndAt?: string | null
+}
+
+export interface CourseDetailVO {
+  courseId: number
+  applicationId: number
+  roomId: number | null
+  teacherUid: number
+  studentUid: number
+  teachingMode?: 'ONLINE' | 'OFFLINE' | null
+  courseName?: string | null
+  classTime?: string | null
+  frequencyPerWeek?: number | null
+  lessonPrice?: string | null
+  status: string
+  trialStartAt?: string | null
+  trialEndAt?: string | null
 }
 
 export type ChatMessageBody =

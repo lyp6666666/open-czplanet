@@ -18,10 +18,14 @@ public class CourseEnrollment {
     private Long proposalId;
     private Long teacherUid;
     private Long studentUid;
+    private String teachingMode;
+    private String courseName;
+    private String classTime;
+    private Integer frequencyPerWeek;
+    private String lessonPrice;
     private String status;
     private LocalDateTime trialStartAt;
     private LocalDateTime trialEndAt;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
-

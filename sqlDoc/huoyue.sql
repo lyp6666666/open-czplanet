@@ -477,6 +477,11 @@ CREATE TABLE `course_enrollment` (
             `proposal_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '合作提案id',
             `teacher_uid` bigint(20) UNSIGNED NOT NULL COMMENT '教师uid',
             `student_uid` bigint(20) UNSIGNED NOT NULL COMMENT '学生uid',
+            `teaching_mode` varchar(20) DEFAULT NULL COMMENT '授课形式 ONLINE/OFFLINE',
+            `course_name` varchar(255) DEFAULT NULL COMMENT '长期课程名称',
+            `class_time` varchar(255) DEFAULT NULL COMMENT '每周固定上课时间描述',
+            `frequency_per_week` int DEFAULT NULL COMMENT '每周课次数',
+            `lesson_price` varchar(64) DEFAULT NULL COMMENT '单节课价格文案',
             `status` varchar(32) NOT NULL COMMENT '课程状态 APPLYING/WAIT_PAY/COMMUNICATING/REFUND_REVIEW/REFUNDED/TRIALING/TRIAL_REFUND_REVIEW/TEACHING/FINISHED',
             `trial_start_at` datetime(3) DEFAULT NULL COMMENT '试课开始时间',
             `trial_end_at` datetime(3) DEFAULT NULL COMMENT '试课结束时间（开始+7天）',
@@ -640,6 +645,7 @@ CREATE TABLE `room_read_state` (
 DROP TABLE IF EXISTS `tutor_appointment`;
 CREATE TABLE `tutor_appointment` (
             `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '预约id',
+            `course_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '所属长期课程 id',
             `parent_id` bigint(20) NOT NULL COMMENT '家长 user_id',
             `tutor_id` bigint(20) NOT NULL COMMENT '教师 user_id',
             `parent_job_posting_id` bigint(20) DEFAULT NULL COMMENT '家长需求贴id',
@@ -661,6 +667,7 @@ CREATE TABLE `tutor_appointment` (
             `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
             `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
             PRIMARY KEY (`id`),
+            KEY `idx_course_id` (`course_id`),
             KEY `idx_parent_id` (`parent_id`),
             KEY `idx_tutor_id` (`tutor_id`),
             KEY `idx_status` (`status`),

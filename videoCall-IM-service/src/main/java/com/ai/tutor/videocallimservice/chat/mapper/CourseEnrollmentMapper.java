@@ -31,5 +31,16 @@ public interface CourseEnrollmentMapper {
                      @Param("trialStartAt") LocalDateTime trialStartAt,
                      @Param("trialEndAt") LocalDateTime trialEndAt);
 
+    int startOnlineCourse(@Param("id") Long id,
+                          @Param("expectedStatus") String expectedStatus,
+                          @Param("proposalId") Long proposalId,
+                          @Param("teachingMode") String teachingMode,
+                          @Param("courseName") String courseName,
+                          @Param("classTime") String classTime,
+                          @Param("frequencyPerWeek") Integer frequencyPerWeek,
+                          @Param("lessonPrice") String lessonPrice,
+                          @Param("trialStartAt") LocalDateTime trialStartAt,
+                          @Param("trialEndAt") LocalDateTime trialEndAt);
+
     int updateRoomId(@Param("applicationId") Long applicationId, @Param("roomId") Long roomId);
 }

@@ -7,10 +7,11 @@ import type { ChatPresenceResp, ChatRefundStateResp } from '@/api/chat'
 import { assetsApi } from '@/api/assets'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
+import { courseApi } from '@/api/course'
 import { liveApi } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, CourseDetailVO, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useToastStore } from '@/stores/toast'
@@ -84,6 +85,7 @@ const scheduleTitle = ref('')
 const scheduleDescription = ref('')
 const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now()))
 const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
+const currentCourse = ref<CourseDetailVO | null>(null)
 
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
@@ -423,8 +425,8 @@ function openScheduleCreate() {
   }
   const peerName = otherUid.value ? pickDisplayName(otherUser.value, otherUid.value) : '对方'
   const start = roundToNextHalfHour(Date.now())
-  scheduleTitle.value = `与${peerName}的线上课程`
-  scheduleDescription.value = ''
+  scheduleTitle.value = currentCourse.value?.courseName?.trim() || `与${peerName}的线上课程`
+  scheduleDescription.value = currentCourse.value ? `课程 #${currentCourse.value.courseId} 下新增课节` : ''
   scheduleStartAt.value = start
   scheduleEndAt.value = start + 60 * 60 * 1000
   scheduleError.value = null
@@ -493,6 +495,7 @@ async function submitScheduleCreate() {
   scheduleBusy.value = true
   try {
     const event = await scheduleApi.createEvent({
+      courseId: currentCourse.value?.courseId,
       title: titleText,
       participantUserId: otherUid.value,
       startAt: scheduleStartAt.value,
@@ -816,6 +819,18 @@ async function loadLatestMessages() {
   mergeMessages(page.list || [], 'append')
   cursor.value = page.cursor ?? null
   isLast.value = !!page.isLast
+}
+
+async function loadCurrentCourse() {
+  if (!(roomId.value > 0)) {
+    currentCourse.value = null
+    return
+  }
+  try {
+    currentCourse.value = await courseApi.byRoom(roomId.value)
+  } catch {
+    currentCourse.value = null
+  }
 }
 function msgText(raw: unknown): string {
   if (!raw) return ''
@@ -1741,8 +1756,10 @@ watch(
     pendingOutgoingMessages.value = []
     sending.value = false
     contactAutoShown.value = false
+    currentCourse.value = null
     void loadOtherUser()
     void loadOtherPresence()
+    void loadCurrentCourse()
     startPresenceRefresh()
     void chatRealtime.refreshUnreadFromServer()
     void ackFromRoomList()
@@ -2041,6 +2058,9 @@ watch(
               <button class="btn schedule-action" type="button" :disabled="!composerEnabled || !otherUid" @click="openScheduleCreate">
                 发起约课
               </button>
+              <button v-if="currentCourse?.courseId" class="btn" type="button" @click="router.push({ name: 'courseDetail', params: { courseId: String(currentCourse.courseId) } })">
+                我的课程
+              </button>
               <span v-if="chatUnlocked && isTeacher && !hasAnyRefundRequest" :title="refundHoverText">
                 <button class="btn" type="button" :disabled="!canApplyRefund" @click="applyRefund">
                   申请退费
@@ -2088,7 +2108,10 @@ watch(
     <div v-if="scheduleOpen" class="mask" @click.self="closeScheduleCreate">
       <div class="modal card schedule-modal">
         <div class="m-title">发起线上约课</div>
-        <div class="m-desc">对方接收后，系统会自动生成实时课堂，并在开课前提醒双方进入。</div>
+        <div class="m-desc">
+          对方接收后，系统会自动生成实时课堂，并在开课前提醒双方进入。
+          <template v-if="currentCourse?.courseId">当前会挂到长期课程 #{{ currentCourse.courseId }} 下。</template>
+        </div>
         <div v-if="scheduleError" class="m-error">{{ scheduleError }}</div>
 
         <div class="field">

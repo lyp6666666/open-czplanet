@@ -5,6 +5,7 @@
 
     <resultMap id="TutorAppointmentMap" type="com.ai.tutor.appointment.model.entity.TutorAppointment">
         <id column="id" property="id"/>
+        <result column="course_id" property="courseId"/>
         <result column="parent_id" property="parentId"/>
         <result column="tutor_id" property="tutorId"/>
         <result column="parent_job_posting_id" property="parentJobPostingId"/>
@@ -29,10 +30,10 @@
 
     <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.TutorAppointment" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tutor_appointment
-        (parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+        (course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
          start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark)
         VALUES
-        (#{parentId}, #{tutorId}, #{parentJobPostingId}, #{tutorJobPostingId}, #{title}, #{subjectId}, #{classMode}, #{city}, #{address},
+        (#{courseId}, #{parentId}, #{tutorId}, #{parentJobPostingId}, #{tutorJobPostingId}, #{title}, #{subjectId}, #{classMode}, #{city}, #{address},
          #{startTime}, #{durationMinutes}, #{status}, #{createdBy}, #{roomId}, #{proposedStartTime}, #{proposedBy}, #{cancelBy}, #{remark})
     </insert>
 
@@ -56,7 +57,7 @@
 
     <select id="selectById" resultMap="TutorAppointmentMap">
         SELECT
-            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            id, course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
             start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
         FROM tutor_appointment
         WHERE id = #{id}
@@ -99,7 +100,7 @@
 
     <select id="listByUser" resultMap="TutorAppointmentMap">
         SELECT
-            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            id, course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
             start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
         FROM tutor_appointment
         WHERE (parent_id = #{uid} OR tutor_id = #{uid})
@@ -115,7 +116,7 @@
 
     <select id="listByUserAndTimeRange" resultMap="TutorAppointmentMap">
         SELECT
-            id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            id, course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
             start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
         FROM tutor_appointment
         WHERE (parent_id = #{uid} OR tutor_id = #{uid})
@@ -130,6 +131,15 @@
                   (2, 3, 5)
               </otherwise>
           </choose>
+        ORDER BY start_time ASC, id ASC
+    </select>
+
+    <select id="listByCourseId" resultMap="TutorAppointmentMap">
+        SELECT
+            id, course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, subject_id, class_mode, city, address,
+            start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
+        FROM tutor_appointment
+        WHERE course_id = #{courseId}
         ORDER BY start_time ASC, id ASC
     </select>
 

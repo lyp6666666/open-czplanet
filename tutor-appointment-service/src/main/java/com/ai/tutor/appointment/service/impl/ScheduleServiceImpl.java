@@ -73,6 +73,19 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     @Override
+    public List<ScheduleEventVO> listCourseEvents(Long courseId, Long uid) {
+        ThrowUtils.throwIf(courseId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        List<TutorAppointment> list = tutorAppointmentMapper.listByCourseId(courseId);
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(item -> uid.equals(item.getParentId()) || uid.equals(item.getTutorId()))
+                .map(item -> toEventVO(item, uid))
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public ScheduleEventVO createEvent(CreateScheduleEventRequest request, Long uid) {
         ThrowUtils.throwIf(request == null || uid == null, ErrorCode.PARAMS_ERROR);
@@ -119,6 +132,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         int durationMinutes = (int) Duration.between(start, end).toMinutes();
         TutorAppointment appointment = TutorAppointment.builder()
+                .courseId(request.getCourseId())
                 .parentId(parentId)
                 .tutorId(tutorId)
                 .title(request.getTitle())
@@ -280,6 +294,7 @@ public class ScheduleServiceImpl implements ScheduleService {
 
         return ScheduleEventVO.builder()
                 .id(a.getId())
+                .courseId(a.getCourseId())
                 .title(a.getTitle() == null || a.getTitle().isBlank() ? "课程" : a.getTitle())
                 .description(a.getRemark())
                 .startAt(start == null ? null : toEpochMillis(start))

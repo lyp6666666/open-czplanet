@@ -23,7 +23,9 @@ const SchedulePage = () => import('@/pages/schedule/SchedulePage.vue')
 const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
 const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
 const MyCoursesPage = () => import('@/pages/course/MyCoursesPage.vue')
+const CourseDetailPage = () => import('@/pages/course/CourseDetailPage.vue')
 const LivePreparePage = () => import('@/pages/live/LivePreparePage.vue')
+const LivePermissionGuidePage = () => import('@/pages/live/LivePermissionGuidePage.vue')
 const LiveClassroomPage = () => import('@/pages/live/LiveClassroomPage.vue')
 const OrgAuthPage = () => import('@/pages/org/OrgAuthPage.vue')
 const OrgChangePasswordPage = () => import('@/pages/org/OrgChangePasswordPage.vue')
@@ -244,9 +246,19 @@ export const router = createRouter({
       component: MyCoursesPage,
     },
     {
+      path: '/courses/:courseId',
+      name: 'courseDetail',
+      component: CourseDetailPage,
+    },
+    {
       path: '/live/prepare/:courseId',
       name: 'livePrepare',
       component: LivePreparePage,
+    },
+    {
+      path: '/live/permission-help',
+      name: 'livePermissionHelp',
+      component: LivePermissionGuidePage,
     },
     {
       path: '/live/classroom/:courseId',
@@ -272,6 +284,7 @@ router.beforeEach((to) => {
     to.path === '/invite' ||
     to.path.startsWith('/settings') ||
     to.path === '/schedule' ||
+    to.path.startsWith('/courses') ||
     to.path.startsWith('/live/') ||
     to.path.startsWith('/pay/') ||
     to.path.startsWith('/student/') ||

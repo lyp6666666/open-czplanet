@@ -10,6 +10,11 @@
         <result column="proposal_id" property="proposalId"/>
         <result column="teacher_uid" property="teacherUid"/>
         <result column="student_uid" property="studentUid"/>
+        <result column="teaching_mode" property="teachingMode"/>
+        <result column="course_name" property="courseName"/>
+        <result column="class_time" property="classTime"/>
+        <result column="frequency_per_week" property="frequencyPerWeek"/>
+        <result column="lesson_price" property="lessonPrice"/>
         <result column="status" property="status"/>
         <result column="trial_start_at" property="trialStartAt"/>
         <result column="trial_end_at" property="trialEndAt"/>
@@ -25,6 +30,11 @@
             proposal_id,
             teacher_uid,
             student_uid,
+            teaching_mode,
+            course_name,
+            class_time,
+            frequency_per_week,
+            lesson_price,
             status,
             trial_start_at,
             trial_end_at,
@@ -38,6 +48,11 @@
             #{proposalId},
             #{teacherUid},
             #{studentUid},
+            #{teachingMode},
+            #{courseName},
+            #{classTime},
+            #{frequencyPerWeek},
+            #{lessonPrice},
             #{status},
             #{trialStartAt},
             #{trialEndAt},
@@ -48,7 +63,7 @@
 
     <select id="selectByApplicationId" resultMap="baseMap">
         SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
             trial_start_at, trial_end_at, create_time, update_time
         FROM course_enrollment
         WHERE application_id = #{applicationId}
@@ -57,7 +72,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
             trial_start_at, trial_end_at, create_time, update_time
         FROM course_enrollment
         WHERE id = #{id}
@@ -66,7 +81,7 @@
 
     <select id="selectLatestByRoomId" resultMap="baseMap">
         SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
             trial_start_at, trial_end_at, create_time, update_time
         FROM course_enrollment
         WHERE room_id = #{roomId}
@@ -100,7 +115,7 @@
 
     <select id="listByTeacher" resultMap="baseMap">
         SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
             trial_start_at, trial_end_at, create_time, update_time
         FROM course_enrollment
         WHERE teacher_uid = #{teacherUid}
@@ -110,7 +125,7 @@
 
     <select id="listByStudent" resultMap="baseMap">
         SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
             trial_start_at, trial_end_at, create_time, update_time
         FROM course_enrollment
         WHERE student_uid = #{studentUid}
@@ -131,6 +146,23 @@
             <if test="trialEndAt != null">
                 trial_end_at = #{trialEndAt},
             </if>
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = #{expectedStatus}
+    </update>
+
+    <update id="startOnlineCourse">
+        UPDATE course_enrollment
+        SET
+            status = 'TRIALING',
+            proposal_id = #{proposalId},
+            teaching_mode = #{teachingMode},
+            course_name = #{courseName},
+            class_time = #{classTime},
+            frequency_per_week = #{frequencyPerWeek},
+            lesson_price = #{lessonPrice},
+            trial_start_at = #{trialStartAt},
+            trial_end_at = #{trialEndAt},
             update_time = NOW()
         WHERE id = #{id}
           AND status = #{expectedStatus}

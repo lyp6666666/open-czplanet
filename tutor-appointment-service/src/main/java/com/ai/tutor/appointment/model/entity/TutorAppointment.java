@@ -15,6 +15,12 @@ public class TutorAppointment {
 
     private Long id;
 
+    /**
+     * 所属长期课程 id。
+     * 中文说明：线上短期课节统一挂到长期课程下，避免后续约课/调课时丢失课程归属。
+     */
+    private Long courseId;
+
     private Long parentId;
 
     private Long tutorId;

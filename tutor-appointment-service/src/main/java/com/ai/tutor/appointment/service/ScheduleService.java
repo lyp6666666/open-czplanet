@@ -18,6 +18,11 @@ public interface ScheduleService {
     List<ScheduleEventVO> listEvents(Long uid, Long startAtMs, Long endAtMs, boolean includePending);
 
     /**
+     * 查询某门长期课程下的全部课节。
+     */
+    List<ScheduleEventVO> listCourseEvents(Long courseId, Long uid);
+
+    /**
      * 创建授课申请（创建日程 + 发送授课申请消息）。
      */
     ScheduleEventVO createEvent(CreateScheduleEventRequest request, Long uid);
@@ -32,4 +37,3 @@ public interface ScheduleService {
      */
     ScheduleEventVO cancel(Long eventId, Long uid, String remark);
 }
-

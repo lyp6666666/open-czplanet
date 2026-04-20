@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
-@Schema(description = "我的课程条目")
-public class CourseItemVO {
+@Schema(description = "长期课程详情")
+public class CourseDetailVO {
 
     @Schema(description = "course_enrollment.id")
     private Long courseId;
@@ -17,7 +17,7 @@ public class CourseItemVO {
     @Schema(description = "tutor_application.id")
     private Long applicationId;
 
-    @Schema(description = "roomId（可空）")
+    @Schema(description = "roomId")
     private Long roomId;
 
     @Schema(description = "教师 uid")
@@ -41,12 +41,12 @@ public class CourseItemVO {
     @Schema(description = "单节课课时费文案")
     private String lessonPrice;
 
-    @Schema(description = "课程状态")
+    @Schema(description = "长期课程状态")
     private String status;
 
-    @Schema(description = "试课开始时间（可空）")
+    @Schema(description = "试课开始时间")
     private LocalDateTime trialStartAt;
 
-    @Schema(description = "试课结束时间（可空）")
+    @Schema(description = "试课结束时间")
     private LocalDateTime trialEndAt;
 }
