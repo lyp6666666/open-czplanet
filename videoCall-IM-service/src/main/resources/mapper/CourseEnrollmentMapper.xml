@@ -74,6 +74,30 @@
         LIMIT 1
     </select>
 
+    <select id="countActiveByRoomId" resultType="java.lang.Integer">
+        SELECT
+            (
+                SELECT COUNT(1)
+                FROM course_enrollment
+                WHERE room_id = #{roomId}
+                  AND status IN ('APPLYING', 'WAIT_PAY', 'COMMUNICATING', 'TRIALING', 'TRIAL_REFUND_REVIEW', 'TEACHING')
+            )
+            +
+            (
+                SELECT COUNT(1)
+                FROM tutor_appointment
+                WHERE room_id = #{roomId}
+                  AND status IN (2, 3)
+            )
+            +
+            (
+                SELECT COUNT(1)
+                FROM live_class_session
+                WHERE room_id = #{roomId}
+                  AND status IN ('CREATED', 'JOIN_OPEN', 'IN_PROGRESS')
+            )
+    </select>
+
     <select id="listByTeacher" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, status,

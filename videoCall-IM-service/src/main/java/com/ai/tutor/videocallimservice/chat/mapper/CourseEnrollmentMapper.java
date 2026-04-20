@@ -18,6 +18,8 @@ public interface CourseEnrollmentMapper {
 
     CourseEnrollment selectLatestByRoomId(@Param("roomId") Long roomId);
 
+    Integer countActiveByRoomId(@Param("roomId") Long roomId);
+
     List<CourseEnrollment> listByTeacher(@Param("teacherUid") Long teacherUid, @Param("offset") long offset, @Param("size") int size);
 
     List<CourseEnrollment> listByStudent(@Param("studentUid") Long studentUid, @Param("offset") long offset, @Param("size") int size);

@@ -2,6 +2,9 @@ package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.config.OpsProperties;
 import com.ai.tutor.appointment.enums.RedisKeyPrefix;
+import com.ai.tutor.appointment.enums.UserRoleEnum;
+import com.ai.tutor.appointment.model.vo.LoginUserVO;
+import com.ai.tutor.appointment.service.UserService;
 import com.ai.tutor.appointment.service.impl.SmsServiceImpl;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.enums.ErrorCode;
@@ -32,6 +35,9 @@ public class DevSmsController {
     @Resource
     private SmsServiceImpl smsService;
 
+    @Resource
+    private UserService userService;
+
     @GetMapping("/code")
     public BaseResponse<String> code(@RequestParam("phone") String phone,
                                     @RequestHeader(value = "X-Ops-Token", required = false) String token) {
@@ -53,5 +59,22 @@ public class DevSmsController {
         String local = smsService.debugPeekCode(p, RedisKeyPrefix.SMS_CODE.getPrefix());
         ThrowUtils.throwIf(local == null, ErrorCode.NOT_FOUND_ERROR, "code not found");
         return ResultUtils.success(local);
+    }
+
+    @GetMapping("/login")
+    public BaseResponse<LoginUserVO> login(@RequestParam("phone") String phone,
+                                           @RequestParam("role") String role,
+                                           @RequestHeader(value = "X-Ops-Token", required = false) String token) {
+        ThrowUtils.throwIf(!exposeSmsCode, ErrorCode.NO_AUTH_ERROR, "dev endpoint disabled");
+        String expected = opsProperties == null ? null : opsProperties.getVerifyToken();
+        ThrowUtils.throwIf(expected == null || expected.isBlank(), ErrorCode.NO_AUTH_ERROR, "ops token not configured");
+        ThrowUtils.throwIf(token == null || !token.equals(expected), ErrorCode.NO_AUTH_ERROR, "ops token invalid");
+        ThrowUtils.throwIf(phone == null || phone.trim().isEmpty(), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(role == null || role.trim().isEmpty(), ErrorCode.PARAMS_ERROR);
+
+        String normalizedPhone = phone.trim();
+        UserRoleEnum userRoleEnum = UserRoleEnum.valueOf(role.trim().toUpperCase());
+        String code = smsService.sendCode(normalizedPhone, RedisKeyPrefix.SMS_CODE.getPrefix());
+        return ResultUtils.success(userService.userLoginOrRegister(normalizedPhone, code, userRoleEnum, null));
     }
 }

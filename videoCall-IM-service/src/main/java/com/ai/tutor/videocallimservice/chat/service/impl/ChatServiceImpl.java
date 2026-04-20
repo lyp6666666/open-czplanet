@@ -16,6 +16,7 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.CursorPageBaseReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatMessageResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageBaseResp;
+import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
@@ -57,6 +58,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Autowired
     private TutorApplicationMapper tutorApplicationMapper;
+
+    @Autowired
+    private CourseEnrollmentMapper courseEnrollmentMapper;
 
     @Autowired
     private TeacherProfileLiteMapper teacherProfileLiteMapper;
@@ -157,6 +161,10 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
         Room room = roomMapper.selectById(roomId);
         if (room == null || room.getStatus() == null || room.getStatus() != 1) {
             return false;
+        }
+        Integer activeCourseCount = courseEnrollmentMapper.countActiveByRoomId(roomId);
+        if (activeCourseCount != null && activeCourseCount > 0) {
+            return true;
         }
         Long teacherUid = room.getTeacherProfileId() == null ? null : teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
         Long studentUid = room.getStudentProfileId() == null ? null : studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId());
