@@ -11,6 +11,8 @@ REMOTE_USER="${REMOTE_USER:-root}"
 REMOTE_HOST="${REMOTE_HOST:-111.228.20.88}"
 REMOTE_PORT="${REMOTE_PORT:-22}"
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
+LIVEKIT_PORT="${LIVEKIT_PORT:-7880}"
+LIVEKIT_RTC_TCP_PORT="${LIVEKIT_RTC_TCP_PORT:-7881}"
 WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
 
@@ -35,8 +37,12 @@ read_pid() {
   fi
 }
 
+tunnel_pid_from_port() {
+  lsof -ti tcp:"$WEB_PORT" -sTCP:LISTEN 2>/dev/null | sed -n '1p' || true
+}
+
 check_ports_available() {
-  for port in "$WEB_PORT" "$ADMIN_WEB_PORT" "$GATEWAY_PORT"; do
+  for port in "$WEB_PORT" "$ADMIN_WEB_PORT" "$GATEWAY_PORT" "$LIVEKIT_PORT" "$LIVEKIT_RTC_TCP_PORT"; do
     if port_is_listening "$port"; then
       pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | sed -n '1p' || true)"
       echo "[ssh_tunnel] 本地端口已被占用：$port pid=${pid:-unknown}"
@@ -55,7 +61,7 @@ wait_until_ready() {
       exit 1
     fi
     ready=1
-    for port in "$WEB_PORT" "$ADMIN_WEB_PORT" "$GATEWAY_PORT"; do
+    for port in "$WEB_PORT" "$ADMIN_WEB_PORT" "$GATEWAY_PORT" "$LIVEKIT_PORT" "$LIVEKIT_RTC_TCP_PORT"; do
       if ! port_is_listening "$port"; then
         ready=0
         break
@@ -88,19 +94,29 @@ start_tunnel() {
   echo "  localhost:${WEB_PORT} -> remote 127.0.0.1:${WEB_PORT}"
   echo "  localhost:${ADMIN_WEB_PORT} -> remote 127.0.0.1:${ADMIN_WEB_PORT}"
   echo "  localhost:${GATEWAY_PORT} -> remote 127.0.0.1:${GATEWAY_PORT}"
+  echo "  localhost:${LIVEKIT_PORT} -> remote 127.0.0.1:${LIVEKIT_PORT}"
+  echo "  localhost:${LIVEKIT_RTC_TCP_PORT} -> remote 127.0.0.1:${LIVEKIT_RTC_TCP_PORT}"
 
-  nohup ssh \
+  ssh \
+    -f \
     -N \
     -p "$REMOTE_PORT" \
     -o ExitOnForwardFailure=yes \
+    -o StdinNull=yes \
     -o ServerAliveInterval=30 \
     -o ServerAliveCountMax=3 \
     -L "${WEB_PORT}:127.0.0.1:${WEB_PORT}" \
     -L "${ADMIN_WEB_PORT}:127.0.0.1:${ADMIN_WEB_PORT}" \
     -L "${GATEWAY_PORT}:127.0.0.1:${GATEWAY_PORT}" \
-    "${REMOTE_USER}@${REMOTE_HOST}" >"$LOG_FILE" 2>&1 &
+    -L "${LIVEKIT_PORT}:127.0.0.1:${LIVEKIT_PORT}" \
+    -L "${LIVEKIT_RTC_TCP_PORT}:127.0.0.1:${LIVEKIT_RTC_TCP_PORT}" \
+    "${REMOTE_USER}@${REMOTE_HOST}" >"$LOG_FILE" 2>&1
 
-  pid=$!
+  pid="$(tunnel_pid_from_port)"
+  if [ -z "$pid" ]; then
+    echo "[ssh_tunnel] 未找到隧道监听进程，请检查 $LOG_FILE"
+    exit 1
+  fi
   echo "$pid" >"$PID_FILE"
   wait_until_ready "$pid"
 }

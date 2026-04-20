@@ -86,3 +86,25 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./grafana-data:/var/lib/grafana
+
+  livekit:
+    image: docker.m.daocloud.io/livekit/livekit-server:v1.9.3
+    container_name: livekit
+    networks:
+      default:
+      docker_default:
+    depends_on:
+      - redis
+    command: --config /etc/livekit/livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit/livekit.yaml:ro
+
+networks:
+  docker_default:
+    external: true

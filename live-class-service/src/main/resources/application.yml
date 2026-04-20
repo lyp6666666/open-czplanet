@@ -23,8 +23,8 @@ spring:
 
 livekit:
   api-key: ${LIVEKIT_API_KEY:dev-api-key}
-  api-secret: ${LIVEKIT_API_SECRET:dev-api-secret}
-  ws-url: ${LIVEKIT_WS_URL:wss://livekit.example.com}
+  api-secret: ${LIVEKIT_API_SECRET:CHANGE_ME_LIVEKIT_API_SECRET}
+  ws-url: ${LIVEKIT_WS_URL:ws://127.0.0.1:7880}
   room-prefix: ${LIVEKIT_ROOM_PREFIX:class}
   token-ttl-seconds: ${LIVEKIT_TOKEN_TTL_SECONDS:7200}
 

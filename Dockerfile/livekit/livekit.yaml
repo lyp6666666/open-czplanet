@@ -1,0 +1,26 @@
+port: 7880
+
+redis:
+  address: redis:6379
+  password: "123456"
+
+rtc:
+  port_range_start: 50000
+  port_range_end: 50100
+  tcp_port: 7881
+  use_external_ip: false
+  node_ip: 127.0.0.1
+  force_tcp: true
+
+keys:
+  dev-api-key: CHANGE_ME_LIVEKIT_API_SECRET
+
+room:
+  auto_create: true
+  empty_timeout: 600
+  departure_timeout: 20
+
+webhook:
+  api_key: dev-api-key
+  urls:
+    - http://host.docker.internal:18085/internal/live/webhooks/livekit

@@ -68,3 +68,6 @@ ai-tutor-miniprogram/unpackage/
 .worktrees/
 
 .pids/
+playwright-report/
+test-results/
+ai-tutor-web/playwright/.auth/

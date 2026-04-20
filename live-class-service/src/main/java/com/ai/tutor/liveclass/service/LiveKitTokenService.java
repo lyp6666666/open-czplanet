@@ -38,10 +38,10 @@ public class LiveKitTokenService {
         claims.put("name", participantName);
 
         String token = Jwts.builder()
+                .setClaims(claims)
                 .setIssuer(liveKitProperties.getApiKey())
                 .setSubject(String.valueOf(uid))
                 .setAudience("livekit")
-                .setClaims(claims)
                 .setIssuedAt(Date.from(now.toInstant(ZoneOffset.ofHours(8))))
                 .setExpiration(Date.from(expireAt.toInstant(ZoneOffset.ofHours(8))))
                 .signWith(resolveKey(), SignatureAlgorithm.HS256)

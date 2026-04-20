@@ -40,6 +40,7 @@ IM_PORT="${IM_PORT:-18082}"
 PAYMENT_PORT="${PAYMENT_PORT:-18083}"
 ADMIN_PORT="${ADMIN_PORT:-18084}"
 LIVE_CLASS_PORT="${LIVE_CLASS_PORT:-18085}"
+LIVEKIT_PORT="${LIVEKIT_PORT:-7880}"
 WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
@@ -49,8 +50,13 @@ MANAGE_INFRA="${MANAGE_INFRA:-auto}"
 SERVICE_STARTUP_WAIT_LOOPS="${SERVICE_STARTUP_WAIT_LOOPS:-300}"
 FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
-INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana}"
+INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana livekit}"
 AUTO_BOOTSTRAP_DEV_DB="${AUTO_BOOTSTRAP_DEV_DB:-1}"
+LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-dev-api-key}"
+LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-CHANGE_ME_LIVEKIT_API_SECRET}"
+LIVEKIT_WS_URL="${LIVEKIT_WS_URL:-ws://127.0.0.1:${LIVEKIT_PORT}}"
+OPS_VERIFY_TOKEN="${OPS_VERIFY_TOKEN:-DevOpsVerifyTokenForE2E}"
+DEV_EXPOSE_SMS_CODE="${DEV_EXPOSE_SMS_CODE:-true}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
@@ -125,7 +131,12 @@ ensure_nacos_server_addr() {
 
 ensure_nacos_server_addr
 
-export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE
+export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE LIVEKIT_API_KEY LIVEKIT_API_SECRET LIVEKIT_WS_URL OPS_VERIFY_TOKEN DEV_EXPOSE_SMS_CODE
+SPRING_APPLICATION_JSON=$(cat <<EOF
+{"ops":{"verifyToken":"$OPS_VERIFY_TOKEN"},"dev":{"exposeSmsCode":$DEV_EXPOSE_SMS_CODE},"livekit":{"apiKey":"$LIVEKIT_API_KEY","apiSecret":"$LIVEKIT_API_SECRET","wsUrl":"$LIVEKIT_WS_URL"}}
+EOF
+)
+export SPRING_APPLICATION_JSON
 
 echo "[dev_all_up] profile=$SPRING_PROFILES_ACTIVE nacos.server-addr=$NACOS_SERVER_ADDR"
 echo "[dev_all_up] nacos.namespace.dev=$NACOS_NAMESPACE_DEV"
@@ -136,6 +147,8 @@ echo "[dev_all_up] nacos.discovery.namespace=$NACOS_DISCOVERY_NAMESPACE"
 echo "[dev_all_up] nacos.grpc.check=$NACOS_GRPC_CHECK"
 echo "[dev_all_up] manage.infra=$MANAGE_INFRA"
 echo "[dev_all_up] auto.nacos.tunnel=$AUTO_NACOS_TUNNEL"
+echo "[dev_all_up] livekit.ws-url=$LIVEKIT_WS_URL"
+echo "[dev_all_up] dev.exposeSmsCode=$DEV_EXPOSE_SMS_CODE"
 
 if command -v nc >/dev/null 2>&1; then
   nacos_host="$(echo "$NACOS_SERVER_ADDR" | awk -F: '{print $1}')"
@@ -368,9 +381,16 @@ start_frontend() {
     done
   fi
 
+  lock_file="$ROOT_DIR/$app_dir/package-lock.json"
+  lock_stamp="$ROOT_DIR/$app_dir/node_modules/.package-lock.sync"
   if [ ! -d "$ROOT_DIR/$app_dir/node_modules" ]; then
     echo "[dev_all_up] 安装 $app_name 依赖（node_modules 不存在）"
     (cd "$ROOT_DIR/$app_dir" && npm ci >/dev/null)
+    [ -f "$lock_file" ] && cp "$lock_file" "$lock_stamp"
+  elif [ -f "$lock_file" ] && { [ ! -f "$lock_stamp" ] || ! cmp -s "$lock_file" "$lock_stamp"; }; then
+    echo "[dev_all_up] 检测到 $app_name 锁文件变更，重新安装依赖"
+    (cd "$ROOT_DIR/$app_dir" && npm ci >/dev/null)
+    cp "$lock_file" "$lock_stamp"
   fi
 
   echo "[dev_all_up] 启动 $app_name host=$FRONTEND_HOST port=$port base=$base_path"
