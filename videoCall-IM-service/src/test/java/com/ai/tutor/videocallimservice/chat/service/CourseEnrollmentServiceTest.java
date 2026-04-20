@@ -1,9 +1,12 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
 import com.ai.tutor.exception.BusinessException;
+import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment;
+import com.ai.tutor.videocallimservice.chat.domain.entity.RefundRequest;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
@@ -105,6 +108,88 @@ class CourseEnrollmentServiceTest {
         assertThat(detail.getCourseName()).isEqualTo("线上长期课程");
 
         assertThatThrownBy(() -> service.getCourseByRoom(88L, 3001L))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void applyTrialRefundShouldUseOfflineVideoAndRefund80Percent() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        RefundRequestMapper refundRequestMapper = mock(RefundRequestMapper.class);
+        BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
+        CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", refundRequestMapper);
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .applicationId(501L)
+                .roomId(88L)
+                .teacherUid(1001L)
+                .studentUid(2001L)
+                .teachingMode("OFFLINE")
+                .status("TRIALING")
+                .trialEndAt(java.time.LocalDateTime.now().plusDays(1))
+                .build());
+        BrokerageOrder order = BrokerageOrder.builder()
+                .id(99L)
+                .amountFen(10000L)
+                .status("PAID")
+                .build();
+        when(brokerageOrderMapper.selectByApplicationId(501L)).thenReturn(order);
+        when(brokerageOrderMapper.lockForRefund(99L, "TRIAL_REFUND_REVIEW")).thenReturn(1);
+        org.mockito.ArgumentCaptor<RefundRequest> captor = org.mockito.ArgumentCaptor.forClass(RefundRequest.class);
+        when(refundRequestMapper.insert(captor.capture())).thenAnswer(inv -> {
+            RefundRequest request = inv.getArgument(0);
+            request.setId(10L);
+            return 1;
+        });
+
+        ApplyTrialRefundReq req = new ApplyTrialRefundReq();
+        req.setReason("试课不合适");
+        req.setEvidenceImageUrls(java.util.List.of("https://img.example.com/a.png"));
+        req.setEvidenceVideoUrl("https://video.example.com/wechat.mp4");
+        req.setEvidenceVideoDurationSeconds(45);
+
+        Long requestId = service.applyTrialRefund(66L, req, 1001L);
+
+        assertThat(requestId).isEqualTo(10L);
+        RefundRequest saved = captor.getValue();
+        assertThat(saved.getRefundPercent()).isEqualTo(80);
+        assertThat(saved.getRefundAmountFen()).isEqualTo(8000L);
+        assertThat(saved.getEvidenceVideoUrl()).isEqualTo("https://video.example.com/wechat.mp4");
+        assertThat(saved.getEvidenceVideoDeleteStatus()).isEqualTo("PENDING_DELETE");
+    }
+
+    @Test
+    void applyTrialRefundShouldRejectOnlineInfoFeeRefund() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .teacherUid(1001L)
+                .teachingMode("ONLINE")
+                .status("TRIALING")
+                .trialEndAt(java.time.LocalDateTime.now().plusDays(1))
+                .build());
+
+        ApplyTrialRefundReq req = new ApplyTrialRefundReq();
+        req.setReason("试课不合适");
+        req.setEvidenceImageUrls(java.util.List.of("https://img.example.com/a.png"));
+        req.setEvidenceVideoUrl("https://video.example.com/wechat.mp4");
+        req.setEvidenceVideoDurationSeconds(45);
+
+        assertThatThrownBy(() -> service.applyTrialRefund(66L, req, 1001L))
                 .isInstanceOf(BusinessException.class);
     }
 }

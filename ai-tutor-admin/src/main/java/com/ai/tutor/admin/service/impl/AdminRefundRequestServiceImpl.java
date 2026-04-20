@@ -120,6 +120,8 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
             return;
         }
         adminRefundRequestMapper.markOrderRefunded(request.getBrokerageOrderId(), request.getRefundAmountFen());
+        // 中文注释：审核通过后应删除教师上传的微信录屏；当前先写删除状态，真实对象存储删除由后续文件服务接入。
+        adminRefundRequestMapper.markEvidenceVideoDeleted(requestId, now);
         if (request.getCourseId() != null) {
             adminRefundRequestMapper.markCourseRefundedById(request.getCourseId());
         } else if (request.getRoomId() != null) {
@@ -142,6 +144,7 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
         if (updated <= 0) {
             return;
         }
+        adminRefundRequestMapper.markEvidenceVideoKeep(requestId);
         if (request.getBrokerageOrderId() != null) {
             adminRefundRequestMapper.rollbackOrderPaid(request.getBrokerageOrderId());
         }

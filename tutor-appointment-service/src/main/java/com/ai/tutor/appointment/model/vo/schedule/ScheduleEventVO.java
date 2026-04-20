@@ -24,6 +24,33 @@ public class ScheduleEventVO implements Serializable {
     @Schema(description = "课程名称/标题")
     private String title;
 
+    @Schema(description = "课节类型：TRIAL/NORMAL")
+    private String lessonType;
+
+    @Schema(description = "单节标准课价（分）")
+    private Long lessonPriceFen;
+
+    @Schema(description = "试课收费比例，默认 50 表示半节课")
+    private Integer trialPricePercent;
+
+    @Schema(description = "当前课节应付金额（分）")
+    private Long payableAmountFen;
+
+    @Schema(description = "课节支付状态：UNBILLED/PENDING/PAYING/PAID/CANCELED")
+    private String paymentStatus;
+
+    @Schema(description = "课节支付单 id")
+    private Long lessonPaymentOrderId;
+
+    @Schema(description = "平台服务费率，线上课默认为 10%")
+    private Integer platformFeeRate;
+
+    @Schema(description = "平台服务费金额（分）")
+    private Long platformFeeAmountFen;
+
+    @Schema(description = "教师预计到账金额（分）")
+    private Long teacherIncomeAmountFen;
+
     @Schema(description = "备注")
     private String description;
 

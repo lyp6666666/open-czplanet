@@ -22,6 +22,10 @@ public class RefundRequest {
     private String status;
     private String reason;
     private String evidenceImagesJson;
+    private String evidenceVideoUrl;
+    private Integer evidenceVideoDurationSeconds;
+    private String evidenceVideoDeleteStatus;
+    private LocalDateTime evidenceVideoDeletedAt;
     private Integer refundPercent;
     private Long refundAmountFen;
     private Long adminUid;
@@ -30,4 +34,3 @@ public class RefundRequest {
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }
-

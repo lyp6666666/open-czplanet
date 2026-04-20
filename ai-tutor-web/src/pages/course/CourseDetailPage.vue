@@ -34,6 +34,8 @@ const avatarBroken = ref(false)
 const scheduleOpen = ref(false)
 const scheduleTitle = ref('')
 const scheduleDescription = ref('')
+const scheduleLessonPriceYuan = ref('200')
+const scheduleTrialPricePercent = ref(50)
 const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000))
 const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
 const scheduleError = ref<string | null>(null)
@@ -117,6 +119,20 @@ function lessonStatusText(status: string) {
   if (normalized === 'CANCELED') return '已取消'
   if (normalized === 'COMPLETED') return '已结课'
   return normalized || '未知状态'
+}
+
+function paymentStatusText(status?: string | null) {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (normalized === 'PENDING') return '待支付'
+  if (normalized === 'PAYING') return '支付中'
+  if (normalized === 'PAID') return '已支付'
+  if (normalized === 'CANCELED') return '已取消'
+  return '未出账'
+}
+
+function formatMoneyFen(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) return '--'
+  return `¥${(value / 100).toFixed(2)}`
 }
 
 const participantUid = computed(() => {
@@ -219,9 +235,19 @@ function openScheduleCreate() {
   lessonActionError.value = null
   scheduleTitle.value = detail.value.courseName?.trim() || `与${participantName.value}的线上课程`
   scheduleDescription.value = latestLesson.value ? '补充新增课节' : '第一节试课'
+  scheduleLessonPriceYuan.value = ''
+  scheduleTrialPricePercent.value = 50
   scheduleStartAt.value = roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000)
   scheduleEndAt.value = scheduleStartAt.value + 60 * 60 * 1000
   scheduleOpen.value = true
+}
+
+function parseLessonPriceFen() {
+  const raw = scheduleLessonPriceYuan.value.trim()
+  if (!raw) return undefined
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.round(n * 100)
 }
 
 function closeScheduleCreate() {
@@ -257,11 +283,20 @@ async function submitScheduleCreate() {
     scheduleError.value = '结束时间必须晚于开始时间'
     return
   }
+  const priceFen = parseLessonPriceFen()
+  if (priceFen === null) {
+    scheduleError.value = '请输入有效的单节标准课价'
+    return
+  }
+  const lessonType = sortedLessons.value.length === 0 ? 'TRIAL' : 'NORMAL'
   saving.value = true
   scheduleError.value = null
   try {
     const created = await scheduleApi.createEvent({
       courseId: detail.value.courseId,
+      lessonType,
+      lessonPriceFen: priceFen,
+      trialPricePercent: lessonType === 'TRIAL' ? scheduleTrialPricePercent.value : undefined,
       title: titleText,
       participantUserId: participantUid.value,
       startAt: scheduleStartAt.value,
@@ -276,6 +311,36 @@ async function submitScheduleCreate() {
   } finally {
     saving.value = false
   }
+}
+
+async function completeLesson(item: ScheduleEventVO) {
+  if (saving.value || item.status !== 'ACCEPTED') return
+  const confirmed = window.confirm(`确认「${item.title}」已完成授课吗？结课后会生成学生待支付课时费账单。`)
+  if (!confirmed) return
+  saving.value = true
+  lessonActionError.value = null
+  setLessonActionBusy(item.id, '结课中...')
+  try {
+    await appointmentApi.complete(item.id)
+    await load()
+    toast.show('已结课，待学生支付本节课费用。', 'success')
+  } catch (e) {
+    lessonActionError.value = e instanceof Error ? e.message : '结课失败'
+  } finally {
+    setLessonActionBusy(item.id, null)
+    saving.value = false
+  }
+}
+
+function payLesson(item: ScheduleEventVO) {
+  if (!item.lessonPaymentOrderId) return
+  void router.push({
+    name: 'cashierPay',
+    query: {
+      contextType: 'LESSON_PAYMENT_ORDER',
+      contextId: String(item.lessonPaymentOrderId),
+    },
+  })
 }
 
 async function cancelLesson(item: ScheduleEventVO) {
@@ -497,6 +562,11 @@ onMounted(() => {
                 <div class="lesson-time">{{ fmtDateTime(item.startAt) }} - {{ fmtDateTime(item.endAt, { hour: '2-digit', minute: '2-digit' }) }}</div>
                 <div class="lesson-sub">{{ item.description || '暂无备注' }}</div>
                 <div v-if="lessonMetaText(item, index)" class="lesson-meta">{{ lessonMetaText(item, index) }}</div>
+                <div class="lesson-pay-meta">
+                  <span>{{ paymentStatusText(item.paymentStatus) }}</span>
+                  <span>应付 {{ formatMoneyFen(item.payableAmountFen) }}</span>
+                  <span v-if="isTeacher">平台服务费 {{ item.platformFeeRate ?? 10 }}%，预计到账 {{ formatMoneyFen(item.teacherIncomeAmountFen) }}</span>
+                </div>
               </div>
               <div class="lesson-side">
                 <div class="status-pill">{{ lessonStatusText(item.status) }}</div>
@@ -511,6 +581,12 @@ onMounted(() => {
                   </button>
                   <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click="confirmReschedule(item)">
                     {{ getLessonActionBusyText(item.id) || '确认改期' }}
+                  </button>
+                  <button v-if="isTeacher" class="btn" type="button" :disabled="isLessonActionBusy(item.id) || item.status !== 'ACCEPTED'" @click="completeLesson(item)">
+                    {{ getLessonActionBusyText(item.id) || '结课' }}
+                  </button>
+                  <button v-else class="btn btn-primary" type="button" :disabled="item.paymentStatus !== 'PENDING' && item.paymentStatus !== 'PAYING'" @click="payLesson(item)">
+                    去支付
                   </button>
                   <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click="cancelLesson(item)">
                     {{ getLessonActionBusyText(item.id) || '删课' }}
@@ -545,6 +621,17 @@ onMounted(() => {
         <div class="field">
           <div class="label">课节备注</div>
           <textarea v-model="scheduleDescription" class="textarea" rows="4" placeholder="填写本节课目标、教材、作业或调课说明" />
+        </div>
+        <div class="time-grid">
+          <div class="field">
+            <div class="label">单节标准课价（元）</div>
+            <input v-model="scheduleLessonPriceYuan" class="input" inputmode="decimal" placeholder="例如：200" />
+          </div>
+          <div class="field">
+            <div class="label">试课收费比例</div>
+            <input v-model.number="scheduleTrialPricePercent" class="input" type="number" min="1" max="100" />
+            <div class="field-hint">第一节试课默认 50%，即半节课费用；正式课按 100% 计费。</div>
+          </div>
         </div>
         <div class="modal-actions">
           <button class="btn" type="button" :disabled="saving" @click="closeScheduleCreate">取消</button>
@@ -762,6 +849,18 @@ onMounted(() => {
 .lesson-meta {
   font-size: 12px;
   color: #0d7e7d;
+}
+
+.lesson-pay-meta,
+.field-hint {
+  font-size: 12px;
+  color: rgba(31, 35, 41, 0.58);
+}
+
+.lesson-pay-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .lesson-side {

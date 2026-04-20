@@ -60,6 +60,15 @@
           </div>
         </div>
 
+        <div v-if="detail.refundRequest.evidenceVideoUrl" class="video-proof">
+          <div class="section-title">微信录屏凭证</div>
+          <a class="video-link" :href="detail.refundRequest.evidenceVideoUrl" target="_blank">打开录屏</a>
+          <div class="video-meta">
+            时长 {{ detail.refundRequest.evidenceVideoDurationSeconds ?? '-' }} 秒 · 删除状态 {{ videoDeleteStatusText(detail.refundRequest.evidenceVideoDeleteStatus) }}
+          </div>
+          <div class="video-tip">审核通过后系统会删除录屏凭证；审核未通过会先保留以便复核。</div>
+        </div>
+
         <div class="actions">
           <button class="btn btn-primary" type="button" :disabled="busyAction" @click="onApprove">
             同意退款
@@ -173,6 +182,14 @@ function messageSpeakerName(uid?: number | null) {
     return studentDisplayName.value
   }
   return refundParticipantDisplayName(null, null, uid ?? null)
+}
+
+function videoDeleteStatusText(status?: string | null) {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (normalized === 'PENDING_DELETE') return '待审核通过后删除'
+  if (normalized === 'DELETED') return '已删除'
+  if (normalized === 'KEEP') return '已保留'
+  return '未标记'
 }
 
 async function load() {
@@ -468,6 +485,28 @@ onMounted(load)
   margin-top: 12px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.video-proof {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.video-link {
+  display: inline-flex;
+  margin-top: 8px;
+  color: rgba(0, 190, 189, 1);
+  font-weight: 700;
+}
+
+.video-meta,
+.video-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .textarea {

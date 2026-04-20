@@ -34,6 +34,26 @@ public class TutorAppointment {
      */
     private String title;
 
+    /**
+     * 课节类型：TRIAL/NORMAL。
+     */
+    private String lessonType;
+
+    /**
+     * 单节标准课价（分）。
+     */
+    private Long lessonPriceFen;
+
+    /**
+     * 试课按标准课价的折扣比例，默认 50 表示半节课费用。
+     */
+    private Integer trialPricePercent;
+
+    /**
+     * 当前课节应付金额（分）。
+     */
+    private Long payableAmountFen;
+
     private Long subjectId;
 
     private String classMode;

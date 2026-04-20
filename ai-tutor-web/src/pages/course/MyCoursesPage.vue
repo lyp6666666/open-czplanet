@@ -108,6 +108,8 @@ const modalOpen = ref(false)
 const modalCourseId = ref<number | null>(null)
 const modalReason = ref('')
 const modalFiles = ref<File[]>([])
+const modalVideoUrl = ref('')
+const modalVideoDurationSeconds = ref<number | null>(60)
 const modalBusy = ref(false)
 const modalErr = ref<string | null>(null)
 
@@ -720,6 +722,8 @@ function openTrialRefund(courseId: number) {
   modalCourseId.value = courseId
   modalReason.value = ''
   modalFiles.value = []
+  modalVideoUrl.value = ''
+  modalVideoDurationSeconds.value = 60
   modalErr.value = null
   modalOpen.value = true
 }
@@ -747,6 +751,16 @@ async function submitTrialRefund() {
     modalErr.value = '请至少上传 1 张证据图片'
     return
   }
+  const videoUrl = modalVideoUrl.value.trim()
+  if (!videoUrl) {
+    modalErr.value = '请上传并填写微信聊天录屏 URL'
+    return
+  }
+  const duration = Number(modalVideoDurationSeconds.value)
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 60) {
+    modalErr.value = '录屏时长需控制在 1-60 秒内'
+    return
+  }
 
   modalBusy.value = true
   modalErr.value = null
@@ -760,7 +774,12 @@ async function submitTrialRefund() {
       modalErr.value = '图片上传失败，请稍后重试'
       return
     }
-    await courseApi.applyTrialRefund(modalCourseId.value, { reason, evidenceImageUrls: urls })
+    await courseApi.applyTrialRefund(modalCourseId.value, {
+      reason,
+      evidenceImageUrls: urls,
+      evidenceVideoUrl: videoUrl,
+      evidenceVideoDurationSeconds: Math.round(duration),
+    })
     modalOpen.value = false
     await load()
   } catch (e) {
@@ -1255,11 +1274,13 @@ onMounted(() => {
     <div v-if="modalOpen" class="mask" @click.self="closeTrialRefund">
       <div class="modal card">
         <div class="m-title">试课不通过</div>
-        <div class="m-desc">提交后会进入管理员审核，系统会先上传证据图片，再发起试课不通过申请。</div>
+        <div class="m-desc">线下试课不通过需提交微信聊天记录滚动并删除拉黑的录屏，管理员审核通过后退还 80% 信息费并删除录屏。</div>
         <div class="m-form">
           <textarea v-model="modalReason" class="txt" rows="4" placeholder="请填写试课不通过说明"></textarea>
           <input class="file" type="file" accept="image/*" multiple @change="onPickFiles" />
           <div class="m-hint">已选择 {{ modalFiles.length }} 张</div>
+          <input v-model="modalVideoUrl" class="input" placeholder="微信录屏 URL（1 分钟内）" />
+          <input v-model.number="modalVideoDurationSeconds" class="input" type="number" min="1" max="60" placeholder="录屏时长（秒）" />
         </div>
         <div v-if="modalErr" class="m-error">{{ modalErr }}</div>
         <div class="m-ops">

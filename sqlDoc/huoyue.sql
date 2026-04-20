@@ -507,7 +507,11 @@ CREATE TABLE `refund_request` (
             `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '申请状态 PENDING/APPROVED/REJECTED',
             `reason` varchar(1024) DEFAULT NULL COMMENT '退款原因/说明',
             `evidence_images_json` text COMMENT '证据图片URL数组（JSON）',
-            `refund_percent` int(11) NOT NULL COMMENT '退款比例（100/60）',
+            `evidence_video_url` varchar(1024) DEFAULT NULL COMMENT '试课不通过微信聊天录屏URL',
+            `evidence_video_duration_seconds` int(11) DEFAULT NULL COMMENT '录屏时长（秒，最长60秒）',
+            `evidence_video_delete_status` varchar(32) DEFAULT NULL COMMENT '录屏删除状态 PENDING_DELETE/DELETED/KEEP',
+            `evidence_video_deleted_at` datetime(3) DEFAULT NULL COMMENT '录屏删除标记时间',
+            `refund_percent` int(11) NOT NULL COMMENT '退款比例（100/80）',
             `refund_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '申请退款金额（分）',
             `admin_uid` bigint(20) UNSIGNED DEFAULT NULL COMMENT '审核管理员uid',
             `admin_note` varchar(1024) DEFAULT NULL COMMENT '审核备注/拒绝原因',
@@ -651,6 +655,10 @@ CREATE TABLE `tutor_appointment` (
             `parent_job_posting_id` bigint(20) DEFAULT NULL COMMENT '家长需求贴id',
             `tutor_job_posting_id` bigint(20) DEFAULT NULL COMMENT '教师服务贴id',
             `title` varchar(100) DEFAULT NULL COMMENT '课程名称/标题',
+            `lesson_type` varchar(20) NOT NULL DEFAULT 'NORMAL' COMMENT '课节类型 TRIAL/NORMAL',
+            `lesson_price_fen` bigint(20) UNSIGNED DEFAULT NULL COMMENT '单节标准课价（分）',
+            `trial_price_percent` int(11) NOT NULL DEFAULT 50 COMMENT '试课收费比例，默认50表示半节课',
+            `payable_amount_fen` bigint(20) UNSIGNED DEFAULT NULL COMMENT '当前课节应付金额（分）',
             `subject_id` bigint(20) NOT NULL COMMENT '科目id（position_post.id）',
             `class_mode` varchar(50) DEFAULT NULL COMMENT '授课方式：online/offline',
             `city` varchar(100) DEFAULT NULL COMMENT '城市（线下）',
@@ -674,6 +682,46 @@ CREATE TABLE `tutor_appointment` (
             KEY `idx_start_time` (`start_time`),
             KEY `idx_room_id` (`room_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预约/邀约表';
+
+DROP TABLE IF EXISTS `lesson_payment_order`;
+CREATE TABLE `lesson_payment_order` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '课节支付订单id',
+            `lesson_id` bigint(20) UNSIGNED NOT NULL COMMENT '短期课节/预约id',
+            `course_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '所属长期课程id',
+            `student_uid` bigint(20) UNSIGNED NOT NULL COMMENT '学生/家长uid',
+            `teacher_uid` bigint(20) UNSIGNED NOT NULL COMMENT '教师uid',
+            `lesson_type` varchar(20) NOT NULL DEFAULT 'NORMAL' COMMENT '课节类型 TRIAL/NORMAL',
+            `total_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '学生支付金额（分）',
+            `platform_fee_rate` int(11) NOT NULL DEFAULT 10 COMMENT '平台服务费率百分比',
+            `platform_fee_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '平台服务费金额（分）',
+            `teacher_income_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '教师预计到账金额（分）',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态 PENDING/PAYING/PAID/CANCELED',
+            `payment_order_no` varchar(64) DEFAULT NULL COMMENT '支付域商户订单号',
+            `paid_at` datetime(3) DEFAULT NULL COMMENT '支付完成时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_lesson_payment_lesson` (`lesson_id`),
+            KEY `idx_lesson_payment_course_status` (`course_id`, `status`),
+            KEY `idx_lesson_payment_student_status` (`student_uid`, `status`),
+            KEY `idx_lesson_payment_teacher_status` (`teacher_uid`, `status`),
+            KEY `idx_lesson_payment_order_no` (`payment_order_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='线上课节支付订单表';
+
+DROP TABLE IF EXISTS `teacher_settlement`;
+CREATE TABLE `teacher_settlement` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '教师结算记录id',
+            `lesson_payment_order_id` bigint(20) UNSIGNED NOT NULL COMMENT '课节支付订单id',
+            `teacher_uid` bigint(20) UNSIGNED NOT NULL COMMENT '教师uid',
+            `settlement_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '教师应结算金额（分）',
+            `platform_fee_amount_fen` bigint(20) UNSIGNED NOT NULL COMMENT '平台服务费金额（分）',
+            `status` varchar(32) NOT NULL DEFAULT 'SETTLEABLE' COMMENT '状态 SETTLEABLE/PAID',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_teacher_settlement_lesson_payment` (`lesson_payment_order_id`),
+            KEY `idx_teacher_settlement_teacher_status` (`teacher_uid`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教师课节结算快照表';
 
 DROP TABLE IF EXISTS `tutor_review`;
 CREATE TABLE `tutor_review` (
@@ -813,5 +861,58 @@ CREATE TABLE `invite_settlement_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_user_month` (`user_id`, `settlement_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邀请返利结算单表';
+
+DROP TABLE IF EXISTS `ai_task`;
+CREATE TABLE `ai_task` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `task_id` varchar(64) NOT NULL COMMENT '任务唯一ID',
+  `task_type` varchar(64) NOT NULL COMMENT '任务类型 LESSON_REPORT/CHAT_SUMMARY',
+  `biz_id` varchar(64) NOT NULL COMMENT '业务主键，例如 lessonId/roomId',
+  `status` varchar(32) NOT NULL COMMENT '任务状态',
+  `progress` int(11) NOT NULL DEFAULT 0 COMMENT '任务进度 0-100',
+  `message` varchar(255) DEFAULT NULL COMMENT '进度说明',
+  `input_json` json DEFAULT NULL COMMENT '任务输入快照',
+  `output_json` json DEFAULT NULL COMMENT '任务输出结果',
+  `error_message` text DEFAULT NULL COMMENT '错误信息',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ai_task_task_id` (`task_id`),
+  KEY `idx_ai_task_biz` (`biz_id`),
+  KEY `idx_ai_task_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI Agent 任务表';
+
+DROP TABLE IF EXISTS `ai_lesson_report`;
+CREATE TABLE `ai_lesson_report` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `lesson_id` bigint(20) NOT NULL COMMENT '课程ID',
+  `task_id` varchar(64) NOT NULL COMMENT '关联任务ID',
+  `teacher_id` bigint(20) DEFAULT NULL COMMENT '教师ID',
+  `student_id` bigint(20) DEFAULT NULL COMMENT '学生ID',
+  `status` varchar(32) NOT NULL COMMENT '报告状态',
+  `report_json` json DEFAULT NULL COMMENT '课后报告草稿/最终稿',
+  `teacher_edited_json` json DEFAULT NULL COMMENT '教师编辑后的报告',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ai_lesson_report_lesson_id` (`lesson_id`),
+  UNIQUE KEY `uk_ai_lesson_report_task_id` (`task_id`),
+  KEY `idx_ai_lesson_report_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 课后报告表';
+
+DROP TABLE IF EXISTS `ai_chat_summary`;
+CREATE TABLE `ai_chat_summary` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `room_id` bigint(20) NOT NULL COMMENT '聊天室ID',
+  `task_id` varchar(64) NOT NULL COMMENT '关联任务ID',
+  `summary_json` json DEFAULT NULL COMMENT 'IM 摘要结果',
+  `message_start_id` bigint(20) DEFAULT NULL COMMENT '摘要覆盖的起始消息ID',
+  `message_end_id` bigint(20) DEFAULT NULL COMMENT '摘要覆盖的结束消息ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ai_chat_summary_room_id` (`room_id`),
+  UNIQUE KEY `uk_ai_chat_summary_task_id` (`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 聊天摘要表';
 
 SET FOREIGN_KEY_CHECKS = 1;

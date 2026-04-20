@@ -5,7 +5,9 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.common.event.PaymentSuccessEvent;
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.integration.LessonPaymentPayInfo;
 import com.ai.tutor.common.security.IdentitySignatureUtils;
+import com.ai.tutor.payment.integration.feign.AppointmentLessonPaymentFeignClient;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.payment.integration.feign.ImBrokerageOrderFeignClient;
 import com.ai.tutor.payment.client.YungouosClient;
@@ -49,6 +51,7 @@ import java.util.Map;
 public class YungouosPaymentAppService {
 
     public static final String CONTEXT_BROKERAGE_ORDER = "BROKERAGE_ORDER";
+    public static final String CONTEXT_LESSON_PAYMENT_ORDER = "LESSON_PAYMENT_ORDER";
     private static final String PAY_NOTIFY = "PAY_NOTIFY";
     private static final String PAY_FINALIZE = "PAY_FINALIZE";
     private static final String PAY_QUERY = "PAY_QUERY";
@@ -58,6 +61,7 @@ public class YungouosPaymentAppService {
     private final BrokerageOrderFacade brokerageOrderFacade;
     private final YungouosClient yungouosClient;
     private final ImBrokerageOrderFeignClient imBrokerageOrderFeignClient;
+    private final AppointmentLessonPaymentFeignClient appointmentLessonPaymentFeignClient;
     private final IdentitySignatureUtils identitySignatureUtils;
 
     public PrepayResponse prepay(PrepayRequest req, Long uid, String clientIp) {
@@ -67,20 +71,18 @@ public class YungouosPaymentAppService {
         Long contextId = req.getContextId();
         String channel = StringUtils.trimAllWhitespace(req.getChannel());
 
-        ThrowUtils.throwIf(!CONTEXT_BROKERAGE_ORDER.equalsIgnoreCase(contextType), ErrorCode.PARAMS_ERROR, "暂不支持的 contextType");
         validateChannel(channel);
 
-        BrokerageOrderPayInfo payInfo = brokerageOrderFacade.getPayableOrder(contextId, uid);
-        ThrowUtils.throwIf(payInfo == null, ErrorCode.NOT_FOUND_ERROR);
+        PayableInfo payInfo = resolvePayableInfo(contextType, contextId, uid);
 
         PaymentOrder order = paymentOrderService.createOrReusePending(
-                CONTEXT_BROKERAGE_ORDER,
-                payInfo.getOrderId(),
+                payInfo.contextType(),
+                payInfo.orderId(),
                 uid,
                 channel.toUpperCase(),
-                payInfo.getAmountFen(),
-                defaultSubject(payInfo),
-                defaultBody(payInfo),
+                payInfo.amountFen(),
+                payInfo.subject(),
+                payInfo.body(),
                 clientIp
         );
         LocalDateTime now = LocalDateTime.now();
@@ -333,7 +335,7 @@ public class YungouosPaymentAppService {
             return;
         }
         String contextType = order.getContextType() == null ? "" : order.getContextType().trim().toUpperCase();
-        if (!CONTEXT_BROKERAGE_ORDER.equals(contextType)) {
+        if (!CONTEXT_BROKERAGE_ORDER.equals(contextType) && !CONTEXT_LESSON_PAYMENT_ORDER.equals(contextType)) {
             return;
         }
         if (order.getContextId() == null) {
@@ -344,31 +346,28 @@ public class YungouosPaymentAppService {
         long ts = System.currentTimeMillis();
         long uid = 0L;
         int role = 0;
-        String path = "/internal/facade/payment/success";
+        String path = CONTEXT_LESSON_PAYMENT_ORDER.equals(contextType)
+                ? "/internal/facade/lesson-payments/payment-success"
+                : "/internal/facade/payment/success";
         String sign = identitySignatureUtils.sign(uid, role, ts, "POST", path);
 
-        PaymentSuccessEvent event = new PaymentSuccessEvent();
-        event.setOrderNo(orderNo);
-        event.setUserId(order.getUserId());
-        event.setAmount(order.getAmount());
-        event.setContextId(order.getContextId());
-        event.setContextType(order.getContextType());
-        event.setTransactionId(order.getTransactionId());
-        event.setSuccessTime(order.getSuccessTime());
-        event.setChannel(order.getChannel());
-        event.setProvider(order.getProvider());
-        event.setProviderOrderNo(order.getProviderOrderNo());
+        PaymentSuccessEvent event = buildPaymentSuccessEvent(order);
 
         try {
             log.info("{} start orderNo={} contextType={} contextId={} status={}",
                     PAY_FINALIZE, orderNo, order.getContextType(), order.getContextId(), order.getStatus());
-            BaseResponse<Boolean> resp = imBrokerageOrderFeignClient.onPaymentSuccess(
-                    String.valueOf(uid),
-                    String.valueOf(role),
-                    String.valueOf(ts),
-                    sign,
-                    event
-            );
+            BaseResponse<Boolean> resp;
+            if (CONTEXT_LESSON_PAYMENT_ORDER.equals(contextType)) {
+                resp = appointmentLessonPaymentFeignClient.onPaymentSuccess(event);
+            } else {
+                resp = imBrokerageOrderFeignClient.onPaymentSuccess(
+                        String.valueOf(uid),
+                        String.valueOf(role),
+                        String.valueOf(ts),
+                        sign,
+                        event
+                );
+            }
             if (resp != null && resp.getCode() == ErrorCode.SUCCESS.getCode() && Boolean.TRUE.equals(resp.getData())) {
                 paymentOrderService.markEventSent(orderNo);
                 log.info("{} success orderNo={} contextId={}", PAY_FINALIZE, orderNo, order.getContextId());
@@ -524,6 +523,41 @@ public class YungouosPaymentAppService {
         return reqSign.trim().equalsIgnoreCase(expect);
     }
 
+    private PayableInfo resolvePayableInfo(String contextType, Long contextId, Long uid) {
+        if (CONTEXT_BROKERAGE_ORDER.equalsIgnoreCase(contextType)) {
+            BrokerageOrderPayInfo payInfo = brokerageOrderFacade.getPayableOrder(contextId, uid);
+            ThrowUtils.throwIf(payInfo == null, ErrorCode.NOT_FOUND_ERROR);
+            return new PayableInfo(CONTEXT_BROKERAGE_ORDER, payInfo.getOrderId(), payInfo.getAmountFen(), defaultSubject(payInfo), defaultBody(payInfo));
+        }
+        if (CONTEXT_LESSON_PAYMENT_ORDER.equalsIgnoreCase(contextType)) {
+            BaseResponse<LessonPaymentPayInfo> resp = appointmentLessonPaymentFeignClient.getPayableOrder(contextId, uid);
+            ThrowUtils.throwIf(resp == null || resp.getCode() != ErrorCode.SUCCESS.getCode() || resp.getData() == null,
+                    ErrorCode.OPERATION_ERROR,
+                    resp == null ? "获取课节支付单失败" : resp.getMessage());
+            LessonPaymentPayInfo payInfo = resp.getData();
+            return new PayableInfo(CONTEXT_LESSON_PAYMENT_ORDER, payInfo.getOrderId(), payInfo.getAmountFen(),
+                    StringUtils.hasText(payInfo.getSubject()) ? payInfo.getSubject() : "课后支付",
+                    StringUtils.hasText(payInfo.getBody()) ? payInfo.getBody() : "课时费");
+        }
+        ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "暂不支持的 contextType");
+        return null;
+    }
+
+    private static PaymentSuccessEvent buildPaymentSuccessEvent(PaymentOrder order) {
+        PaymentSuccessEvent event = new PaymentSuccessEvent();
+        event.setOrderNo(order.getOrderNo());
+        event.setUserId(order.getUserId());
+        event.setAmount(order.getAmount());
+        event.setContextId(order.getContextId());
+        event.setContextType(order.getContextType());
+        event.setTransactionId(order.getTransactionId());
+        event.setSuccessTime(order.getSuccessTime());
+        event.setChannel(order.getChannel());
+        event.setProvider(order.getProvider());
+        event.setProviderOrderNo(order.getProviderOrderNo());
+        return event;
+    }
+
     private static void validateChannel(String channel) {
         String c = channel == null ? "" : channel.trim().toUpperCase();
         ThrowUtils.throwIf(!PaymentChannel.WECHAT.getCode().equals(c) && !PaymentChannel.ALIPAY.getCode().equals(c), ErrorCode.PARAMS_ERROR, "不支持的支付渠道");
@@ -552,6 +586,9 @@ public class YungouosPaymentAppService {
     private static String defaultBody(BrokerageOrderPayInfo payInfo) {
         String s = payInfo == null ? null : payInfo.getBody();
         return StringUtils.hasText(s) ? s : "中介费支付";
+    }
+
+    private record PayableInfo(String contextType, Long orderId, Long amountFen, String subject, String body) {
     }
 
     private static String buildAttach(PaymentOrder order) {

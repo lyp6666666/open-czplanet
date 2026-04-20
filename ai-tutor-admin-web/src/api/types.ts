@@ -312,6 +312,10 @@ export interface RefundRequestRecord {
   status: string
   reason?: string | null
   evidenceImagesJson?: string | null
+  evidenceVideoUrl?: string | null
+  evidenceVideoDurationSeconds?: number | null
+  evidenceVideoDeleteStatus?: string | null
+  evidenceVideoDeletedAt?: string | null
   refundPercent: number
   refundAmountFen: number
   adminUid?: number | null

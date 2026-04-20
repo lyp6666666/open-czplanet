@@ -2,11 +2,15 @@ package com.ai.tutor.payment.service;
 
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.integration.LessonPaymentPayInfo;
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.common.security.IdentitySignatureUtils;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
 import com.ai.tutor.payment.controller.dto.PrepayRequest;
 import com.ai.tutor.payment.controller.dto.PrepayResponse;
+import com.ai.tutor.payment.integration.feign.AppointmentLessonPaymentFeignClient;
 import com.ai.tutor.payment.integration.feign.ImBrokerageOrderFeignClient;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
 import org.junit.jupiter.api.Test;
@@ -35,10 +39,11 @@ public class YungouosPaymentAppServicePrepayTest {
         BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
         YungouosClient yungouosClient = Mockito.mock(YungouosClient.class);
         ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        AppointmentLessonPaymentFeignClient appointmentLessonPaymentFeignClient = Mockito.mock(AppointmentLessonPaymentFeignClient.class);
         IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
 
         YungouosPaymentAppService svc = new YungouosPaymentAppService(
-                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, identitySignatureUtils);
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, appointmentLessonPaymentFeignClient, identitySignatureUtils);
 
         BrokerageOrderPayInfo payInfo = new BrokerageOrderPayInfo();
         payInfo.setOrderId(10L);
@@ -82,5 +87,69 @@ public class YungouosPaymentAppServicePrepayTest {
         assertEquals(19900L, resp.getAmountFen());
         assertEquals("WECHAT", resp.getChannel());
         assertEquals("http://img.example.com/q.png", resp.getQrCodeUrl());
+    }
+
+    @Test
+    void prepay_lessonPaymentOrder_returnsQrCodeUrl() {
+        PaymentProperties props = new PaymentProperties();
+        PaymentProperties.Yungouos cfg = props.getYungouos();
+        cfg.setAppId("TEST_APP");
+        cfg.setAppKey("TEST_KEY");
+        cfg.setWechatMchId("WX_MCH");
+        cfg.setNotifyUrl("https://example.com/payment/notify/yungouos");
+        cfg.setNativePayType("2");
+
+        PaymentOrderService paymentOrderService = Mockito.mock(PaymentOrderService.class);
+        BrokerageOrderFacade brokerageOrderFacade = Mockito.mock(BrokerageOrderFacade.class);
+        YungouosClient yungouosClient = Mockito.mock(YungouosClient.class);
+        ImBrokerageOrderFeignClient imBrokerageOrderFeignClient = Mockito.mock(ImBrokerageOrderFeignClient.class);
+        AppointmentLessonPaymentFeignClient appointmentLessonPaymentFeignClient = Mockito.mock(AppointmentLessonPaymentFeignClient.class);
+        IdentitySignatureUtils identitySignatureUtils = Mockito.mock(IdentitySignatureUtils.class);
+
+        YungouosPaymentAppService svc = new YungouosPaymentAppService(
+                props, paymentOrderService, brokerageOrderFacade, yungouosClient, imBrokerageOrderFeignClient, appointmentLessonPaymentFeignClient, identitySignatureUtils);
+
+        LessonPaymentPayInfo payInfo = new LessonPaymentPayInfo();
+        payInfo.setOrderId(88L);
+        payInfo.setPayerUid(1L);
+        payInfo.setAmountFen(10000L);
+        payInfo.setSubject("课后支付");
+        payInfo.setBody("试课课时费");
+        when(appointmentLessonPaymentFeignClient.getPayableOrder(88L, 1L))
+                .thenReturn(new BaseResponse<>(ErrorCode.SUCCESS.getCode(), payInfo, "ok"));
+
+        PaymentOrder created = new PaymentOrder();
+        created.setOrderNo("L1");
+        created.setUserId(1L);
+        created.setAmount(10000L);
+        created.setChannel("WECHAT");
+        created.setContextType("LESSON_PAYMENT_ORDER");
+        created.setContextId(88L);
+        created.setBody("试课课时费");
+        created.setExpireTime(LocalDateTime.now().plusMinutes(5));
+        when(paymentOrderService.createOrReusePending(anyString(), anyLong(), anyLong(), anyString(), anyLong(), anyString(), anyString(), anyString()))
+                .thenReturn(created);
+        when(yungouosClient.wechatNativePay(eq("L1"), anyString(), eq("WX_MCH"), anyString(), eq("2"), any(), any(), any(), any(), eq("TEST_KEY")))
+                .thenReturn("http://img.example.com/l.png");
+        when(paymentOrderService.updatePayData(eq("L1"), anyString(), any(LocalDateTime.class))).thenReturn(true);
+
+        PaymentOrder updated = new PaymentOrder();
+        updated.setOrderNo("L1");
+        updated.setAmount(10000L);
+        updated.setChannel("WECHAT");
+        updated.setExpireTime(LocalDateTime.now().plusMinutes(5));
+        updated.setPayData("{\"type\":\"2\",\"data\":\"http://img.example.com/l.png\",\"channel\":\"WECHAT\",\"provider\":\"YUNGOUOS\"}");
+        when(paymentOrderService.getByOrderNo("L1")).thenReturn(updated);
+
+        PrepayRequest req = new PrepayRequest();
+        req.setContextType("LESSON_PAYMENT_ORDER");
+        req.setContextId(88L);
+        req.setChannel("WECHAT");
+
+        PrepayResponse resp = svc.prepay(req, 1L, "127.0.0.1");
+        assertNotNull(resp);
+        assertEquals("L1", resp.getOrderNo());
+        assertEquals(10000L, resp.getAmountFen());
+        assertEquals("http://img.example.com/l.png", resp.getQrCodeUrl());
     }
 }

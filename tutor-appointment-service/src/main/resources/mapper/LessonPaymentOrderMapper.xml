@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.LessonPaymentOrderMapper">
+
+    <resultMap id="LessonPaymentOrderMap" type="com.ai.tutor.appointment.model.entity.LessonPaymentOrder">
+        <id column="id" property="id"/>
+        <result column="lesson_id" property="lessonId"/>
+        <result column="course_id" property="courseId"/>
+        <result column="student_uid" property="studentUid"/>
+        <result column="teacher_uid" property="teacherUid"/>
+        <result column="lesson_type" property="lessonType"/>
+        <result column="total_amount_fen" property="totalAmountFen"/>
+        <result column="platform_fee_rate" property="platformFeeRate"/>
+        <result column="platform_fee_amount_fen" property="platformFeeAmountFen"/>
+        <result column="teacher_income_amount_fen" property="teacherIncomeAmountFen"/>
+        <result column="status" property="status"/>
+        <result column="payment_order_no" property="paymentOrderNo"/>
+        <result column="paid_at" property="paidAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.LessonPaymentOrder" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lesson_payment_order
+        (lesson_id, course_id, student_uid, teacher_uid, lesson_type, total_amount_fen,
+         platform_fee_rate, platform_fee_amount_fen, teacher_income_amount_fen, status,
+         payment_order_no, paid_at)
+        VALUES
+        (#{lessonId}, #{courseId}, #{studentUid}, #{teacherUid}, #{lessonType}, #{totalAmountFen},
+         #{platformFeeRate}, #{platformFeeAmountFen}, #{teacherIncomeAmountFen}, #{status},
+         #{paymentOrderNo}, #{paidAt})
+    </insert>
+
+    <select id="selectById" resultMap="LessonPaymentOrderMap">
+        SELECT id, lesson_id, course_id, student_uid, teacher_uid, lesson_type, total_amount_fen,
+               platform_fee_rate, platform_fee_amount_fen, teacher_income_amount_fen, status,
+               payment_order_no, paid_at, create_time, update_time
+        FROM lesson_payment_order
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByLessonId" resultMap="LessonPaymentOrderMap">
+        SELECT id, lesson_id, course_id, student_uid, teacher_uid, lesson_type, total_amount_fen,
+               platform_fee_rate, platform_fee_amount_fen, teacher_income_amount_fen, status,
+               payment_order_no, paid_at, create_time, update_time
+        FROM lesson_payment_order
+        WHERE lesson_id = #{lessonId}
+        LIMIT 1
+    </select>
+
+    <select id="selectUnpaidByCourseId" resultMap="LessonPaymentOrderMap">
+        SELECT id, lesson_id, course_id, student_uid, teacher_uid, lesson_type, total_amount_fen,
+               platform_fee_rate, platform_fee_amount_fen, teacher_income_amount_fen, status,
+               payment_order_no, paid_at, create_time, update_time
+        FROM lesson_payment_order
+        WHERE course_id = #{courseId}
+          AND status IN ('PENDING', 'PAYING')
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <update id="markPaying">
+        UPDATE lesson_payment_order
+        SET status = 'PAYING',
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status = 'PENDING'
+    </update>
+
+    <update id="markPaid">
+        UPDATE lesson_payment_order
+        SET status = 'PAID',
+            payment_order_no = #{paymentOrderNo},
+            paid_at = #{paidAt},
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND status IN ('PENDING', 'PAYING')
+    </update>
+</mapper>

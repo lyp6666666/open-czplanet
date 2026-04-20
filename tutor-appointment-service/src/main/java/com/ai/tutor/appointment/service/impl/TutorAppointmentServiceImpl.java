@@ -14,6 +14,7 @@ import com.ai.tutor.common.integration.AppointmentEventPublisher;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -38,6 +39,9 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
 
     @Resource
     private AppointmentEventPublisher appointmentEventPublisher;
+
+    @Resource
+    private com.ai.tutor.appointment.service.LessonPaymentOrderService lessonPaymentOrderService;
 
     @Override
     public Long create(CreateAppointmentRequest request, Long uid) {
@@ -156,6 +160,7 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void complete(Long id, Long uid) {
         TutorAppointment db = requireParticipant(id, uid);
         ThrowUtils.throwIf(db.getStatus() == null || db.getStatus() != STATUS_ACCEPTED, ErrorCode.OPERATION_ERROR, "当前状态不允许结课");
@@ -171,6 +176,11 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
                     .status(0)
                     .build();
             studentJobPostingMapper.updateById(toUpdate);
+        }
+        TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
+        TutorAppointment billable = latest == null ? db : latest;
+        if (billable.getCourseId() != null && billable.getPayableAmountFen() != null && billable.getPayableAmountFen() > 0) {
+            lessonPaymentOrderService.createAfterLessonCompleted(billable);
         }
     }
 

@@ -14,4 +14,8 @@ export const appointmentApi = {
   confirmReschedule(id: number) {
     return http.post<unknown, string>(`/appointment/${id}/confirmReschedule`)
   },
+
+  complete(id: number) {
+    return http.post<unknown, string>(`/appointment/${id}/complete`)
+  },
 }

@@ -14,6 +14,10 @@
         <result column="status" property="status"/>
         <result column="reason" property="reason"/>
         <result column="evidence_images_json" property="evidenceImagesJson"/>
+        <result column="evidence_video_url" property="evidenceVideoUrl"/>
+        <result column="evidence_video_duration_seconds" property="evidenceVideoDurationSeconds"/>
+        <result column="evidence_video_delete_status" property="evidenceVideoDeleteStatus"/>
+        <result column="evidence_video_deleted_at" property="evidenceVideoDeletedAt"/>
         <result column="refund_percent" property="refundPercent"/>
         <result column="refund_amount_fen" property="refundAmountFen"/>
         <result column="admin_uid" property="adminUid"/>
@@ -35,6 +39,10 @@
             status,
             reason,
             evidence_images_json,
+            evidence_video_url,
+            evidence_video_duration_seconds,
+            evidence_video_delete_status,
+            evidence_video_deleted_at,
             refund_percent,
             refund_amount_fen,
             admin_uid,
@@ -54,6 +62,10 @@
             #{status},
             #{reason},
             #{evidenceImagesJson},
+            #{evidenceVideoUrl},
+            #{evidenceVideoDurationSeconds},
+            #{evidenceVideoDeleteStatus},
+            #{evidenceVideoDeletedAt},
             #{refundPercent},
             #{refundAmountFen},
             #{adminUid},
@@ -67,7 +79,8 @@
     <select id="selectById" resultMap="baseMap">
         SELECT
             id, brokerage_order_id, course_id, room_id, applicant_uid, applicant_role, type, status,
-            reason, evidence_images_json, refund_percent, refund_amount_fen, admin_uid, admin_note,
+            reason, evidence_images_json, evidence_video_url, evidence_video_duration_seconds, evidence_video_delete_status,
+            evidence_video_deleted_at, refund_percent, refund_amount_fen, admin_uid, admin_note,
             decided_at, create_time, update_time
         FROM refund_request
         WHERE id = #{id}
@@ -77,7 +90,8 @@
     <select id="selectPendingByBrokerageOrderId" resultMap="baseMap">
         SELECT
             id, brokerage_order_id, course_id, room_id, applicant_uid, applicant_role, type, status,
-            reason, evidence_images_json, refund_percent, refund_amount_fen, admin_uid, admin_note,
+            reason, evidence_images_json, evidence_video_url, evidence_video_duration_seconds, evidence_video_delete_status,
+            evidence_video_deleted_at, refund_percent, refund_amount_fen, admin_uid, admin_note,
             decided_at, create_time, update_time
         FROM refund_request
         WHERE brokerage_order_id = #{brokerageOrderId}
@@ -87,4 +101,3 @@
     </select>
 
 </mapper>
-

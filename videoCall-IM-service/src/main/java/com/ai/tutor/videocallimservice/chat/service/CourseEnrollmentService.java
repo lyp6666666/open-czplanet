@@ -199,6 +199,11 @@ public class CourseEnrollmentService {
         ThrowUtils.throwIf(!uid.equals(course.getTeacherUid()), ErrorCode.NO_AUTH_ERROR);
         ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可发起试课退费");
         ThrowUtils.throwIf(course.getTrialEndAt() == null || LocalDateTime.now().isAfter(course.getTrialEndAt()), ErrorCode.OPERATION_ERROR, "试课期已结束，无法发起试课退费");
+        ThrowUtils.throwIf("ONLINE".equalsIgnoreCase(course.getTeachingMode()), ErrorCode.OPERATION_ERROR, "线上试课不支持退还信息费，请直接发起退课");
+        ThrowUtils.throwIf(req.getEvidenceVideoUrl() == null || req.getEvidenceVideoUrl().trim().isEmpty(), ErrorCode.PARAMS_ERROR, "请上传微信聊天录屏");
+        ThrowUtils.throwIf(req.getEvidenceVideoDurationSeconds() == null || req.getEvidenceVideoDurationSeconds() <= 0 || req.getEvidenceVideoDurationSeconds() > 60,
+                ErrorCode.PARAMS_ERROR,
+                "录屏时长需控制在 60 秒内");
 
         BrokerageOrder order = brokerageOrderMapper.selectByApplicationId(course.getApplicationId());
         ThrowUtils.throwIf(order == null || order.getId() == null, ErrorCode.NOT_FOUND_ERROR, "未找到信息费订单");
@@ -218,7 +223,7 @@ public class CourseEnrollmentService {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "订单状态不可申请试课退费");
         }
 
-        long refundAmountFen = computePercentAmount(order.getAmountFen(), 60);
+        long refundAmountFen = computePercentAmount(order.getAmountFen(), 80);
         LocalDateTime now = LocalDateTime.now();
         RefundRequest request = RefundRequest.builder()
                 .brokerageOrderId(order.getId())
@@ -230,7 +235,10 @@ public class CourseEnrollmentService {
                 .status(RefundRequestStatus.PENDING.name())
                 .reason(trimTo1024(req.getReason()))
                 .evidenceImagesJson(JSONUtil.toJsonStr(req.getEvidenceImageUrls()))
-                .refundPercent(60)
+                .evidenceVideoUrl(trimTo1024(req.getEvidenceVideoUrl()))
+                .evidenceVideoDurationSeconds(req.getEvidenceVideoDurationSeconds())
+                .evidenceVideoDeleteStatus("PENDING_DELETE")
+                .refundPercent(80)
                 .refundAmountFen(refundAmountFen)
                 .adminUid(null)
                 .adminNote(null)

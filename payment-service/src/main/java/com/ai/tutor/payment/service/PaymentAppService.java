@@ -3,11 +3,13 @@ package com.ai.tutor.payment.service;
 import cn.hutool.json.JSONUtil;
 import com.ai.tutor.common.integration.BrokerageOrderFacade;
 import com.ai.tutor.common.integration.BrokerageOrderPayInfo;
+import com.ai.tutor.common.integration.LessonPaymentPayInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.payment.config.PaymentProperties;
 import com.ai.tutor.payment.controller.dto.PrepayRequest;
 import com.ai.tutor.payment.controller.dto.PrepayResponse;
 import com.ai.tutor.payment.enums.PaymentChannel;
+import com.ai.tutor.payment.integration.feign.AppointmentLessonPaymentFeignClient;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
 import com.ai.tutor.payment.strategy.PaymentStrategy;
 import com.ai.tutor.payment.strategy.impl.WechatPaymentStrategy;
@@ -31,10 +33,12 @@ import java.util.Map;
 public class PaymentAppService {
 
     public static final String CONTEXT_BROKERAGE_ORDER = "BROKERAGE_ORDER";
+    public static final String CONTEXT_LESSON_PAYMENT_ORDER = "LESSON_PAYMENT_ORDER";
 
     private final PaymentProperties paymentProperties;
     private final PaymentOrderService paymentOrderService;
     private final BrokerageOrderFacade brokerageOrderFacade;
+    private final AppointmentLessonPaymentFeignClient appointmentLessonPaymentFeignClient;
     private final WechatPaymentStrategy wechatPaymentStrategy;
 
     public PrepayResponse prepay(PrepayRequest req, Long uid, String clientIp) {
@@ -44,19 +48,16 @@ public class PaymentAppService {
         Long contextId = req.getContextId();
         String channel = StringUtils.trimAllWhitespace(req.getChannel());
 
-        ThrowUtils.throwIf(!CONTEXT_BROKERAGE_ORDER.equalsIgnoreCase(contextType), ErrorCode.PARAMS_ERROR, "暂不支持的 contextType");
-        
-        BrokerageOrderPayInfo payInfo = brokerageOrderFacade.getPayableOrder(contextId, uid);
-        ThrowUtils.throwIf(payInfo == null, ErrorCode.NOT_FOUND_ERROR);
+        PayableInfo payInfo = resolvePayableInfo(contextType, contextId, uid);
 
         PaymentOrder order = paymentOrderService.createOrReusePending(
-                CONTEXT_BROKERAGE_ORDER,
-                payInfo.getOrderId(),
+                payInfo.contextType(),
+                payInfo.orderId(),
                 uid,
                 channel.toUpperCase(),
-                payInfo.getAmountFen(),
-                defaultSubject(payInfo),
-                defaultBody(payInfo),
+                payInfo.amountFen(),
+                payInfo.subject(),
+                payInfo.body(),
                 clientIp
         );
 
@@ -100,6 +101,26 @@ public class PaymentAppService {
         throw new IllegalArgumentException("不支持的支付渠道: " + channel);
     }
 
+    private PayableInfo resolvePayableInfo(String contextType, Long contextId, Long uid) {
+        if (CONTEXT_BROKERAGE_ORDER.equalsIgnoreCase(contextType)) {
+            BrokerageOrderPayInfo payInfo = brokerageOrderFacade.getPayableOrder(contextId, uid);
+            ThrowUtils.throwIf(payInfo == null, ErrorCode.NOT_FOUND_ERROR);
+            return new PayableInfo(CONTEXT_BROKERAGE_ORDER, payInfo.getOrderId(), payInfo.getAmountFen(), defaultSubject(payInfo), defaultBody(payInfo));
+        }
+        if (CONTEXT_LESSON_PAYMENT_ORDER.equalsIgnoreCase(contextType)) {
+            com.ai.tutor.common.BaseResponse<LessonPaymentPayInfo> resp = appointmentLessonPaymentFeignClient.getPayableOrder(contextId, uid);
+            ThrowUtils.throwIf(resp == null || resp.getCode() != ErrorCode.SUCCESS.getCode() || resp.getData() == null,
+                    ErrorCode.OPERATION_ERROR,
+                    resp == null ? "获取课节支付单失败" : resp.getMessage());
+            LessonPaymentPayInfo payInfo = resp.getData();
+            return new PayableInfo(CONTEXT_LESSON_PAYMENT_ORDER, payInfo.getOrderId(), payInfo.getAmountFen(),
+                    StringUtils.hasText(payInfo.getSubject()) ? payInfo.getSubject() : "课后支付",
+                    StringUtils.hasText(payInfo.getBody()) ? payInfo.getBody() : "课时费");
+        }
+        ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "暂不支持的 contextType");
+        return null;
+    }
+
     private static String defaultSubject(BrokerageOrderPayInfo payInfo) {
         String s = payInfo == null ? null : payInfo.getSubject();
         return StringUtils.hasText(s) ? s : "服务费";
@@ -118,5 +139,8 @@ public class PaymentAppService {
         resp.setExpireTime(order.getExpireTime());
         resp.setPayParams(payParams);
         return resp;
+    }
+
+    private record PayableInfo(String contextType, Long orderId, Long amountFen, String subject, String body) {
     }
 }

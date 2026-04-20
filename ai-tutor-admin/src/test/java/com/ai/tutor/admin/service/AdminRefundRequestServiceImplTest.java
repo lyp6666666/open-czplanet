@@ -69,6 +69,7 @@ class AdminRefundRequestServiceImplTest {
         verify(adminRefundRequestMapper).approve(eq(10L), eq(100L), any(), any(LocalDateTime.class));
         verify(adminRefundRequestMapper).markOrderRefunded(99L, 6000L);
         verify(adminRefundRequestMapper).markCourseRefundedById(1L);
+        verify(adminRefundRequestMapper).markEvidenceVideoDeleted(eq(10L), any(LocalDateTime.class));
     }
 
     @Test

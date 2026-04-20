@@ -18,6 +18,15 @@ public class CreateScheduleEventRequest {
     @Schema(description = "长期课程 id（线上课建议传入）", example = "66")
     private Long courseId;
 
+    @Schema(description = "课节类型：TRIAL/NORMAL；不传时首节默认试课，后续默认正式课", example = "TRIAL")
+    private String lessonType;
+
+    @Schema(description = "单节标准课价（分）；创建首节课时建议明确传入", example = "30000")
+    private Long lessonPriceFen;
+
+    @Schema(description = "试课收费比例，默认 50 表示半节课", example = "50")
+    private Integer trialPricePercent;
+
     @NotBlank
     @Schema(description = "课程名称/标题", example = "初二数学｜一次函数强化")
     private String title;

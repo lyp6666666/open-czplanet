@@ -9,6 +9,9 @@ export interface ListScheduleEventsParams {
 
 export interface CreateScheduleEventRequest {
   courseId?: number
+  lessonType?: 'TRIAL' | 'NORMAL'
+  lessonPriceFen?: number
+  trialPricePercent?: number
   title: string
   participantUserId: number
   startAt: number

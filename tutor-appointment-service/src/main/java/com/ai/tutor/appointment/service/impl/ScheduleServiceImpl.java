@@ -5,10 +5,12 @@ import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.integration.feign.LiveClassInternalFeignClient;
 import com.ai.tutor.appointment.model.dto.schedule.CreateScheduleEventRequest;
+import com.ai.tutor.appointment.model.entity.LessonPaymentOrder;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
 import com.ai.tutor.appointment.model.vo.schedule.ScheduleEventVO;
+import com.ai.tutor.appointment.service.LessonPaymentOrderService;
 import com.ai.tutor.appointment.service.ScheduleService;
 import com.ai.tutor.common.integration.ImFacade;
 import com.ai.tutor.enums.ErrorCode;
@@ -58,6 +60,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     @Resource
     private LiveClassInternalFeignClient liveClassInternalFeignClient;
+
+    @Resource
+    private LessonPaymentOrderService lessonPaymentOrderService;
 
     @Override
     public List<ScheduleEventVO> listEvents(Long uid, Long startAtMs, Long endAtMs, boolean includePending) {
@@ -128,16 +133,28 @@ public class ScheduleServiceImpl implements ScheduleService {
             subjectId = positionPostMapper.selectFirstEnabledLeafId();
             ThrowUtils.throwIf(subjectId == null, ErrorCode.OPERATION_ERROR, "未找到可用科目，请先初始化科目数据");
         }
+        if (request.getCourseId() != null) {
+            LessonPaymentOrder unpaid = lessonPaymentOrderService.findUnpaidByCourseId(request.getCourseId());
+            ThrowUtils.throwIf(unpaid != null, ErrorCode.OPERATION_ERROR, "上一节课尚未支付，支付后才能预约下一节课");
+        }
 
         // 关联聊天会话，用于在聊天中投递授课申请卡片
         Long roomId = imFacade.getOrCreateRoomWithUser(uid, target.getId());
 
         int durationMinutes = (int) Duration.between(start, end).toMinutes();
+        String lessonType = normalizeLessonType(request.getLessonType(), request.getCourseId());
+        Long lessonPriceFen = request.getLessonPriceFen();
+        Integer trialPricePercent = clampPercent(request.getTrialPricePercent(), 50);
+        Long payableAmountFen = computePayableAmountFen(lessonPriceFen, lessonType, trialPricePercent);
         TutorAppointment appointment = TutorAppointment.builder()
                 .courseId(request.getCourseId())
                 .parentId(parentId)
                 .tutorId(tutorId)
                 .title(request.getTitle())
+                .lessonType(lessonType)
+                .lessonPriceFen(lessonPriceFen)
+                .trialPricePercent(trialPricePercent)
+                .payableAmountFen(payableAmountFen)
                 .subjectId(subjectId)
                 .startTime(start)
                 .durationMinutes(durationMinutes)
@@ -155,6 +172,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         payload.put("bizType", "LESSON_REQUEST");
         payload.put("eventId", appointment.getId());
         payload.put("title", appointment.getTitle());
+        payload.put("lessonType", lessonType);
+        payload.put("payableAmountFen", payableAmountFen);
         payload.put("startAt", request.getStartAt());
         payload.put("endAt", request.getEndAt());
         payload.put("status", "PENDING");
@@ -295,11 +314,21 @@ public class ScheduleServiceImpl implements ScheduleService {
         LocalDateTime end = start == null ? null : start.plusMinutes(minutes);
         LocalDateTime proposedStart = a.getProposedStartTime();
         LocalDateTime proposedEnd = proposedStart == null ? null : proposedStart.plusMinutes(minutes);
+        LessonPaymentOrder paymentOrder = lessonPaymentOrderService.getByLessonId(a.getId());
 
         return ScheduleEventVO.builder()
                 .id(a.getId())
                 .courseId(a.getCourseId())
                 .title(a.getTitle() == null || a.getTitle().isBlank() ? "课程" : a.getTitle())
+                .lessonType(normalizeLessonType(a.getLessonType(), null))
+                .lessonPriceFen(a.getLessonPriceFen())
+                .trialPricePercent(a.getTrialPricePercent())
+                .payableAmountFen(a.getPayableAmountFen())
+                .paymentStatus(paymentOrder == null ? "UNBILLED" : paymentOrder.getStatus())
+                .lessonPaymentOrderId(paymentOrder == null ? null : paymentOrder.getId())
+                .platformFeeRate(paymentOrder == null ? 10 : paymentOrder.getPlatformFeeRate())
+                .platformFeeAmountFen(paymentOrder == null ? computePlatformFee(a.getPayableAmountFen()) : paymentOrder.getPlatformFeeAmountFen())
+                .teacherIncomeAmountFen(paymentOrder == null ? computeTeacherIncome(a.getPayableAmountFen()) : paymentOrder.getTeacherIncomeAmountFen())
                 .description(a.getRemark())
                 .startAt(start == null ? null : toEpochMillis(start))
                 .endAt(end == null ? null : toEpochMillis(end))
@@ -356,6 +385,54 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     private static LocalDateTime toLocalDateTime(long epochMillis) {
         return LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), ZoneId.systemDefault());
+    }
+
+    private String normalizeLessonType(String raw, Long courseId) {
+        if (raw != null && !raw.isBlank()) {
+            String normalized = raw.trim().toUpperCase();
+            ThrowUtils.throwIf(!"TRIAL".equals(normalized) && !"NORMAL".equals(normalized), ErrorCode.PARAMS_ERROR, "课节类型仅支持 TRIAL/NORMAL");
+            return normalized;
+        }
+        if (courseId != null) {
+            List<TutorAppointment> existing = tutorAppointmentMapper.listByCourseId(courseId);
+            if (existing == null || existing.isEmpty()) {
+                return "TRIAL";
+            }
+        }
+        return "NORMAL";
+    }
+
+    private static Integer clampPercent(Integer value, int defaultValue) {
+        int v = value == null ? defaultValue : value;
+        if (v < 1) return 1;
+        if (v > 100) return 100;
+        return v;
+    }
+
+    private static Long computePayableAmountFen(Long lessonPriceFen, String lessonType, Integer trialPricePercent) {
+        if (lessonPriceFen == null || lessonPriceFen <= 0) {
+            return null;
+        }
+        if ("TRIAL".equalsIgnoreCase(lessonType)) {
+            // 中文注释：线上试课默认按半节课收费，可由发起试课时的 trialPricePercent 调整。
+            return lessonPriceFen * clampPercent(trialPricePercent, 50) / 100;
+        }
+        return lessonPriceFen;
+    }
+
+    private static Long computePlatformFee(Long amountFen) {
+        if (amountFen == null || amountFen <= 0) {
+            return null;
+        }
+        return amountFen * 10 / 100;
+    }
+
+    private static Long computeTeacherIncome(Long amountFen) {
+        Long platformFee = computePlatformFee(amountFen);
+        if (amountFen == null || platformFee == null) {
+            return null;
+        }
+        return Math.max(0L, amountFen - platformFee);
     }
 
     private static long toEpochMillis(LocalDateTime time) {

@@ -419,6 +419,15 @@ export interface ScheduleEventVO {
   id: number
   courseId?: number | null
   title: string
+  lessonType?: 'TRIAL' | 'NORMAL' | string | null
+  lessonPriceFen?: number | null
+  trialPricePercent?: number | null
+  payableAmountFen?: number | null
+  paymentStatus?: 'UNBILLED' | 'PENDING' | 'PAYING' | 'PAID' | 'CANCELED' | string | null
+  lessonPaymentOrderId?: number | null
+  platformFeeRate?: number | null
+  platformFeeAmountFen?: number | null
+  teacherIncomeAmountFen?: number | null
   description: string | null
   startAt: number
   endAt: number
