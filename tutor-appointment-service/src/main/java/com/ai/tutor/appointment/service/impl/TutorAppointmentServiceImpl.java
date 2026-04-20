@@ -121,6 +121,7 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
                 .proposedStartTime(request.getProposedStartTime())
                 .proposedBy(uid)
                 .durationMinutes(request.getDurationMinutes())
+                .remark(request.getRemark())
                 .build();
         int updated = tutorAppointmentMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);

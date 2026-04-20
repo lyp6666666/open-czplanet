@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
+import { appointmentApi } from '@/api/appointment'
 import { courseApi } from '@/api/course'
 import { scheduleApi } from '@/api/schedule'
 import type { CourseDetailVO, ScheduleEventVO, TutorApplicationVO, UserCardVO, UserSimpleVO } from '@/api/types'
@@ -36,6 +37,16 @@ const scheduleDescription = ref('')
 const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000))
 const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
 const scheduleError = ref<string | null>(null)
+const lessonActionError = ref<string | null>(null)
+const actionLoadingByLessonId = ref<Record<number, string>>({})
+
+const rescheduleOpen = ref(false)
+const rescheduleLessonId = ref<number | null>(null)
+const rescheduleTitle = ref('')
+const rescheduleStartAt = ref<number>(roundToNextHalfHour(Date.now() + 24 * 60 * 60 * 1000))
+const rescheduleEndAt = ref<number>(rescheduleStartAt.value + 60 * 60 * 1000)
+const rescheduleRemark = ref('')
+const rescheduleError = ref<string | null>(null)
 
 function roundToNextHalfHour(nowMs: number) {
   const d = new Date(nowMs)
@@ -101,8 +112,10 @@ function lessonStatusText(status: string) {
   const normalized = String(status || '').trim().toUpperCase()
   if (normalized === 'PENDING') return '待确认'
   if (normalized === 'ACCEPTED') return '已确认'
+  if (normalized === 'RESCHEDULE_PENDING') return '待确认调课'
   if (normalized === 'REJECTED') return '已拒绝'
   if (normalized === 'CANCELED') return '已取消'
+  if (normalized === 'COMPLETED') return '已结课'
   return normalized || '未知状态'
 }
 
@@ -132,6 +145,7 @@ const sortedLessons = computed(() =>
   }),
 )
 
+const currentUid = computed(() => auth.user?.id ?? null)
 const latestLesson = computed(() => sortedLessons.value[sortedLessons.value.length - 1] || null)
 
 const lessonStats = computed(() => ({
@@ -150,9 +164,59 @@ function goChat() {
   void router.push({ name: 'chatRoom', params: { roomId: String(detail.value.roomId) } })
 }
 
+function isTrialLesson(index: number) {
+  return index === 0
+}
+
+function getLessonActionBusyText(lessonId: number) {
+  return actionLoadingByLessonId.value[lessonId] || ''
+}
+
+function isLessonActionBusy(lessonId: number) {
+  return Boolean(getLessonActionBusyText(lessonId))
+}
+
+function setLessonActionBusy(lessonId: number, text: string | null) {
+  const next = { ...actionLoadingByLessonId.value }
+  if (text) next[lessonId] = text
+  else delete next[lessonId]
+  actionLoadingByLessonId.value = next
+}
+
+function replaceLesson(nextLesson: ScheduleEventVO) {
+  lessons.value = lessons.value.map((item) => (item.id === nextLesson.id ? nextLesson : item))
+}
+
+function canCancelLesson(item: ScheduleEventVO) {
+  return item.status === 'PENDING' || item.status === 'ACCEPTED' || item.status === 'RESCHEDULE_PENDING'
+}
+
+function canRescheduleLesson(item: ScheduleEventVO) {
+  return item.status === 'ACCEPTED'
+}
+
+function canConfirmReschedule(item: ScheduleEventVO) {
+  if (item.status !== 'RESCHEDULE_PENDING') return false
+  if (!currentUid.value || !item.proposedBy) return false
+  return currentUid.value !== item.proposedBy
+}
+
+function lessonMetaText(item: ScheduleEventVO, index: number) {
+  const bits: string[] = []
+  if (isTrialLesson(index)) bits.push('首节试课')
+  if (item.status === 'RESCHEDULE_PENDING' && item.proposedStartAt && item.proposedEndAt) {
+    bits.push(`待确认改期：${fmtDateTime(item.proposedStartAt)} - ${fmtDateTime(item.proposedEndAt, { hour: '2-digit', minute: '2-digit' })}`)
+  }
+  if (item.proposedBy && currentUid.value) {
+    bits.push(item.proposedBy === currentUid.value ? '由你发起调课' : '等待你确认调课')
+  }
+  return bits.join(' · ')
+}
+
 function openScheduleCreate() {
   if (!detail.value || !participantUid.value) return
   scheduleError.value = null
+  lessonActionError.value = null
   scheduleTitle.value = detail.value.courseName?.trim() || `与${participantName.value}的线上课程`
   scheduleDescription.value = latestLesson.value ? '补充新增课节' : '第一节试课'
   scheduleStartAt.value = roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000)
@@ -163,6 +227,23 @@ function openScheduleCreate() {
 function closeScheduleCreate() {
   if (saving.value) return
   scheduleOpen.value = false
+}
+
+function openReschedule(item: ScheduleEventVO) {
+  lessonActionError.value = null
+  rescheduleError.value = null
+  rescheduleLessonId.value = item.id
+  rescheduleTitle.value = item.title
+  rescheduleStartAt.value = item.startAt
+  rescheduleEndAt.value = item.endAt
+  rescheduleRemark.value = item.description || '调课说明：'
+  rescheduleOpen.value = true
+}
+
+function closeReschedule() {
+  if (saving.value) return
+  rescheduleOpen.value = false
+  rescheduleLessonId.value = null
 }
 
 async function submitScheduleCreate() {
@@ -197,6 +278,96 @@ async function submitScheduleCreate() {
   }
 }
 
+async function cancelLesson(item: ScheduleEventVO) {
+  if (saving.value || !canCancelLesson(item)) return
+  const confirmed = window.confirm(`确认取消课节「${item.title}」吗？取消后本节课将不能继续履约。`)
+  if (!confirmed) return
+  saving.value = true
+  lessonActionError.value = null
+  setLessonActionBusy(item.id, '取消中...')
+  try {
+    const canceled = await scheduleApi.cancel(item.id, '从课程详情页取消课节')
+    replaceLesson(canceled)
+    toast.show('课节已取消。', 'success')
+  } catch (e) {
+    lessonActionError.value = e instanceof Error ? e.message : '取消课节失败'
+  } finally {
+    setLessonActionBusy(item.id, null)
+    saving.value = false
+  }
+}
+
+function toLocalDateTimeIso(ms: number) {
+  const d = new Date(ms)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hours = String(d.getHours()).padStart(2, '0')
+  const minutes = String(d.getMinutes()).padStart(2, '0')
+  const seconds = String(d.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`
+}
+
+function applyRescheduleStartInput(value: string) {
+  const nextStart = parseLocalDateTimeInputValue(value)
+  const previousDuration = Math.max(30 * 60 * 1000, rescheduleEndAt.value - rescheduleStartAt.value)
+  rescheduleStartAt.value = nextStart
+  if (!(rescheduleEndAt.value > rescheduleStartAt.value)) {
+    rescheduleEndAt.value = nextStart + previousDuration
+  }
+}
+
+function applyRescheduleEndInput(value: string) {
+  rescheduleEndAt.value = parseLocalDateTimeInputValue(value)
+}
+
+async function submitReschedule() {
+  const lessonId = rescheduleLessonId.value
+  if (!lessonId || saving.value) return
+  if (!(rescheduleEndAt.value > rescheduleStartAt.value)) {
+    rescheduleError.value = '改期后的结束时间必须晚于开始时间'
+    return
+  }
+  saving.value = true
+  rescheduleError.value = null
+  lessonActionError.value = null
+  setLessonActionBusy(lessonId, '发起调课中...')
+  try {
+    await appointmentApi.reschedule(lessonId, {
+      proposedStartTime: toLocalDateTimeIso(rescheduleStartAt.value),
+      durationMinutes: Math.max(15, Math.round((rescheduleEndAt.value - rescheduleStartAt.value) / 60000)),
+      remark: rescheduleRemark.value.trim() || undefined,
+    })
+    await load()
+    closeReschedule()
+    toast.show('调课申请已发出，等待对方确认。', 'success')
+  } catch (e) {
+    rescheduleError.value = e instanceof Error ? e.message : '发起调课失败'
+  } finally {
+    setLessonActionBusy(lessonId, null)
+    saving.value = false
+  }
+}
+
+async function confirmReschedule(item: ScheduleEventVO) {
+  if (saving.value || !canConfirmReschedule(item)) return
+  const confirmed = window.confirm(`确认将「${item.title}」调整到新的时间吗？确认后会覆盖原上课时间。`)
+  if (!confirmed) return
+  saving.value = true
+  lessonActionError.value = null
+  setLessonActionBusy(item.id, '确认中...')
+  try {
+    await appointmentApi.confirmReschedule(item.id)
+    await load()
+    toast.show('调课已确认。', 'success')
+  } catch (e) {
+    lessonActionError.value = e instanceof Error ? e.message : '确认调课失败'
+  } finally {
+    setLessonActionBusy(item.id, null)
+    saving.value = false
+  }
+}
+
 async function load() {
   if (!(courseId.value > 0)) {
     error.value = '课程不存在'
@@ -204,6 +375,7 @@ async function load() {
   }
   loading.value = true
   error.value = null
+  lessonActionError.value = null
   try {
     const current = await courseApi.detail(courseId.value)
     detail.value = current
@@ -308,18 +480,23 @@ onMounted(() => {
           <div class="section-head">
             <div>
               <div class="section-title">课节列表</div>
-              <div class="section-desc">这里展示这门长期课程下的所有短期课节，可继续新增课节，并为调课/删课预留统一入口。</div>
+              <div class="section-desc">这里展示这门长期课程下的所有短期课节。首节默认视为试课，后续可继续新增、删课、调课并确认改期。</div>
             </div>
             <button class="btn btn-primary" type="button" :disabled="!participantUid" @click="openScheduleCreate">新增课节</button>
           </div>
+          <div v-if="lessonActionError" class="hint error">{{ lessonActionError }}</div>
 
           <div v-if="sortedLessons.length === 0" class="mini-empty">这门课还没有创建任何课节，先创建第一节试课或正式课吧。</div>
           <div v-else class="lesson-list">
-            <article v-for="item in sortedLessons" :key="item.id" class="lesson-item">
+            <article v-for="(item, index) in sortedLessons" :key="item.id" class="lesson-item">
               <div class="lesson-main">
-                <div class="lesson-title">{{ item.title }}</div>
+                <div class="lesson-title-row">
+                  <div class="lesson-title">{{ item.title }}</div>
+                  <span v-if="isTrialLesson(index)" class="trial-pill">试课</span>
+                </div>
                 <div class="lesson-time">{{ fmtDateTime(item.startAt) }} - {{ fmtDateTime(item.endAt, { hour: '2-digit', minute: '2-digit' }) }}</div>
                 <div class="lesson-sub">{{ item.description || '暂无备注' }}</div>
+                <div v-if="lessonMetaText(item, index)" class="lesson-meta">{{ lessonMetaText(item, index) }}</div>
               </div>
               <div class="lesson-side">
                 <div class="status-pill">{{ lessonStatusText(item.status) }}</div>
@@ -327,6 +504,17 @@ onMounted(() => {
                 <div class="lesson-actions">
                   <router-link class="btn btn-link" :to="{ name: 'chatRoom', params: { roomId: String(detail.roomId) } }">聊天</router-link>
                   <router-link class="btn btn-link" :to="{ name: 'schedule' }">日程</router-link>
+                </div>
+                <div class="lesson-actions lesson-actions-secondary">
+                  <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canRescheduleLesson(item)" @click="openReschedule(item)">
+                    {{ getLessonActionBusyText(item.id) || '调课' }}
+                  </button>
+                  <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click="confirmReschedule(item)">
+                    {{ getLessonActionBusyText(item.id) || '确认改期' }}
+                  </button>
+                  <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click="cancelLesson(item)">
+                    {{ getLessonActionBusyText(item.id) || '删课' }}
+                  </button>
                 </div>
               </div>
             </article>
@@ -361,6 +549,36 @@ onMounted(() => {
         <div class="modal-actions">
           <button class="btn" type="button" :disabled="saving" @click="closeScheduleCreate">取消</button>
           <button class="btn btn-primary" type="button" :disabled="saving" @click="submitScheduleCreate">{{ saving ? '提交中...' : '创建课节' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="rescheduleOpen" class="mask" @click.self="closeReschedule">
+      <div class="modal card">
+        <div class="modal-title">发起调课</div>
+        <div class="modal-desc">调课后需要对方确认，确认前本节课会显示为“待确认调课”。</div>
+        <div v-if="rescheduleError" class="hint error">{{ rescheduleError }}</div>
+        <div class="field">
+          <div class="label">课节名称</div>
+          <input v-model="rescheduleTitle" class="input" disabled />
+        </div>
+        <div class="time-grid">
+          <div class="field">
+            <div class="label">改后开始时间</div>
+            <input class="input" type="datetime-local" :value="toLocalDateTimeInputValue(rescheduleStartAt)" @change="applyRescheduleStartInput(($event.target as HTMLInputElement).value)" />
+          </div>
+          <div class="field">
+            <div class="label">改后结束时间</div>
+            <input class="input" type="datetime-local" :value="toLocalDateTimeInputValue(rescheduleEndAt)" @change="applyRescheduleEndInput(($event.target as HTMLInputElement).value)" />
+          </div>
+        </div>
+        <div class="field">
+          <div class="label">调课说明</div>
+          <textarea v-model="rescheduleRemark" class="textarea" rows="4" placeholder="例如：学校活动冲突，希望顺延到周四晚上" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" :disabled="saving" @click="closeReschedule">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="saving" @click="submitReschedule">{{ saving ? '提交中...' : '发起调课' }}</button>
         </div>
       </div>
     </div>
@@ -494,6 +712,24 @@ onMounted(() => {
   font-weight: 800;
 }
 
+.lesson-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trial-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .kv-list {
   display: grid;
   gap: 10px;
@@ -514,6 +750,7 @@ onMounted(() => {
 .lesson-main {
   display: grid;
   gap: 6px;
+  flex: 1 1 auto;
 }
 
 .lesson-time,
@@ -522,8 +759,13 @@ onMounted(() => {
   color: rgba(31, 35, 41, 0.68);
 }
 
+.lesson-meta {
+  font-size: 12px;
+  color: #0d7e7d;
+}
+
 .lesson-side {
-  min-width: 160px;
+  min-width: 240px;
   display: grid;
   justify-items: end;
   gap: 8px;
@@ -606,6 +848,16 @@ onMounted(() => {
 
 .btn-link {
   text-decoration: none;
+}
+
+.lesson-actions-secondary {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn-danger {
+  border-color: rgba(190, 24, 93, 0.22);
+  color: #be123c;
 }
 
 .hint.error {

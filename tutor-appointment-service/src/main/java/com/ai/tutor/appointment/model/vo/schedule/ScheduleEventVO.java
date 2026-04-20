@@ -33,7 +33,7 @@ public class ScheduleEventVO implements Serializable {
     @Schema(description = "结束时间（毫秒时间戳）")
     private Long endAt;
 
-    @Schema(description = "状态：PENDING/ACCEPTED/REJECTED/CANCELED")
+    @Schema(description = "状态：PENDING/ACCEPTED/RESCHEDULE_PENDING/REJECTED/CANCELED/COMPLETED")
     private String status;
 
     @Schema(description = "发起方用户 id")
@@ -44,6 +44,21 @@ public class ScheduleEventVO implements Serializable {
 
     @Schema(description = "关联聊天会话 id")
     private Long chatRoomId;
+
+    @Schema(description = "当前课节时长（分钟）")
+    private Integer durationMinutes;
+
+    @Schema(description = "待确认改期开始时间（毫秒时间戳）")
+    private Long proposedStartAt;
+
+    @Schema(description = "待确认改期结束时间（毫秒时间戳）")
+    private Long proposedEndAt;
+
+    @Schema(description = "调课发起人用户 id")
+    private Long proposedBy;
+
+    @Schema(description = "取消课节的操作者用户 id")
+    private Long cancelBy;
 
     private static final long serialVersionUID = 1L;
 }

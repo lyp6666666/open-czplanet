@@ -16,5 +16,7 @@ public class RescheduleAppointmentRequest {
 
     @Schema(description = "新时长（分钟）", example = "60")
     private Integer durationMinutes;
-}
 
+    @Schema(description = "调课说明", example = "学校活动冲突，希望顺延到周四晚 19:00")
+    private String remark;
+}

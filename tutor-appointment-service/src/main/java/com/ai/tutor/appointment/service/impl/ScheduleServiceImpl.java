@@ -39,7 +39,9 @@ public class ScheduleServiceImpl implements ScheduleService {
 
     private static final int STATUS_PENDING = 1;
     private static final int STATUS_ACCEPTED = 2;
+    private static final int STATUS_RESCHEDULE_PENDING = 3;
     private static final int STATUS_CANCELED = 4;
+    private static final int STATUS_COMPLETED = 5;
     private static final int STATUS_REJECTED = 6;
 
     @Resource
@@ -291,6 +293,8 @@ public class ScheduleServiceImpl implements ScheduleService {
         LocalDateTime start = a.getStartTime();
         int minutes = a.getDurationMinutes() == null ? 60 : a.getDurationMinutes();
         LocalDateTime end = start == null ? null : start.plusMinutes(minutes);
+        LocalDateTime proposedStart = a.getProposedStartTime();
+        LocalDateTime proposedEnd = proposedStart == null ? null : proposedStart.plusMinutes(minutes);
 
         return ScheduleEventVO.builder()
                 .id(a.getId())
@@ -303,6 +307,11 @@ public class ScheduleServiceImpl implements ScheduleService {
                 .creatorUserId(a.getCreatedBy())
                 .participant(otherVo)
                 .chatRoomId(a.getRoomId())
+                .durationMinutes(minutes)
+                .proposedStartAt(proposedStart == null ? null : toEpochMillis(proposedStart))
+                .proposedEndAt(proposedEnd == null ? null : toEpochMillis(proposedEnd))
+                .proposedBy(a.getProposedBy())
+                .cancelBy(a.getCancelBy())
                 .build();
     }
 
@@ -312,7 +321,9 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         if (status == STATUS_PENDING) return "PENDING";
         if (status == STATUS_ACCEPTED) return "ACCEPTED";
+        if (status == STATUS_RESCHEDULE_PENDING) return "RESCHEDULE_PENDING";
         if (status == STATUS_CANCELED) return "CANCELED";
+        if (status == STATUS_COMPLETED) return "COMPLETED";
         if (status == STATUS_REJECTED) return "REJECTED";
         return "UNKNOWN";
     }

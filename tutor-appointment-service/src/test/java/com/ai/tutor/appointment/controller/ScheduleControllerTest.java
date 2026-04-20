@@ -67,8 +67,13 @@ class ScheduleControllerTest {
                 .description("备注")
                 .startAt(1_771_412_400_000L)
                 .endAt(1_771_416_000_000L)
-                .status("PENDING")
+                .status("RESCHEDULE_PENDING")
                 .creatorUserId(1001L)
+                .durationMinutes(60)
+                .proposedStartAt(1_771_498_800_000L)
+                .proposedEndAt(1_771_502_400_000L)
+                .proposedBy(1002L)
+                .cancelBy(null)
                 .participant(UserSimpleVO.builder().id(1002L).name("对方").userType(2).avatar(null).build())
                 .chatRoomId(10L)
                 .build();
@@ -83,6 +88,9 @@ class ScheduleControllerTest {
                 .andExpect(jsonPath("$.data[0].id").value(1))
                 .andExpect(jsonPath("$.data[0].courseId").value(66))
                 .andExpect(jsonPath("$.data[0].title").value("测试课"))
+                .andExpect(jsonPath("$.data[0].status").value("RESCHEDULE_PENDING"))
+                .andExpect(jsonPath("$.data[0].proposedStartAt").value(1771498800000L))
+                .andExpect(jsonPath("$.data[0].proposedEndAt").value(1771502400000L))
                 .andExpect(jsonPath("$.data[0].participant.id").value(1002));
     }
 

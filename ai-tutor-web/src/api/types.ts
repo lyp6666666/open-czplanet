@@ -302,6 +302,10 @@ export interface TutorAppointment {
   startTime: string
   durationMinutes: number
   status: number
+  proposedStartTime?: string | null
+  proposedBy?: number | null
+  cancelBy?: number | null
+  remark?: string | null
   createTime: string
 }
 
@@ -407,7 +411,7 @@ export interface ChatMessageResp {
   message: { id: number; roomId: number; sendTime: string; body: unknown }
 }
 
-export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'UNKNOWN'
+export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'RESCHEDULE_PENDING' | 'REJECTED' | 'CANCELED' | 'COMPLETED' | 'UNKNOWN'
 export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNKNOWN'
 export type TutorApplicationCardStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 
@@ -422,6 +426,11 @@ export interface ScheduleEventVO {
   creatorUserId: number
   participant: UserSimpleVO | null
   chatRoomId: number | null
+  durationMinutes?: number | null
+  proposedStartAt?: number | null
+  proposedEndAt?: number | null
+  proposedBy?: number | null
+  cancelBy?: number | null
 }
 
 export interface CourseItemVO {
