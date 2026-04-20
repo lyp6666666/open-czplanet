@@ -15,12 +15,14 @@ import com.ai.tutor.videocallimservice.chat.domain.enums.RefundRequestType;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitTrialResultReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseItemVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RefundRequestMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
@@ -45,6 +47,8 @@ public class CourseEnrollmentService {
     private CollaborationProposalMapper collaborationProposalMapper;
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
+    @Resource
+    private RoomMapper roomMapper;
 
     @Transactional(rollbackFor = Exception.class)
     public CourseEnrollment ensureForApplication(TutorApplication application) {
@@ -192,6 +196,31 @@ public class CourseEnrollmentService {
     }
 
     @Transactional(rollbackFor = Exception.class)
+    public void submitTrialResult(Long courseId, SubmitTrialResultReq req, Long uid) {
+        ThrowUtils.throwIf(courseId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
+        CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
+        ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
+        ThrowUtils.throwIf(!uid.equals(course.getTeacherUid()), ErrorCode.NO_AUTH_ERROR);
+        String result = req.getResult() == null ? "" : req.getResult().trim().toUpperCase();
+        if ("PASS".equals(result)) {
+            confirmTrialPassed(course);
+            return;
+        }
+        ThrowUtils.throwIf(!"FAIL".equals(result), ErrorCode.PARAMS_ERROR, "试课结果不合法");
+
+        ApplyTrialRefundReq refundReq = new ApplyTrialRefundReq();
+        refundReq.setReason(req.getReason());
+        refundReq.setEvidenceImageUrls(req.getEvidenceImageUrls());
+        refundReq.setEvidenceVideoUrl(req.getEvidenceVideoUrl());
+        refundReq.setEvidenceVideoDurationSeconds(req.getEvidenceVideoDurationSeconds());
+        if ("ONLINE".equalsIgnoreCase(course.getTeachingMode())) {
+            failOnlineTrial(course, refundReq);
+            return;
+        }
+        applyTrialRefund(courseId, refundReq, uid);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public Long applyTrialRefund(Long courseId, ApplyTrialRefundReq req, Long uid) {
         ThrowUtils.throwIf(courseId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
         CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
@@ -250,7 +279,53 @@ public class CourseEnrollmentService {
         ThrowUtils.throwIf(request.getId() == null, ErrorCode.OPERATION_ERROR);
 
         courseEnrollmentMapper.updateStatus(course.getId(), course.getStatus(), CourseEnrollmentStatus.TRIAL_REFUND_REVIEW.name(), null, null, null);
+        closeCourseCommunication(course);
         return request.getId();
+    }
+
+    private void confirmTrialPassed(CourseEnrollment course) {
+        ThrowUtils.throwIf(course == null || course.getId() == null, ErrorCode.PARAMS_ERROR);
+        if (CourseEnrollmentStatus.TEACHING.name().equals(course.getStatus())) {
+            return;
+        }
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可确认试课结果");
+        int updated = courseEnrollmentMapper.updateStatus(
+                course.getId(),
+                course.getStatus(),
+                CourseEnrollmentStatus.TEACHING.name(),
+                null,
+                null,
+                null
+        );
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
+    }
+
+    private void failOnlineTrial(CourseEnrollment course, ApplyTrialRefundReq req) {
+        ThrowUtils.throwIf(course == null || course.getId() == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可发起退课");
+        ThrowUtils.throwIf(trimTo1024(req == null ? null : req.getReason()) == null, ErrorCode.PARAMS_ERROR, "请填写试课不通过说明");
+        int updated = courseEnrollmentMapper.updateStatus(
+                course.getId(),
+                course.getStatus(),
+                CourseEnrollmentStatus.FINISHED.name(),
+                null,
+                null,
+                null
+        );
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
+        closeCourseCommunication(course);
+    }
+
+    private void closeCourseCommunication(CourseEnrollment course) {
+        if (course == null) {
+            return;
+        }
+        if (course.getApplicationId() != null) {
+            tutorApplicationMapper.updateChatAccessStatus(course.getApplicationId(), TutorApplicationChatAccessStatus.NONE.name());
+        }
+        if (course.getRoomId() != null) {
+            roomMapper.closeRoom(course.getRoomId());
+        }
     }
 
     private static long computePercentAmount(Long amountFen, int percent) {

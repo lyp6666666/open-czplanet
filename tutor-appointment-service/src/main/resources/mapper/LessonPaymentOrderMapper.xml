@@ -61,6 +61,18 @@
         LIMIT 1
     </select>
 
+    <select id="selectFirstUnpaidBeforeLesson" resultMap="LessonPaymentOrderMap">
+        SELECT id, lesson_id, course_id, student_uid, teacher_uid, lesson_type, total_amount_fen,
+               platform_fee_rate, platform_fee_amount_fen, teacher_income_amount_fen, status,
+               payment_order_no, paid_at, create_time, update_time
+        FROM lesson_payment_order
+        WHERE course_id = #{courseId}
+          AND lesson_id &lt; #{lessonId}
+          AND status IN ('PENDING', 'PAYING')
+        ORDER BY lesson_id ASC, id ASC
+        LIMIT 1
+    </select>
+
     <update id="markPaying">
         UPDATE lesson_payment_order
         SET status = 'PAYING',

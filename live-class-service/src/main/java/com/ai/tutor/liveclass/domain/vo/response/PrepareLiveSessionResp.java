@@ -13,6 +13,8 @@ public class PrepareLiveSessionResp {
     private Boolean canJoin;
     private Boolean joinableNow;
     private String joinBlockedReason;
+    private Long blockingPaymentOrderId;
+    private Long blockingLessonId;
     private String defaultMediaPolicy;
     private Boolean deviceCheckRequired;
 }

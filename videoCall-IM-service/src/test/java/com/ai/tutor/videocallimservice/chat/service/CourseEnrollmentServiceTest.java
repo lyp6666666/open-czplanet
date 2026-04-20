@@ -7,11 +7,13 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment;
 import com.ai.tutor.videocallimservice.chat.domain.entity.RefundRequest;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitTrialResultReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RefundRequestMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -33,6 +35,7 @@ class CourseEnrollmentServiceTest {
         BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
         CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
 
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
@@ -40,6 +43,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
 
         when(courseEnrollmentMapper.selectLatestByRoomId(88L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -84,6 +88,7 @@ class CourseEnrollmentServiceTest {
         BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
         CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
 
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
@@ -91,6 +96,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
 
         when(courseEnrollmentMapper.selectLatestByRoomId(88L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -118,6 +124,7 @@ class CourseEnrollmentServiceTest {
         BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
         CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
 
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
@@ -125,6 +132,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -164,6 +172,8 @@ class CourseEnrollmentServiceTest {
         assertThat(saved.getRefundAmountFen()).isEqualTo(8000L);
         assertThat(saved.getEvidenceVideoUrl()).isEqualTo("https://video.example.com/wechat.mp4");
         assertThat(saved.getEvidenceVideoDeleteStatus()).isEqualTo("PENDING_DELETE");
+        verify(tutorApplicationMapper).updateChatAccessStatus(501L, "NONE");
+        verify(roomMapper).closeRoom(88L);
     }
 
     @Test
@@ -175,6 +185,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
+        ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
                 .teacherUid(1001L)
@@ -191,5 +202,63 @@ class CourseEnrollmentServiceTest {
 
         assertThatThrownBy(() -> service.applyTrialRefund(66L, req, 1001L))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void submitTrialResultShouldPromoteTeachingWhenPassed() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
+        ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .teacherUid(1001L)
+                .status("TRIALING")
+                .build());
+        when(courseEnrollmentMapper.updateStatus(66L, "TRIALING", "TEACHING", null, null, null)).thenReturn(1);
+
+        SubmitTrialResultReq req = new SubmitTrialResultReq();
+        req.setResult("PASS");
+        service.submitTrialResult(66L, req, 1001L);
+
+        verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "TEACHING", null, null, null);
+    }
+
+    @Test
+    void submitTrialResultShouldFinishOnlineTrialAndCloseChatWhenFailed() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .applicationId(501L)
+                .roomId(88L)
+                .teacherUid(1001L)
+                .teachingMode("ONLINE")
+                .status("TRIALING")
+                .build());
+        when(courseEnrollmentMapper.updateStatus(66L, "TRIALING", "FINISHED", null, null, null)).thenReturn(1);
+
+        SubmitTrialResultReq req = new SubmitTrialResultReq();
+        req.setResult("FAIL");
+        req.setReason("试课后确认不合适");
+        service.submitTrialResult(66L, req, 1001L);
+
+        verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "FINISHED", null, null, null);
+        verify(tutorApplicationMapper).updateChatAccessStatus(501L, "NONE");
+        verify(roomMapper).closeRoom(88L);
     }
 }

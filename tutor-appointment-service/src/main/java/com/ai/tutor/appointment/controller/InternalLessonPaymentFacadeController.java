@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.controller;
 import com.ai.tutor.appointment.service.LessonPaymentOrderService;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.common.event.PaymentSuccessEvent;
+import com.ai.tutor.common.integration.LessonPaymentAccessCheckInfo;
 import com.ai.tutor.common.integration.LessonPaymentPayInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ResultUtils;
@@ -27,6 +28,11 @@ public class InternalLessonPaymentFacadeController {
     public BaseResponse<LessonPaymentPayInfo> getPayableOrder(@PathVariable("orderId") Long orderId,
                                                                @RequestParam("uid") Long uid) {
         return ResultUtils.success(lessonPaymentOrderService.getPayableOrder(orderId, uid));
+    }
+
+    @GetMapping("/lesson/{lessonId}/join-access")
+    public BaseResponse<LessonPaymentAccessCheckInfo> getJoinAccess(@PathVariable("lessonId") Long lessonId) {
+        return ResultUtils.success(lessonPaymentOrderService.checkJoinAccessByLessonId(lessonId));
     }
 
     @PostMapping("/payment-success")

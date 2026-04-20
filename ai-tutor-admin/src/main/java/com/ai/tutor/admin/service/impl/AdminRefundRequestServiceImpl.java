@@ -15,10 +15,13 @@ import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.model.vo.RefundChatParticipantVO;
 import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
 import com.ai.tutor.admin.service.AdminRefundRequestService;
+import com.ai.tutor.admin.storage.MinioProperties;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.utils.ThrowUtils;
+import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,10 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
     private PaymentRefundFeignClient paymentRefundFeignClient;
     @Resource
     private UserMapper userMapper;
+    @Resource
+    private MinioClient minioClient;
+    @Resource
+    private MinioProperties minioProperties;
 
     @Override
     public PageResult<RefundRequestRecord> list(int page, int size, String type, String status) {
@@ -120,8 +127,7 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
             return;
         }
         adminRefundRequestMapper.markOrderRefunded(request.getBrokerageOrderId(), request.getRefundAmountFen());
-        // 中文注释：审核通过后应删除教师上传的微信录屏；当前先写删除状态，真实对象存储删除由后续文件服务接入。
-        adminRefundRequestMapper.markEvidenceVideoDeleted(requestId, now);
+        deleteEvidenceVideoIfNeeded(request, now);
         if (request.getCourseId() != null) {
             adminRefundRequestMapper.markCourseRefundedById(request.getCourseId());
         } else if (request.getRoomId() != null) {
@@ -167,6 +173,41 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
         if (v.isEmpty()) return null;
         if (v.length() <= 1024) return v;
         return v.substring(0, 1024);
+    }
+
+    private void deleteEvidenceVideoIfNeeded(RefundRequestRecord request, LocalDateTime now) {
+        if (request == null) {
+            return;
+        }
+        String objectKey = resolveObjectKey(request.getEvidenceVideoUrl());
+        if (objectKey != null && minioProperties.isEnabled()) {
+            try {
+                minioClient.removeObject(RemoveObjectArgs.builder()
+                        .bucket(minioProperties.getBucket())
+                        .object(objectKey)
+                        .build());
+            } catch (Exception e) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "录屏删除失败，请稍后重试");
+            }
+        }
+        adminRefundRequestMapper.markEvidenceVideoDeleted(request.getId(), now);
+    }
+
+    private static String resolveObjectKey(String evidenceVideoUrl) {
+        String value = evidenceVideoUrl == null ? "" : evidenceVideoUrl.trim();
+        if (value.isEmpty()) {
+            return null;
+        }
+        String marker = "/api/v1/public/assets/";
+        int idx = value.indexOf(marker);
+        if (idx >= 0) {
+            String key = value.substring(idx + marker.length()).trim();
+            return key.isEmpty() ? null : key;
+        }
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            return value.startsWith("/") ? value.substring(1) : value;
+        }
+        return null;
     }
 
     private Map<Long, User> loadRelatedUsers(RefundRequestRecord request, BrokerageOrder order, List<Message> chatHistory) {

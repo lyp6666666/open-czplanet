@@ -1,6 +1,8 @@
 package com.ai.tutor.liveclass.service;
 
 import cn.hutool.json.JSONUtil;
+import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.integration.LessonPaymentAccessCheckInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.liveclass.config.LiveKitProperties;
@@ -111,14 +113,19 @@ public class LiveClassService {
         LiveClassSession session = requireByCourseId(courseId);
         String peerName = resolvePeerDisplayName(session, viewerUid);
         boolean joinableNow = joinableNow(session);
+        LessonPaymentAccessCheckInfo accessCheck = loadLessonJoinAccess(courseId);
+        boolean paymentBlocked = accessCheck != null && Boolean.TRUE.equals(accessCheck.getBlocked());
+        boolean canJoin = canJoin(session, viewerUid) && !paymentBlocked;
         return PrepareLiveSessionResp.builder()
                 .sessionId(session.getId())
                 .status(session.getStatus())
                 .courseTitle("实时课程")
                 .peerDisplayName(peerName)
-                .canJoin(canJoin(session, viewerUid))
+                .canJoin(canJoin)
                 .joinableNow(joinableNow)
-                .joinBlockedReason(resolveJoinBlockedReason(session, joinableNow))
+                .joinBlockedReason(paymentBlocked ? accessCheck.getReason() : resolveJoinBlockedReason(session, joinableNow))
+                .blockingPaymentOrderId(paymentBlocked ? accessCheck.getBlockingOrderId() : null)
+                .blockingLessonId(paymentBlocked ? accessCheck.getBlockingLessonId() : null)
                 .defaultMediaPolicy("AUDIO_VIDEO")
                 .deviceCheckRequired(Boolean.TRUE)
                 .build();
@@ -446,6 +453,15 @@ public class LiveClassService {
         if (users == null || users.isEmpty()) return "用户" + uid;
         AppointmentInternalFeignClient.UserSimpleDto dto = users.get(0);
         return blank(dto.getRealName()) ? defaulted(dto.getName(), "用户" + uid) : dto.getRealName();
+    }
+
+    private LessonPaymentAccessCheckInfo loadLessonJoinAccess(Long lessonId) {
+        try {
+            BaseResponse<LessonPaymentAccessCheckInfo> resp = appointmentInternalFeignClient.getLessonJoinAccess(lessonId);
+            return resp == null ? null : resp.getData();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private Long resolveParticipantUid(LiveKitWebhookRequest request) {

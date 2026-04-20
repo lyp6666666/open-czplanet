@@ -1,12 +1,14 @@
 package com.ai.tutor.appointment.service.impl;
 
 import com.ai.tutor.appointment.mapper.LessonPaymentOrderMapper;
+import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.TeacherSettlementMapper;
 import com.ai.tutor.appointment.model.entity.LessonPaymentOrder;
 import com.ai.tutor.appointment.model.entity.TeacherSettlement;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.service.LessonPaymentOrderService;
 import com.ai.tutor.common.event.PaymentSuccessEvent;
+import com.ai.tutor.common.integration.LessonPaymentAccessCheckInfo;
 import com.ai.tutor.common.integration.LessonPaymentPayInfo;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
@@ -27,6 +29,8 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
 
     @Resource
     private TeacherSettlementMapper teacherSettlementMapper;
+    @Resource
+    private TutorAppointmentMapper tutorAppointmentMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -109,6 +113,29 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
         return lessonPaymentOrderMapper.selectUnpaidByCourseId(courseId);
     }
 
+    @Override
+    public LessonPaymentAccessCheckInfo checkJoinAccessByLessonId(Long lessonId) {
+        ThrowUtils.throwIf(lessonId == null, ErrorCode.PARAMS_ERROR);
+        TutorAppointment appointment = tutorAppointmentMapper.selectById(lessonId);
+        ThrowUtils.throwIf(appointment == null, ErrorCode.NOT_FOUND_ERROR, "课节不存在");
+        LessonPaymentAccessCheckInfo info = new LessonPaymentAccessCheckInfo();
+        info.setLessonId(lessonId);
+        info.setCourseId(appointment.getCourseId());
+        info.setBlocked(Boolean.FALSE);
+        if (appointment.getCourseId() == null) {
+            return info;
+        }
+        LessonPaymentOrder unpaid = lessonPaymentOrderMapper.selectFirstUnpaidBeforeLesson(appointment.getCourseId(), lessonId);
+        if (unpaid == null || unpaid.getId() == null) {
+            return info;
+        }
+        info.setBlocked(Boolean.TRUE);
+        info.setBlockingOrderId(unpaid.getId());
+        info.setBlockingLessonId(unpaid.getLessonId());
+        info.setReason("上一节课尚未支付，支付后才能进入本节课堂");
+        return info;
+    }
+
     private void ensureTeacherSettlement(LessonPaymentOrder order) {
         if (order == null || order.getId() == null) {
             return;
@@ -117,7 +144,8 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
         if (settlement != null) {
             return;
         }
-        // 中文注释：先沉淀教师应收快照，真实微信零钱划转后续再接企业付款能力。
+        // 中文注释：当前仍是学生支付到平台账户，后续再对接微信商家转账/企业付款，把应收自动划转到教师微信。
+        // TODO: 对接微信转账能力，按结算记录将教师收入打款到教师微信。
         teacherSettlementMapper.insertIgnore(TeacherSettlement.builder()
                 .lessonPaymentOrderId(order.getId())
                 .teacherUid(order.getTeacherUid())

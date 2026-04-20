@@ -543,12 +543,33 @@ function canOpenSchedule(item: CourseViewModel | null) {
   return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TEACHING'
 }
 
-function canApplyTrialRefund(it: CourseItemVO) {
+function canConfirmTrialPass(it: CourseItemVO) {
+  if (!isTeacher.value) return false
+  const s = String(it.status || '').trim().toUpperCase()
+  if (s !== 'TRIALING') return false
+  return true
+}
+
+function canSubmitTrialFail(it: CourseItemVO) {
   if (!isTeacher.value) return false
   const s = String(it.status || '').trim().toUpperCase()
   if (s !== 'TRIALING') return false
   if (trialExpired(it.trialEndAt)) return false
   return true
+}
+
+async function submitTrialPass(courseId: number) {
+  if (actionBusyCourseId.value != null) return
+  actionBusyCourseId.value = courseId
+  try {
+    await courseApi.submitTrialResult(courseId, { result: 'PASS' })
+    toast.show('已确认试课合适，课程进入正式上课阶段。', 'success')
+    await load()
+  } catch (e) {
+    toast.show(e instanceof Error ? e.message : '提交失败', 'error')
+  } finally {
+    actionBusyCourseId.value = null
+  }
 }
 
 function goChat(roomId?: number | null) {
@@ -719,6 +740,11 @@ async function submitScheduleCreate() {
 }
 
 function openTrialRefund(courseId: number) {
+  const item = courseViews.value.find((it) => it.courseId === courseId) || null
+  if (!item) {
+    toast.show('课程信息不存在', 'error')
+    return
+  }
   modalCourseId.value = courseId
   modalReason.value = ''
   modalFiles.value = []
@@ -742,44 +768,59 @@ function onPickFiles(e: Event) {
 async function submitTrialRefund() {
   if (modalBusy.value) return
   if (!modalCourseId.value) return
+  const item = courseViews.value.find((it) => it.courseId === modalCourseId.value) || null
+  if (!item) {
+    modalErr.value = '课程信息不存在'
+    return
+  }
   const reason = modalReason.value.trim()
   if (!reason) {
     modalErr.value = '请填写试课不通过说明'
     return
   }
-  if (modalFiles.value.length < 1) {
-    modalErr.value = '请至少上传 1 张证据图片'
-    return
-  }
-  const videoUrl = modalVideoUrl.value.trim()
-  if (!videoUrl) {
-    modalErr.value = '请上传并填写微信聊天录屏 URL'
-    return
-  }
-  const duration = Number(modalVideoDurationSeconds.value)
-  if (!Number.isFinite(duration) || duration <= 0 || duration > 60) {
-    modalErr.value = '录屏时长需控制在 1-60 秒内'
-    return
-  }
+  const isOffline = String(item.raw.teachingMode || '').trim().toUpperCase() === 'OFFLINE'
 
   modalBusy.value = true
   modalErr.value = null
   try {
-    const urls: string[] = []
-    for (const file of modalFiles.value) {
-      const uploaded = await assetsApi.uploadImage(file, 'trial_refund')
-      if (uploaded?.url) urls.push(uploaded.url)
+    if (isOffline) {
+      if (modalFiles.value.length < 1) {
+        modalErr.value = '请至少上传 1 张证据图片'
+        return
+      }
+      const videoUrl = modalVideoUrl.value.trim()
+      if (!videoUrl) {
+        modalErr.value = '请上传并填写微信聊天录屏 URL'
+        return
+      }
+      const duration = Number(modalVideoDurationSeconds.value)
+      if (!Number.isFinite(duration) || duration <= 0 || duration > 60) {
+        modalErr.value = '录屏时长需控制在 1-60 秒内'
+        return
+      }
+      const urls: string[] = []
+      for (const file of modalFiles.value) {
+        const uploaded = await assetsApi.uploadImage(file, 'trial_refund')
+        if (uploaded?.url) urls.push(uploaded.url)
+      }
+      if (urls.length < 1) {
+        modalErr.value = '图片上传失败，请稍后重试'
+        return
+      }
+      await courseApi.applyTrialRefund(modalCourseId.value, {
+        reason,
+        evidenceImageUrls: urls,
+        evidenceVideoUrl: videoUrl,
+        evidenceVideoDurationSeconds: Math.round(duration),
+      })
+      toast.show('试课不通过申请已提交，聊天已关闭，等待管理员审核。', 'success')
+    } else {
+      await courseApi.submitTrialResult(modalCourseId.value, {
+        result: 'FAIL',
+        reason,
+      })
+      toast.show('已提交试课不合适，课程已结束并关闭聊天。', 'success')
     }
-    if (urls.length < 1) {
-      modalErr.value = '图片上传失败，请稍后重试'
-      return
-    }
-    await courseApi.applyTrialRefund(modalCourseId.value, {
-      reason,
-      evidenceImageUrls: urls,
-      evidenceVideoUrl: videoUrl,
-      evidenceVideoDurationSeconds: Math.round(duration),
-    })
     modalOpen.value = false
     await load()
   } catch (e) {
@@ -1192,12 +1233,21 @@ onMounted(() => {
           <button class="btn" type="button" @click="goCourseDetail(selectedCourse.courseId)">课程详情</button>
           <button class="btn" type="button" @click="goSchedule">查看日程表</button>
           <button
-            v-if="canApplyTrialRefund(selectedCourse.raw)"
+            v-if="canConfirmTrialPass(selectedCourse.raw)"
+            class="btn btn-primary"
+            type="button"
+            :disabled="actionBusyCourseId === selectedCourse.courseId"
+            @click="submitTrialPass(selectedCourse.courseId)"
+          >
+            试课合适
+          </button>
+          <button
+            v-if="canSubmitTrialFail(selectedCourse.raw)"
             class="btn btn-danger"
             type="button"
             @click="openTrialRefund(selectedCourse.courseId)"
           >
-            试课不通过
+            试课不合适
           </button>
         </div>
       </aside>
@@ -1273,14 +1323,20 @@ onMounted(() => {
 
     <div v-if="modalOpen" class="mask" @click.self="closeTrialRefund">
       <div class="modal card">
-        <div class="m-title">试课不通过</div>
-        <div class="m-desc">线下试课不通过需提交微信聊天记录滚动并删除拉黑的录屏，管理员审核通过后退还 80% 信息费并删除录屏。</div>
+        <div class="m-title">试课不合适</div>
+        <div class="m-desc">
+          {{ selectedCourse?.raw.teachingMode === 'OFFLINE'
+            ? '线下试课不通过需提交微信聊天记录滚动并删除拉黑的录屏，管理员审核通过后退还 80% 信息费并删除录屏。'
+            : '线上试课不合适会直接结束课程并关闭聊天，不退还信息费。' }}
+        </div>
         <div class="m-form">
           <textarea v-model="modalReason" class="txt" rows="4" placeholder="请填写试课不通过说明"></textarea>
-          <input class="file" type="file" accept="image/*" multiple @change="onPickFiles" />
-          <div class="m-hint">已选择 {{ modalFiles.length }} 张</div>
-          <input v-model="modalVideoUrl" class="input" placeholder="微信录屏 URL（1 分钟内）" />
-          <input v-model.number="modalVideoDurationSeconds" class="input" type="number" min="1" max="60" placeholder="录屏时长（秒）" />
+          <template v-if="selectedCourse?.raw.teachingMode === 'OFFLINE'">
+            <input class="file" type="file" accept="image/*" multiple @change="onPickFiles" />
+            <div class="m-hint">已选择 {{ modalFiles.length }} 张</div>
+            <input v-model="modalVideoUrl" class="input" placeholder="微信录屏 URL（1 分钟内）" />
+            <input v-model.number="modalVideoDurationSeconds" class="input" type="number" min="1" max="60" placeholder="录屏时长（秒）" />
+          </template>
         </div>
         <div v-if="modalErr" class="m-error">{{ modalErr }}</div>
         <div class="m-ops">

@@ -4,6 +4,7 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitTrialResultReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseItemVO;
 import com.ai.tutor.videocallimservice.chat.service.CourseEnrollmentService;
@@ -17,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/courses")
-@Tag(name = "我的课程接口", description = "课程状态列表与试课退款申请")
+@Tag(name = "我的课程接口", description = "课程状态列表、试课结果与试课退款申请")
 public class CourseController {
 
     @Resource
@@ -49,8 +50,17 @@ public class CourseController {
         return ResultUtils.success(courseEnrollmentService.getCourseByRoom(roomId, uid));
     }
 
+    @PostMapping("/{courseId}/trial-result")
+    @Operation(summary = "提交试课结果（合适进入正式授课；不合适按线上/线下规则结束）")
+    public BaseResponse<Boolean> submitTrialResult(@PathVariable("courseId") Long courseId,
+                                                   @Valid @RequestBody SubmitTrialResultReq request) {
+        Long uid = RequestHolder.get().getUid();
+        courseEnrollmentService.submitTrialResult(courseId, request, uid);
+        return ResultUtils.success(true);
+    }
+
     @PostMapping("/{courseId}/trial-refund/apply")
-    @Operation(summary = "试课不通过退款申请（退 60% 信息费）")
+    @Operation(summary = "线下试课不通过退款申请（审核通过后退 80% 信息费）")
     public BaseResponse<Long> applyTrialRefund(@PathVariable("courseId") Long courseId,
                                                @Valid @RequestBody ApplyTrialRefundReq request) {
         Long uid = RequestHolder.get().getUid();

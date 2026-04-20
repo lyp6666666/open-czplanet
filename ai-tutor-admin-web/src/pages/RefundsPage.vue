@@ -14,6 +14,20 @@
 
     <div v-if="errorText" class="error">{{ errorText }}</div>
 
+    <div class="filters">
+      <select v-model="typeFilter" class="input filter">
+        <option value="">全部类型</option>
+        <option value="CHAT_INFO_FEE">沟通退费</option>
+        <option value="TRIAL_INFO_FEE">试课退费</option>
+      </select>
+      <select v-model="statusFilter" class="input filter">
+        <option value="">全部状态</option>
+        <option value="PENDING">待审核</option>
+        <option value="APPROVED">已同意</option>
+        <option value="REJECTED">已拒绝</option>
+      </select>
+    </div>
+
     <div class="table-wrap">
       <table class="table">
         <thead>
@@ -21,8 +35,10 @@
             <th style="width: 90px">申请ID</th>
             <th style="width: 120px">类型</th>
             <th style="width: 120px">状态</th>
+            <th style="width: 100px">申请方</th>
             <th style="width: 140px">金额(分)</th>
             <th style="width: 120px">会话ID</th>
+            <th style="width: 120px">录屏状态</th>
             <th>说明</th>
             <th style="width: 220px">操作</th>
           </tr>
@@ -34,10 +50,13 @@
             </td>
             <td><span class="badge">{{ refundTypeText(row.type) }}</span></td>
             <td><span class="badge">{{ refundStatusText(row.status) }}</span></td>
+            <td>{{ applicantRoleText(row.applicantRole) }}</td>
             <td>{{ row.refundAmountFen ?? '-' }}</td>
             <td>{{ row.roomId ?? '-' }}</td>
+            <td>{{ videoDeleteStatusText(row.evidenceVideoDeleteStatus) }}</td>
             <td>
               <div class="cell-title">{{ row.reason || '-' }}</div>
+              <div class="cell-sub">{{ row.createTime ? String(row.createTime).replace('T', ' ').slice(0, 19) : '-' }}</div>
             </td>
             <td>
               <div class="actions">
@@ -54,7 +73,7 @@
             </td>
           </tr>
           <tr v-if="rows.length === 0 && !loading">
-            <td colspan="7">
+            <td colspan="9">
               <div class="empty">暂无退款申请</div>
             </td>
           </tr>
@@ -108,6 +127,8 @@ const size = ref(10)
 const loading = ref(false)
 const errorText = ref<string | null>(null)
 const busyId = ref<number | null>(null)
+const typeFilter = ref('')
+const statusFilter = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
 
@@ -116,7 +137,7 @@ async function load() {
   loading.value = true
   errorText.value = null
   try {
-    const res = await listRefundRequests({ page: page.value, size: size.value })
+    const res = await listRefundRequests({ page: page.value, size: size.value, type: typeFilter.value || undefined, status: statusFilter.value || undefined })
     rows.value = res.records
     total.value = Number(res.total || 0)
   } catch (e) {
@@ -185,7 +206,24 @@ watch([page, size], () => {
   load()
 })
 
+watch([typeFilter, statusFilter], () => {
+  page.value = 1
+  load()
+})
+
 onMounted(load)
+
+function applicantRoleText(role?: string | null) {
+  return role === 'TEACHER' ? '教师' : role === 'STUDENT' ? '学生' : '-'
+}
+
+function videoDeleteStatusText(status?: string | null) {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (normalized === 'PENDING_DELETE') return '待删'
+  if (normalized === 'DELETED') return '已删除'
+  if (normalized === 'KEEP') return '保留'
+  return '-'
+}
 </script>
 
 <style scoped>
@@ -216,6 +254,17 @@ onMounted(load)
   font-size: 13px;
 }
 
+.filters {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter {
+  min-width: 140px;
+}
+
 .table-wrap {
   margin-top: 12px;
   overflow: auto;
@@ -223,6 +272,12 @@ onMounted(load)
 
 .cell-title {
   font-weight: 600;
+}
+
+.cell-sub {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .cell-link {

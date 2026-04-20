@@ -17,6 +17,8 @@ public interface LessonPaymentOrderMapper {
 
     LessonPaymentOrder selectUnpaidByCourseId(@Param("courseId") Long courseId);
 
+    LessonPaymentOrder selectFirstUnpaidBeforeLesson(@Param("courseId") Long courseId, @Param("lessonId") Long lessonId);
+
     int markPaying(@Param("id") Long id);
 
     int markPaid(@Param("id") Long id,

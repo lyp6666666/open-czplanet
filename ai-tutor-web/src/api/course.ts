@@ -14,6 +14,16 @@ export const courseApi = {
     return http.get<unknown, CourseDetailVO>(`/courses/by-room/${roomId}`)
   },
 
+  submitTrialResult(courseId: number, payload: {
+    result: 'PASS' | 'FAIL'
+    reason?: string
+    evidenceImageUrls?: string[]
+    evidenceVideoUrl?: string
+    evidenceVideoDurationSeconds?: number
+  }) {
+    return http.post<unknown, boolean>(`/courses/${courseId}/trial-result`, payload)
+  },
+
   applyTrialRefund(courseId: number, payload: { reason: string; evidenceImageUrls: string[]; evidenceVideoUrl: string; evidenceVideoDurationSeconds: number }) {
     return http.post<unknown, number>(`/courses/${courseId}/trial-refund/apply`, payload)
   },

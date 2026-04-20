@@ -207,4 +207,62 @@ describe('MyCoursesPage', () => {
     expect(createEvent).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('约课待确认')
   })
+
+  it('hides offline trial refund action for online trial course', async () => {
+    server.use(
+      http.get('http://localhost/courses/my', () =>
+        ok([
+          {
+            courseId: 66,
+            applicationId: 501,
+            roomId: 88,
+            teacherUid: 1001,
+            studentUid: 2001,
+            status: 'TRIALING',
+            teachingMode: 'ONLINE',
+            trialEndAt: '2026-04-27T10:00:00',
+          },
+        ]),
+      ),
+      http.get('http://localhost/chat/application/501', () =>
+        ok({
+          id: 501,
+          senderUid: 2001,
+          receiverUid: 1001,
+          senderRole: 'STUDENT',
+          receiverRole: 'TEACHER',
+          contextType: 'TUTOR',
+          contextId: 11,
+          content: '想约数学课',
+          status: 'ACCEPTED',
+          chatAccessStatus: 'CHAT_ENABLED',
+          paymentPayerRole: 'TEACHER',
+          orderId: 9001,
+          roomId: 88,
+          receiverRead: true,
+          decidedAt: null,
+          createTime: '2026-04-20T10:00:00',
+        }),
+      ),
+      http.get('http://localhost/user/batch', () =>
+        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
+      ),
+      http.get('http://localhost/user/card', () =>
+        ok({
+          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
+          studentProfile: null,
+          jobPosting: null,
+        }),
+      ),
+      http.get('http://localhost/api/v1/schedule/events', () => ok([])),
+      http.get('http://localhost/live/sessions/reminders', () => ok([])),
+    )
+
+    const wrapper = mount(MyCoursesPage, { global: { plugins: [createPinia()] } })
+    seedStudentAuth()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('试课不通过')
+  })
 })

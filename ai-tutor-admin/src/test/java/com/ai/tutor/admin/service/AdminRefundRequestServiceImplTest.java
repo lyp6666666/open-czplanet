@@ -11,7 +11,9 @@ import com.ai.tutor.admin.model.entity.Message;
 import com.ai.tutor.admin.model.entity.RefundRequestRecord;
 import com.ai.tutor.admin.model.entity.User;
 import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
+import com.ai.tutor.admin.storage.MinioProperties;
 import com.ai.tutor.common.BaseResponse;
+import io.minio.MinioClient;
 import com.ai.tutor.admin.service.impl.AdminRefundRequestServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,12 +41,16 @@ class AdminRefundRequestServiceImplTest {
     private PaymentRefundFeignClient paymentRefundFeignClient;
     @Mock
     private UserMapper userMapper;
+    @Mock
+    private MinioClient minioClient;
+    @Mock
+    private MinioProperties minioProperties;
 
     @InjectMocks
     private AdminRefundRequestServiceImpl service;
 
     @Test
-    void approveShouldCallPaymentRefundAndUpdateStatus() {
+    void approveShouldCallPaymentRefundAndUpdateStatus() throws Exception {
         RefundRequestRecord record = new RefundRequestRecord();
         record.setId(10L);
         record.setStatus("PENDING");
@@ -52,7 +58,10 @@ class AdminRefundRequestServiceImplTest {
         record.setRefundAmountFen(6000L);
         record.setReason("试课不通过");
         record.setCourseId(1L);
+        record.setEvidenceVideoUrl("/api/v1/public/assets/refund/evidence.mp4");
         when(adminRefundRequestMapper.selectById(10L)).thenReturn(record);
+        when(minioProperties.isEnabled()).thenReturn(true);
+        when(minioProperties.getBucket()).thenReturn("ai-tutor-assets");
 
         PaymentRefundResponse pr = new PaymentRefundResponse();
         pr.setRefundNo("R1");
@@ -70,6 +79,7 @@ class AdminRefundRequestServiceImplTest {
         verify(adminRefundRequestMapper).markOrderRefunded(99L, 6000L);
         verify(adminRefundRequestMapper).markCourseRefundedById(1L);
         verify(adminRefundRequestMapper).markEvidenceVideoDeleted(eq(10L), any(LocalDateTime.class));
+        verify(minioClient).removeObject(any());
     }
 
     @Test

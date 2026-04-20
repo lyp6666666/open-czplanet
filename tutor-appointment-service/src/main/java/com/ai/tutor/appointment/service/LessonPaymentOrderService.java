@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.service;
 import com.ai.tutor.appointment.model.entity.LessonPaymentOrder;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.common.event.PaymentSuccessEvent;
+import com.ai.tutor.common.integration.LessonPaymentAccessCheckInfo;
 import com.ai.tutor.common.integration.LessonPaymentPayInfo;
 
 public interface LessonPaymentOrderService {
@@ -16,4 +17,6 @@ public interface LessonPaymentOrderService {
     LessonPaymentOrder getByLessonId(Long lessonId);
 
     LessonPaymentOrder findUnpaidByCourseId(Long courseId);
+
+    LessonPaymentAccessCheckInfo checkJoinAccessByLessonId(Long lessonId);
 }

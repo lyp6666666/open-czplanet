@@ -30,6 +30,8 @@ export type PrepareLiveSessionResp = {
   canJoin: boolean
   joinableNow: boolean
   joinBlockedReason?: string | null
+  blockingPaymentOrderId?: number | null
+  blockingLessonId?: number | null
   defaultMediaPolicy?: string | null
   deviceCheckRequired: boolean
 }

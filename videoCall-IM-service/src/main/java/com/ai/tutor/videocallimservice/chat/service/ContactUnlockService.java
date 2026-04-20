@@ -4,13 +4,19 @@ import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
+import com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
+import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
+import com.ai.tutor.videocallimservice.chat.domain.enums.CourseEnrollmentStatus;
+import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.UnlockedContactVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
+import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
@@ -34,6 +40,10 @@ public class ContactUnlockService {
     @Resource
     private BrokerageOrderMapper brokerageOrderMapper;
     @Resource
+    private TutorApplicationMapper tutorApplicationMapper;
+    @Resource
+    private CourseEnrollmentMapper courseEnrollmentMapper;
+    @Resource
     private JdbcTemplate jdbcTemplate;
     @Resource
     private ObjectProvider<AppointmentInternalClient> appointmentInternalClientProvider;
@@ -52,16 +62,54 @@ public class ContactUnlockService {
             ThrowUtils.throwIf(!targetUid.equals(teacherUid), ErrorCode.NO_AUTH_ERROR);
         }
 
-        CollaborationProposal proposal = collaborationProposalMapper.selectLatestByRoomId(roomId);
-        ThrowUtils.throwIf(proposal == null, ErrorCode.NOT_FOUND_ERROR);
-        ThrowUtils.throwIf(!CollaborationProposalStatus.ACCEPTED.name().equals(proposal.getStatus()), ErrorCode.NO_AUTH_ERROR);
-
-        BrokerageOrder order = brokerageOrderMapper.selectByProposalId(proposal.getId());
-        ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
-        ThrowUtils.throwIf(!BrokerageOrderStatus.PAID.name().equals(order.getStatus()), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(!isContactUnlocked(roomId), ErrorCode.NOT_FOUND_ERROR);
 
         String phone = loadPhone(targetUid);
         return UnlockedContactVO.builder().uid(targetUid).phone(phone == null ? "" : phone).build();
+    }
+
+    private boolean isContactUnlocked(Long roomId) {
+        if (roomId == null) {
+            return false;
+        }
+        Room room = roomMapper.selectById(roomId);
+        if (room == null || room.getStatus() == null || room.getStatus() != 1) {
+            return false;
+        }
+
+        CourseEnrollment course = courseEnrollmentMapper.selectLatestByRoomId(roomId);
+        if (course != null && course.getStatus() != null) {
+            String courseStatus = course.getStatus().trim().toUpperCase();
+            if (CourseEnrollmentStatus.REFUND_REVIEW.name().equals(courseStatus)
+                    || CourseEnrollmentStatus.TRIAL_REFUND_REVIEW.name().equals(courseStatus)
+                    || CourseEnrollmentStatus.REFUNDED.name().equals(courseStatus)
+                    || CourseEnrollmentStatus.FINISHED.name().equals(courseStatus)) {
+                return false;
+            }
+        }
+
+        BrokerageOrder paidOrder = brokerageOrderMapper.selectPaidByRoomId(roomId);
+        if (paidOrder != null) {
+            return true;
+        }
+
+        CollaborationProposal proposal = collaborationProposalMapper.selectLatestByRoomId(roomId);
+        if (proposal != null && CollaborationProposalStatus.ACCEPTED.name().equals(proposal.getStatus())) {
+            BrokerageOrder proposalOrder = brokerageOrderMapper.selectByProposalId(proposal.getId());
+            if (proposalOrder != null && BrokerageOrderStatus.PAID.name().equals(proposalOrder.getStatus())) {
+                return true;
+            }
+        }
+
+        Long teacherUid = teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
+        Long studentUid = studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId());
+        if (teacherUid == null || studentUid == null) {
+            return false;
+        }
+
+        TutorApplication application = tutorApplicationMapper.selectLatestUnlockedBetween(teacherUid, studentUid);
+        return application != null
+                && TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(application.getChatAccessStatus());
     }
 
     private String loadPhone(Long targetUid) {

@@ -439,7 +439,10 @@ public class TutorApplicationService {
             access = TutorApplicationChatAccessStatus.CHAT_ENABLED.name();
         }
 
-        ThrowUtils.throwIf(!TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access), ErrorCode.OPERATION_ERROR);
+        if (!TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access)) {
+            ThrowUtils.throwIf(TutorApplicationChatAccessStatus.NONE.name().equals(access), ErrorCode.OPERATION_ERROR, "当前沟通已结束");
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
+        }
         Long otherUid = uid.equals(application.getSenderUid()) ? application.getReceiverUid() : application.getSenderUid();
         Long roomId = application.getRoomId();
         if (roomId == null) {
@@ -464,6 +467,9 @@ public class TutorApplicationService {
         TutorApplication application = tutorApplicationMapper.selectLatestAcceptedBetween(uid, targetUid);
         if (application == null) {
             return;
+        }
+        if (TutorApplicationChatAccessStatus.NONE.name().equals(application.getChatAccessStatus())) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "当前沟通已结束");
         }
         if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(application.getChatAccessStatus())) {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "请先在申请中完成中介费支付后再进入聊天");
