@@ -4,16 +4,19 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { jobsApi } from '@/api/jobs'
 import type { DemandViewVO } from '@/api/types'
+import { useToastStore } from '@/stores/toast'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 
 const route = useRoute()
 const router = useRouter()
+const toast = useToastStore()
 
 const id = computed(() => Number(route.params.id))
 
 const loading = ref(false)
 const error = ref<string | null>(null)
 const data = ref<DemandViewVO | null>(null)
+const actionBusy = ref(false)
 
 async function load() {
   loading.value = true
@@ -30,6 +33,25 @@ async function load() {
 onMounted(() => {
   void load()
 })
+
+function isClosed(it: Pick<DemandViewVO, 'status'> | null | undefined): boolean {
+  return !!it && it.status === 0
+}
+
+async function togglePublishStatus() {
+  if (!data.value || actionBusy.value) return
+  actionBusy.value = true
+  try {
+    const nextStatus = isClosed(data.value) ? 1 : 0
+    await jobsApi.updateDemand(data.value.id, { status: nextStatus })
+    toast.show(nextStatus === 1 ? '需求已重新公开' : '需求已关闭', 'success')
+    await load()
+  } catch (e) {
+    toast.show(e instanceof Error ? e.message : '操作失败', 'error')
+  } finally {
+    actionBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -41,19 +63,29 @@ onMounted(() => {
         <button class="btn" type="button" @click="router.push({ name: 'studentEditJob', params: { id: data?.id } })" :disabled="!data">
           编辑
         </button>
+        <button class="btn" type="button" :disabled="!data || actionBusy" @click="togglePublishStatus">
+          {{ isClosed(data) ? '重新公开' : '关闭需求' }}
+        </button>
       </div>
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>
 
     <div v-if="data" class="card detail">
-      <div class="t">{{ data.title }}</div>
+      <div class="title-row">
+        <div class="t">{{ data.title }}</div>
+        <span v-if="isClosed(data)" class="closed-badge">已关闭</span>
+      </div>
       <div class="meta">
         <span>{{ (data.classMode || '').toLowerCase() === 'online' ? '线上' : data.city || '线下' }}</span>
         <span>{{ formatClassMode(data.classMode) }}</span>
         <span>每周{{ data.frequencyPerWeek || '-' }}次</span>
         <span>{{ formatEducationRequirement(data.educationRequirement) }}</span>
         <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
+      </div>
+
+      <div v-if="isClosed(data)" class="hint notice">
+        当前需求已停止公开推荐。点击右上角“重新公开”后，会重新回到首页/需求页的公开推荐池。
       </div>
 
       <div class="sec">
@@ -114,9 +146,26 @@ onMounted(() => {
   gap: 10px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .t {
   font-weight: 900;
   font-size: 16px;
+}
+
+.closed-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #b54708;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  font-weight: 800;
 }
 
 .meta {
@@ -191,5 +240,10 @@ onMounted(() => {
 .hint.error {
   border-color: rgba(255, 0, 0, 0.25);
   background: rgba(255, 0, 0, 0.06);
+}
+
+.hint.notice {
+  border-color: rgba(255, 170, 0, 0.28);
+  background: rgba(255, 170, 0, 0.06);
 }
 </style>

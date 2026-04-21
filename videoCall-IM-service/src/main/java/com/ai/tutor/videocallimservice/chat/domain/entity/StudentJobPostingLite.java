@@ -17,4 +17,6 @@ public class StudentJobPostingLite {
     private Integer frequencyPerWeek;
     private BigDecimal budgetMin;
     private BigDecimal budgetMax;
+    private Integer bizStatus;
+    private Integer status;
 }

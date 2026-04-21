@@ -5,7 +5,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@EnableFeignClients(basePackages = "com.ai.tutor.liveclass.integration.feign")
+@EnableFeignClients(basePackages = {
+        "com.ai.tutor.liveclass.integration.feign",
+        "com.ai.tutor.liveclass.integration.im"
+})
 @SpringBootApplication(scanBasePackages = {"com.ai.tutor.liveclass", "com.ai.tutor.common"})
 @MapperScan("com.ai.tutor.liveclass.**.mapper")
 public class LiveClassApplication {

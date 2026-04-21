@@ -122,6 +122,22 @@ function effectiveUnread(roomId: number, fallback: number) {
   return chatRealtime.resolveRoomUnread(roomId, fallback, room?.lastMsgId, room?.myLastReadMsgId)
 }
 
+function systemStatusText(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
+  if (!value) return '状态更新'
+  if (value === 'PENDING') return '待处理'
+  if (value === 'ACCEPTED') return '已通过'
+  if (value === 'REJECTED') return '已拒绝'
+  if (value === 'PAID') return '已支付'
+  if (value === 'PAYING') return '支付中'
+  if (value === 'PAYMENT_REQUIRED') return '待支付'
+  if (value === 'CHAT_ENABLED') return '可聊天'
+  if (value === 'CANCELED') return '已取消'
+  if (value === 'COMPLETED') return '已完成'
+  if (value === 'RESCHEDULE_PENDING') return '待确认调课'
+  return value
+}
+
 function lastMsgText(raw: unknown): string {
   if (!raw) return ''
   if (typeof raw === 'string') return raw
@@ -130,7 +146,29 @@ function lastMsgText(raw: unknown): string {
     const t = typeof any.type === 'string' ? any.type.trim() : ''
     if (t === 'recall') return '[消息已撤回]'
     if (t === 'image') return '[图片]'
-    if (t === 'brokerage_refund_request' || t === 'brokerage_refund_status') return '[退款申请]'
+    if (t === 'tutor_application') return '[家教申请]'
+    if (t === 'tutor_application_status') return `[家教申请] ${systemStatusText(any.status)}`
+    if (t === 'collaboration_proposal') return '[合作提案]'
+    if (t === 'collaboration_status') return `[合作提案] ${systemStatusText(any.status)}`
+    if (t === 'lesson_request') return typeof any.title === 'string' && any.title.trim() ? `[约课申请] ${any.title.trim()}` : '[约课申请]'
+    if (t === 'lesson_status') {
+      const title = typeof any.title === 'string' ? any.title.trim() : ''
+      const status = systemStatusText(any.status)
+      return title ? `[课程状态] ${title} ${status}` : `[课程状态] ${status}`
+    }
+    if (t === 'lesson_ai_result') {
+      const title = typeof any.title === 'string' ? any.title.trim() : ''
+      return title ? `[课堂总结] ${title}` : '[课堂总结]'
+    }
+    if (t === 'brokerage_required') {
+      const status = systemStatusText(any.status)
+      return `[信息费] ${status}`
+    }
+    if (t === 'contact_unlocked') return '[聊天功能已开启]'
+    if (t === 'brokerage_refund_request') return '[退款申请]'
+    if (t === 'brokerage_refund_status') return `[退款进度] ${systemStatusText(any.status)}`
+    if (t === 'end_chat_request') return '[结束沟通申请]'
+    if (t === 'end_chat_status') return `[沟通状态] ${systemStatusText(any.status)}`
     if (typeof any.content === 'string') return any.content
   }
   try {

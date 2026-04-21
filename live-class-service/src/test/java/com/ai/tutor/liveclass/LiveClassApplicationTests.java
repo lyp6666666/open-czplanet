@@ -18,7 +18,11 @@ class LiveClassApplicationTests {
 
         EnableFeignClients feignAnnotation = LiveClassApplication.class.getAnnotation(EnableFeignClients.class);
         assertThat(feignAnnotation).isNotNull();
-        assertThat(feignAnnotation.basePackages()).containsExactly("com.ai.tutor.liveclass.integration.feign");
+        assertThat(feignAnnotation.basePackages())
+                .containsExactlyInAnyOrder(
+                        "com.ai.tutor.liveclass.integration.feign",
+                        "com.ai.tutor.liveclass.integration.im"
+                );
     }
 
     @Test

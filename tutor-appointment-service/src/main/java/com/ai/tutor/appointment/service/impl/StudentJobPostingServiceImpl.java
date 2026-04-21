@@ -174,7 +174,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .educationRequirement(request.getEducationRequirement() == null ? null : normalizeEducationRequirementForStorage(request.getEducationRequirement()))
                 .publisherIdentity(request.getPublisherIdentity() == null ? null : normalizePublisherIdentity(request.getPublisherIdentity()))
                 .schedule(request.getSchedule())
-                .bizStatus(request.getStatus() != null && request.getStatus() == 0 ? 6 : null)
+                .bizStatus(resolveBizStatusForStatusUpdate(request.getStatus(), db))
                 .status(request.getStatus())
                 .subjectTouched(touchSubject)
                 .build();
@@ -476,6 +476,25 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         if (raw == null) return null;
         String v = raw.trim();
         return v.isEmpty() ? null : v;
+    }
+
+    /**
+     * 发布状态与业务状态要保持一致：
+     * - 手动关闭需求时，落为“已关闭”
+     * - 从已关闭重新公开时，回到“匹配中”，重新进入公开推荐池
+     * - 其他更新不覆盖沟通/合作中的真实业务状态
+     */
+    private static Integer resolveBizStatusForStatusUpdate(Integer nextStatus, StudentJobPosting db) {
+        if (nextStatus == null || db == null) {
+            return null;
+        }
+        if (nextStatus == 0) {
+            return 6;
+        }
+        if (nextStatus == 1 && (db.getStatus() == null || db.getStatus() == 0 || Integer.valueOf(6).equals(db.getBizStatus()))) {
+            return 1;
+        }
+        return null;
     }
 
     private static String normalizePublisherIdentity(String raw) {

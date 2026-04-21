@@ -10,6 +10,7 @@ import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, StudentJobPosting
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { useCityStore } from '@/stores/city'
+import { useToastStore } from '@/stores/toast'
 import OrgCardModal from '@/ui/user/OrgCardModal.vue'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
 import { SUBJECT_OTHER_VALUE, SUBJECT_PRESETS } from '@/utils/subjects'
@@ -19,9 +20,11 @@ const route = useRoute()
 const chatRealtime = useChatRealtimeStore()
 const settings = useSettingsStore()
 const cityStore = useCityStore()
+const toast = useToastStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const LIST_PAGE_SIZE = 6
 
 const q = ref('')
 const subject = ref<string>('')
@@ -41,6 +44,7 @@ const budgetMaxInput = ref('')
 const list = ref<StudentJobPosting[]>([])
 const cursor = ref<number | null>(null)
 const isLast = ref(false)
+const listPageIndex = ref(0)
 const selectedId = ref<number | null>(null)
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
@@ -91,6 +95,27 @@ const eduOptions = [
 
 const checkedFavoriteIds = new Set<number>()
 const favoriteMap = ref<Record<number, boolean>>({})
+
+const maxListPageIndex = computed(() => Math.max(0, Math.ceil(list.value.length / LIST_PAGE_SIZE) - 1))
+
+const visibleList = computed(() => {
+  const safePageIndex = Math.min(listPageIndex.value, maxListPageIndex.value)
+  const start = safePageIndex * LIST_PAGE_SIZE
+  return list.value.slice(start, start + LIST_PAGE_SIZE)
+})
+
+const listPageCount = computed(() => Math.max(1, Math.ceil(list.value.length / LIST_PAGE_SIZE)))
+
+const listRangeText = computed(() => {
+  if (!list.value.length) return '暂无结果'
+  const safePageIndex = Math.min(listPageIndex.value, maxListPageIndex.value)
+  const start = safePageIndex * LIST_PAGE_SIZE + 1
+  const end = Math.min(list.value.length, start + LIST_PAGE_SIZE - 1)
+  return `${start}-${end} / 已加载 ${list.value.length}`
+})
+
+const canPrevListPage = computed(() => listPageIndex.value > 0)
+const canNextListPage = computed(() => listPageIndex.value < maxListPageIndex.value || !isLast.value)
 
 const typeLabel = computed(() => {
   if (!classMode.value) return '不限'
@@ -225,6 +250,7 @@ async function refresh() {
   list.value = []
   cursor.value = null
   isLast.value = false
+  listPageIndex.value = 0
   checkedFavoriteIds.clear()
   favoriteMap.value = {}
   selectedId.value = null
@@ -289,9 +315,108 @@ async function loadMore() {
   }
 }
 
+function selectFirstVisibleDemand() {
+  const first = visibleList.value[0]
+  if (!first) return
+  if (!visibleList.value.some((it) => it.id === selectedId.value)) {
+    selectedId.value = first.id
+  }
+}
+
+function prevListPage() {
+  if (!canPrevListPage.value) return
+  listPageIndex.value -= 1
+  selectFirstVisibleDemand()
+}
+
+async function nextListPage() {
+  if (!canNextListPage.value) return
+  const hasLoadedNext = listPageIndex.value < maxListPageIndex.value
+  if (!hasLoadedNext) {
+    const before = list.value.length
+    await loadMore()
+    if (list.value.length <= before) {
+      listPageIndex.value = Math.min(listPageIndex.value, maxListPageIndex.value)
+      return
+    }
+  }
+  listPageIndex.value = Math.min(listPageIndex.value + 1, maxListPageIndex.value)
+  selectFirstVisibleDemand()
+}
+
 function openDetail(it: StudentJobPosting) {
   selectedId.value = it.id
 }
+
+function formatGradeCode(raw: string | null | undefined): string {
+  const map: Record<string, string> = {
+    PRESCHOOL: '幼儿',
+    GRADE1: '一年级',
+    GRADE2: '二年级',
+    GRADE3: '三年级',
+    GRADE4: '四年级',
+    GRADE5: '五年级',
+    GRADE6: '六年级',
+    JUNIOR1: '初一',
+    JUNIOR2: '初二',
+    JUNIOR3: '初三',
+    SENIOR1: '高一',
+    SENIOR2: '高二',
+    SENIOR3: '高三',
+    SELF_EXAM: '自考生',
+    COLLEGE1: '大一',
+    COLLEGE2: '大二',
+    COLLEGE3: '大三',
+    COLLEGE4: '大四',
+    ADULT: '成人',
+  }
+  const key = String(raw || '').trim()
+  return map[key] || key || '待补充'
+}
+
+function formatGender(raw: string | null | undefined): string {
+  const v = String(raw || '').toLowerCase()
+  if (v === 'male') return '男'
+  if (v === 'female') return '女'
+  if (v === 'both') return '均可'
+  return raw || '不限'
+}
+
+function formatBudgetRange(it: Pick<StudentJobPosting, 'budgetMin' | 'budgetMax'>): string {
+  if (!it.budgetMin && !it.budgetMax) return '预算待沟通'
+  return `${it.budgetMin || '-'}-${it.budgetMax || '-'}元/小时`
+}
+
+function formatSubjectName(it: Pick<StudentJobPosting, 'subjectName' | 'subjectIsOther'>): string {
+  if (it.subjectIsOther) return it.subjectName || '其他科目'
+  return it.subjectName || '科目待补充'
+}
+
+const demandStats = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  return [
+    { label: '预算', value: formatBudgetRange(d), hint: '按小时计费' },
+    { label: '频次', value: renderFrequency(d), hint: '可沟通调整' },
+    { label: '授课方式', value: formatClassMode(d.classMode), hint: renderLocation(d) },
+  ]
+})
+
+const demandCompleteness = computed(() => {
+  const d = detail.value
+  if (!d) return 0
+  const filled = [
+    d.title,
+    d.description,
+    d.subjectName,
+    d.availableTime || d.schedule,
+    d.teacherRequirementDetail,
+    d.city || d.classMode === 'online',
+    d.budgetMin || d.budgetMax,
+    d.gradeCode,
+  ].filter((it) => String(it ?? '').trim()).length
+  return Math.round((filled / 8) * 100)
+})
 
 function genClientRequestId() {
   const g = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : ''
@@ -419,9 +544,10 @@ const applyButton = computed(() => {
   const d = detail.value
   if (!d) return { text: '发起申请', disabled: true, mode: 'apply' as const }
   const app = detailApplication.value
+  if (app?.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
+  if (app?.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
+  if (isDemandClosed(d)) return { text: '已关闭', disabled: true, mode: 'closed' as const }
   if (!app || app.status === 'REJECTED') return { text: '发起申请', disabled: false, mode: 'apply' as const }
-  if (app.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
-  if (app.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
   return { text: '发起申请', disabled: false, mode: 'apply' as const }
 })
 
@@ -566,6 +692,29 @@ function renderFrequency(it: Pick<StudentJobPosting, 'frequencyPerWeek'>): strin
   return it.frequencyPerWeek ? `每周${it.frequencyPerWeek}次` : '每周-次'
 }
 
+function isDemandClosed(it: Pick<StudentJobPosting, 'status' | 'bizStatus'> | null | undefined): boolean {
+  if (!it) return false
+  return it.status !== 1 || (it.bizStatus != null && Number(it.bizStatus) !== 1)
+}
+
+function buildDemandShareLink(id: number): string {
+  const href = router.resolve({ name: 'tutorJobDetail', params: { id: String(id) } }).href
+  return new URL(href, window.location.origin).toString()
+}
+
+async function onShareDemand(id: number) {
+  const link = buildDemandShareLink(id)
+  try {
+    if (!(navigator.clipboard && typeof navigator.clipboard.writeText === 'function')) {
+      throw new Error('clipboard-unavailable')
+    }
+    await navigator.clipboard.writeText(link)
+    toast.show('链接已复制，可转发给其他老师查看', 'success')
+  } catch {
+    toast.show('复制失败，请手动复制', 'error')
+  }
+}
+
 onMounted(() => {
   const raw = route.query.q
   if (typeof raw === 'string' && raw.trim()) {
@@ -599,6 +748,13 @@ watch(
   () => cityStore.city,
   () => {
     void refresh()
+  },
+)
+
+watch(
+  () => list.value.length,
+  () => {
+    listPageIndex.value = Math.min(listPageIndex.value, maxListPageIndex.value)
   },
 )
 </script>
@@ -715,20 +871,36 @@ watch(
 
     <div class="workbench">
       <aside class="card left">
+        <div class="list-head">
+          <div>
+            <div class="list-title">需求列表</div>
+            <div class="list-sub">{{ listRangeText }}</div>
+          </div>
+          <div class="pager-mini">
+            <button class="pager-btn" type="button" :disabled="!canPrevListPage" @click="prevListPage">上一页</button>
+            <button class="pager-btn" type="button" :disabled="!canNextListPage || loading" @click="nextListPage">
+              {{ loading && !isLast ? '加载中' : '下一页' }}
+            </button>
+          </div>
+        </div>
+
         <div v-if="list.length === 0 && !loading" class="empty">
           <div class="empty-title">暂无匹配需求</div>
           <div class="empty-desc">换个关键词或筛选条件试试</div>
         </div>
 
         <div v-else class="items">
-          <button
-            v-for="it in list"
+          <div
+            v-for="it in visibleList"
             :key="it.id"
             class="item"
-            type="button"
             :id="`demand-item-${it.id}`"
             :class="{ active: selectedId === it.id }"
+            role="button"
+            tabindex="0"
             @click="openDetail(it)"
+            @keydown.enter.prevent="openDetail(it)"
+            @keydown.space.prevent="openDetail(it)"
           >
             <div class="line1">
               <div class="t">
@@ -744,14 +916,14 @@ watch(
               <span>{{ formatEducationRequirement(it.educationRequirement) }}</span>
             </div>
             <div v-if="it.description" class="desc">{{ it.description }}</div>
-          </button>
+            <div class="item-ops">
+              <button class="btn btn-small" type="button" @click.stop="onShareDemand(it.id)">分享需求</button>
+            </div>
+          </div>
         </div>
 
         <div class="footer" v-if="list.length > 0">
-          <button class="btn" type="button" :disabled="loading || isLast" @click="loadMore">
-            <span v-if="isLast">没有更多了</span>
-            <span v-else>{{ loading ? '加载中...' : '加载更多' }}</span>
-          </button>
+          <span class="footer-note">第 {{ listPageIndex + 1 }} / {{ listPageCount }} 页</span>
         </div>
       </aside>
 
@@ -765,9 +937,16 @@ watch(
         </div>
         <div v-else-if="detail" class="card detail">
           <div class="detail-head">
-            <div class="detail-title">{{ detail.title }}</div>
+            <div>
+              <div class="detail-title">{{ detail.title }}</div>
+              <div class="detail-subtitle">
+                {{ [formatSubjectName(detail), formatGradeCode(detail.gradeCode), renderLocation(detail)].filter(Boolean).join(' · ') }}
+              </div>
+              <div v-if="isDemandClosed(detail)" class="closed-tip-inline">已关闭，当前不再公开招募，仅支持通过分享链接查看。</div>
+            </div>
             <div class="detail-ops">
               <button class="btn" type="button" @click="onToggleFavorite(detail)">{{ favoriteMap[detail.id] ? '已收藏' : '收藏' }}</button>
+              <button class="btn" type="button" @click="onShareDemand(detail.id)">分享需求</button>
               <button
                 class="btn btn-primary"
                 type="button"
@@ -779,11 +958,45 @@ watch(
             </div>
           </div>
 
-          <div class="detail-meta">
-            <span>{{ renderLocation(detail) }}</span>
-            <span>{{ formatClassMode(detail.classMode) }}</span>
-            <span>{{ renderFrequency(detail) }}</span>
-            <span>{{ formatEducationRequirement(detail.educationRequirement) }}</span>
+          <div class="stat-grid">
+            <div v-for="stat in demandStats" :key="stat.label" class="stat-card">
+              <div class="stat-value">{{ stat.value }}</div>
+              <div class="stat-label">{{ stat.label }}</div>
+              <div class="stat-hint">{{ stat.hint }}</div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">需求概览</div>
+              <div class="section-sub">资料完整度 {{ demandCompleteness }}%，越完整越利于判断是否接单</div>
+            </div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span>科目</span>
+                <strong>{{ formatSubjectName(detail) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>学生年级</span>
+                <strong>{{ formatGradeCode(detail.gradeCode) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>学生性别</span>
+                <strong>{{ formatGender(detail.studentGender) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>教师性别偏好</span>
+                <strong>{{ formatGender(detail.teacherGenderPreference) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>学历要求</span>
+                <strong>{{ formatEducationRequirement(detail.educationRequirement) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>孩子年龄</span>
+                <strong>{{ detail.childAge ? `${detail.childAge}岁` : '待补充' }}</strong>
+              </div>
+            </div>
           </div>
 
           <div v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="hint notice">
@@ -793,51 +1006,80 @@ watch(
             </div>
           </div>
 
-          <div class="detail-block">
-            <div class="detail-label">需求描述</div>
-            <div class="detail-text">{{ detail.description || '—' }}</div>
-          </div>
-
-          <div v-if="detail.availableTime || detail.schedule" class="detail-block">
-            <div class="detail-label">可上课时间</div>
-            <div class="detail-text">
-              {{ detail.availableTime || (detail.schedule ? formatScheduleText(detail.schedule) : '') }}
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">需求描述</div>
+              <div class="section-sub">家长/机构对学习情况和目标的说明</div>
             </div>
+            <div class="detail-text rich-text">{{ detail.description || '发布者暂未补充详细描述，可先通过申请沟通了解学生基础、目标和上课节奏。' }}</div>
           </div>
 
-          <div v-if="detail.teacherRequirementDetail" class="detail-block">
-            <div class="detail-label">对教员的详细要求</div>
-            <div class="detail-text">{{ detail.teacherRequirementDetail }}</div>
-          </div>
-
-          <div v-if="detail.publisher" class="publisher">
-            <img
-              v-if="detail.publisher.avatar && !publisherAvatarFailed"
-              class="p-avatar"
-              :src="detail.publisher.avatar"
-              alt="avatar"
-              @error="publisherAvatarFailed = true"
-            />
-            <div v-else class="p-avatar fallback">{{ (detail.publisher.displayName || 'U').slice(0, 1) }}</div>
-            <div class="p-info">
-              <div class="p-name">{{ detail.publisher.displayName }}</div>
-              <div class="p-tags">
-                <span class="tag">{{ detail.publisher.identityLabel }}</span>
-                <button
-                  v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'"
-                  class="link"
-                  type="button"
-                  @click="openOrgCard(detail.parentId)"
-                >
-                  查看机构主页
-                </button>
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">上课安排</div>
+              <div class="section-sub">时间、频次、地点和授课方式</div>
+            </div>
+            <div class="info-grid">
+              <div class="info-item">
+                <span>可上课时间</span>
+                <strong>{{ detail.availableTime || (detail.schedule ? formatScheduleText(detail.schedule) : '待沟通') }}</strong>
+              </div>
+              <div class="info-item">
+                <span>上课频次</span>
+                <strong>{{ renderFrequency(detail) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>授课方式</span>
+                <strong>{{ formatClassMode(detail.classMode) }}</strong>
+              </div>
+              <div class="info-item">
+                <span>{{ detail.classMode === 'online' ? '授课地点' : '工作地址' }}</span>
+                <strong>{{ detail.classMode === 'online' ? '线上授课' : [detail.city, detail.address].filter(Boolean).join(' · ') || '地址待沟通' }}</strong>
               </div>
             </div>
           </div>
 
-          <div v-if="detail.classMode !== 'online'" class="detail-block">
-            <div class="detail-label">工作地址</div>
-            <div class="detail-text">{{ [detail.city, detail.address].filter(Boolean).join(' · ') || '—' }}</div>
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">对教员的详细要求</div>
+              <div class="section-sub">接单前重点核对是否符合</div>
+            </div>
+            <div class="detail-text rich-text">{{ detail.teacherRequirementDetail || '发布者暂未填写额外要求，可在申请沟通时确认教学经验、性别偏好、试讲安排等信息。' }}</div>
+          </div>
+
+          <div class="detail-section">
+            <div class="section-head">
+              <div class="section-title">发布者信息</div>
+              <div class="section-sub">用于判断发布主体与后续沟通对象</div>
+            </div>
+            <div v-if="detail.publisher" class="publisher">
+              <img
+                v-if="detail.publisher.avatar && !publisherAvatarFailed"
+                class="p-avatar"
+                :src="detail.publisher.avatar"
+                alt="avatar"
+                @error="publisherAvatarFailed = true"
+              />
+              <div v-else class="p-avatar fallback">{{ (detail.publisher.displayName || 'U').slice(0, 1) }}</div>
+              <div class="p-info">
+                <div class="p-name">{{ detail.publisher.displayName }}</div>
+                <div class="p-tags">
+                  <span class="tag">{{ detail.publisher.identityLabel }}</span>
+                  <button
+                    v-if="String(detail.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'"
+                    class="link"
+                    type="button"
+                    @click="openOrgCard(detail.parentId)"
+                  >
+                    查看机构主页
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="placeholder-card">
+              <div class="placeholder-title">发布者资料暂不可见</div>
+              <div class="placeholder-desc">可以先从需求信息判断是否适合，再发起申请沟通。</div>
+            </div>
           </div>
         </div>
         <div v-else class="card detail empty-detail">
@@ -996,17 +1238,62 @@ watch(
 
 .workbench {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
 }
 
 .left {
-  padding: 12px;
+  height: min(760px, calc(100vh - 218px));
+  min-height: 620px;
+  padding: 14px;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   overflow: hidden;
+  border-radius: 18px;
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.list-title {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.list-sub {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pager-mini {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.pager-btn {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pager-btn:disabled {
+  cursor: not-allowed;
+  color: var(--muted);
+  background: rgba(31, 35, 41, 0.04);
 }
 
 .items {
@@ -1027,11 +1314,18 @@ watch(
   border-radius: 14px;
   background: #fff;
   cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
 .item.active {
   border-color: rgba(0, 190, 189, 0.45);
-  background: rgba(0, 190, 189, 0.06);
+  background: linear-gradient(135deg, rgba(0, 190, 189, 0.08), #fff 62%);
+  box-shadow: 0 0 0 4px rgba(0, 190, 189, 0.08);
+}
+
+.item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 190, 189, 0.28);
 }
 
 .line1 {
@@ -1087,9 +1381,27 @@ watch(
   overflow: hidden;
 }
 
+.item-ops {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.btn-small {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .footer {
   display: flex;
   justify-content: center;
+}
+
+.footer-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .right {
@@ -1097,11 +1409,17 @@ watch(
 }
 
 .detail {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 12px;
+  height: min(760px, calc(100vh - 218px));
+  min-height: 620px;
+  padding: 18px;
+  border-radius: 20px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  overflow: auto;
+  background:
+    radial-gradient(circle at top right, rgba(0, 190, 189, 0.08), transparent 34%),
+    #fff;
 }
 
 .detail-head {
@@ -1113,31 +1431,110 @@ watch(
 
 .detail-title {
   font-weight: 900;
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.detail-subtitle {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .detail-ops {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.detail-meta {
-  display: flex;
+.closed-tip-inline {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #b54708;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
-  flex-wrap: wrap;
+}
+
+.stat-card {
+  min-height: 86px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  background: rgba(246, 251, 251, 0.86);
+}
+
+.stat-value {
+  color: #0f766e;
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.stat-label {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.stat-hint {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.detail-section {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.section-title {
+  font-weight: 900;
+  font-size: 15px;
+}
+
+.section-sub {
   color: var(--muted);
   font-size: 12px;
 }
 
-.detail-block {
+.info-grid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.detail-label {
-  font-weight: 900;
+.info-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(31, 35, 41, 0.035);
+}
+
+.info-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.info-item strong {
+  color: var(--text);
   font-size: 13px;
+  line-height: 1.45;
 }
 
 .detail-text {
@@ -1148,11 +1545,19 @@ watch(
   word-break: break-word;
 }
 
+.rich-text {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(31, 35, 41, 0.035);
+}
+
 .publisher {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-top: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(31, 35, 41, 0.035);
 }
 
 .p-avatar {
@@ -1221,6 +1626,25 @@ watch(
 
 .n-body {
   color: var(--muted);
+  line-height: 1.6;
+}
+
+.placeholder-card {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: rgba(31, 35, 41, 0.025);
+}
+
+.placeholder-title {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.placeholder-desc {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 1.6;
 }
 

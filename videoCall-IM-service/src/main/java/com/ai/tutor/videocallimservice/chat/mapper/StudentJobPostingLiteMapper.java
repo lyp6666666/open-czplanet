@@ -9,7 +9,7 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface StudentJobPostingLiteMapper {
 
-    @Select("SELECT id, class_mode AS classMode, frequency_per_week AS frequencyPerWeek, budget_min AS budgetMin, budget_max AS budgetMax FROM student_job_posting WHERE id = #{id}")
+    @Select("SELECT id, class_mode AS classMode, frequency_per_week AS frequencyPerWeek, budget_min AS budgetMin, budget_max AS budgetMax, biz_status AS bizStatus, status FROM student_job_posting WHERE id = #{id}")
     StudentJobPostingLite selectById(@Param("id") Long id);
 
     @Update("UPDATE student_job_posting SET biz_status = #{status} WHERE id = #{id}")

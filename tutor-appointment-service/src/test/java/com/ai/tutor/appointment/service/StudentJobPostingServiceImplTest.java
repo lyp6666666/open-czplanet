@@ -245,4 +245,43 @@ class StudentJobPostingServiceImplTest {
         assertThat(vo.getPublisher().getAvatar()).isEqualTo("/avatars/u101.png");
         assertThat(vo.getPublisher().getIdentityLabel()).isEqualTo("学生本人");
     }
+
+    @Test
+    void updateShouldRestoreMatchingStatusWhenReopenClosedDemand() {
+        StudentJobPosting existing = StudentJobPosting.builder()
+                .id(3002L)
+                .parentId(101L)
+                .subjectId(201L)
+                .subjectName("数学")
+                .subjectIsOther(0)
+                .title("初中数学一对一")
+                .description("学生基础一般，需要巩固提升。")
+                .studentGender("female")
+                .gradeCode("JUNIOR1")
+                .teacherGenderPreference("both")
+                .teacherRequirementDetail("希望老师有耐心，经验丰富。")
+                .classMode("online")
+                .frequencyPerWeek(2)
+                .budgetMin(new BigDecimal("100"))
+                .budgetMax(new BigDecimal("200"))
+                .stageCode("JUNIOR")
+                .educationRequirement("BACHELOR")
+                .publisherIdentity("PARENT")
+                .status(0)
+                .bizStatus(6)
+                .build();
+        when(studentJobPostingMapper.selectById(3002L)).thenReturn(existing);
+        when(studentJobPostingMapper.updateById(any(StudentJobPosting.class))).thenReturn(1);
+
+        UpdateStudentJobPostingRequest req = new UpdateStudentJobPostingRequest();
+        req.setStatus(1);
+
+        service.update(3002L, req, 101L);
+
+        ArgumentCaptor<StudentJobPosting> captor = ArgumentCaptor.forClass(StudentJobPosting.class);
+        verify(studentJobPostingMapper).updateById(captor.capture());
+        StudentJobPosting saved = captor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(1);
+        assertThat(saved.getBizStatus()).isEqualTo(1);
+    }
 }

@@ -258,6 +258,46 @@ describe('ChatListPage realtime', () => {
     expect(wrapper.text()).toContain('[消息已撤回]')
   })
 
+  it('renders readable preview for system message rooms', async () => {
+    mocks.listRooms.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          roomId: 7201,
+          otherUid: 3001,
+          lastMsgId: 8001,
+          lastMsgBody: { type: 'brokerage_required', orderId: 28, amountFen: 1, status: 'PENDING' },
+          myLastReadMsgId: null,
+          unreadCount: 1,
+          activeTime: '2026-04-21T12:59:00',
+        },
+      ],
+    })
+    mocks.batch.mockResolvedValue([{ id: 3001, name: '这回忆那么空～', realName: '', avatar: '', userType: 1 }])
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore(pinia)
+
+    const router = createTestRouter()
+    await router.push('/chat')
+    await router.isReady()
+
+    const wrapper = mount(ChatListPage, {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          RouterView: { template: '<div data-test="room-view" />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('[信息费] 待处理')
+    expect(wrapper.text()).not.toContain('"orderId":28')
+  })
+
   it('keeps pinned rooms at the top of the chat list', async () => {
     localStorage.setItem('ai_tutor_chat_pins:2001', JSON.stringify([7102]))
     mocks.listRooms.mockResolvedValue({

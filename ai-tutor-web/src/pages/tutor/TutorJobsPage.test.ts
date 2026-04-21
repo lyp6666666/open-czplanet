@@ -277,6 +277,71 @@ describe('TutorJobsPage', () => {
     expect(wrapper.text()).toContain('海淀区中关村')
   })
 
+  it('keeps demand pager in valid range when clicking next on the last page', async () => {
+    localStorage.setItem('ai_tutor_city', '北京')
+    mocks.feedDemands.mockReset()
+    mocks.getDemandView.mockReset()
+    mocks.checkDemandFavorites.mockReset()
+    mocks.listSent.mockReset()
+
+    const list = Array.from({ length: 53 }, (_, idx) => ({
+      id: 4000 + idx,
+      parentId: 200 + idx,
+      subjectId: 201,
+      subjectName: idx % 2 === 0 ? '数学' : '英语',
+      subjectIsOther: 0,
+      title: `需求${idx + 1}`,
+      description: `描述${idx + 1}`,
+      childAge: 12,
+      classMode: 'offline',
+      city: '北京',
+      address: `海淀区${idx + 1}号`,
+      frequencyPerWeek: 2,
+      budgetMin: '120',
+      budgetMax: '180',
+      stageCode: 'JUNIOR',
+      educationRequirement: 'UNLIMITED',
+      publisherIdentity: 'PARENT',
+      schedule: null,
+      status: 1,
+      createTime: '',
+      updateTime: '',
+    }))
+
+    mocks.feedDemands.mockResolvedValue({
+      nextCursor: null,
+      isLast: true,
+      list,
+    })
+    mocks.checkDemandFavorites.mockResolvedValue([])
+    mocks.listSent.mockResolvedValue({ cursor: null, isLast: true, list: [] })
+    mocks.getDemandView.mockResolvedValue({
+      ...list[0],
+      publisher: { uid: 200, displayName: '林女士', avatar: null, identityLabel: '学生家长' },
+    })
+
+    const router = createTestRouter()
+    await router.push('/tutor/jobs')
+    await router.isReady()
+
+    const wrapper = mount(TutorJobsPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    const nextBtn = () => wrapper.findAll('button').find((b) => b.text().includes('下一页'))
+    for (let i = 0; i < 12; i += 1) {
+      const btn = nextBtn()
+      if (!btn || btn.attributes('disabled') !== undefined) break
+      await btn.trigger('click')
+      await flushPromises()
+    }
+
+    expect(wrapper.text()).toContain('49-53 / 已加载 53')
+    expect(wrapper.text()).toContain('第 9 / 9 页')
+    expect(wrapper.text()).not.toContain('55-53 / 已加载 53')
+  })
+
   it('refreshes the selected detail application when receiving a matching realtime event', async () => {
     vi.useFakeTimers()
     localStorage.setItem('ai_tutor_city', '北京')

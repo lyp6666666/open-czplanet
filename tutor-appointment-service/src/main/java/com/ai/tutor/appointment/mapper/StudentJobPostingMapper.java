@@ -54,4 +54,6 @@ public interface StudentJobPostingMapper {
 
     List<StudentJobPosting> searchPublishedByTitle(@Param("keyword") String keyword,
                                                   @Param("limit") Integer limit);
+
+    Integer countActiveApplicationCandidates(@Param("id") Long id);
 }

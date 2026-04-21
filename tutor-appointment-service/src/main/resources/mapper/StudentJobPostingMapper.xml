@@ -113,6 +113,7 @@
             frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
         <if test="subjectId != null">
             AND subject_id = #{subjectId}
         </if>
@@ -135,6 +136,7 @@
             frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
         <if test="subjectId != null">
             AND subject_id = #{subjectId}
         </if>
@@ -172,6 +174,7 @@
             frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
         <if test="subjectId != null">
             AND subject_id = #{subjectId}
         </if>
@@ -271,9 +274,18 @@
             frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
         FROM student_job_posting
         WHERE status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
           AND (title LIKE CONCAT('%', #{keyword}, '%') OR LOCATE(title, #{keyword}) > 0)
         ORDER BY id DESC
         LIMIT #{limit}
+    </select>
+
+    <select id="countActiveApplicationCandidates" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM student_job_posting
+        WHERE id = #{id}
+          AND status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
     </select>
 
 </mapper>

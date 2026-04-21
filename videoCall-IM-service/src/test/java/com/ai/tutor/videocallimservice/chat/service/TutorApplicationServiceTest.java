@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
 import com.ai.tutor.common.service.dto.RequestInfo;
+import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.ApplicationBrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
@@ -27,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -125,6 +127,8 @@ class TutorApplicationServiceTest {
         StudentJobPostingLite demand = new StudentJobPostingLite();
         demand.setId(501L);
         demand.setClassMode("online");
+        demand.setStatus(1);
+        demand.setBizStatus(1);
         when(studentJobPostingLiteMapper.selectById(501L)).thenReturn(demand);
         when(studentProfileLiteMapper.selectIdByUserId(2001L)).thenReturn(66L);
         when(tutorApplicationMapper.selectBySenderAndClientRequestId(eq(1001L), any())).thenReturn(null);
@@ -161,6 +165,57 @@ class TutorApplicationServiceTest {
 
             TutorApplicationVO vo = service.create(req, 1001L);
             assertThat(vo.getTeachingMode()).isEqualTo("ONLINE");
+        } finally {
+            RequestHolder.remove();
+        }
+    }
+
+    @Test
+    void createShouldRejectClosedDemandForTeacherApply() {
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
+        ApplicationBrokerageOrderMapper applicationBrokerageOrderMapper = mock(ApplicationBrokerageOrderMapper.class);
+        ChatRoomService chatRoomService = mock(ChatRoomService.class);
+        ChatService chatService = mock(ChatService.class);
+        SseSessionManager sseSessionManager = mock(SseSessionManager.class);
+        StudentJobPostingLiteMapper studentJobPostingLiteMapper = mock(StudentJobPostingLiteMapper.class);
+        TeacherProfileLiteMapper teacherProfileLiteMapper = mock(TeacherProfileLiteMapper.class);
+        StudentProfileLiteMapper studentProfileLiteMapper = mock(StudentProfileLiteMapper.class);
+
+        StudentJobPostingLite demand = new StudentJobPostingLite();
+        demand.setId(501L);
+        demand.setClassMode("online");
+        demand.setStatus(1);
+        demand.setBizStatus(3);
+        when(studentJobPostingLiteMapper.selectById(501L)).thenReturn(demand);
+        when(studentProfileLiteMapper.selectIdByUserId(2001L)).thenReturn(66L);
+
+        TutorApplicationService service = new TutorApplicationService();
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
+        ReflectionTestUtils.setField(service, "applicationBrokerageOrderMapper", applicationBrokerageOrderMapper);
+        ReflectionTestUtils.setField(service, "chatRoomService", chatRoomService);
+        ReflectionTestUtils.setField(service, "chatService", chatService);
+        ReflectionTestUtils.setField(service, "sseSessionManager", sseSessionManager);
+        ReflectionTestUtils.setField(service, "studentJobPostingLiteMapper", studentJobPostingLiteMapper);
+        ReflectionTestUtils.setField(service, "teacherProfileLiteMapper", teacherProfileLiteMapper);
+        ReflectionTestUtils.setField(service, "studentProfileLiteMapper", studentProfileLiteMapper);
+
+        RequestInfo info = new RequestInfo();
+        info.setUid(1001L);
+        ReflectionTestUtils.setField(info, "role", 1);
+        RequestHolder.set(info);
+        try {
+            CreateTutorApplicationReq req = new CreateTutorApplicationReq();
+            req.setReceiverUid(2001L);
+            req.setContextType("DEMAND");
+            req.setContextId(501L);
+            req.setContent("老师看到您的需求，想进一步沟通");
+            req.setClientRequestId("cid-demand-closed");
+
+            assertThatThrownBy(() -> service.create(req, 1001L))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("已停止公开");
         } finally {
             RequestHolder.remove();
         }

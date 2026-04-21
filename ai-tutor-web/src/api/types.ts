@@ -131,6 +131,8 @@ export interface HotDemandCardVO {
   publisherIdentity?: string
   parent: { userId: number; displayName: string; avatar: string }
   tags: string[]
+  bizStatus?: number | null
+  status?: number | null
 }
 
 export interface HotTutorCardVO {
@@ -526,6 +528,16 @@ export type ChatMessageBody =
       endAt: number
       status: ScheduleEventStatus
       actorUserId: number
+    }
+  | {
+      type: 'lesson_ai_result'
+      eventId: number
+      title: string
+      status: string
+      contextType?: string | null
+      contextId?: number | null
+      content?: string | null
+      reportStatus?: string | null
     }
   | {
       type: 'collaboration_proposal'

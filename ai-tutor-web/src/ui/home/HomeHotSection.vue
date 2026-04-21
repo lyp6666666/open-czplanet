@@ -108,6 +108,24 @@ function genClientRequestId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+function buildDemandShareLink(demandId: number): string {
+  const href = router.resolve({ name: 'tutorJobDetail', params: { id: String(demandId) } }).href
+  return new URL(href, window.location.origin).toString()
+}
+
+async function onShareDemand(demandId: number) {
+  const link = buildDemandShareLink(demandId)
+  try {
+    if (!(navigator.clipboard && typeof navigator.clipboard.writeText === 'function')) {
+      throw new Error('clipboard-unavailable')
+    }
+    await navigator.clipboard.writeText(link)
+    toast.show('链接已复制，可转发给其他老师查看', 'success')
+  } catch {
+    toast.show('复制失败，请手动复制', 'error')
+  }
+}
+
 const servicePlaceholders = computed(() => range(6))
 const demandPlaceholders = computed(() => range(6))
 const tutorPlaceholders = computed(() => range(4))
@@ -338,11 +356,13 @@ watch(
             <div class="tags">
               <span v-for="tag in it.tags" :key="tag" class="tag">{{ formatScheduleText(tag) }}</span>
             </div>
-            <div v-if="canApplyDemand" class="ops">
-              <button 
-                class="btn btn-primary" 
-                type="button" 
-                :disabled="applyBusy || appliedMap[it.demandId]" 
+            <div class="ops">
+              <button class="btn" type="button" @click.stop="onShareDemand(it.demandId)">分享需求</button>
+              <button
+                v-if="canApplyDemand"
+                class="btn btn-primary"
+                type="button"
+                :disabled="applyBusy || appliedMap[it.demandId]"
                 @click.stop="onApplyDemand(it)"
               >
                 {{ appliedMap[it.demandId] ? '已申请' : (applyBusy ? '提交中...' : '发起申请') }}

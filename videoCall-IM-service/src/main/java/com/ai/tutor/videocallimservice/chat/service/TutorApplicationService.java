@@ -740,6 +740,9 @@ public class TutorApplicationService {
         ThrowUtils.throwIf(demandId == null, ErrorCode.PARAMS_ERROR);
         StudentJobPostingLite demand = studentJobPostingLiteMapper.selectById(demandId);
         ThrowUtils.throwIf(demand == null, ErrorCode.NOT_FOUND_ERROR, "需求不存在");
+        boolean closed = demand.getStatus() == null || demand.getStatus() != 1
+                || (demand.getBizStatus() != null && demand.getBizStatus() != 1);
+        ThrowUtils.throwIf(closed, ErrorCode.OPERATION_ERROR, "该需求当前已停止公开，无法继续申请");
         String mode = trimNullable(demand.getClassMode());
         if (mode == null) {
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "需求缺少授课形式");

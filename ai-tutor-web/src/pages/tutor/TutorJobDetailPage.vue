@@ -9,6 +9,7 @@ import { jobsApi } from '@/api/jobs'
 import type { ChatMessageResp, ChatRoomItemResp, DemandViewVO, TutorApplicationVO } from '@/api/types'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
+import { useToastStore } from '@/stores/toast'
 import UserCardModal from '@/ui/user/UserCardModal.vue'
 import OrgCardModal from '@/ui/user/OrgCardModal.vue'
 import { formatClassMode, formatEducationRequirement, formatScheduleText } from '@/utils/present'
@@ -17,6 +18,7 @@ const route = useRoute()
 const router = useRouter()
 const chatRealtime = useChatRealtimeStore()
 const settings = useSettingsStore()
+const toast = useToastStore()
 
 const id = computed(() => Number(route.params.id))
 
@@ -146,12 +148,36 @@ async function reloadCurrentApplicationDetail(reason: 'realtime' | 'polling') {
   }
 }
 
+function isDemandClosed(it: Pick<DemandViewVO, 'status' | 'bizStatus'> | null | undefined): boolean {
+  if (!it) return false
+  return it.status !== 1 || (it.bizStatus != null && Number(it.bizStatus) !== 1)
+}
+
+function buildDemandShareLink(): string {
+  const href = router.resolve({ name: 'tutorJobDetail', params: { id: String(id.value) } }).href
+  return new URL(href, window.location.origin).toString()
+}
+
+async function onShareDemand() {
+  const link = buildDemandShareLink()
+  try {
+    if (!(navigator.clipboard && typeof navigator.clipboard.writeText === 'function')) {
+      throw new Error('clipboard-unavailable')
+    }
+    await navigator.clipboard.writeText(link)
+    toast.show('链接已复制，可转发给其他老师查看', 'success')
+  } catch {
+    toast.show('复制失败，请手动复制', 'error')
+  }
+}
+
 const applyButton = computed(() => {
   if (!data.value) return { text: '发起申请', disabled: true, mode: 'apply' as const }
   const app = application.value
+  if (app?.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
+  if (app?.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
+  if (isDemandClosed(data.value)) return { text: '已关闭', disabled: true, mode: 'closed' as const }
   if (!app || app.status === 'REJECTED') return { text: '发起申请', disabled: false, mode: 'apply' as const }
-  if (app.status === 'PENDING') return { text: '已发起申请', disabled: true, mode: 'pending' as const }
-  if (app.status === 'ACCEPTED') return { text: '已发起沟通', disabled: false, mode: 'chat' as const }
   return { text: '发起申请', disabled: false, mode: 'apply' as const }
 })
 
@@ -336,6 +362,7 @@ onBeforeUnmount(() => {
         <button class="btn" type="button" :disabled="loading || !data" @click="onToggleFavorite">
           {{ favorited ? '已收藏' : '收藏' }}
         </button>
+        <button class="btn" type="button" :disabled="loading || !data" @click="onShareDemand">分享需求</button>
         <button
           class="btn btn-primary"
           type="button"
@@ -350,13 +377,20 @@ onBeforeUnmount(() => {
     <div v-if="error" class="hint error">{{ error }}</div>
 
     <div v-if="data" class="card detail">
-      <div class="t">{{ data.title }}</div>
+      <div class="title-row">
+        <div class="t">{{ data.title }}</div>
+        <span v-if="isDemandClosed(data)" class="closed-badge">已关闭</span>
+      </div>
       <div class="meta">
         <span>{{ (data.classMode || '').toLowerCase() === 'online' ? '线上' : data.city || '线下' }}</span>
         <span>{{ formatClassMode(data.classMode) }}</span>
         <span>每周{{ data.frequencyPerWeek || '-' }}次</span>
         <span>{{ formatEducationRequirement(data.educationRequirement) }}</span>
         <span v-if="data.budgetMin || data.budgetMax">{{ data.budgetMin || '-' }}-{{ data.budgetMax || '-' }}/小时</span>
+      </div>
+
+      <div v-if="isDemandClosed(data)" class="hint notice closed-hint">
+        该需求当前已停止公开推荐，仅支持通过分享链接查看，不能再发起新的申请。
       </div>
 
       <div v-if="String(data.publisherIdentity || '').toUpperCase() === 'ORGANIZATION'" class="hint notice">
@@ -455,9 +489,26 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .t {
   font-weight: 900;
   font-size: 16px;
+}
+
+.closed-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #b54708;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  font-weight: 800;
 }
 
 .meta {
@@ -569,6 +620,10 @@ onBeforeUnmount(() => {
 .hint.notice {
   border-color: rgba(255, 170, 0, 0.28);
   background: rgba(255, 170, 0, 0.06);
+}
+
+.closed-hint {
+  margin-top: 2px;
 }
 
 .n-title {
