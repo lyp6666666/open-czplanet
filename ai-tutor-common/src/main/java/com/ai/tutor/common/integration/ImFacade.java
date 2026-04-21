@@ -31,6 +31,14 @@ public interface ImFacade {
     Long sendSystemMessage(Long uid, Long roomId, Object body);
 
     /**
+     * 断言当前会话已满足发起线上合作/授课申请的前置条件。
+     *
+     * @param uid 当前用户 id
+     * @param roomId 会话房间 id
+     */
+    void assertRoomReadyForScheduling(Long uid, Long roomId);
+
+    /**
      * 获取最近联系人（来自会话列表）。
      *
      * @param uid   当前用户 id
@@ -38,4 +46,24 @@ public interface ImFacade {
      * @return 对方用户 id 列表（按最近活跃排序）
      */
     java.util.List<Long> listRecentContactUids(Long uid, int limit);
+
+    /**
+     * 通知 IM 课程域：学生已提交正式每周固定课表。
+     *
+     * @param uid              当前学生 uid
+     * @param courseId         长期课程 id
+     * @param classTime        固定课表摘要
+     * @param frequencyPerWeek 每周课次数
+     * @param lessonPriceFen   单节课时费（分）
+     */
+    void confirmWeeklyScheduleSubmitted(Long uid, Long courseId, String classTime, Integer frequencyPerWeek, Long lessonPriceFen);
+
+    /**
+     * 通知 IM 课程域：试课课节在开始前被取消，需要退回聊天沟通阶段。
+     *
+     * @param uid      当前操作者 uid
+     * @param courseId 长期课程 id
+     * @param reason   取消原因
+     */
+    void markTrialCanceled(Long uid, Long courseId, String reason);
 }

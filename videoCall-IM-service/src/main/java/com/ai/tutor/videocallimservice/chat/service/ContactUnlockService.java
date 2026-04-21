@@ -10,7 +10,6 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.enums.BrokerageOrderStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CollaborationProposalStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.CourseEnrollmentStatus;
-import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.UnlockedContactVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.CollaborationProposalMapper;
@@ -65,7 +64,9 @@ public class ContactUnlockService {
         ThrowUtils.throwIf(!isContactUnlocked(roomId), ErrorCode.NOT_FOUND_ERROR);
 
         String phone = loadPhone(targetUid);
-        return UnlockedContactVO.builder().uid(targetUid).phone(phone == null ? "" : phone).build();
+        String normalizedPhone = phone == null ? "" : phone.trim();
+        ThrowUtils.throwIf(normalizedPhone.isEmpty(), ErrorCode.OPERATION_ERROR, "对方联系方式暂不可用");
+        return UnlockedContactVO.builder().uid(targetUid).phone(normalizedPhone).build();
     }
 
     private boolean isContactUnlocked(Long roomId) {
@@ -94,22 +95,19 @@ public class ContactUnlockService {
         }
 
         CollaborationProposal proposal = collaborationProposalMapper.selectLatestByRoomId(roomId);
-        if (proposal != null && CollaborationProposalStatus.ACCEPTED.name().equals(proposal.getStatus())) {
+        if (proposal != null && CollaborationProposalStatus.ACCEPTED.name().equalsIgnoreCase(proposal.getStatus())) {
+            TutorApplication latestApplication = tutorApplicationMapper.selectLatestByRoomId(roomId);
+            if (latestApplication != null
+                    && "OFFLINE".equalsIgnoreCase(latestApplication.getTeachingMode())
+                    && "ACCEPTED".equalsIgnoreCase(latestApplication.getStatus())) {
+                return true;
+            }
             BrokerageOrder proposalOrder = brokerageOrderMapper.selectByProposalId(proposal.getId());
-            if (proposalOrder != null && BrokerageOrderStatus.PAID.name().equals(proposalOrder.getStatus())) {
+            if (proposalOrder != null && BrokerageOrderStatus.PAID.name().equalsIgnoreCase(proposalOrder.getStatus())) {
                 return true;
             }
         }
-
-        Long teacherUid = teacherProfileLiteMapper.selectUserIdById(room.getTeacherProfileId());
-        Long studentUid = studentProfileLiteMapper.selectUserIdById(room.getStudentProfileId());
-        if (teacherUid == null || studentUid == null) {
-            return false;
-        }
-
-        TutorApplication application = tutorApplicationMapper.selectLatestUnlockedBetween(teacherUid, studentUid);
-        return application != null
-                && TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(application.getChatAccessStatus());
+        return false;
     }
 
     private String loadPhone(Long targetUid) {

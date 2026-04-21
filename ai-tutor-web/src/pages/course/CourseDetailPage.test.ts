@@ -139,8 +139,59 @@ function buildCourseDetailHandlers(lessonListFactory?: () => any[]) {
                 participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
                 chatRoomId: 88,
               },
-            ],
+          ],
       ),
+    ),
+    http.get('http://localhost/live/sessions/by-course/701', () =>
+      ok({
+        sessionId: 8801,
+        courseId: 701,
+        status: 'ENDED',
+        joinableNow: false,
+      }),
+    ),
+    http.get('http://localhost/live/sessions/by-course/702', () =>
+      ok({
+        sessionId: 8802,
+        courseId: 702,
+        status: 'SCHEDULED',
+        joinableNow: false,
+      }),
+    ),
+    http.get('http://localhost/live/sessions/by-course/703', () =>
+      ok({
+        sessionId: 8803,
+        courseId: 703,
+        status: 'SCHEDULED',
+        joinableNow: false,
+      }),
+    ),
+    http.get('http://localhost/live/sessions/8801/ai/result', () =>
+      ok({
+        sessionId: 8801,
+        courseId: 701,
+        resultStatus: 'READY',
+        reportStatus: 'READY',
+        preview: '本节课完成一次函数基础梳理与例题讲解',
+      }),
+    ),
+    http.get('http://localhost/live/sessions/8802/ai/result', () =>
+      ok({
+        sessionId: 8802,
+        courseId: 702,
+        resultStatus: 'PENDING',
+        reportStatus: null,
+        preview: null,
+      }),
+    ),
+    http.get('http://localhost/live/sessions/8803/ai/result', () =>
+      ok({
+        sessionId: 8803,
+        courseId: 703,
+        resultStatus: 'PENDING',
+        reportStatus: null,
+        preview: null,
+      }),
     ),
   )
 }

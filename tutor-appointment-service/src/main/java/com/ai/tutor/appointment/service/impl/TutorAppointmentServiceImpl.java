@@ -17,6 +17,7 @@ import jakarta.annotation.Resource;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -42,6 +43,9 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
 
     @Resource
     private com.ai.tutor.appointment.service.LessonPaymentOrderService lessonPaymentOrderService;
+
+    @Resource
+    private com.ai.tutor.appointment.service.EmailNotificationService emailNotificationService;
 
     @Override
     public Long create(CreateAppointmentRequest request, Long uid) {
@@ -104,6 +108,8 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
         int updated = tutorAppointmentMapper.acceptIfPending(db.getId());
         if (updated > 0) {
             appointmentEventPublisher.publishAccepted(db.getId(), db.getParentId(), db.getTutorId());
+            TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
+            emailNotificationService.createLessonStartTasks(latest == null ? db : latest);
             return;
         }
 
@@ -118,17 +124,27 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
         TutorAppointment db = requireParticipant(id, uid);
         ThrowUtils.throwIf(db.getStatus() == null || db.getStatus() != STATUS_ACCEPTED, ErrorCode.OPERATION_ERROR);
         ThrowUtils.throwIf(request.getProposedStartTime() == null, ErrorCode.PARAMS_ERROR);
+        int duration = request.getDurationMinutes() == null ? (db.getDurationMinutes() == null ? 60 : db.getDurationMinutes()) : request.getDurationMinutes();
+        LocalDateTime proposedEnd = request.getProposedStartTime().plusMinutes(duration);
+        int conflicts = tutorAppointmentMapper.countAcceptedConflictsExcept(
+                List.of(db.getParentId(), db.getTutorId()),
+                request.getProposedStartTime(),
+                proposedEnd,
+                db.getId()
+        );
+        ThrowUtils.throwIf(conflicts > 0, ErrorCode.OPERATION_ERROR, "改期时间与已有课程冲突，请重新选择");
 
         TutorAppointment toUpdate = TutorAppointment.builder()
                 .id(db.getId())
                 .status(STATUS_RESCHEDULE_PENDING)
                 .proposedStartTime(request.getProposedStartTime())
                 .proposedBy(uid)
-                .durationMinutes(request.getDurationMinutes())
+                .durationMinutes(duration)
                 .remark(request.getRemark())
                 .build();
         int updated = tutorAppointmentMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson reschedule requested");
     }
 
     @Override
@@ -138,9 +154,21 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
         ThrowUtils.throwIf(db.getProposedBy() == null, ErrorCode.OPERATION_ERROR);
         ThrowUtils.throwIf(uid.equals(db.getProposedBy()), ErrorCode.NO_AUTH_ERROR);
         ThrowUtils.throwIf(db.getProposedStartTime() == null, ErrorCode.OPERATION_ERROR);
+        int minutes = db.getDurationMinutes() == null ? 60 : db.getDurationMinutes();
+        LocalDateTime proposedEnd = db.getProposedStartTime().plusMinutes(minutes);
+        int conflicts = tutorAppointmentMapper.countAcceptedConflictsExcept(
+                List.of(db.getParentId(), db.getTutorId()),
+                db.getProposedStartTime(),
+                proposedEnd,
+                db.getId()
+        );
+        ThrowUtils.throwIf(conflicts > 0, ErrorCode.OPERATION_ERROR, "改期时间与已有课程冲突，请重新选择");
 
         int updated = tutorAppointmentMapper.confirmReschedule(db.getId());
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
+        emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson rescheduled");
+        emailNotificationService.createLessonStartTasks(latest == null ? db : latest);
     }
 
     @Override
@@ -157,6 +185,7 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
                 .build();
         int updated = tutorAppointmentMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson canceled");
     }
 
     @Override
@@ -182,6 +211,7 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
         if (billable.getCourseId() != null && billable.getPayableAmountFen() != null && billable.getPayableAmountFen() > 0) {
             lessonPaymentOrderService.createAfterLessonCompleted(billable);
         }
+        emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson completed");
     }
 
     @Override

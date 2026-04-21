@@ -150,9 +150,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
             boolean allowed = "TUTOR_APPLICATION".equals(bizType)
                     || "TUTOR_APPLICATION_STATUS".equals(bizType)
                     || "BROKERAGE_REQUIRED".equals(bizType)
-                    || "CONTACT_UNLOCKED".equals(bizType)
-                    || "LESSON_REQUEST".equals(bizType)
-                    || "LESSON_STATUS".equals(bizType);
+                    || "CONTACT_UNLOCKED".equals(bizType);
             ThrowUtils.throwIf(!allowed, ErrorCode.OPERATION_ERROR, "当前仅可发送家教申请");
         }
     }
@@ -162,7 +160,7 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
         if (room == null || room.getStatus() == null || room.getStatus() != 1) {
             return false;
         }
-        Integer activeCourseCount = courseEnrollmentMapper.countActiveByRoomId(roomId);
+        Integer activeCourseCount = courseEnrollmentMapper == null ? null : courseEnrollmentMapper.countActiveByRoomId(roomId);
         if (activeCourseCount != null && activeCourseCount > 0) {
             return true;
         }

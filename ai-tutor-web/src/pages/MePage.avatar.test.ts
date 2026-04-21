@@ -99,11 +99,11 @@ describe('MePage avatar upload', () => {
     })
   })
 
-  it('uses student real name as base user name when saving student profile', async () => {
+  it('keeps student nickname in base user info and saves real name into student profile', async () => {
     localStorage.setItem('ai_tutor_token', 't')
     localStorage.setItem(
       'ai_tutor_user',
-      JSON.stringify({ id: 1001, token: 't', userType: 2, name: '', phone: '13800001111', avatar: '', sex: 2 }),
+      JSON.stringify({ id: 1001, token: 't', userType: 2, name: '这回忆那么空～', phone: '13800001111', avatar: '', sex: 2 }),
     )
 
     mocks.me.mockReset()
@@ -111,13 +111,13 @@ describe('MePage avatar upload', () => {
     mocks.uploadImage.mockReset()
 
     mocks.me.mockResolvedValue({
-      name: '',
+      name: '这回忆那么空～',
       phone: '13800001111',
       avatar: '',
       sex: 2,
       userType: 2,
       teacherProfile: null,
-      studentProfile: { realName: '', childAge: null, address: '', demandDescription: '', budget: null },
+      studentProfile: { realName: '陆熠鹏', childAge: null, address: '', demandDescription: '', budget: null },
     })
     mocks.updateUserInfo.mockResolvedValue('ok')
 
@@ -130,13 +130,12 @@ describe('MePage avatar upload', () => {
     })
     await flushPromises()
 
-    await wrapper.find('input[placeholder="例如：王女士"]').setValue('陆熠鹏')
     await wrapper.findAll('button').find((b) => b.text().trim() === '保存')!.trigger('click')
     await flushPromises()
 
     expect(mocks.updateUserInfo).toHaveBeenCalledTimes(1)
     expect(mocks.updateUserInfo.mock.calls[0]![0]).toMatchObject({
-      baseUserInfo: { name: '陆熠鹏' },
+      baseUserInfo: { name: '这回忆那么空～' },
       studentExtInfo: { realName: '陆熠鹏' },
     })
   })

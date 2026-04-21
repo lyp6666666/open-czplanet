@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Track } from 'livekit-client'
 
-import { liveApi, type LiveSessionResp } from '@/api/live'
+import { liveApi, type LiveAiStateResp, type LiveSessionResp } from '@/api/live'
 import {
   attachTrackToElement,
   detachTrack,
@@ -20,12 +20,14 @@ const loading = ref(false)
 const connecting = ref(false)
 const error = ref<string | null>(null)
 const session = ref<LiveSessionResp | null>(null)
-const sidebar = ref<'chat' | 'info' | 'tech'>('info')
+const sidebar = ref<'ai' | 'chat' | 'info' | 'tech'>('ai')
 const connectionState = ref<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('idle')
 const remoteParticipantName = ref('对方')
 const remoteAudioConnected = ref(false)
 const remoteVideoConnected = ref(false)
 const roomId = computed(() => session.value?.roomId ?? null)
+const aiState = ref<LiveAiStateResp | null>(null)
+const aiError = ref<string | null>(null)
 
 const prefs = readLiveMediaPreferences()
 const micOn = ref(prefs.micEnabled)
@@ -40,11 +42,51 @@ const remoteAudioRef = ref<HTMLAudioElement | null>(null)
 let pollTimer: number | null = null
 let roomClient: LiveRoomClient | null = null
 
+function clearRemoteMediaState() {
+  remoteVideoConnected.value = false
+  remoteAudioConnected.value = false
+  if (remoteVideoRef.value) remoteVideoRef.value.srcObject = null
+  if (remoteAudioRef.value) remoteAudioRef.value.srcObject = null
+}
+
+function syncRemoteStateFromRoom(client: LiveRoomClient) {
+  const remoteParticipants = Array.from(client.room.remoteParticipants.values())
+  const participant = remoteParticipants[0]
+  if (!participant) {
+    remoteParticipantName.value = '对方'
+    clearRemoteMediaState()
+    return
+  }
+
+  remoteParticipantName.value = participant.name || participant.identity || '对方'
+  let hasRemoteAudio = false
+  let hasRemoteVideo = false
+  for (const publication of participant.trackPublications.values()) {
+    const track = publication.track
+    if (!track) continue
+    if (track.kind === Track.Kind.Video) {
+      attachTrackToElement(track, remoteVideoRef.value)
+      hasRemoteVideo = true
+      continue
+    }
+    attachTrackToElement(track, remoteAudioRef.value)
+    hasRemoteAudio = true
+  }
+  remoteVideoConnected.value = hasRemoteVideo
+  remoteAudioConnected.value = hasRemoteAudio
+  if (!hasRemoteVideo && remoteVideoRef.value) remoteVideoRef.value.srcObject = null
+  if (!hasRemoteAudio && remoteAudioRef.value) remoteAudioRef.value.srcObject = null
+}
+
 async function load() {
   loading.value = true
   error.value = null
   try {
     session.value = await liveApi.getByCourse(courseId.value)
+    if (session.value?.sessionId) {
+      aiState.value = await liveApi.aiState(session.value.sessionId)
+      aiError.value = null
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载课堂失败'
   } finally {
@@ -56,20 +98,30 @@ async function refreshStatus() {
   if (!session.value?.sessionId) return
   try {
     session.value = await liveApi.status(session.value.sessionId)
+    aiState.value = await liveApi.aiState(session.value.sessionId)
+    aiError.value = null
   } catch {
     // 保持当前课堂状态，避免轮询报错打断课堂。
   }
 }
 
+const aiStatusText = computed(() => {
+  const status = String(aiState.value?.aiStatus || '').trim().toUpperCase()
+  if (status === 'ACTIVE') return '实时转写中'
+  if (status === 'ASR_DEGRADED') return '语音识别暂不可用'
+  if (status === 'LLM_DEGRADED') return 'AI 正在稍后重试整理摘要'
+  if (status === 'FAILED') return 'AI 暂不可用'
+  if (status === 'OFF') return '本节课未开启课堂 AI'
+  return 'AI 正在进入课堂...'
+})
+
 function bindRoomEvents(client: LiveRoomClient) {
   client.onParticipantConnected((participant) => {
     remoteParticipantName.value = participant.name || participant.identity || '对方'
+    syncRemoteStateFromRoom(client)
   })
   client.onParticipantDisconnected(() => {
-    remoteVideoConnected.value = false
-    remoteAudioConnected.value = false
-    if (remoteVideoRef.value) remoteVideoRef.value.srcObject = null
-    if (remoteAudioRef.value) remoteAudioRef.value.srcObject = null
+    syncRemoteStateFromRoom(client)
   })
   client.onTrackSubscribed((track, _publication, participant) => {
     remoteParticipantName.value = participant.name || participant.identity || '对方'
@@ -85,10 +137,12 @@ function bindRoomEvents(client: LiveRoomClient) {
     if (track.kind === Track.Kind.Video) {
       detachTrack(track, remoteVideoRef.value)
       remoteVideoConnected.value = false
+      syncRemoteStateFromRoom(client)
       return
     }
     detachTrack(track, remoteAudioRef.value)
     remoteAudioConnected.value = false
+    syncRemoteStateFromRoom(client)
   })
   client.onConnectionStateChanged((state) => {
     if (state === 'connected' || state === 'reconnecting' || state === 'disconnected') {
@@ -131,6 +185,7 @@ async function connectRoom() {
     if (localCameraPublication?.track) {
       attachTrackToElement(localCameraPublication.track, localVideoRef.value)
     }
+    syncRemoteStateFromRoom(client)
     connectionState.value = 'connected'
     await refreshStatus()
   } catch (e) {
@@ -257,12 +312,48 @@ onUnmounted(async () => {
 
       <aside class="sidebar card">
         <div class="side-tabs">
+          <button class="tab" :class="{ active: sidebar === 'ai' }" type="button" @click="sidebar = 'ai'">AI 纪要</button>
           <button class="tab" :class="{ active: sidebar === 'info' }" type="button" @click="sidebar = 'info'">课程信息</button>
           <button class="tab" :class="{ active: sidebar === 'tech' }" type="button" @click="sidebar = 'tech'">技术状态</button>
           <button class="tab" :class="{ active: sidebar === 'chat' }" type="button" @click="sidebar = 'chat'">课中聊天</button>
         </div>
 
-        <div v-if="sidebar === 'info'" class="side-section">
+        <div v-if="sidebar === 'ai'" class="side-section">
+          <div class="row"><span>AI 状态</span><strong>{{ aiStatusText }}</strong></div>
+          <div class="ai-block">
+            <div class="ai-title">当前阶段摘要</div>
+            <div class="ai-text">{{ aiState?.latestStageSummary || 'AI 正在整理本阶段重点，稍后会展示摘要' }}</div>
+          </div>
+          <div class="ai-block">
+            <div class="ai-title">当前讲解主题</div>
+            <div class="ai-text">{{ aiState?.currentTopic || '暂未提炼' }}</div>
+          </div>
+          <div class="ai-block">
+            <div class="ai-title">学生提问</div>
+            <div v-if="!aiState?.studentQuestions?.length" class="ai-empty">暂无内容</div>
+            <ul v-else class="ai-list">
+              <li v-for="item in aiState?.studentQuestions || []" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+          <div class="ai-block">
+            <div class="ai-title">课堂重点</div>
+            <div v-if="!aiState?.keyPoints?.length" class="ai-empty">暂无内容</div>
+            <ul v-else class="ai-list">
+              <li v-for="item in aiState?.keyPoints || []" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+          <div class="ai-block">
+            <div class="ai-title">作业候选</div>
+            <div v-if="!aiState?.homeworkCandidates?.length" class="ai-empty">暂无内容</div>
+            <ul v-else class="ai-list">
+              <li v-for="item in aiState?.homeworkCandidates || []" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+          <div v-if="aiError" class="hint error">{{ aiError }}</div>
+          <div class="hint">仅供课堂辅助参考，课后将自动生成完整总结。</div>
+        </div>
+
+        <div v-else-if="sidebar === 'info'" class="side-section">
           <div class="row"><span>课堂状态</span><strong>{{ session?.status || '—' }}</strong></div>
           <div class="row"><span>房间</span><strong>{{ session?.providerRoomName || '—' }}</strong></div>
           <div class="row"><span>对方状态</span><strong>{{ session?.peerJoined || remoteAudioConnected ? '已入会' : '等待中' }}</strong></div>
@@ -294,6 +385,7 @@ onUnmounted(async () => {
       <button class="ctl" :class="{ off: !camOn }" type="button" data-testid="classroom-toggle-camera" @click="toggleCamera">
         {{ camOn ? '关闭摄像头' : '打开摄像头' }}
       </button>
+      <button class="ctl" type="button" @click="sidebar = 'ai'">AI 纪要</button>
       <button class="ctl" type="button" @click="sidebar = 'tech'">切换设备</button>
       <button class="ctl" type="button" @click="sidebar = 'chat'">课中聊天</button>
       <button class="ctl primary" type="button" @click="endClass">结束课程</button>
@@ -433,6 +525,30 @@ onUnmounted(async () => {
   display: grid;
   gap: 10px;
   margin-top: 16px;
+}
+
+.ai-block {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.ai-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ai-text,
+.ai-empty,
+.ai-list li {
+  color: rgba(15, 23, 42, 0.72);
+  line-height: 1.6;
+}
+
+.ai-list {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .row {

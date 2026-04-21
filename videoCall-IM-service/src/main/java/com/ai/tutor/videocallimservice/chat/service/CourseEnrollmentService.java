@@ -15,7 +15,9 @@ import com.ai.tutor.videocallimservice.chat.domain.enums.RefundRequestType;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationChatAccessStatus;
 import com.ai.tutor.videocallimservice.chat.domain.enums.TutorApplicationStatus;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitTrialResultReq;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.SystemMsgReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseItemVO;
 import com.ai.tutor.videocallimservice.chat.mapper.BrokerageOrderMapper;
@@ -24,8 +26,12 @@ import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RefundRequestMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
+import com.ai.tutor.videocallimservice.integration.feign.AppointmentInternalFeignClient;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +55,10 @@ public class CourseEnrollmentService {
     private TutorApplicationMapper tutorApplicationMapper;
     @Resource
     private RoomMapper roomMapper;
+    @Resource
+    private ChatService chatService;
+    @Autowired(required = false)
+    private AppointmentInternalClient appointmentInternalClient;
 
     @Transactional(rollbackFor = Exception.class)
     public CourseEnrollment ensureForApplication(TutorApplication application) {
@@ -126,10 +136,10 @@ public class CourseEnrollmentService {
         }
         TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(roomId);
         CollaborationProposal proposal = proposalId == null ? null : collaborationProposalMapper.selectById(proposalId);
-        LocalDateTime start = LocalDateTime.now();
-        LocalDateTime end = start.plus(7, ChronoUnit.DAYS);
+        LocalDateTime start = proposal == null || proposal.getTrialStartAt() == null ? LocalDateTime.now() : proposal.getTrialStartAt();
+        LocalDateTime end = proposal == null || proposal.getTrialEndAt() == null ? start.plus(2, ChronoUnit.HOURS) : proposal.getTrialEndAt();
         // 中文注释：线上合作一旦被接受，就把聊天阶段沉淀为“长期课程”，后续短期课节必须挂在这门课下面。
-        courseEnrollmentMapper.startOnlineCourse(
+        int updated = courseEnrollmentMapper.startOnlineCourse(
                 enrollment.getId(),
                 enrollment.getStatus(),
                 proposalId,
@@ -141,6 +151,10 @@ public class CourseEnrollmentService {
                 start,
                 end
         );
+        if (updated > 0) {
+            CourseEnrollment latest = courseEnrollmentMapper.selectById(enrollment.getId());
+            createAcceptedTrialSchedule(latest == null ? enrollment : latest, proposal);
+        }
     }
 
     public List<CourseItemVO> listMyCourses(Long uid, String role, int page, int size) {
@@ -195,15 +209,42 @@ public class CourseEnrollmentService {
         return toCourseDetail(course);
     }
 
+    @Scheduled(fixedDelayString = "${course.trial.scheduler-delay-ms:60000}")
+    public void processEndedTrials() {
+        List<CourseEnrollment> list = courseEnrollmentMapper.listTrialingEnded(LocalDateTime.now(), 50);
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        for (CourseEnrollment course : list) {
+            if (course == null || course.getId() == null) {
+                continue;
+            }
+            courseEnrollmentMapper.updateStatus(
+                    course.getId(),
+                    CourseEnrollmentStatus.TRIALING.name(),
+                    CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name(),
+                    null,
+                    null,
+                    null
+            );
+        }
+    }
+
+    @Scheduled(fixedDelayString = "${course.weekly-schedule.scheduler-delay-ms:60000}")
+    public void processWeeklyScheduleDeadlineTasks() {
+        processWeeklyScheduleTimeouts();
+        processWeeklyScheduleReminders();
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void submitTrialResult(Long courseId, SubmitTrialResultReq req, Long uid) {
         ThrowUtils.throwIf(courseId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
         CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
         ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
-        ThrowUtils.throwIf(!uid.equals(course.getTeacherUid()), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(!uid.equals(course.getStudentUid()), ErrorCode.NO_AUTH_ERROR, "试课后是否继续只能由学生确认");
         String result = req.getResult() == null ? "" : req.getResult().trim().toUpperCase();
         if ("PASS".equals(result)) {
-            confirmTrialPassed(course);
+            confirmTrialPassedByStudent(course);
             return;
         }
         ThrowUtils.throwIf(!"FAIL".equals(result), ErrorCode.PARAMS_ERROR, "试课结果不合法");
@@ -213,11 +254,52 @@ public class CourseEnrollmentService {
         refundReq.setEvidenceImageUrls(req.getEvidenceImageUrls());
         refundReq.setEvidenceVideoUrl(req.getEvidenceVideoUrl());
         refundReq.setEvidenceVideoDurationSeconds(req.getEvidenceVideoDurationSeconds());
-        if ("ONLINE".equalsIgnoreCase(course.getTeachingMode())) {
-            failOnlineTrial(course, refundReq);
+        failOnlineTrial(course, refundReq);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmWeeklyScheduleSubmitted(Long courseId, Long uid, String classTime, Integer frequencyPerWeek, Long lessonPriceFen) {
+        ThrowUtils.throwIf(courseId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
+        ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
+        ThrowUtils.throwIf(!uid.equals(course.getStudentUid()), ErrorCode.NO_AUTH_ERROR, "正式每周课表只能由学生提交");
+        if (CourseEnrollmentStatus.TEACHING.name().equals(course.getStatus())) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "正式课表已提交，不能重复提交");
+        }
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可提交正式课表");
+        int updated = courseEnrollmentMapper.markWeeklyScheduleSubmitted(
+                course.getId(),
+                CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name(),
+                trimTo255(classTime),
+                frequencyPerWeek,
+                formatLessonPriceFen(lessonPriceFen)
+        );
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "正式课表提交状态更新失败，请稍后重试");
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void markTrialCanceled(Long courseId, Long uid, String reason) {
+        ThrowUtils.throwIf(courseId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
+        ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
+        assertParticipant(course, uid);
+        if (CourseEnrollmentStatus.COMMUNICATING.name().equals(course.getStatus())) {
+            reopenCourseCommunication(course);
             return;
         }
-        applyTrialRefund(courseId, refundReq, uid);
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus())
+                && !CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name().equals(course.getStatus())
+                && !CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可取消试课");
+        int updated = courseEnrollmentMapper.updateStatus(
+                course.getId(),
+                course.getStatus(),
+                CourseEnrollmentStatus.COMMUNICATING.name(),
+                null,
+                null,
+                null
+        );
+        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课取消状态更新失败，请稍后重试");
+        reopenCourseCommunication(course);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -283,37 +365,63 @@ public class CourseEnrollmentService {
         return request.getId();
     }
 
-    private void confirmTrialPassed(CourseEnrollment course) {
+    private void confirmTrialPassedByStudent(CourseEnrollment course) {
         ThrowUtils.throwIf(course == null || course.getId() == null, ErrorCode.PARAMS_ERROR);
-        if (CourseEnrollmentStatus.TEACHING.name().equals(course.getStatus())) {
+        if (CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name().equals(course.getStatus())
+                || CourseEnrollmentStatus.TEACHING.name().equals(course.getStatus())) {
             return;
         }
-        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可确认试课结果");
-        int updated = courseEnrollmentMapper.updateStatus(
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name().equals(course.getStatus())
+                && !CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可确认试课结果");
+        int updated = courseEnrollmentMapper.markTrialPassedWaitingWeeklySchedule(
                 course.getId(),
                 course.getStatus(),
-                CourseEnrollmentStatus.TEACHING.name(),
-                null,
-                null,
-                null
+                resolveWeeklyScheduleDeadline(course)
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
+        CourseEnrollment latest = courseEnrollmentMapper.selectById(course.getId());
+        sendWeeklyScheduleReminderMessage(latest == null ? course : latest, "试课已通过，请在试课结束后 24 小时内确认正式每周课表。");
     }
 
     private void failOnlineTrial(CourseEnrollment course, ApplyTrialRefundReq req) {
         ThrowUtils.throwIf(course == null || course.getId() == null, ErrorCode.PARAMS_ERROR);
-        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可发起退课");
+        ThrowUtils.throwIf(!CourseEnrollmentStatus.TRIALING.name().equals(course.getStatus())
+                && !CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name().equals(course.getStatus())
+                && !CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name().equals(course.getStatus()), ErrorCode.OPERATION_ERROR, "当前课程状态不可发起退课");
         ThrowUtils.throwIf(trimTo1024(req == null ? null : req.getReason()) == null, ErrorCode.PARAMS_ERROR, "请填写试课不通过说明");
         int updated = courseEnrollmentMapper.updateStatus(
                 course.getId(),
                 course.getStatus(),
-                CourseEnrollmentStatus.FINISHED.name(),
+                CourseEnrollmentStatus.TRIAL_FAILED.name(),
                 null,
                 null,
                 null
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
         closeCourseCommunication(course);
+    }
+
+    private void createAcceptedTrialSchedule(CourseEnrollment course, CollaborationProposal proposal) {
+        if (appointmentInternalClient == null
+                || course == null
+                || course.getId() == null
+                || course.getTrialStartAt() == null
+                || course.getTrialEndAt() == null) {
+            return;
+        }
+        AppointmentInternalFeignClient.InternalTrialEventRequest request = new AppointmentInternalFeignClient.InternalTrialEventRequest();
+        request.setCourseId(course.getId());
+        request.setRoomId(course.getRoomId());
+        request.setTeacherUid(course.getTeacherUid());
+        request.setStudentUid(course.getStudentUid());
+        request.setCreatedBy(proposal == null ? course.getTeacherUid() : proposal.getFromUid());
+        request.setTitle("试课｜" + (course.getCourseName() == null ? "线上长期课程" : course.getCourseName()));
+        request.setLessonPrice(course.getLessonPrice());
+        request.setStartAt(toEpochMillis(course.getTrialStartAt()));
+        request.setEndAt(toEpochMillis(course.getTrialEndAt()));
+        request.setRemark(proposal == null ? null : proposal.getRemark());
+        request.setClientRequestId(proposal == null || proposal.getId() == null ? null : "COLLAB_TRIAL:" + proposal.getId());
+        appointmentInternalClient.createAcceptedTrialEvent(request);
     }
 
     private void closeCourseCommunication(CourseEnrollment course) {
@@ -326,6 +434,111 @@ public class CourseEnrollmentService {
         if (course.getRoomId() != null) {
             roomMapper.closeRoom(course.getRoomId());
         }
+    }
+
+    private void reopenCourseCommunication(CourseEnrollment course) {
+        if (course == null) {
+            return;
+        }
+        if (course.getApplicationId() != null) {
+            tutorApplicationMapper.updateChatAccessStatus(course.getApplicationId(), TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
+        }
+        if (course.getRoomId() != null) {
+            roomMapper.reopenRoom(course.getRoomId());
+        }
+    }
+
+    private void processWeeklyScheduleTimeouts() {
+        List<CourseEnrollment> list = courseEnrollmentMapper.listWeeklyScheduleDeadlineReached(LocalDateTime.now(), 50);
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        for (CourseEnrollment course : list) {
+            if (course == null || course.getId() == null) {
+                continue;
+            }
+            int updated = courseEnrollmentMapper.updateStatus(
+                    course.getId(),
+                    CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name(),
+                    CourseEnrollmentStatus.TRIAL_FAILED.name(),
+                    null,
+                    null,
+                    null
+            );
+            if (updated > 0) {
+                CourseEnrollment latest = courseEnrollmentMapper.selectById(course.getId());
+                sendWeeklyScheduleReminderMessage(latest == null ? course : latest, "正式课表确认已超时，系统已判定试课失败。");
+                closeCourseCommunication(course);
+            }
+        }
+    }
+
+    private void processWeeklyScheduleReminders() {
+        List<CourseEnrollment> list = courseEnrollmentMapper.listWeeklyScheduleReminderDue(LocalDateTime.now(), 50);
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (CourseEnrollment course : list) {
+            if (course == null || course.getId() == null || course.getWeeklyScheduleDeadlineAt() == null) {
+                continue;
+            }
+            long minutesLeft = ChronoUnit.MINUTES.between(now, course.getWeeklyScheduleDeadlineAt());
+            String column;
+            String label;
+            if (minutesLeft <= 60) {
+                column = "weekly_reminder_1h_sent_at";
+                label = "1 小时";
+            } else if (minutesLeft <= 6 * 60) {
+                column = "weekly_reminder_6h_sent_at";
+                label = "6 小时";
+            } else {
+                column = "weekly_reminder_12h_sent_at";
+                label = "12 小时";
+            }
+            courseEnrollmentMapper.markWeeklyReminderSent(course.getId(), column, now);
+            sendWeeklyScheduleReminderMessage(course, "请尽快确认正式每周课表，距离截止还有 " + label + "。");
+        }
+    }
+
+    private void sendWeeklyScheduleReminderMessage(CourseEnrollment course, String content) {
+        if (course == null || course.getRoomId() == null || content == null || content.isBlank()) {
+            return;
+        }
+        SystemMsgReq payload = new SystemMsgReq();
+        payload.setBizType("COURSE_STATUS_REMINDER");
+        payload.setEventId(course.getId());
+        payload.setStatus(course.getStatus());
+        payload.setContent(content);
+        payload.setContextType("COURSE");
+        payload.setContextId(course.getId());
+        payload.setTitle(course.getCourseName());
+        if (course.getWeeklyScheduleDeadlineAt() != null) {
+            payload.setEndAt(toEpochMillis(course.getWeeklyScheduleDeadlineAt()));
+        }
+        sendCourseSystemMessage(course, payload);
+    }
+
+    private void sendCourseSystemMessage(CourseEnrollment course, Object payload) {
+        if (chatService == null || course == null || course.getRoomId() == null || payload == null) {
+            return;
+        }
+        try {
+            chatService.sendMsg(ChatMessageReq.builder()
+                    .roomId(course.getRoomId())
+                    .msgType(8)
+                    .body(payload)
+                    .build(), course.getStudentUid());
+        } catch (Exception ignored) {
+            // 系统提醒不影响主链路，失败后由下一轮任务继续兜底。
+        }
+    }
+
+    private static LocalDateTime resolveWeeklyScheduleDeadline(CourseEnrollment course) {
+        if (course == null || course.getTrialEndAt() == null) {
+            return LocalDateTime.now().plusHours(24);
+        }
+        return course.getTrialEndAt().plusHours(24);
     }
 
     private static long computePercentAmount(Long amountFen, int percent) {
@@ -389,7 +602,19 @@ public class CourseEnrollmentService {
                 .status(course.getStatus())
                 .trialStartAt(course.getTrialStartAt())
                 .trialEndAt(course.getTrialEndAt())
+                .weeklyScheduleDeadlineAt(course.getWeeklyScheduleDeadlineAt())
+                .weeklyScheduleSubmittedAt(course.getWeeklyScheduleSubmittedAt())
                 .build();
+    }
+
+    private static String formatLessonPriceFen(Long lessonPriceFen) {
+        if (lessonPriceFen == null || lessonPriceFen <= 0) {
+            return null;
+        }
+        if (lessonPriceFen % 100 == 0) {
+            return (lessonPriceFen / 100) + " 元/节";
+        }
+        return String.format(java.util.Locale.ROOT, "%.2f 元/节", lessonPriceFen / 100.0);
     }
 
     private static String normalizeTeachingMode(String teachingMode) {
@@ -437,5 +662,12 @@ public class CourseEnrollmentService {
         if (v.isEmpty()) return null;
         if (v.length() <= 64) return v;
         return v.substring(0, 64);
+    }
+
+    private static Long toEpochMillis(LocalDateTime time) {
+        if (time == null) {
+            return null;
+        }
+        return time.atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
     }
 }

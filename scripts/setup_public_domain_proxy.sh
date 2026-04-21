@@ -28,7 +28,45 @@ if [ -z "$TLS_KEY_PATH" ] && [ -f "/etc/letsencrypt/live/$PUBLIC_DOMAIN/privkey.
   TLS_KEY_PATH="/etc/letsencrypt/live/$PUBLIC_DOMAIN/privkey.pem"
 fi
 
-cat >"$NGINX_CONF" <<EOF
+if [ -n "$TLS_CERT_PATH" ] && [ -n "$TLS_KEY_PATH" ] && [ -f "$TLS_CERT_PATH" ] && [ -f "$TLS_KEY_PATH" ]; then
+  cat >"$NGINX_CONF" <<EOF
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
+
+    ssl_certificate $TLS_CERT_PATH;
+    ssl_certificate_key $TLS_KEY_PATH;
+
+    access_log /var/log/nginx/ai-tutor-public-domain-ssl.access.log;
+    error_log /var/log/nginx/ai-tutor-public-domain-ssl.error.log warn;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Host \$host;
+    proxy_set_header X-Forwarded-Port \$server_port;
+
+    location / {
+        proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+}
+EOF
+else
+  cat >"$NGINX_CONF" <<EOF
 server {
     listen 80;
     listen [::]:80;
@@ -58,88 +96,6 @@ server {
 
     location / {
         proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-    }
-}
-
-server {
-    listen $ADMIN_PORT;
-    listen [::]:$ADMIN_PORT;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
-
-    access_log /var/log/nginx/ai-tutor-public-admin.access.log;
-    error_log /var/log/nginx/ai-tutor-public-admin.error.log warn;
-
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-Port \$server_port;
-
-    location / {
-        proxy_pass http://$UPSTREAM_HOST:$ADMIN_PORT;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-    }
-}
-EOF
-
-if [ -n "$TLS_CERT_PATH" ] && [ -n "$TLS_KEY_PATH" ] && [ -f "$TLS_CERT_PATH" ] && [ -f "$TLS_KEY_PATH" ]; then
-  cat >>"$NGINX_CONF" <<EOF
-
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
-
-    ssl_certificate $TLS_CERT_PATH;
-    ssl_certificate_key $TLS_KEY_PATH;
-
-    access_log /var/log/nginx/ai-tutor-public-domain-ssl.access.log;
-    error_log /var/log/nginx/ai-tutor-public-domain-ssl.error.log warn;
-
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-Port \$server_port;
-
-    location / {
-        proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-    }
-}
-
-server {
-    listen $ADMIN_PORT ssl http2;
-    listen [::]:$ADMIN_PORT ssl http2;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
-
-    ssl_certificate $TLS_CERT_PATH;
-    ssl_certificate_key $TLS_KEY_PATH;
-
-    access_log /var/log/nginx/ai-tutor-public-admin-ssl.access.log;
-    error_log /var/log/nginx/ai-tutor-public-admin-ssl.error.log warn;
-
-    proxy_http_version 1.1;
-    proxy_set_header Host \$host;
-    proxy_set_header X-Real-IP \$remote_addr;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-Port \$server_port;
-
-    location / {
-        proxy_pass http://$UPSTREAM_HOST:$ADMIN_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;

@@ -2,6 +2,9 @@ package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.entity.User;
+import com.ai.tutor.appointment.model.vo.email.InternalUserEmailsVO;
+import com.ai.tutor.appointment.service.EmailAccountService;
+import com.ai.tutor.appointment.service.ScheduleService;
 import com.ai.tutor.appointment.service.UserReadService;
 import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.enums.ErrorCode;
@@ -23,6 +26,8 @@ public class InternalFacadeUserController {
 
     private final UserMapper userMapper;
     private final UserReadService userReadService;
+    private final EmailAccountService emailAccountService;
+    private final ScheduleService scheduleService;
 
     @GetMapping("/{uid}/basic")
     public BaseResponse<Map<String, Object>> getUserBasicById(@PathVariable("uid") Long uid) {
@@ -48,5 +53,25 @@ public class InternalFacadeUserController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         return ResultUtils.success(userReadService.getPhoneByUserId(uid));
+    }
+
+    @GetMapping("/{uid}/emails")
+    public BaseResponse<InternalUserEmailsVO> getUserEmailsById(@PathVariable("uid") Long uid) {
+        if (uid == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        return ResultUtils.success(emailAccountService.getInternalUserEmails(uid));
+    }
+
+    @GetMapping("/{uid}/schedule/conflict-check")
+    public BaseResponse<Boolean> checkScheduleConflict(@PathVariable("uid") Long uid,
+                                                       @org.springframework.web.bind.annotation.RequestParam("otherUid") Long otherUid,
+                                                       @org.springframework.web.bind.annotation.RequestParam("startAt") Long startAt,
+                                                       @org.springframework.web.bind.annotation.RequestParam("endAt") Long endAt) {
+        if (uid == null || otherUid == null || startAt == null || endAt == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        scheduleService.assertNoScheduleConflict(uid, otherUid, startAt, endAt);
+        return ResultUtils.success(Boolean.TRUE);
     }
 }

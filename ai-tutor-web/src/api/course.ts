@@ -27,4 +27,5 @@ export const courseApi = {
   applyTrialRefund(courseId: number, payload: { reason: string; evidenceImageUrls: string[]; evidenceVideoUrl: string; evidenceVideoDurationSeconds: number }) {
     return http.post<unknown, number>(`/courses/${courseId}/trial-refund/apply`, payload)
   },
+
 }

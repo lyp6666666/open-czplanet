@@ -4,6 +4,43 @@ export interface BaseResponse<T> {
   message: string
 }
 
+export type EmailVerifyStatus = 'PENDING' | 'VERIFIED' | 'INVALID'
+export type EmailBounceStatus = 'NORMAL' | 'SOFT_BOUNCE' | 'HARD_BOUNCE'
+export type EmailType = 'PRIMARY' | 'SUMMARY_ONLY'
+
+export interface UserEmailItemVO {
+  emailMasked: string
+  verifyStatus: EmailVerifyStatus
+  bounceStatus: EmailBounceStatus
+  verifiedAt?: string | null
+}
+
+export interface UserEmailStatusVO {
+  primaryEmail?: UserEmailItemVO | null
+  summaryEmail?: UserEmailItemVO | null
+  canUseSummaryEmail: boolean
+  tips: {
+    primaryEmailMissing: boolean
+    summaryEmailMissing: boolean
+  }
+}
+
+export interface EmailCodeVO {
+  cooldownSeconds: number
+  expireSeconds: number
+}
+
+export interface EmailReminderHintVO {
+  show: boolean
+  level?: 'LIGHT' | 'MIDDLE' | 'STRONG' | string
+  title?: string
+  description?: string
+  actionText?: string
+  actionTarget?: string
+  dismissible?: boolean
+  cooldownDays?: number
+}
+
 export interface CursorPageRequest {
   pageSize?: number
   cursor?: number | null
@@ -448,6 +485,7 @@ export interface CourseItemVO {
   courseId: number
   applicationId: number
   roomId?: number | null
+  liveSessionId?: number | null
   teacherUid: number
   studentUid: number
   teachingMode?: 'ONLINE' | 'OFFLINE' | null
@@ -458,12 +496,17 @@ export interface CourseItemVO {
   status: string
   trialStartAt?: string | null
   trialEndAt?: string | null
+  weeklyScheduleDeadlineAt?: string | null
+  weeklyScheduleSubmittedAt?: string | null
+  aiResultStatus?: string | null
+  aiPreview?: string | null
 }
 
 export interface CourseDetailVO {
   courseId: number
   applicationId: number
   roomId: number | null
+  liveSessionId?: number | null
   teacherUid: number
   studentUid: number
   teachingMode?: 'ONLINE' | 'OFFLINE' | null
@@ -474,6 +517,21 @@ export interface CourseDetailVO {
   status: string
   trialStartAt?: string | null
   trialEndAt?: string | null
+  weeklyScheduleDeadlineAt?: string | null
+  weeklyScheduleSubmittedAt?: string | null
+  aiResultStatus?: string | null
+  aiPreview?: string | null
+}
+
+export interface CourseAiResultVO {
+  sessionId: number
+  courseId: number
+  resultStatus: string
+  reportStatus?: string | null
+  summary?: Record<string, unknown> | null
+  report?: Record<string, unknown> | null
+  preview?: string | null
+  updatedAt?: string | null
 }
 
 export type ChatMessageBody =
@@ -543,8 +601,12 @@ export type ChatMessageBody =
       type: 'collaboration_proposal'
       proposalId: number
       pricePerHour: string
-      classTime: string
-      frequencyPerWeek: number
+      classTime?: string
+      frequencyPerWeek?: number
+      trialStartAt?: number | null
+      trialEndAt?: number | null
+      remark?: string | null
+      expireAt?: number | null
       status: CollaborationProposalStatus
       creatorUserId: number
     }

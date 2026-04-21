@@ -18,6 +18,12 @@ public interface CourseEnrollmentMapper {
 
     CourseEnrollment selectLatestByRoomId(@Param("roomId") Long roomId);
 
+    List<CourseEnrollment> listTrialingEnded(@Param("now") LocalDateTime now, @Param("limit") Integer limit);
+
+    List<CourseEnrollment> listWeeklyScheduleDeadlineReached(@Param("now") LocalDateTime now, @Param("limit") Integer limit);
+
+    List<CourseEnrollment> listWeeklyScheduleReminderDue(@Param("now") LocalDateTime now, @Param("limit") Integer limit);
+
     Integer countActiveByRoomId(@Param("roomId") Long roomId);
 
     List<CourseEnrollment> listByTeacher(@Param("teacherUid") Long teacherUid, @Param("offset") long offset, @Param("size") int size);
@@ -30,6 +36,23 @@ public interface CourseEnrollmentMapper {
                      @Param("proposalId") Long proposalId,
                      @Param("trialStartAt") LocalDateTime trialStartAt,
                      @Param("trialEndAt") LocalDateTime trialEndAt);
+
+    int updateStatusAny(@Param("id") Long id,
+                        @Param("nextStatus") String nextStatus);
+
+    int markWeeklyScheduleSubmitted(@Param("id") Long id,
+                                    @Param("expectedStatus") String expectedStatus,
+                                    @Param("classTime") String classTime,
+                                    @Param("frequencyPerWeek") Integer frequencyPerWeek,
+                                    @Param("lessonPrice") String lessonPrice);
+
+    int markTrialPassedWaitingWeeklySchedule(@Param("id") Long id,
+                                             @Param("expectedStatus") String expectedStatus,
+                                             @Param("deadlineAt") LocalDateTime deadlineAt);
+
+    int markWeeklyReminderSent(@Param("id") Long id,
+                               @Param("column") String column,
+                               @Param("sentAt") LocalDateTime sentAt);
 
     int startOnlineCourse(@Param("id") Long id,
                           @Param("expectedStatus") String expectedStatus,

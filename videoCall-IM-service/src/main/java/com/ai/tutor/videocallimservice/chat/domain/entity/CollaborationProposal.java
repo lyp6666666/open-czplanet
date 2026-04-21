@@ -19,6 +19,11 @@ public class CollaborationProposal {
     private String pricePerHour;
     private String classTime;
     private Integer frequencyPerWeek;
+    private LocalDateTime trialStartAt;
+    private LocalDateTime trialEndAt;
+    private String remark;
+    private LocalDateTime expireAt;
+    private String clientRequestId;
     private String status;
     private Long actorUid;
     private LocalDateTime actionTime;

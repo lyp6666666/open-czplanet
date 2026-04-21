@@ -16,6 +16,7 @@ REMOTE_USE_TUNNEL="${REMOTE_USE_TUNNEL:-1}"
 REMOTE_STOP_INFRA="${REMOTE_STOP_INFRA:-0}"
 REMOTE_BROWSER_HOST="${REMOTE_BROWSER_HOST:-$REMOTE_HOST}"
 REMOTE_SYNC_DELETE="${REMOTE_SYNC_DELETE:-1}"
+REMOTE_ADMIN_WEB_BASE_PATH="${REMOTE_ADMIN_WEB_BASE_PATH:-/admin/}"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
@@ -43,6 +44,7 @@ echo "[dev_remote_sync_up] remote USE_TUNNEL=$REMOTE_USE_TUNNEL"
 echo "[dev_remote_sync_up] remote FRONTEND_HOST=$REMOTE_FRONTEND_HOST"
 echo "[dev_remote_sync_up] remote LIVEKIT_WS_URL=$REMOTE_LIVEKIT_WS_URL"
 echo "[dev_remote_sync_up] remote SYNC_DELETE=$REMOTE_SYNC_DELETE"
+echo "[dev_remote_sync_up] remote ADMIN_WEB_BASE_PATH=$REMOTE_ADMIN_WEB_BASE_PATH"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
@@ -60,13 +62,13 @@ ssh -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_HOST}" \
   "cd '$REMOTE_PATH' && STOP_INFRA='$REMOTE_STOP_INFRA' sh scripts/dev_all_down.sh || true"
 
 ssh -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_HOST}" \
-  "cd '$REMOTE_PATH' && MANAGE_INFRA='$REMOTE_MANAGE_INFRA' NACOS_GRPC_CHECK='$REMOTE_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$REMOTE_NACOS_SERVER_ADDR' FRONTEND_HOST='$REMOTE_FRONTEND_HOST' LIVEKIT_WS_URL='$REMOTE_LIVEKIT_WS_URL' sh scripts/dev_all_up.sh"
+  "cd '$REMOTE_PATH' && MANAGE_INFRA='$REMOTE_MANAGE_INFRA' NACOS_GRPC_CHECK='$REMOTE_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$REMOTE_NACOS_SERVER_ADDR' FRONTEND_HOST='$REMOTE_FRONTEND_HOST' LIVEKIT_WS_URL='$REMOTE_LIVEKIT_WS_URL' ADMIN_WEB_BASE_PATH='$REMOTE_ADMIN_WEB_BASE_PATH' sh scripts/dev_all_up.sh"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
     echo "[dev_remote_sync_up] 本地访问："
     echo "  http://localhost:5173"
-    echo "  http://localhost:5174"
+    echo "  http://localhost:5174${REMOTE_ADMIN_WEB_BASE_PATH}"
     echo "  http://localhost:18080"
     echo "  ws://localhost:7880"
     echo "  livekit rtc tcp://localhost:7881"
@@ -74,7 +76,7 @@ case "$REMOTE_USE_TUNNEL" in
   0|false|no)
     echo "[dev_remote_sync_up] 远程直连访问："
     echo "  http://${REMOTE_BROWSER_HOST}:5173"
-    echo "  http://${REMOTE_BROWSER_HOST}:5174"
+    echo "  http://${REMOTE_BROWSER_HOST}:5174${REMOTE_ADMIN_WEB_BASE_PATH}"
     echo "  http://${REMOTE_BROWSER_HOST}:18080"
     echo "  ws://${REMOTE_BROWSER_HOST}:7880"
     echo "[dev_remote_sync_up] 提示：需确保安全组/防火墙已放通 5173/5174/7880/7881 以及 LiveKit UDP 50000-50100。"

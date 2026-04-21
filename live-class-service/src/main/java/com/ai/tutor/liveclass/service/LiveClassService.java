@@ -20,6 +20,8 @@ import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.SyncCourseSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
@@ -61,6 +63,8 @@ public class LiveClassService {
     private LiveKitProperties liveKitProperties;
     @Resource
     private AppointmentInternalFeignClient appointmentInternalFeignClient;
+    @Resource
+    private LiveClassAiService liveClassAiService;
 
     @Transactional
     public LiveSessionResp syncFromCourse(SyncCourseSessionRequest request) {
@@ -111,6 +115,11 @@ public class LiveClassService {
 
     public PrepareLiveSessionResp prepare(Long courseId, Long viewerUid, PrepareLiveSessionRequest request) {
         LiveClassSession session = requireByCourseId(courseId);
+        try {
+            liveClassAiService.ensureRealtimeSession(session);
+        } catch (Exception ignored) {
+            // AI 初始化失败不影响主课堂准备流程
+        }
         String peerName = resolvePeerDisplayName(session, viewerUid);
         boolean joinableNow = joinableNow(session);
         LessonPaymentAccessCheckInfo accessCheck = loadLessonJoinAccess(courseId);
@@ -177,7 +186,13 @@ public class LiveClassService {
     }
 
     public LiveSessionResp status(Long sessionId, Long viewerUid) {
-        return toResp(requireById(sessionId), viewerUid);
+        LiveClassSession session = requireById(sessionId);
+        try {
+            liveClassAiService.ensureRealtimeSession(session);
+        } catch (Exception ignored) {
+            // AI 初始化失败不影响课堂主流程
+        }
+        return toResp(session, viewerUid);
     }
 
     @Transactional
@@ -217,7 +232,30 @@ public class LiveClassService {
         LiveClassSession session = requireParticipantSession(sessionId, uid);
         liveClassSessionMapper.markEnded(sessionId, uid, defaulted(request == null ? null : request.getReason(), "USER_END"), LocalDateTime.now());
         appendEvent(sessionId, "CLASS_ENDED", "APP", uid, request);
+        try {
+            liveClassAiService.finalizeAndNotify(requireById(sessionId), uid);
+            appendEvent(sessionId, "CLASS_AI_FINALIZED", "APP", uid, Map.of("courseId", session.getCourseId()));
+        } catch (Exception ex) {
+            appendEvent(sessionId, "CLASS_AI_FINALIZE_FAILED", "APP", uid, Map.of("courseId", session.getCourseId()));
+        }
         return toResp(requireById(sessionId), uid);
+    }
+
+    public LiveAiStateResp aiState(Long sessionId, Long uid) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        return liveClassAiService.getAiState(session);
+    }
+
+    public LiveAiResultResp aiResult(Long sessionId, Long uid) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        return liveClassAiService.getAiResult(session);
+    }
+
+    public LiveAiResultResp retryAiResult(Long sessionId, Long uid) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        LiveAiResultResp result = liveClassAiService.retryResult(session, uid);
+        appendEvent(sessionId, "CLASS_AI_RETRY", "APP", uid, Map.of("resultStatus", result.getResultStatus()));
+        return result;
     }
 
     public List<LiveTimelineItemResp> timeline(Long sessionId, Long uid) {

@@ -7,6 +7,7 @@ import type { HomeConfigVO, HotWordsVO, SearchSuggestVO } from '@/api/types'
 import { BRAND_NAME } from '@/constants/brand'
 import { useAuthStore } from '@/stores/auth'
 import CitySelectModal from '@/ui/city/CitySelectModal.vue'
+import BrandLogoMark from '@/ui/common/BrandLogoMark.vue'
 import { debounce } from '@/utils/debounce'
 
 const props = defineProps<{
@@ -133,7 +134,10 @@ watch(
   <header class="header">
     <div class="container bar">
       <div class="left">
-        <div class="logo">{{ BRAND_NAME }}</div>
+        <div class="brand-lockup" aria-label="创智星球">
+          <BrandLogoMark class="logo-mark" />
+          <div class="logo">{{ BRAND_NAME }}</div>
+        </div>
 
         <div class="city">
           <button class="city-trigger" type="button" @click="cityModalOpen = true">
@@ -201,7 +205,9 @@ watch(
             <div v-if="userMenuOpen" class="menu card">
               <button class="menu-item" type="button" @click="goMenu('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
               <button class="menu-item" type="button" @click="goMenu(isTeacher ? '/tutor/favorites' : '/student/favorites')">收藏</button>
-              <button class="menu-item" type="button" @click="goMenu('/invite')">邀请有礼</button>
+              <button class="menu-item invite-entry" type="button" @click="goMenu('/invite')">
+                <span class="invite-text">邀请有礼</span>
+              </button>
               <button class="menu-item danger" type="button" @click="logout">退出登录</button>
             </div>
           </div>
@@ -228,7 +234,7 @@ watch(
 
 .bar {
   display: grid;
-  grid-template-columns: 260px 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
   padding: 14px 0;
@@ -237,32 +243,56 @@ watch(
 .left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.logo-mark {
+  width: 74px;
+  height: 36px;
+  flex: 0 0 74px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px rgba(58, 106, 255, 0.18));
 }
 
 .logo {
   font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
   letter-spacing: 0.5px;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .city {
   display: flex;
   align-items: center;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .city-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   font-weight: 900;
   color: var(--text);
+  white-space: nowrap;
 }
 
 .city-trigger:hover {
@@ -452,6 +482,43 @@ watch(
 .menu-item:hover {
   border-color: var(--border);
   background: rgba(255, 255, 255, 0.6);
+}
+
+.invite-entry {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 156, 86, 0.18), rgba(255, 219, 111, 0.1));
+  border-color: rgba(255, 156, 86, 0.22);
+}
+
+.invite-entry::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 18%, rgba(255, 255, 255, 0.72) 50%, transparent 82%);
+  transform: translateX(-140%);
+  transition: transform 420ms ease;
+}
+
+.invite-entry:hover {
+  border-color: rgba(255, 156, 86, 0.4);
+  background: linear-gradient(135deg, rgba(255, 156, 86, 0.24), rgba(255, 219, 111, 0.16));
+}
+
+.invite-entry:hover::after {
+  transform: translateX(140%);
+}
+
+.invite-text {
+  position: relative;
+  z-index: 1;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, #ff7a00, #ff4d4f 52%, #f59e0b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 .menu-item.danger {

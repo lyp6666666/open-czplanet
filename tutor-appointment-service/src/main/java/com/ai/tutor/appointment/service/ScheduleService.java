@@ -1,6 +1,9 @@
 package com.ai.tutor.appointment.service;
 
 import com.ai.tutor.appointment.model.dto.schedule.CreateScheduleEventRequest;
+import com.ai.tutor.appointment.model.dto.schedule.InternalTrialEventRequest;
+import com.ai.tutor.appointment.model.dto.schedule.SubmitWeeklyScheduleRequest;
+import com.ai.tutor.appointment.model.vo.schedule.ScheduleAvailabilityVO;
 import com.ai.tutor.appointment.model.vo.schedule.ScheduleEventVO;
 
 import java.util.List;
@@ -18,6 +21,16 @@ public interface ScheduleService {
     List<ScheduleEventVO> listEvents(Long uid, Long startAtMs, Long endAtMs, boolean includePending);
 
     /**
+     * 查询当前用户与对方在某一天的日程占用，用于试课/改期可视化选择。
+     */
+    ScheduleAvailabilityVO getDayAvailability(Long uid, Long otherUid, Long dateAtMs);
+
+    /**
+     * 校验双方在指定时间段内不存在可视为占用的课程冲突。
+     */
+    void assertNoScheduleConflict(Long uid, Long otherUid, Long startAtMs, Long endAtMs);
+
+    /**
      * 查询某门长期课程下的全部课节。
      */
     List<ScheduleEventVO> listCourseEvents(Long courseId, Long uid);
@@ -26,6 +39,10 @@ public interface ScheduleService {
      * 创建授课申请（创建日程 + 发送授课申请消息）。
      */
     ScheduleEventVO createEvent(CreateScheduleEventRequest request, Long uid);
+
+    Long createAcceptedTrialEvent(InternalTrialEventRequest request);
+
+    List<ScheduleEventVO> submitWeeklySchedule(Long courseId, SubmitWeeklyScheduleRequest request, Long uid);
 
     /**
      * 响应授课申请（接收/拒绝）。

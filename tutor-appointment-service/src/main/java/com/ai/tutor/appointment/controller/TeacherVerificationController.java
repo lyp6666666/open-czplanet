@@ -46,11 +46,7 @@ public class TeacherVerificationController {
             teacherVerificationService.submitRealnameIdPhoto(uid, req.getIdFrontUrl(), req.getIdBackUrl());
             return ResultUtils.success(true);
         }
-        if ("NAME_IDNO".equals(m)) {
-            teacherVerificationService.submitRealnameNameIdno(uid, req.getRealName(), req.getIdNo());
-            return ResultUtils.success(true);
-        }
-        ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "未知提交方式");
+        ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "实名认证仅支持上传身份证正反面图片");
         return ResultUtils.success(false);
     }
 }

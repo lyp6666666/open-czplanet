@@ -5,6 +5,7 @@ defineProps<{
   phone: string
   loading: boolean
   error: string | null
+  note?: string
 }>()
 
 const emit = defineEmits<{
@@ -35,6 +36,7 @@ function close() {
           <span class="k">手机号</span>
           <span class="v">{{ phone || '-' }}</span>
         </div>
+        <div v-if="note" class="note">{{ note }}</div>
       </div>
     </div>
   </div>
@@ -111,5 +113,10 @@ function close() {
 .v {
   font-weight: 800;
 }
-</style>
 
+.note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+</style>

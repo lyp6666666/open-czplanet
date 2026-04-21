@@ -111,4 +111,11 @@
             update_time = NOW(3)
         WHERE id = #{id}
     </update>
+
+    <update id="updateExtraJsonById">
+        UPDATE live_class_session
+        SET extra_json = #{extraJson},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
 </mapper>

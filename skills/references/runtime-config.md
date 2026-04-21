@@ -1,122 +1,140 @@
-# Runtime And Config
+# 运行与配置
 
-Use this reference when work touches startup, remote testing, Nacos, environment variables, or "where does this config come from?" questions.
+当任务涉及启动、远程测试、Nacos、环境变量，或“这个配置到底从哪来”之类的问题时，请使用这份参考。
 
-## Current Shared Environment
+## 当前共享环境
 
-- Shared remote dev/test server:
+- 共享远程开发/测试服务器：
   `root@111.228.20.88`
-- Shared domain/callback proxy server:
+- 共享域名/回调代理服务器：
   `root@111.229.64.41`
-- Remote repo path:
+- 远程仓库路径：
   `/opt/ai-platform`
-- Current shared Nacos host:
+- 当前共享中间件宿主机：
+  `111.228.20.88`
+- 当前共享 MinIO：
+  容器 `minio`，服务端 API `127.0.0.1:9000`，bucket `ai-tutor-assets`
+- 当前共享 Nacos：
   `111.228.20.88:8848`
-- Current namespaces:
+- 当前 namespaces：
   `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`
   `prod=44cf681d-9f93-443e-aa9e-ba6ec8f721d5`
-- Day-to-day work should assume `dev` unless the user explicitly says `prod`
+- 日常工作默认使用 `dev`，除非用户明确指定 `prod`
 
-## How The Project Usually Runs
+## 项目通常如何运行
 
-### Local
+### 本地
 
-- Preferred entry:
+- 推荐入口：
   `bash scripts/dev_local_up.sh`
-- Local stop:
+- 本地停止：
   `bash scripts/dev_local_down.sh`
-- Real work happens inside `scripts/dev_all_up.sh`
-- Default local behavior:
+- 真正的启动核心逻辑在 `scripts/dev_all_up.sh`
+- 本地默认行为：
   `MANAGE_INFRA=auto`
   `SPRING_PROFILES_ACTIVE=dev`
-  prefer local Nacos `127.0.0.1:8848`
-  if local Nacos is unavailable, auto-open a local Nacos SSH tunnel and switch to `127.0.0.1:18848`
+  优先使用本地 Nacos `127.0.0.1:8848`
+  如果本地 Nacos 不可用，则自动打开本地 Nacos SSH 隧道并切换到 `127.0.0.1:18848`
 
-### Shared Remote Server
+### 共享远程服务器
 
-- Preferred remote wrapper from laptop:
+- 从笔记本发起的推荐远程启动方式：
   `bash scripts/dev_remote_up.sh`
-- Preferred remote stop from laptop:
+- 从笔记本发起的推荐远程停止方式：
   `bash scripts/dev_remote_down.sh`
-- Current remote defaults:
+- 当前远程默认值：
   `REMOTE_MANAGE_INFRA=never`
   `REMOTE_NACOS_SERVER_ADDR=127.0.0.1:8848`
   `REMOTE_NACOS_GRPC_CHECK=warn`
   `REMOTE_USE_TUNNEL=1`
-- This means the server is expected to have always-on middleware already running, while app processes are started from the repo checkout
-- In the current payment-callback topology, `111.228.20.88` is still the real app/middleware host
+- 这意味着：服务器上的中间件应已长期运行，而应用进程则从仓库副本中启动
+- 在当前支付回调拓扑下，`111.228.20.88` 仍然是真正承载应用和中间件的主机
+- 除非用户明确说明不是，否则远程测试默认认为 MinIO、MySQL、Redis、RabbitMQ、Nacos、Prometheus、Grafana 都在这台共享服务器上
 
-### Directly On The Server
+### 直接在服务器上
 
-- Common start:
+- 常见启动方式：
   `cd /opt/ai-platform && MANAGE_INFRA=never sh scripts/dev_all_up.sh`
-- Common stop:
+- 常见停止方式：
   `cd /opt/ai-platform && STOP_INFRA=0 sh scripts/dev_all_down.sh`
-- Use `MANAGE_INFRA=auto` only when the server really should let repo scripts manage middleware containers too
-- For current shared payment testing on `111.228.20.88`, the more explicit start is:
+- 只有当服务器确实应该由仓库脚本管理中间件时，才用 `MANAGE_INFRA=auto`
+- 对于当前 `111.228.20.88` 上的共享支付测试，更明确的启动命令是：
   `cd /opt/ai-platform && MANAGE_INFRA=never FRONTEND_HOST=0.0.0.0 NACOS_SERVER_ADDR=127.0.0.1:8848 sh scripts/dev_local_up.sh`
 
-### Domain Callback Proxy Server
+### 域名回调代理服务器
 
-- `111.229.64.41` only runs `nginx`
-- `huoyue.online` should resolve to `111.229.64.41`
-- This host is used for public payment callback ingress, not as the main app runtime
-- `/payment/notify/*` and `/payment/return/*` proxy to `111.228.20.88`
-- Root `/` intentionally returns a small probe string instead of the app frontend
+- `111.229.64.41` 只运行 `nginx`
+- `huoyue.online` 应解析到 `111.229.64.41`
+- 这台主机只用于公网支付回调入口，不是主应用运行环境
+- `/payment/notify/*` 和 `/payment/return/*` 都代理到 `111.228.20.88`
+- 根路径 `/` 会有意返回一个很小的探活字符串，而不是应用前端
 
-## What `dev_all_up.sh` Starts
+## `dev_all_up.sh` 会启动什么
 
-- Gateway:
-  `ai-tutor-gateway` on `18080`
-- Appointment/user service:
-  `tutor-appointment-service` on `18081`
-- IM/chat/collaboration service:
-  `videoCall-IM-service` on `18082`
-- Payment service:
-  `payment-service` on `18083`
-- Admin backend:
-  `ai-tutor-admin` on `18084`
-- User web:
-  `ai-tutor-web` on `5173`
-- Admin web:
-  `ai-tutor-admin-web` on `5174`
+- Gateway：
+  `ai-tutor-gateway`，端口 `18080`
+- Appointment / 用户服务：
+  `tutor-appointment-service`，端口 `18081`
+- IM / 聊天 / 合作服务：
+  `videoCall-IM-service`，端口 `18082`
+- Payment 服务：
+  `payment-service`，端口 `18083`
+- 管理后端：
+  `ai-tutor-admin`，端口 `18084`
+- 用户端 Web：
+  `ai-tutor-web`，端口 `5173`
+- 管理端 Web：
+  `ai-tutor-admin-web`，端口 `5174`
 
-Runtime artifacts:
+运行产物：
 
-- logs:
+- 日志：
   `.logs/*.log`
-- pid files:
+- pid 文件：
   `.pids/*.pid`
 
-## Startup Decision Rules That Matter
+## 共享远程 MinIO
 
-- The wrapper scripts are safer than calling `dev_all_up/down` blindly
-- `dev_local_up.sh` is for laptop-style development
-- `dev_remote_up.sh` is for "start on server, browse locally" development
-- `dev_all_up.sh` is the shared engine and can now be run directly on either local machine or server
-- Remote wrapper syncs key startup scripts and `common.md` to the server before starting
-- If remote behavior differs from local code, suspect sync drift first
+- MinIO 运行在 `111.228.20.88` 上，对应 Docker 容器 `minio`
+- 服务端 API 端口是 `127.0.0.1:9000`；Console 是 `127.0.0.1:9001`
+- 项目 bucket 是 `ai-tutor-assets`
+- 通过应用网关对外暴露的公共资源路径是 `/api/v1/public/assets/{objectKey}`
+- 当前品牌 logo 资源对象位于：
+  `brand/logo-icon.svg`
+  `brand/favicon.svg`
+- 从远程服务器上验证时，优先使用：
+  `curl -I http://127.0.0.1:18080/api/v1/public/assets/brand/logo-icon.svg`
+- 不要依赖笔记本直接访问 `111.228.20.88:9000` 或 `111.228.20.88:18080`；即使服务器自身服务健康，这些端口也可能对笔记本不可达
 
-## Config Source Of Truth
+## 启动决策规则
 
-For backend services, runtime config comes from four layers:
+- Wrapper 脚本比直接调用 `dev_all_up/down` 更安全
+- `dev_local_up.sh` 用于偏本地开发的场景
+- `dev_remote_up.sh` 用于“在服务器启动、在本地浏览器访问”的场景
+- `dev_all_up.sh` 是共享引擎，现在既可以在本机直接跑，也可以在服务器直接跑
+- 远程 wrapper 会在启动前把关键启动脚本和 `common.md` 同步到服务器
+- 如果远程表现和本地代码不一致，先怀疑同步漂移
 
-1. Environment variables
-2. Nacos imported by each service `application.yml`
-3. Optional local fallback files where present
-4. In-code defaults inside `@ConfigurationProperties` or `@Value`
+## 配置来源的真实顺序
 
-Important consequence:
+对后端服务来说，运行时配置来自四层：
 
-- When debugging a missing config, do not only inspect Nacos
-- also inspect env vars passed by startup scripts
-- and check whether code has a fallback default that hides the real issue
+1. 环境变量
+2. 各服务 `application.yml` 导入的 Nacos 配置
+3. 某些服务存在的本地可选回退文件
+4. 代码中的 `@ConfigurationProperties` 或 `@Value` 默认值
 
-## Nacos Import Chain By Service
+一个重要结论：
+
+- 排查“配置缺失”时，不要只看 Nacos
+- 还要检查启动脚本传入的环境变量
+- 以及代码里是否有默认值掩盖了真正的问题
+
+## 各服务的 Nacos 导入链
 
 ### `ai-tutor-gateway`
 
-Imports in order:
+按顺序导入：
 
 - `ai-tutor-common.yaml`
 - `ai-tutor-common-${spring.profiles.active}.yaml`
@@ -125,7 +143,7 @@ Imports in order:
 
 ### `tutor-appointment-service`
 
-Imports in order:
+按顺序导入：
 
 - `ai-tutor-common.yaml`
 - `ai-tutor-common-${spring.profiles.active}.yaml`
@@ -135,12 +153,12 @@ Imports in order:
 - `ai-tutor-sms-${spring.profiles.active}.yaml`
 - `tutor-appointment-service.yaml`
 - `tutor-appointment-service-${spring.profiles.active}.yaml`
-- optional fallback file `./.private/tutor-appointment-service.yml`
-- optional fallback file `../.private/tutor-appointment-service.yml`
+- 可选回退文件 `./.private/tutor-appointment-service.yml`
+- 可选回退文件 `../.private/tutor-appointment-service.yml`
 
 ### `videoCall-IM-service`
 
-Imports in order:
+按顺序导入：
 
 - `ai-tutor-common.yaml`
 - `ai-tutor-common-${spring.profiles.active}.yaml`
@@ -151,7 +169,7 @@ Imports in order:
 
 ### `payment-service`
 
-Imports in order:
+按顺序导入：
 
 - `ai-tutor-common.yaml`
 - `ai-tutor-common-${spring.profiles.active}.yaml`
@@ -162,45 +180,45 @@ Imports in order:
 
 ### `ai-tutor-admin`
 
-Imports in order:
+按顺序导入：
 
 - `ai-tutor-common.yaml`
 - `ai-tutor-common-${spring.profiles.active}.yaml`
 - `ai-tutor-admin.yaml`
 - `ai-tutor-admin-${spring.profiles.active}.yaml`
 
-## High-Value DataIds To Check First
+## 优先排查的高价值 DataId
 
-In the shared `dev` namespace, these are the usual first stops:
+在共享 `dev` namespace 中，下面这些通常是第一优先级：
 
 - `ai-tutor-common-dev.yaml`
-  shared JWT, gateway sign, MinIO, upload, dev toggles
+  共享 JWT、网关签名、MinIO、上传、开发开关
 - `ai-tutor-gateway-dev.yaml`
-  gateway jwt/sign config
+  网关 JWT / 签名配置
 - `ai-tutor-home-dev.yaml`
-  homepage guest content and operating config
+  首页游客内容和运营配置
 - `ai-tutor-sms-dev.yaml`
-  SMS provider switches and Spug token
+  短信供应商开关和 Spug token
 - `tutor-appointment-service-dev.yaml`
-  appointment-only switches, miniapp config
+  appointment 服务独有开关、小程序配置
 - `videoCall-IM-service-dev.yaml`
-  brokerage amount, admin token, payment gating, MQ
+  佣金金额、管理员 token、支付开关、MQ
 - `ai-tutor-payment-dev.yaml`
-  payment provider keys, notify URL, return URL, payment enable switch
+  支付平台 key、notify URL、return URL、支付启用开关
 - `payment-service-dev.yaml`
-  payment retry and service-local payment settings
+  支付重试与服务本地支付配置
 - `ai-tutor-admin-dev.yaml`
-  admin-only dynamic flags
+  管理端动态开关
 
-Template source for these lives in:
+这些模板文件位于：
 
 - `docs/nacos/templates/*.yaml`
 
-When the user asks "what should I fill into Nacos?", start from the matching template before reading code.
+当用户问“这个 Nacos 该填什么”时，先从对应模板开始看，再决定是否继续读代码。
 
-### Current Payment Values Worth Rechecking First
+### 当前最值得先复查的支付配置
 
-In `ai-tutor-payment-dev.yaml`, the high-value live fields are:
+在 `ai-tutor-payment-dev.yaml` 中，最关键的线上字段有：
 
 - `payment.enabled`
 - `alipay.notifyUrl`
@@ -209,24 +227,24 @@ In `ai-tutor-payment-dev.yaml`, the high-value live fields are:
 - `yungouos.return-url`
 - `yungouos.return-page-url`
 
-Current shared remote payment testing expects:
+当前共享远程支付测试预期值：
 
 - `yungouos.notify-url: http://huoyue.online/payment/notify/yungouos`
 - `yungouos.return-url: http://huoyue.online/payment/return/yungouos`
 
-Note:
+说明：
 
-- `return-page-url` may still point at the business host frontend
-- async callback correctness should be judged from logs first, not only from where the browser lands
+- `return-page-url` 目前仍可能指向业务主机前端
+- 判断异步支付回调是否正确时，优先看日志，不要只看浏览器最终落在哪个页面
 
-## How To Find What A Config Key Means
+## 如何确定一个配置键是什么意思
 
-Start from the binding point in code:
+从代码里的绑定点开始看：
 
 - `@ConfigurationProperties(prefix = "...")`
 - `@Value("${...}")`
 
-Useful examples already in repo:
+仓库里已有的一些常见示例：
 
 - `jwt.*`
   `tutor-appointment-service/.../config/JwtProperties.java`
@@ -249,17 +267,17 @@ Useful examples already in repo:
   `tutor-appointment-service/.../config/SmsProperties.java`
   `tutor-appointment-service/.../config/SmsSpugProperties.java`
 
-Fast grep:
+快速 grep：
 
 ```bash
 rg -n "@ConfigurationProperties|@Value\\(" tutor-appointment-service videoCall-IM-service payment-service ai-tutor-admin ai-tutor-gateway ai-tutor-common
 ```
 
-## How To Read The Effective Runtime Config
+## 如何读取真正生效的运行时配置
 
-### 1. Confirm Which Namespace And Nacos Address Are In Use
+### 1. 先确认当前用了哪个 namespace 和 Nacos 地址
 
-Check startup output from `dev_all_up.sh`:
+查看 `dev_all_up.sh` 的启动输出：
 
 - `profile=...`
 - `nacos.server-addr=...`
@@ -267,61 +285,61 @@ Check startup output from `dev_all_up.sh`:
 - `nacos.config.namespace=...`
 - `nacos.discovery.namespace=...`
 
-These lines are the quickest truth source for current startup mode.
+这些行是判断当前启动模式最快的真相来源。
 
-### 2. Confirm Which DataIds Were Actually Loaded
+### 2. 确认哪些 DataId 实际被加载了
 
-Use:
+执行：
 
 ```bash
 bash scripts/verify_nacos_effect.sh
 ```
 
-or inspect logs for:
+或者查看日志里这些内容：
 
 - `[Nacos Config] Load config[dataId=...]`
 - `[Nacos Config] Listening config: ...`
 
-If the expected DataId is missing from logs, the problem is usually one of:
+如果预期的 DataId 没出现在日志里，通常是以下原因之一：
 
-- wrong namespace
-- wrong Nacos address
-- missing DataId in Nacos
-- service never reached the config import stage because it failed earlier
+- namespace 错了
+- Nacos 地址错了
+- Nacos 里缺少对应 DataId
+- 服务在进入配置导入阶段之前就已经失败退出
 
-### 3. Inspect The Template And Compare With Live Nacos
+### 3. 看模板，再和线上 Nacos 对比
 
-Template values live in:
+模板值位于：
 
 - `docs/nacos/templates/*.yaml`
 
-The live value should be checked in the Nacos console under the active namespace, usually `dev`.
+线上值应在 Nacos 控制台里、当前启用的 namespace 下核对，通常是 `dev`。
 
-### 4. Inspect In-Code Defaults Before Assuming A Config Was Applied
+### 4. 在断言“配置没生效”前，先看代码默认值
 
-Some keys have direct defaults in code, for example:
+有些键在代码里有直接默认值，例如：
 
 - `brokerage.info-fee.unified.enabled:false`
 - `brokerage.info-fee.unified.amount-fen:19900`
 - `rocketmq.name-server:127.0.0.1:9876`
 - `tutor-application.skip-payment-check:false`
 
-If behavior does not match Nacos, confirm whether code is falling back to a default.
+如果系统行为和 Nacos 不一致，要先确认是不是落回了代码默认值。
 
-## Nacos And Remote Middleware Pitfalls
+## Nacos 与远程中间件的坑点
 
-- Nacos 2.x needs gRPC ports as well as HTTP
-- for same-host Java services, `127.0.0.1:8848` plus reachable `9848/9849` is the important path
-- mapping only `8848` in Docker can make HTTP look fine while Java config/discovery still fails
-- on the shared server, keep middleware long-running and start app processes with `MANAGE_INFRA=never`
+- Nacos 2.x 需要 gRPC 端口，不只是 HTTP 端口
+- 对同机 Java 服务来说，关键路径是 `127.0.0.1:8848` 加上可达的 `9848/9849`
+- Docker 里如果只映射 `8848`，HTTP 看起来正常，但 Java 侧配置/注册发现仍可能失败
+- 在共享服务器上，应保持中间件常驻，而应用进程使用 `MANAGE_INFRA=never` 启动
 
-## Practical Recovery Checklist
+## 实战恢复检查清单
 
-When a service "starts then dies" on the server:
+当某个服务在服务器上“启动后又挂掉”时：
 
-1. read `.logs/<service>.log`
-2. run `bash scripts/verify_nacos_effect.sh`
-3. confirm `127.0.0.1:8848`, `9848`, `9849` reachability on the server
-4. confirm the expected `*-dev.yaml` exists in the `dev` namespace
-5. grep the matching config class or `@Value` consumer in code
-6. only after that decide whether the issue is Nacos, DB, Redis, MQ, MinIO, or business logic
+1. 查看 `.logs/<service>.log`
+2. 执行 `bash scripts/verify_nacos_effect.sh`
+3. 确认服务器上 `127.0.0.1:8848`、`9848`、`9849` 可达
+4. 确认预期的 `*-dev.yaml` 存在于 `dev` namespace
+5. grep 对应配置类或 `@Value` 消费点
+6. 只有做完这些之后，再去判断问题到底是 Nacos、DB、Redis、MQ、MinIO 还是业务逻辑

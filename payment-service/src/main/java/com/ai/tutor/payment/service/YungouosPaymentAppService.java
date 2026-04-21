@@ -176,6 +176,24 @@ public class YungouosPaymentAppService {
         return toStatusResponse(order);
     }
 
+    public PaymentOrderStatusResponse mockPaySuccessForE2e(String orderNo) {
+        ThrowUtils.throwIf(!StringUtils.hasText(orderNo), ErrorCode.PARAMS_ERROR);
+        String normalized = orderNo.trim();
+        PaymentOrder order = paymentOrderService.getByOrderNo(normalized);
+        ThrowUtils.throwIf(order == null, ErrorCode.NOT_FOUND_ERROR);
+
+        // 中文注释：仅供 dev/qa/test E2E 使用，模拟第三方支付成功后仍走真实业务完结逻辑。
+        paymentOrderService.updateSuccessFromProviderQuery(
+                normalized,
+                "MOCK_E2E_TX_" + normalized,
+                "MOCK_E2E_PROVIDER_" + normalized,
+                LocalDateTime.now()
+        );
+        PaymentOrder latest = paymentOrderService.getByOrderNo(normalized);
+        tryFinalizeBusiness(latest);
+        return toStatusResponse(latest == null ? order : latest);
+    }
+
     public String handleNotify(HttpServletRequest request) {
         if (Boolean.FALSE.equals(paymentProperties.getEnabled())) {
             return "SUCCESS";

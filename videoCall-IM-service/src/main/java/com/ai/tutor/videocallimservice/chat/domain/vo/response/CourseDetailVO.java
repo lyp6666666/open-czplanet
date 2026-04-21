@@ -49,4 +49,10 @@ public class CourseDetailVO {
 
     @Schema(description = "试课结束时间")
     private LocalDateTime trialEndAt;
+
+    @Schema(description = "正式固定课表提交截止时间（试课结束后24小时）")
+    private LocalDateTime weeklyScheduleDeadlineAt;
+
+    @Schema(description = "正式固定课表提交时间")
+    private LocalDateTime weeklyScheduleSubmittedAt;
 }

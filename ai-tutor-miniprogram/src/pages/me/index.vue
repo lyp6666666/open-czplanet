@@ -16,6 +16,14 @@
           <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
         </view>
 
+        <view class="action-item" @click="goToEmailSettings">
+          <view>
+            <text>邮箱提醒</text>
+            <text class="sub">接收消息、开课提醒和课后总结</text>
+          </view>
+          <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
+        </view>
+
         <view class="action-item" @click="handleLogout">
           <text style="color: #dd524d;">退出登录</text>
         </view>
@@ -80,6 +88,10 @@ const handleSwitchRole = () => {
 
 const goToMyJobs = () => {
   uni.navigateTo({ url: '/pages/my-jobs/index' });
+};
+
+const goToEmailSettings = () => {
+  uni.navigateTo({ url: '/pages/account/email' });
 };
 </script>
 
@@ -146,6 +158,13 @@ const goToMyJobs = () => {
       border-bottom: 1px solid rgba(31, 35, 41, 0.08);
       font-size: 14px;
       color: #1f2329;
+
+      .sub {
+        display: block;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #8f959e;
+      }
       
       &:last-child {
         border-bottom: none;

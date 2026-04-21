@@ -53,6 +53,18 @@ public class SystemMsgReq {
     @Schema(description = "上课频次（每周次数）")
     private Integer frequencyPerWeek;
 
+    @Schema(description = "试课开始时间（毫秒时间戳）")
+    private Long trialStartAt;
+
+    @Schema(description = "试课结束时间（毫秒时间戳）")
+    private Long trialEndAt;
+
+    @Schema(description = "备注")
+    private String remark;
+
+    @Schema(description = "过期时间（毫秒时间戳）")
+    private Long expireAt;
+
     @Schema(description = "合作提案id（部分系统消息使用）")
     private Long proposalId;
 
@@ -73,4 +85,7 @@ public class SystemMsgReq {
 
     @Schema(description = "授课形式（线上/线下）")
     private String teachingMode;
+
+    @Schema(description = "报告状态（课堂 AI 结果消息使用）")
+    private String reportStatus;
 }

@@ -43,7 +43,10 @@ const mocks = vi.hoisted(() => ({
   sendImage: vi.fn(),
   recallMessage: vi.fn(),
   createEvent: vi.fn(),
+  dayAvailability: vi.fn(),
   unlockContact: vi.fn(),
+  courseByRoom: vi.fn(),
+  getDemandView: vi.fn(),
 }))
 
 vi.mock('@/api/assets', () => ({
@@ -66,8 +69,6 @@ vi.mock('@/api/chat', () => ({
     sendImage: mocks.sendImage,
     recallMessage: mocks.recallMessage,
     requestBrokerageRefund: vi.fn(),
-    requestEndChat: vi.fn(),
-    respondEndChat: vi.fn(),
     createCollaborationProposal: vi.fn(),
     updateCollaborationProposal: vi.fn(),
     respondCollaborationProposal: vi.fn(),
@@ -77,6 +78,18 @@ vi.mock('@/api/chat', () => ({
 vi.mock('@/api/contact', () => ({
   contactApi: {
     unlock: mocks.unlockContact,
+  },
+}))
+
+vi.mock('@/api/course', () => ({
+  courseApi: {
+    byRoom: mocks.courseByRoom,
+  },
+}))
+
+vi.mock('@/api/jobs', () => ({
+  jobsApi: {
+    getDemandView: mocks.getDemandView,
   },
 }))
 
@@ -91,6 +104,7 @@ vi.mock('@/api/application', () => ({
 vi.mock('@/api/schedule', () => ({
   scheduleApi: {
     createEvent: mocks.createEvent,
+    dayAvailability: mocks.dayAvailability,
     respond: vi.fn(),
   },
 }))
@@ -98,7 +112,29 @@ vi.mock('@/api/schedule', () => ({
 vi.mock('@/api/user', () => ({
   userApi: {
     batch: mocks.batch,
-    me: vi.fn(),
+    me: vi.fn(async () => ({
+      id: 2001,
+      name: '学生2001',
+      phone: '13800138000',
+      avatar: '',
+      sex: 2,
+      userType: 2,
+      studentProfile: {
+        id: 1,
+        userId: 2001,
+        realName: '学生2001',
+        age: 18,
+        childAge: 18,
+        address: '',
+        demandDescription: '',
+        budget: '',
+        status: 1,
+        createTime: '2026-04-18T10:00:00',
+        updateTime: '2026-04-18T10:00:00',
+      },
+      teacherProfile: null,
+      organizationProfile: null,
+    })),
   },
 }))
 
@@ -132,6 +168,8 @@ function createTestRouter() {
     routes: [
       { path: '/chat/:roomId', name: 'chatRoom', component: ChatRoomPage },
       { path: '/pay/cashier', name: 'cashierPay', component: { template: '<div>cashier</div>' } },
+      { path: '/courses/:courseId/ai-summary', name: 'lessonAiSummary', component: { template: '<div>lesson-ai-summary</div>' } },
+      { path: '/tutor/jobs/:id', name: 'tutorJobDetail', component: { template: '<div>job-detail</div>' } },
     ],
   })
 }
@@ -176,14 +214,88 @@ async function mountChatRoomPage() {
         BrokerageRequiredCard: { template: '<div />' },
         CollaborationProposalCard: { template: '<div />' },
         CollaborationProposalModal: { template: '<div />' },
-        ContactUnlockedCard: { template: '<div />' },
+        ContactUnlockedCard: {
+          props: ['canView'],
+          emits: ['view'],
+          template:
+            '<button v-if="canView" class="contact-unlocked-trigger" type="button" @click="$emit(\'view\')">查看对方的联系方式</button>',
+        },
         LessonRequestCard: {
           props: ['body'],
           template: '<div class="lesson-request-stub">授课申请 {{ body?.title }}</div>',
         },
         TutorApplicationCard: { template: '<div />' },
         UnlockedContactModal: { template: '<div />' },
-        UserCardModal: { template: '<div />' },
+        UserCardModal: {
+          props: ['open', 'uid', 'unlockedContactPhone'],
+          template:
+            '<div v-if="open" class="user-card-modal-stub">用户卡片 {{ uid }} <span class="user-card-contact">{{ unlockedContactPhone }}</span></div>',
+        },
+      },
+    },
+  })
+  mountedWrappers.push(wrapper)
+  await flushPromises()
+  return { pinia, wrapper }
+}
+
+async function mountChatRoomPageAt(path: string) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  mountedPinia.push(pinia)
+  const auth = useAuthStore(pinia)
+  auth.me = {
+    id: 2001,
+    name: '学生2001',
+    phone: '13800138000',
+    avatar: '',
+    sex: 2,
+    userType: 2,
+    studentProfile: {
+      id: 1,
+      userId: 2001,
+      realName: '学生2001',
+      age: 18,
+      childAge: 18,
+      address: '',
+      demandDescription: '',
+      budget: '',
+      status: 1,
+      createTime: '2026-04-18T10:00:00',
+      updateTime: '2026-04-18T10:00:00',
+    },
+    teacherProfile: null,
+    organizationProfile: null,
+  }
+
+  const router = createTestRouter()
+  await router.push(path)
+  await router.isReady()
+
+  const wrapper = mount(ChatRoomPage, {
+    global: {
+      plugins: [pinia, router],
+      stubs: {
+        BrokerageRequiredCard: { template: '<div />' },
+        CollaborationProposalCard: { template: '<div />' },
+        CollaborationProposalModal: { template: '<div />' },
+        ContactUnlockedCard: {
+          props: ['canView'],
+          emits: ['view'],
+          template:
+            '<button v-if="canView" class="contact-unlocked-trigger" type="button" @click="$emit(\'view\')">查看对方的联系方式</button>',
+        },
+        LessonRequestCard: {
+          props: ['body'],
+          template: '<div class="lesson-request-stub">授课申请 {{ body?.title }}</div>',
+        },
+        TutorApplicationCard: { template: '<div />' },
+        UnlockedContactModal: { template: '<div />' },
+        UserCardModal: {
+          props: ['open', 'uid', 'unlockedContactPhone'],
+          template:
+            '<div v-if="open" class="user-card-modal-stub">用户卡片 {{ uid }} <span class="user-card-contact">{{ unlockedContactPhone }}</span></div>',
+        },
       },
     },
   })
@@ -242,6 +354,8 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.recallMessage.mockReset()
     mocks.createEvent.mockReset()
     mocks.unlockContact.mockReset()
+    mocks.courseByRoom.mockReset()
+    mocks.getDemandView.mockReset()
 
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -291,6 +405,42 @@ describe('ChatRoomPage realtime read receipt', () => {
       ],
     })
     mocks.batchPresence.mockResolvedValue([{ uid: 3001, online: true, lastOnlineAt: null }])
+    mocks.courseByRoom.mockRejectedValue(new Error('no course'))
+    mocks.getDemandView.mockResolvedValue({
+      id: 99,
+      parentId: 2001,
+      subjectId: 1,
+      subjectName: '初中数学',
+      subjectIsOther: 0,
+      title: '初二数学线下提分',
+      description: '想找老师补基础',
+      studentGender: 'male',
+      gradeCode: 'JUNIOR',
+      availableTime: '',
+      teacherGenderPreference: 'both',
+      teacherRequirementDetail: '',
+      childAge: 13,
+      classMode: 'offline',
+      city: '北京',
+      address: '',
+      frequencyPerWeek: 2,
+      budgetMin: '180',
+      budgetMax: '260',
+      stageCode: 'JUNIOR',
+      educationRequirement: 'UNLIMITED',
+      publisherIdentity: 'PARENT',
+      schedule: '',
+      bizStatus: 1,
+      status: 1,
+      createTime: '2026-04-18T10:00:00',
+      updateTime: '2026-04-18T10:00:00',
+      publisher: {
+        uid: 2001,
+        displayName: '家长',
+        avatar: null,
+        identityLabel: '家长',
+      },
+    })
     mocks.ackRead.mockResolvedValue({ roomId: 10, lastReadMsgId: 501 })
     mocks.ackDelivered.mockResolvedValue(true)
     mocks.reportTyping.mockResolvedValue(true)
@@ -344,6 +494,14 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.unlockContact.mockResolvedValue({
       uid: 3001,
       phone: '13800138001',
+    })
+    mocks.courseByRoom.mockResolvedValue({
+      courseId: 66,
+      applicationId: 501,
+      roomId: 10,
+      teacherUid: 3001,
+      studentUid: 2001,
+      liveSessionId: 888,
     })
   })
 
@@ -812,6 +970,93 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(wrapper.text()).not.toContain('请求数据不存在')
   })
 
+  it('renders the updated unlocked contact action copy', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: { type: 'contact_unlocked', proposalId: 88, orderId: 9, status: 'PAID' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    expect(wrapper.find('.contact-unlocked-trigger').text()).toBe('查看对方的联系方式')
+  })
+
+  it('opens unlocked contact even when route query misses otherUid', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: { type: 'contact_unlocked', proposalId: 88, orderId: 9, status: 'PAID' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPageAt('/chat/10')
+    await flushPromises()
+
+    await wrapper.find('.contact-unlocked-trigger').trigger('click')
+    await flushPromises()
+
+    expect(mocks.unlockContact).toHaveBeenCalledWith(10, 3001)
+  })
+
+  it('loads unlocked contact into the peer avatar card after contact access is opened', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: { type: 'contact_unlocked', proposalId: 88, orderId: 9, status: 'PAID' },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 801,
+            roomId: 10,
+            sendTime: '2026-04-18T10:06:00',
+            body: { type: 'text', content: '线下见面前先电话沟通一下' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    const peerAvatarButton = wrapper.find('.avatar.clickable')
+    expect(peerAvatarButton.exists()).toBe(true)
+    await peerAvatarButton.trigger('click')
+    await flushPromises()
+
+    expect(mocks.unlockContact).toHaveBeenCalledWith(10, 3001)
+    expect(wrapper.find('.user-card-contact').text()).toContain('13800138001')
+  })
+
   it('renders image messages from history', async () => {
     mocks.listMessages.mockResolvedValue({
       cursor: null,
@@ -1035,7 +1280,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(divider.text()).toContain('21:00')
   })
 
-  it('creates a lesson request directly from the chat composer area', async () => {
+  it('does not expose direct lesson booking action in chat composer area', async () => {
     mocks.listMessages.mockResolvedValue({
       cursor: null,
       isLast: true,
@@ -1055,24 +1300,318 @@ describe('ChatRoomPage realtime read receipt', () => {
     const { wrapper } = await mountChatRoomPage()
 
     const openButton = wrapper.find('.schedule-action')
-    expect(openButton.exists()).toBe(true)
+    expect(openButton.exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('发起线上约课')
+  })
 
-    await openButton.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('发起线上约课')
-
-    const titleInput = wrapper.find('.schedule-modal .ipt')
-    await titleInput.setValue('初二数学冲刺课')
-    await wrapper.find('.schedule-modal .btn.btn-primary').trigger('click')
-    await flushPromises()
-
-    expect(mocks.createEvent).toHaveBeenCalledTimes(1)
-    expect(mocks.createEvent.mock.calls[0]?.[0]).toMatchObject({
-      title: '初二数学冲刺课',
-      participantUserId: 3001,
+  it('auto opens unlocked contact only once after offline collaboration accepted', async () => {
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:58:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 9,
+              content: '线下试课',
+              status: 'ACCEPTED',
+              creatorUserId: 2001,
+              contextType: 'TUTOR',
+              contextId: 88,
+              teachingMode: 'OFFLINE',
+            },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 501,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: { type: 'collaboration_status', proposalId: 21, status: 'ACCEPTED', actorUserId: 3001 },
+          },
+        },
+      ],
     })
-    expect(wrapper.text()).toContain('授课申请')
-    expect(wrapper.text()).toContain('初二数学冲刺课')
+
+    await mountChatRoomPage()
+    await flushPromises()
+
+    expect(mocks.unlockContact).toHaveBeenCalledTimes(1)
+    expect(localStorage.getItem('ai_tutor_contact_auto_shown:2001:10')).toBe('1')
+  })
+
+  it('does not auto open unlocked contact again after refresh when already shown', async () => {
+    localStorage.setItem('ai_tutor_contact_auto_shown:2001:10', '1')
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 500,
+            roomId: 10,
+            sendTime: '2026-04-18T09:58:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 9,
+              content: '线下试课',
+              status: 'ACCEPTED',
+              creatorUserId: 2001,
+              contextType: 'TUTOR',
+              contextId: 88,
+              teachingMode: 'OFFLINE',
+            },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 501,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: { type: 'collaboration_status', proposalId: 21, status: 'ACCEPTED', actorUserId: 3001 },
+          },
+        },
+      ],
+    })
+
+    await mountChatRoomPage()
+    await flushPromises()
+
+    expect(mocks.unlockContact).not.toHaveBeenCalled()
+  })
+
+  it('renders lesson ai result card and opens summary route', async () => {
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 880,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: {
+              type: 'lesson_ai_result',
+              eventId: 66,
+              title: '本节课 AI 总结已生成',
+              status: 'READY',
+              contextType: 'COURSE',
+              contextId: 66,
+              content: '本节课重点完成一次函数图像与应用题梳理',
+              reportStatus: 'READY',
+            },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(wrapper.text()).toContain('本节课 AI 总结已生成')
+    expect(wrapper.text()).toContain('本节课重点完成一次函数图像与应用题梳理')
+
+    await wrapper.get('.lesson-ai-card .btn').trigger('click')
+    await flushPromises()
+
+    expect(mocks.courseByRoom).toHaveBeenCalledWith(10)
+  })
+
+  it('shows the bound demand bar and opens demand detail', async () => {
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 901,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 901,
+              content: '想沟通初二数学',
+              status: 'PENDING',
+              creatorUserId: 3001,
+              contextType: 'DEMAND',
+              contextId: 99,
+              teachingMode: 'OFFLINE',
+            },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    expect(mocks.getDemandView).toHaveBeenCalledWith(99)
+    expect(wrapper.text()).toContain('当前沟通需求')
+    expect(wrapper.text()).toContain('初二数学线下提分')
+    expect(wrapper.text()).toContain('初中数学')
+
+    await wrapper.get('.bound-demand-bar').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.vm.$router.currentRoute.value.name).toBe('tutorJobDetail')
+    expect(wrapper.vm.$router.currentRoute.value.params.id).toBe('99')
+  })
+
+  it('hides the bound demand after collaboration is accepted and removes end chat action', async () => {
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 911,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 911,
+              content: '初二数学',
+              status: 'ACCEPTED',
+              creatorUserId: 3001,
+              contextType: 'DEMAND',
+              contextId: 99,
+              teachingMode: 'ONLINE',
+            },
+          },
+        },
+        {
+          fromUser: { uid: 2001 },
+          message: {
+            id: 912,
+            roomId: 10,
+            sendTime: '2026-04-18T10:02:00',
+            body: { type: 'contact_unlocked', proposalId: 3, orderId: 3, status: 'PAID' },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 913,
+            roomId: 10,
+            sendTime: '2026-04-18T10:03:00',
+            body: { type: 'collaboration_status', proposalId: 3, status: 'ACCEPTED', actorUserId: 3001 },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    expect(wrapper.find('.bound-demand-bar').exists()).toBe(false)
+    expect(mocks.getDemandView).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('结束沟通')
+  })
+
+  it('binds a new demand posted after an accepted collaboration', async () => {
+    mocks.getDemandView.mockResolvedValueOnce({
+      id: 101,
+      parentId: 2001,
+      subjectId: 2,
+      subjectName: '高中物理',
+      subjectIsOther: 0,
+      title: '高一物理线上同步',
+      description: '同步巩固',
+      studentGender: 'male',
+      gradeCode: 'SENIOR1',
+      availableTime: '',
+      teacherGenderPreference: 'both',
+      teacherRequirementDetail: '',
+      childAge: 15,
+      classMode: 'online',
+      city: '上海',
+      address: '',
+      frequencyPerWeek: 1,
+      budgetMin: '220',
+      budgetMax: '300',
+      stageCode: 'SENIOR',
+      educationRequirement: 'UNLIMITED',
+      publisherIdentity: 'PARENT',
+      schedule: '',
+      bizStatus: 1,
+      status: 1,
+      createTime: '2026-04-18T10:00:00',
+      updateTime: '2026-04-18T10:00:00',
+      publisher: {
+        uid: 2001,
+        displayName: '家长',
+        avatar: null,
+        identityLabel: '家长',
+      },
+    })
+    mocks.listMessages.mockResolvedValueOnce({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 921,
+            roomId: 10,
+            sendTime: '2026-04-18T10:00:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 921,
+              content: '旧需求',
+              status: 'ACCEPTED',
+              creatorUserId: 3001,
+              contextType: 'DEMAND',
+              contextId: 99,
+              teachingMode: 'OFFLINE',
+            },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 922,
+            roomId: 10,
+            sendTime: '2026-04-18T10:03:00',
+            body: { type: 'collaboration_status', proposalId: 4, status: 'ACCEPTED', actorUserId: 3001 },
+          },
+        },
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 923,
+            roomId: 10,
+            sendTime: '2026-04-18T10:10:00',
+            body: {
+              type: 'tutor_application',
+              applicationId: 923,
+              content: '新需求',
+              status: 'PENDING',
+              creatorUserId: 3001,
+              contextType: 'DEMAND',
+              contextId: 101,
+              teachingMode: 'ONLINE',
+            },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+    await flushPromises()
+
+    expect(mocks.getDemandView).toHaveBeenCalledTimes(1)
+    expect(mocks.getDemandView).toHaveBeenCalledWith(101)
+    expect(wrapper.text()).toContain('高一物理线上同步')
+    expect(wrapper.text()).toContain('高中物理')
   })
 })

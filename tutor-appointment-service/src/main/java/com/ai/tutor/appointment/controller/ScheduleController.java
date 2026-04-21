@@ -3,6 +3,8 @@ package com.ai.tutor.appointment.controller;
 import com.ai.tutor.appointment.model.dto.appointment.CancelAppointmentRequest;
 import com.ai.tutor.appointment.model.dto.schedule.CreateScheduleEventRequest;
 import com.ai.tutor.appointment.model.dto.schedule.RespondScheduleEventRequest;
+import com.ai.tutor.appointment.model.dto.schedule.SubmitWeeklyScheduleRequest;
+import com.ai.tutor.appointment.model.vo.schedule.ScheduleAvailabilityVO;
 import com.ai.tutor.appointment.model.vo.schedule.ScheduleEventVO;
 import com.ai.tutor.appointment.service.ScheduleService;
 import com.ai.tutor.common.BaseResponse;
@@ -38,11 +40,27 @@ public class ScheduleController {
         return ResultUtils.success(scheduleService.listEvents(uid, startAt, endAt, includePending != null && includePending));
     }
 
+    @GetMapping("/availability/day")
+    @Operation(summary = "查询双方某天日程占用（试课/改期选择器使用）")
+    public BaseResponse<ScheduleAvailabilityVO> dayAvailability(@RequestParam("otherUid") Long otherUid,
+                                                                @RequestParam("dateAt") Long dateAt) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(scheduleService.getDayAvailability(uid, otherUid, dateAt));
+    }
+
     @GetMapping("/courses/{courseId}/events")
     @Operation(summary = "查询长期课程下的课节列表")
     public BaseResponse<List<ScheduleEventVO>> listCourseEvents(@PathVariable("courseId") Long courseId) {
         Long uid = RequestHolder.get().getUid();
         return ResultUtils.success(scheduleService.listCourseEvents(courseId, uid));
+    }
+
+    @PostMapping("/courses/{courseId}/weekly-schedule")
+    @Operation(summary = "学生提交正式每周固定课表")
+    public BaseResponse<List<ScheduleEventVO>> submitWeeklySchedule(@PathVariable("courseId") Long courseId,
+                                                                    @Valid @RequestBody SubmitWeeklyScheduleRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(scheduleService.submitWeeklySchedule(courseId, request, uid));
     }
 
     @PostMapping("/events")

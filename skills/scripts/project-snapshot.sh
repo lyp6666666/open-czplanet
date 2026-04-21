@@ -4,20 +4,20 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"
 
-echo "repo: $ROOT_DIR"
+echo "仓库：$ROOT_DIR"
 echo
-echo "top-level modules:"
+echo "顶层模块："
 find "$ROOT_DIR" -maxdepth 1 -mindepth 1 -type d \
   \( -name .git -o -name node_modules -o -name .logs -o -name .pids \) -prune -o -type d -print \
   | sed "s#^$ROOT_DIR/##" \
   | sort
 
 echo
-echo "backend modules from pom.xml:"
+echo "来自 pom.xml 的后端模块："
 sed -n '/<modules>/,/<\/modules>/p' "$ROOT_DIR/pom.xml" | sed -n 's/.*<module>\(.*\)<\/module>.*/- \1/p'
 
 echo
-echo "key entry files:"
+echo "关键入口文件："
 for path in \
   "ai-tutor-web/src/router/index.ts" \
   "ai-tutor-admin-web/src/router/index.ts" \
@@ -32,5 +32,5 @@ for path in \
 done
 
 echo
-echo "skill references:"
+echo "skill 参考文档："
 find "$ROOT_DIR/skills/references" -maxdepth 1 -type f | sed "s#^$ROOT_DIR/##" | sort

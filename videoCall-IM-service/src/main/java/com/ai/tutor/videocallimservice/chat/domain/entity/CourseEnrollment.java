@@ -26,6 +26,11 @@ public class CourseEnrollment {
     private String status;
     private LocalDateTime trialStartAt;
     private LocalDateTime trialEndAt;
+    private LocalDateTime weeklyScheduleDeadlineAt;
+    private LocalDateTime weeklyScheduleSubmittedAt;
+    private LocalDateTime weeklyReminder12hSentAt;
+    private LocalDateTime weeklyReminder6hSentAt;
+    private LocalDateTime weeklyReminder1hSentAt;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

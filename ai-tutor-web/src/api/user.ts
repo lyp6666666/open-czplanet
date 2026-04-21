@@ -1,5 +1,19 @@
 import { http } from './http'
-import type { LoginUserVO, OrgLoginVO, OrganizationProfile, UserCardVO, UserMeVO, UserRoleEnum, UserSettingsVO, UserSimpleVO } from './types'
+import type {
+  EmailCodeVO,
+  EmailReminderHintVO,
+  EmailType,
+  LoginUserVO,
+  OrgLoginVO,
+  OrganizationProfile,
+  UserCardVO,
+  UserEmailItemVO,
+  UserEmailStatusVO,
+  UserMeVO,
+  UserRoleEnum,
+  UserSettingsVO,
+  UserSimpleVO,
+} from './types'
 
 export interface SendCodeRequest {
   phone: string
@@ -45,6 +59,20 @@ export interface UserUpdateRequest {
     demandDescription?: string
     budget?: number
   }
+}
+
+export interface SendEmailCodeRequest {
+  email: string
+  emailType: EmailType
+  scene?: 'BIND' | 'CHANGE' | 'REBIND'
+}
+
+export interface VerifyEmailRequest {
+  email: string
+  emailType: EmailType
+  code: string
+  scene?: 'BIND' | 'CHANGE' | 'REBIND'
+  bindSource?: string
 }
 
 export const userApi = {
@@ -102,5 +130,25 @@ export const userApi = {
 
   updateSettings(request: { applicationGreeting?: string | null }) {
     return http.post<unknown, UserSettingsVO>('/user/settings', request)
+  },
+
+  emailStatus() {
+    return http.get<unknown, UserEmailStatusVO>('/user/email')
+  },
+
+  sendEmailCode(request: SendEmailCodeRequest) {
+    return http.post<unknown, EmailCodeVO>('/user/email/code', request)
+  },
+
+  verifyEmail(request: VerifyEmailRequest) {
+    return http.post<unknown, UserEmailItemVO>('/user/email/verify', request)
+  },
+
+  deleteSummaryEmail() {
+    return http.delete<unknown, boolean>('/user/email/summary')
+  },
+
+  emailReminderHint(scene: string) {
+    return http.get<unknown, EmailReminderHintVO>('/user/email/reminder-hints', { params: { scene } })
   },
 }

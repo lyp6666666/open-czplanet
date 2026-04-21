@@ -2,6 +2,8 @@ package com.ai.tutor.liveclass.controller;
 
 import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
@@ -127,6 +129,54 @@ class LiveSessionControllerTest {
         mockMvc.perform(get("/live/sessions/8/timeline"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].eventType").value("SESSION_CREATED"));
+    }
+
+    @Test
+    void shouldReturnAiState() throws Exception {
+        when(liveClassService.aiState(8L, 1001L)).thenReturn(LiveAiStateResp.builder()
+                .sessionId(8L)
+                .courseId(66L)
+                .aiStatus("ACTIVE")
+                .realtimeEnabled(true)
+                .summaryStatus("ACTIVE")
+                .currentTopic("一次函数图像")
+                .latestStageSummary("本阶段重点讲解了一次函数图像。")
+                .studentQuestions(List.of("为什么 k 越大越陡"))
+                .build());
+
+        mockMvc.perform(get("/live/sessions/8/ai/state"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aiStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.currentTopic").value("一次函数图像"));
+    }
+
+    @Test
+    void shouldReturnAiResult() throws Exception {
+        when(liveClassService.aiResult(8L, 1001L)).thenReturn(LiveAiResultResp.builder()
+                .sessionId(8L)
+                .courseId(66L)
+                .resultStatus("READY")
+                .reportStatus("WAITING_TEACHER_REVIEW")
+                .preview("本节课围绕一次函数图像与应用题展开。")
+                .build());
+
+        mockMvc.perform(get("/live/sessions/8/ai/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.resultStatus").value("READY"))
+                .andExpect(jsonPath("$.data.reportStatus").value("WAITING_TEACHER_REVIEW"));
+    }
+
+    @Test
+    void shouldRetryAiResult() throws Exception {
+        when(liveClassService.retryAiResult(8L, 1001L)).thenReturn(LiveAiResultResp.builder()
+                .sessionId(8L)
+                .courseId(66L)
+                .resultStatus("FINALIZING")
+                .build());
+
+        mockMvc.perform(post("/live/sessions/8/ai/result/retry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.resultStatus").value("FINALIZING"));
     }
 
     @SpringBootConfiguration

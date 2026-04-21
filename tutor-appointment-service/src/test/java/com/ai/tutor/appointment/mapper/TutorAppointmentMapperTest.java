@@ -92,6 +92,48 @@ class TutorAppointmentMapperTest {
         assertThat(db.getStatus()).isEqualTo(2);
     }
 
+    @Test
+    void countAcceptedConflictsExceptShouldIgnoreCurrentAppointment() {
+        LocalDateTime start = LocalDateTime.now().plusDays(1).withNano(0);
+        TutorAppointment appointment = TutorAppointment.builder()
+                .parentId(1L)
+                .tutorId(2L)
+                .subjectId(101L)
+                .startTime(start)
+                .durationMinutes(60)
+                .status(2)
+                .createdBy(1L)
+                .build();
+        tutorAppointmentMapper.insert(appointment);
+
+        int selfOnly = tutorAppointmentMapper.countAcceptedConflictsExcept(
+                java.util.List.of(1L, 2L),
+                start.plusMinutes(10),
+                start.plusMinutes(50),
+                appointment.getId()
+        );
+        assertThat(selfOnly).isZero();
+
+        TutorAppointment other = TutorAppointment.builder()
+                .parentId(1L)
+                .tutorId(3L)
+                .subjectId(101L)
+                .startTime(start.plusMinutes(30))
+                .durationMinutes(60)
+                .status(2)
+                .createdBy(1L)
+                .build();
+        tutorAppointmentMapper.insert(other);
+
+        int withOther = tutorAppointmentMapper.countAcceptedConflictsExcept(
+                java.util.List.of(1L, 2L),
+                start.plusMinutes(10),
+                start.plusMinutes(50),
+                appointment.getId()
+        );
+        assertThat(withOther).isEqualTo(1);
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @MapperScan("com.ai.tutor.appointment.mapper")

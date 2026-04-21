@@ -1,0 +1,57 @@
+# AI Agent 服务配置（DEV）
+# DataId: ai-agent-service-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 说明：
+# - 第一版只实现课后报告生成与 IM 沟通摘要。
+# - LLM 服务商先预留配置；默认 provider=template，可在没有外部 key 时生成可预测草稿。
+# - 真实密钥只能写入 Nacos 或服务器环境变量，不要提交 Git。
+# - 该服务仅面向内部 Java 微服务，不直接对外暴露给终端用户。
+# - 后续会在当前 provider / pipeline / task 分层上继续接入 LangChain 和 LangGraph。
+# - 实时课堂 AI 的 P1/P2 已按 LangChain + LangGraph 方向预留结构。
+
+ai-agent:
+  service:
+    port: 18086
+    internal-token: "<TODO:AI_AGENT_INTERNAL_TOKEN>"
+
+  database:
+    # 推荐线上使用现有 MySQL；本地开发可用 ai-agent-service/.env 的 SQLite 默认值
+    url: "mysql+pymysql://root:<TODO:MYSQL_PASSWORD>@127.0.0.1:3306/ai_tutor?charset=utf8mb4"
+
+  redis:
+    url: "redis://:<TODO:REDIS_PASSWORD>@127.0.0.1:6379/2"
+    queue-name: "ai-agent"
+    use-async-worker: true
+
+  llm:
+    # template / volcengine-ark / openai-compatible
+    provider: "volcengine-ark"
+    # 火山方舟 OpenAI 兼容 API 基础地址，若后续使用统一网关可按需替换
+    base-url: "https://ark.cn-beijing.volces.com/api/v3"
+    api-key: "<TODO:VOLCENGINE_ARK_API_KEY>"
+    # 推荐直接填接入点 EP
+    model: "ep-20260420222959-g4vrz"
+    ark-endpoint-id: "ep-20260420222959-g4vrz"
+    timeout-seconds: 30
+
+  task:
+    default-timeout-seconds: 180
+    report-max-teacher-notes-chars: 12000
+    chat-summary-max-messages: 300
+
+  realtime:
+    stage-summary-interval-seconds: 300
+    stage-min-segments: 8
+    transcript-buffer-size: 500
+
+  tencent-asr:
+    enabled: false
+    app-id: "<TODO:TENCENT_ASR_APP_ID>"
+    secret-id: "<TODO:TENCENT_SECRET_ID>"
+    secret-key: "<TODO:TENCENT_SECRET_KEY>"
+    engine-model-type: "16k_zh"
+    voice-format: 1
+    need-vad: 1
+    # 如果服务器上通过 git clone 方式挂载官方 SDK，可填写绝对路径
+    speech-sdk-path: "<TODO:TENCENT_SPEECH_SDK_PATH>"

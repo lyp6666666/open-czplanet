@@ -476,6 +476,27 @@ public class TutorApplicationService {
         }
     }
 
+    public void assertRoomReadyForScheduling(Long roomId, Long uid) {
+        ThrowUtils.throwIf(roomId == null || uid == null, ErrorCode.PARAMS_ERROR);
+        TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(roomId);
+        if (application == null) {
+            return;
+        }
+        ThrowUtils.throwIf(!uid.equals(application.getSenderUid()) && !uid.equals(application.getReceiverUid()),
+                ErrorCode.NO_AUTH_ERROR,
+                "你不在当前沟通会话中");
+        ThrowUtils.throwIf(!TutorApplicationStatus.ACCEPTED.name().equals(application.getStatus()),
+                ErrorCode.OPERATION_ERROR,
+                "当前沟通未完成通过，暂不能发起合作或授课申请");
+        String access = application.getChatAccessStatus();
+        if (TutorApplicationChatAccessStatus.PAYMENT_REQUIRED.name().equals(access)) {
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR, "教师支付信息费后，双方才能继续沟通并发起合作或授课申请");
+        }
+        ThrowUtils.throwIf(!TutorApplicationChatAccessStatus.CHAT_ENABLED.name().equals(access),
+                ErrorCode.OPERATION_ERROR,
+                "当前沟通状态暂不支持发起合作或授课申请");
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public void handlePaymentSuccess(Long applicationId, String orderNo) {
         if (applicationId == null) {

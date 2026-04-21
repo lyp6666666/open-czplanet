@@ -6,6 +6,7 @@ import type { UserRoleEnum } from '@/api/types'
 import { BRAND_NAME } from '@/constants/brand'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import BrandLogoMark from '@/ui/common/BrandLogoMark.vue'
 
 const props = defineProps<{
   role: UserRoleEnum
@@ -37,6 +38,7 @@ const tutorAuthPath = '/auth/tutor'
 const leftActionLabel = '我要找家教'
 const rightActionLabel = '我要当家教'
 const currentActionLabel = computed(() => (isTutor.value ? rightActionLabel : leftActionLabel))
+const BACKDOOR_PHONES = new Set(['26666666666', '28888888888'])
 
 const needSwitchRole = computed(() => auth.isLoggedIn && auth.role != null && auth.role !== props.role)
 const switchModalOpen = ref(false)
@@ -72,7 +74,7 @@ function normalizePhone(raw: string) {
 function validatePhone(v: string): string | null {
   const p = normalizePhone(v)
   if (p.length === 0) return '请输入手机号'
-  if (p === '666888') return null
+  if (BACKDOOR_PHONES.has(p)) return null
   if (!/^\d{11}$/.test(p)) return '请输入 11 位手机号'
   return null
 }
@@ -183,7 +185,7 @@ async function onSendCode() {
     hint.value = phoneErr
     return
   }
-  if (normalizePhone(phone.value) === '666888') {
+  if (BACKDOOR_PHONES.has(normalizePhone(phone.value))) {
     hint.value = '后门账号无需发送验证码'
     return
   }
@@ -271,7 +273,10 @@ async function confirmSwitch() {
       <div class="card board">
         <aside class="left">
           <div class="brand">
-            <div class="logo">{{ BRAND_NAME }}</div>
+            <div class="brand-lockup" aria-label="创智星球">
+              <BrandLogoMark class="logo-mark" />
+              <div class="logo">{{ BRAND_NAME }}</div>
+            </div>
             <div class="slogan">{{ currentActionLabel }}</div>
           </div>
 
@@ -393,10 +398,26 @@ async function confirmSwitch() {
   gap: 6px;
 }
 
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-mark {
+  width: 96px;
+  height: 38px;
+  flex: 0 0 96px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(58, 106, 255, 0.2));
+}
+
 .logo {
   font-weight: 900;
   letter-spacing: 0.5px;
   font-size: 18px;
+  line-height: 1;
 }
 
 .slogan {

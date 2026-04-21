@@ -18,6 +18,11 @@
         <result column="status" property="status"/>
         <result column="trial_start_at" property="trialStartAt"/>
         <result column="trial_end_at" property="trialEndAt"/>
+        <result column="weekly_schedule_deadline_at" property="weeklyScheduleDeadlineAt"/>
+        <result column="weekly_schedule_submitted_at" property="weeklyScheduleSubmittedAt"/>
+        <result column="weekly_reminder_12h_sent_at" property="weeklyReminder12hSentAt"/>
+        <result column="weekly_reminder_6h_sent_at" property="weeklyReminder6hSentAt"/>
+        <result column="weekly_reminder_1h_sent_at" property="weeklyReminder1hSentAt"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>
     </resultMap>
@@ -38,6 +43,11 @@
             status,
             trial_start_at,
             trial_end_at,
+            weekly_schedule_deadline_at,
+            weekly_schedule_submitted_at,
+            weekly_reminder_12h_sent_at,
+            weekly_reminder_6h_sent_at,
+            weekly_reminder_1h_sent_at,
             create_time,
             update_time
         )
@@ -56,6 +66,11 @@
             #{status},
             #{trialStartAt},
             #{trialEndAt},
+            #{weeklyScheduleDeadlineAt},
+            #{weeklyScheduleSubmittedAt},
+            #{weeklyReminder12hSentAt},
+            #{weeklyReminder6hSentAt},
+            #{weeklyReminder1hSentAt},
             #{createTime},
             #{updateTime}
         )
@@ -64,7 +79,7 @@
     <select id="selectByApplicationId" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, create_time, update_time
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
         FROM course_enrollment
         WHERE application_id = #{applicationId}
         LIMIT 1
@@ -73,7 +88,7 @@
     <select id="selectById" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, create_time, update_time
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
         FROM course_enrollment
         WHERE id = #{id}
         LIMIT 1
@@ -82,11 +97,53 @@
     <select id="selectLatestByRoomId" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, create_time, update_time
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
         FROM course_enrollment
         WHERE room_id = #{roomId}
         ORDER BY id DESC
         LIMIT 1
+    </select>
+
+    <select id="listTrialingEnded" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        FROM course_enrollment
+        WHERE status = 'TRIALING'
+          AND trial_end_at IS NOT NULL
+          AND trial_end_at &lt;= #{now}
+        ORDER BY trial_end_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listWeeklyScheduleDeadlineReached" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        FROM course_enrollment
+        WHERE status = 'TRIAL_WAIT_WEEKLY_SCHEDULE'
+          AND weekly_schedule_submitted_at IS NULL
+          AND weekly_schedule_deadline_at IS NOT NULL
+          AND weekly_schedule_deadline_at &lt;= #{now}
+        ORDER BY weekly_schedule_deadline_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listWeeklyScheduleReminderDue" resultMap="baseMap">
+        SELECT
+            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        FROM course_enrollment
+        WHERE status = 'TRIAL_WAIT_WEEKLY_SCHEDULE'
+          AND weekly_schedule_submitted_at IS NULL
+          AND weekly_schedule_deadline_at IS NOT NULL
+          AND (
+                (weekly_reminder_12h_sent_at IS NULL AND TIMESTAMPDIFF(HOUR, #{now}, weekly_schedule_deadline_at) BETWEEN 11 AND 12)
+             OR (weekly_reminder_6h_sent_at IS NULL AND TIMESTAMPDIFF(HOUR, #{now}, weekly_schedule_deadline_at) BETWEEN 5 AND 6)
+             OR (weekly_reminder_1h_sent_at IS NULL AND TIMESTAMPDIFF(MINUTE, #{now}, weekly_schedule_deadline_at) BETWEEN 1 AND 60)
+          )
+        ORDER BY weekly_schedule_deadline_at ASC, id ASC
+        LIMIT #{limit}
     </select>
 
     <select id="countActiveByRoomId" resultType="java.lang.Integer">
@@ -95,7 +152,7 @@
                 SELECT COUNT(1)
                 FROM course_enrollment
                 WHERE room_id = #{roomId}
-                  AND status IN ('APPLYING', 'WAIT_PAY', 'COMMUNICATING', 'TRIALING', 'TRIAL_REFUND_REVIEW', 'TEACHING')
+                  AND status IN ('APPLYING', 'WAIT_PAY', 'COMMUNICATING', 'TRIALING', 'TRIAL_WAIT_STUDENT_DECISION', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TRIAL_REFUND_REVIEW', 'TEACHING', 'FINISHED')
             )
             +
             (
@@ -116,7 +173,7 @@
     <select id="listByTeacher" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, create_time, update_time
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
         FROM course_enrollment
         WHERE teacher_uid = #{teacherUid}
         ORDER BY update_time DESC, id DESC
@@ -126,7 +183,7 @@
     <select id="listByStudent" resultMap="baseMap">
         SELECT
             id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, create_time, update_time
+            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
         FROM course_enrollment
         WHERE student_uid = #{studentUid}
         ORDER BY update_time DESC, id DESC
@@ -149,6 +206,65 @@
             update_time = NOW()
         WHERE id = #{id}
           AND status = #{expectedStatus}
+    </update>
+
+    <update id="updateStatusAny">
+        UPDATE course_enrollment
+        SET
+            status = #{nextStatus},
+            update_time = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="markWeeklyScheduleSubmitted">
+        UPDATE course_enrollment
+        SET
+            status = 'TEACHING',
+            <if test="classTime != null">
+                class_time = #{classTime},
+            </if>
+            <if test="frequencyPerWeek != null">
+                frequency_per_week = #{frequencyPerWeek},
+            </if>
+            <if test="lessonPrice != null">
+                lesson_price = #{lessonPrice},
+            </if>
+            weekly_schedule_submitted_at = NOW(),
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = #{expectedStatus}
+    </update>
+
+    <update id="markTrialPassedWaitingWeeklySchedule">
+        UPDATE course_enrollment
+        SET
+            status = 'TRIAL_WAIT_WEEKLY_SCHEDULE',
+            weekly_schedule_deadline_at = #{deadlineAt},
+            weekly_schedule_submitted_at = NULL,
+            weekly_reminder_12h_sent_at = NULL,
+            weekly_reminder_6h_sent_at = NULL,
+            weekly_reminder_1h_sent_at = NULL,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = #{expectedStatus}
+    </update>
+
+    <update id="markWeeklyReminderSent">
+        UPDATE course_enrollment
+        SET
+            <choose>
+                <when test="column == 'weekly_reminder_12h_sent_at'">
+                    weekly_reminder_12h_sent_at = #{sentAt},
+                </when>
+                <when test="column == 'weekly_reminder_6h_sent_at'">
+                    weekly_reminder_6h_sent_at = #{sentAt},
+                </when>
+                <when test="column == 'weekly_reminder_1h_sent_at'">
+                    weekly_reminder_1h_sent_at = #{sentAt},
+                </when>
+            </choose>
+            update_time = NOW()
+        WHERE id = #{id}
     </update>
 
     <update id="startOnlineCourse">

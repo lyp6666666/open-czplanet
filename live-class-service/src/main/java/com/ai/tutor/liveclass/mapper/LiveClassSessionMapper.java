@@ -28,4 +28,6 @@ public interface LiveClassSessionMapper {
                   @Param("uid") Long uid,
                   @Param("endReason") String endReason,
                   @Param("endedAt") LocalDateTime endedAt);
+
+    int updateExtraJsonById(@Param("id") Long id, @Param("extraJson") String extraJson);
 }

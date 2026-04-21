@@ -41,6 +41,10 @@ spring:
           uri: lb://videoCall-IM-service
           predicates:
             - Path=/chat/**
+        - id: im-courses-route
+          uri: lb://videoCall-IM-service
+          predicates:
+            - Path=/courses/**
         - id: payment-route
           uri: lb://payment-service
           predicates:
@@ -49,3 +53,7 @@ spring:
           uri: lb://live-class-service
           predicates:
             - Path=/live/**
+        - id: ai-agent-internal-route
+          uri: http://127.0.0.1:18086
+          predicates:
+            - Path=/internal/ai/**

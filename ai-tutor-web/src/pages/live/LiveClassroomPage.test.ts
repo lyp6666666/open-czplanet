@@ -14,6 +14,10 @@ const connectMock = vi.fn()
 const disconnectMock = vi.fn()
 const setMicrophoneEnabledMock = vi.fn()
 const setCameraEnabledMock = vi.fn()
+const getTrackPublicationMock = vi.fn()
+const attachTrackToElementMock = vi.fn()
+
+const remoteParticipantsMap = new Map<string, any>()
 
 vi.mock('@/api/live', () => ({
   liveApi: {
@@ -35,8 +39,9 @@ vi.mock('@/api/chat', () => ({
 vi.mock('@/modules/live/livekit', () => ({
   LiveRoomClient: vi.fn().mockImplementation(() => ({
     room: {
+      remoteParticipants: remoteParticipantsMap,
       localParticipant: {
-        getTrackPublication: vi.fn(() => ({
+        getTrackPublication: getTrackPublicationMock.mockImplementation(() => ({
           track: {
             attach: vi.fn(() => document.createElement('video')),
             detach: vi.fn(),
@@ -56,7 +61,7 @@ vi.mock('@/modules/live/livekit', () => ({
     onConnectionStateChanged: vi.fn(),
     onMediaError: vi.fn(),
   })),
-  attachTrackToElement: vi.fn(),
+  attachTrackToElement: (...args: unknown[]) => attachTrackToElementMock(...args),
   detachTrack: vi.fn(),
 }))
 
@@ -96,6 +101,9 @@ describe('LiveClassroomPage', () => {
     disconnectMock.mockReset()
     setMicrophoneEnabledMock.mockReset()
     setCameraEnabledMock.mockReset()
+    getTrackPublicationMock.mockReset()
+    attachTrackToElementMock.mockReset()
+    remoteParticipantsMap.clear()
     listMessagesMock.mockResolvedValue({ list: [], cursor: null, isLast: true })
   })
 
@@ -262,5 +270,73 @@ describe('LiveClassroomPage', () => {
 
     expect(sendTextMock).toHaveBeenCalledWith(7001, '我们开始上课')
     expect(wrapper.text()).toContain('我们开始上课')
+  })
+
+  it('hydrates existing remote participant tracks right after room connection', async () => {
+    const remoteVideoTrack = {
+      kind: 'video',
+      attach: vi.fn(() => {
+        const media = document.createElement('video')
+        media.srcObject = new MediaStream()
+        return media
+      }),
+      detach: vi.fn(),
+    }
+    remoteParticipantsMap.set('remote-user', {
+      identity: '1002',
+      name: '王同学',
+      trackPublications: new Map([
+        [
+          'video-track',
+          {
+            track: remoteVideoTrack,
+          },
+        ],
+      ]),
+    })
+
+    getByCourseMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    statusMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    joinTokenMock.mockResolvedValue({
+      serverUrl: 'ws://127.0.0.1:7880',
+      accessToken: 'token',
+    })
+    connectMock.mockResolvedValue(undefined)
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: [{ path: '/live/classroom/:courseId', component: LiveClassroomPage }],
+    })
+    router.push('/live/classroom/66')
+    await router.isReady()
+
+    const wrapper = mount(LiveClassroomPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('已进入课堂，正在等待对方加入')
+    expect(wrapper.get('[data-testid="remote-video-state"]').attributes('data-connected')).toBe('true')
+    expect(attachTrackToElementMock).toHaveBeenCalled()
   })
 })

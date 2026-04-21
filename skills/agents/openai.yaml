@@ -1,7 +1,7 @@
 interface:
-  display_name: "AI Tutor Project"
-  short_description: "Repo-aware guide for this project"
-  default_prompt: "Use $ai-platform-context to understand the relevant project background before changing code in this repository."
+  display_name: "AI 平台项目"
+  short_description: "面向本仓库的项目上下文指南"
+  default_prompt: "在修改这个仓库中的代码前，先使用 $ai-platform-context 理解对应的项目背景。"
 
 policy:
   allow_implicit_invocation: true

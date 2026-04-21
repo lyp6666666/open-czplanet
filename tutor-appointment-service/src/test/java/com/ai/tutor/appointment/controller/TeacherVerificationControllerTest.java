@@ -23,6 +23,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,6 +65,32 @@ class TeacherVerificationControllerTest {
                 .andExpect(jsonPath("$.data").value(true));
 
         verify(teacherVerificationService, times(1)).submitEducation(eq(1001L), eq(List.of("http://x/a.png")));
+    }
+
+    @Test
+    void submitRealnameShouldOnlyAcceptIdPhotoMode() throws Exception {
+        mockMvc.perform(post("/api/v1/teacher/verification/realname/submit")
+                        .requestAttr("uid", "1001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"ID_PHOTO\",\"idFrontUrl\":\"http://x/front.png\",\"idBackUrl\":\"http://x/back.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data").value(true));
+
+        verify(teacherVerificationService, times(1))
+                .submitRealnameIdPhoto(eq(1001L), eq("http://x/front.png"), eq("http://x/back.png"));
+    }
+
+    @Test
+    void submitRealnameShouldRejectNameIdnoMode() throws Exception {
+        mockMvc.perform(post("/api/v1/teacher/verification/realname/submit")
+                        .requestAttr("uid", "1001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"method\":\"NAME_IDNO\",\"realName\":\"张老师\",\"idNo\":\"110101199001011234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(40000));
+
+        verifyNoMoreInteractions(teacherVerificationService);
     }
 
     private static class Req {

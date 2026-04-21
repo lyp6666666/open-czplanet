@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.common.event.listener;
 
 import com.ai.tutor.videocallimservice.chat.service.stream.ChatMessagePushService;
+import com.ai.tutor.videocallimservice.chat.service.UnreadEmailReminderService;
 import com.ai.tutor.videocallimservice.chat.service.mq.MQProducer;
 import com.ai.tutor.videocallimservice.common.constant.MQConstant;
 import com.ai.tutor.videocallimservice.common.domain.dto.MsgSendMessageDTO;
@@ -22,9 +23,19 @@ public class MessageSendListener {
     @Resource
     private ChatMessagePushService chatMessagePushService;
 
+    @Resource
+    private UnreadEmailReminderService unreadEmailReminderService;
+
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT, classes = MessageSendEvent.class, fallbackExecution = true)
     public void messageRoute(MessageSendEvent event) {
         Long msgId = event.getMsgId();
+        if (unreadEmailReminderService != null) {
+            try {
+                unreadEmailReminderService.onMessageCreated(msgId);
+            } catch (Exception e) {
+                log.warn("create unread email reminder failed, msgId={}", msgId, e);
+            }
+        }
         try {
             mqProducer.sendSecureMsg(MQConstant.SEND_MSG_TOPIC, new MsgSendMessageDTO(msgId), msgId);
         } catch (Exception e) {

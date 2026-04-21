@@ -65,6 +65,44 @@ class HttpImFacadeTest {
     }
 
     @Test
+    void shouldCallFeignClientAssertRoomReadyForScheduling() {
+        bindUid(206L);
+        when(client.assertRoomReadyForScheduling(88L)).thenReturn(new BaseResponse<>(0, true, "ok"));
+
+        facade.assertRoomReadyForScheduling(206L, 88L);
+
+        verify(client).assertRoomReadyForScheduling(88L);
+    }
+
+    @Test
+    void shouldCallFeignClientConfirmWeeklyScheduleSubmitted() {
+        bindUid(206L);
+        when(client.confirmWeeklyScheduleSubmitted(any(), any())).thenReturn(new BaseResponse<>(0, true, "ok"));
+
+        facade.confirmWeeklyScheduleSubmitted(206L, 66L, "周二 19:00-21:00", 1, 20000L);
+
+        ArgumentCaptor<ImInternalFeignClient.ConfirmWeeklyScheduleRequest> captor =
+                ArgumentCaptor.forClass(ImInternalFeignClient.ConfirmWeeklyScheduleRequest.class);
+        verify(client).confirmWeeklyScheduleSubmitted(org.mockito.ArgumentMatchers.eq(66L), captor.capture());
+        assertThat(captor.getValue().getClassTime()).isEqualTo("周二 19:00-21:00");
+        assertThat(captor.getValue().getFrequencyPerWeek()).isEqualTo(1);
+        assertThat(captor.getValue().getLessonPriceFen()).isEqualTo(20000L);
+    }
+
+    @Test
+    void shouldCallFeignClientMarkTrialCanceled() {
+        bindUid(206L);
+        when(client.markTrialCanceled(any(), any())).thenReturn(new BaseResponse<>(0, true, "ok"));
+
+        facade.markTrialCanceled(206L, 66L, "临时取消试课");
+
+        ArgumentCaptor<ImInternalFeignClient.TrialCanceledRequest> captor =
+                ArgumentCaptor.forClass(ImInternalFeignClient.TrialCanceledRequest.class);
+        verify(client).markTrialCanceled(org.mockito.ArgumentMatchers.eq(66L), captor.capture());
+        assertThat(captor.getValue().getReason()).isEqualTo("临时取消试课");
+    }
+
+    @Test
     void shouldThrowWhenFeignReturnsBusinessError() {
         bindUid(206L);
         when(client.listRecentContactUids(20)).thenReturn(new BaseResponse<>(50000, null, "im error"));

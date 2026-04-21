@@ -12,6 +12,7 @@ import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/setting
 const props = defineProps<{
   open: boolean
   uid: number | null
+  unlockedContactPhone?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -231,6 +232,7 @@ async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
           <div class="sec-title">教师信息</div>
           <div class="kv">
             <div v-if="fmt(card.teacherProfile.realName)" class="row"><span class="k">姓名</span><span class="v">{{ fmt(card.teacherProfile.realName) }}</span></div>
+            <div v-if="fmt(props.unlockedContactPhone)" class="row"><span class="k">联系方式</span><span class="v">{{ fmt(props.unlockedContactPhone) }}</span></div>
             <div v-if="fmt(card.teacherProfile.education)" class="row"><span class="k">学历</span><span class="v">{{ fmt(card.teacherProfile.education) }}</span></div>
             <div v-if="fmt(card.teacherProfile.subject)" class="row"><span class="k">科目</span><span class="v">{{ fmt(card.teacherProfile.subject) }}</span></div>
             <div v-if="card.teacherProfile.experienceYears != null" class="row">
@@ -245,6 +247,7 @@ async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
           <div class="sec-title">学生信息</div>
           <div class="kv">
             <div v-if="fmt(card.studentProfile.realName)" class="row"><span class="k">姓名</span><span class="v">{{ fmt(card.studentProfile.realName) }}</span></div>
+            <div v-if="fmt(props.unlockedContactPhone)" class="row"><span class="k">联系方式</span><span class="v">{{ fmt(props.unlockedContactPhone) }}</span></div>
             <div v-if="card.studentProfile.childAge != null" class="row"><span class="k">孩子年龄</span><span class="v">{{ card.studentProfile.childAge }} 岁</span></div>
             <div v-if="fmt(card.studentProfile.address)" class="row"><span class="k">地址</span><span class="v">{{ fmt(card.studentProfile.address) }}</span></div>
             <div v-if="fmt(card.studentProfile.budget)" class="row"><span class="k">预算</span><span class="v">{{ fmt(card.studentProfile.budget) }}</span></div>

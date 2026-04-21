@@ -117,6 +117,10 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("pricePerHour", body.getPricePerHour());
             out.put("classTime", body.getClassTime());
             out.put("frequencyPerWeek", body.getFrequencyPerWeek());
+            out.put("trialStartAt", body.getTrialStartAt());
+            out.put("trialEndAt", body.getTrialEndAt());
+            out.put("remark", body.getRemark());
+            out.put("expireAt", body.getExpireAt());
             out.put("status", body.getStatus());
             out.put("creatorUserId", body.getCreatorUserId());
             return out;
@@ -194,6 +198,28 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
             out.put("proposalId", body.getProposalId());
             return out;
         }
+        if ("LESSON_AI_RESULT".equals(bizType)) {
+            out.put("type", "lesson_ai_result");
+            out.put("eventId", body.getEventId());
+            out.put("title", body.getTitle());
+            out.put("status", body.getStatus());
+            out.put("contextType", body.getContextType());
+            out.put("contextId", body.getContextId());
+            out.put("content", body.getContent());
+            out.put("reportStatus", body.getReportStatus());
+            return out;
+        }
+        if ("COURSE_STATUS_REMINDER".equals(bizType)) {
+            out.put("type", "course_status_reminder");
+            out.put("eventId", body.getEventId());
+            out.put("title", body.getTitle());
+            out.put("status", body.getStatus());
+            out.put("contextType", body.getContextType());
+            out.put("contextId", body.getContextId());
+            out.put("content", body.getContent());
+            out.put("endAt", body.getEndAt());
+            return out;
+        }
 
         out.put("type", "system");
         out.put("bizType", body.getBizType());
@@ -258,6 +284,14 @@ public class SystemMsgHandler extends AbstractMsgHandler<SystemMsgReq> {
         if ("BROKERAGE_REFUND_STATUS".equals(bizType)) {
             String s = body.getStatus() == null ? "" : body.getStatus();
             return "退款状态：" + s;
+        }
+        if ("LESSON_AI_RESULT".equals(bizType)) {
+            String s = body.getStatus() == null ? "" : body.getStatus();
+            return "课堂 AI 总结：" + s;
+        }
+        if ("COURSE_STATUS_REMINDER".equals(bizType)) {
+            String text = body.getContent() == null || body.getContent().isBlank() ? "课程提醒" : body.getContent();
+            return "课程提醒：" + text;
         }
         return "系统消息：" + title;
     }

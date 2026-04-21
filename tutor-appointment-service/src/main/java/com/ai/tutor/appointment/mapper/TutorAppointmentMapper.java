@@ -57,4 +57,9 @@ public interface TutorAppointmentMapper {
     int countAcceptedConflicts(@Param("uids") List<Long> uids,
                                @Param("start") LocalDateTime start,
                                @Param("end") LocalDateTime end);
+
+    int countAcceptedConflictsExcept(@Param("uids") List<Long> uids,
+                                     @Param("start") LocalDateTime start,
+                                     @Param("end") LocalDateTime end,
+                                     @Param("excludeId") Long excludeId);
 }

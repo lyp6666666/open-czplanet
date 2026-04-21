@@ -28,6 +28,13 @@ livekit:
   room-prefix: ${LIVEKIT_ROOM_PREFIX:class}
   token-ttl-seconds: ${LIVEKIT_TOKEN_TTL_SECONDS:7200}
 
+integration:
+  ai-agent:
+    enabled: ${AI_AGENT_ENABLED:true}
+    base-url: ${AI_AGENT_BASE_URL:http://127.0.0.1:18086}
+    internal-token: ${AI_AGENT_INTERNAL_TOKEN:}
+    timeout-millis: ${AI_AGENT_TIMEOUT_MILLIS:5000}
+
 springdoc:
   api-docs:
     enabled: true

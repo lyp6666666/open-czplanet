@@ -915,4 +915,54 @@ CREATE TABLE `ai_chat_summary` (
   UNIQUE KEY `uk_ai_chat_summary_task_id` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 聊天摘要表';
 
+DROP TABLE IF EXISTS `ai_live_lesson_session`;
+CREATE TABLE `ai_live_lesson_session` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `lesson_id` bigint(20) NOT NULL COMMENT '课程ID',
+  `session_id` varchar(64) NOT NULL COMMENT '课堂AI会话ID',
+  `teacher_id` bigint(20) DEFAULT NULL COMMENT '教师ID',
+  `student_id` bigint(20) DEFAULT NULL COMMENT '学生ID',
+  `subject` varchar(64) DEFAULT NULL COMMENT '科目',
+  `grade` varchar(64) DEFAULT NULL COMMENT '年级',
+  `course_type` varchar(32) NOT NULL COMMENT '课型 ONLINE_FORMAL/ONLINE_TRIAL/TEXT_ONLY/LOW_COST',
+  `mode` varchar(32) NOT NULL COMMENT '实时AI模式',
+  `asr_enabled` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否启用ASR',
+  `llm_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否启用LLM阶段摘要',
+  `status` varchar(32) NOT NULL COMMENT '状态 ACTIVE/FINALIZED/FAILED',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ai_live_lesson_lesson_id` (`lesson_id`),
+  UNIQUE KEY `uk_ai_live_lesson_session_id` (`session_id`),
+  KEY `idx_ai_live_lesson_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实时课堂AI会话表';
+
+DROP TABLE IF EXISTS `ai_lesson_transcript`;
+CREATE TABLE `ai_lesson_transcript` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `lesson_id` bigint(20) NOT NULL COMMENT '课程ID',
+  `segment_index` int(11) NOT NULL COMMENT '分段序号',
+  `speaker` varchar(32) NOT NULL COMMENT '说话人 teacher/student/unknown',
+  `start_ms` bigint(20) NOT NULL DEFAULT 0 COMMENT '起始时间毫秒',
+  `end_ms` bigint(20) NOT NULL DEFAULT 0 COMMENT '结束时间毫秒',
+  `text` text NOT NULL COMMENT '转写文本',
+  `is_final` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否最终文本',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_lesson_transcript_lesson` (`lesson_id`),
+  KEY `idx_ai_lesson_transcript_segment` (`lesson_id`, `segment_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='课堂实时转写表';
+
+DROP TABLE IF EXISTS `ai_lesson_stage_summary`;
+CREATE TABLE `ai_lesson_stage_summary` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `lesson_id` bigint(20) NOT NULL COMMENT '课程ID',
+  `stage_index` int(11) NOT NULL COMMENT '阶段索引',
+  `summary_json` json DEFAULT NULL COMMENT '阶段摘要结果',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_lesson_stage_summary_lesson` (`lesson_id`),
+  KEY `idx_ai_lesson_stage_summary_stage` (`lesson_id`, `stage_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='课堂阶段摘要表';
+
 SET FOREIGN_KEY_CHECKS = 1;

@@ -6,6 +6,7 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CourseEnrollment;
 import com.ai.tutor.videocallimservice.chat.domain.entity.RefundRequest;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
+import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ApplyTrialRefundReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.SubmitTrialResultReq;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.CourseDetailVO;
@@ -15,6 +16,8 @@ import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RefundRequestMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
+import com.ai.tutor.videocallimservice.integration.feign.AppointmentInternalFeignClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -36,6 +39,7 @@ class CourseEnrollmentServiceTest {
         CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
         RoomMapper roomMapper = mock(RoomMapper.class);
+        AppointmentInternalClient appointmentInternalClient = mock(AppointmentInternalClient.class);
 
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
@@ -44,6 +48,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
         ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(service, "appointmentInternalClient", appointmentInternalClient);
 
         when(courseEnrollmentMapper.selectLatestByRoomId(88L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -53,6 +58,17 @@ class CourseEnrollmentServiceTest {
                 .studentUid(2001L)
                 .status("COMMUNICATING")
                 .build());
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .roomId(88L)
+                .teacherUid(1001L)
+                .studentUid(2001L)
+                .courseName("线上一对一｜200 元/小时｜每周三 19:00-21:00")
+                .lessonPrice("200 元/小时")
+                .trialStartAt(java.time.LocalDateTime.of(2026, 4, 23, 19, 0))
+                .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
+                .status("TRIALING")
+                .build());
         when(tutorApplicationMapper.selectLatestByRoomId(88L)).thenReturn(TutorApplication.builder()
                 .id(501L)
                 .roomId(88L)
@@ -60,10 +76,15 @@ class CourseEnrollmentServiceTest {
                 .build());
         when(collaborationProposalMapper.selectById(9001L)).thenReturn(CollaborationProposal.builder()
                 .id(9001L)
+                .fromUid(1001L)
                 .pricePerHour("200 元/小时")
                 .classTime("每周三 19:00-21:00")
                 .frequencyPerWeek(2)
+                .trialStartAt(java.time.LocalDateTime.of(2026, 4, 23, 19, 0))
+                .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
                 .build());
+        when(courseEnrollmentMapper.startOnlineCourse(eq(66L), eq("COMMUNICATING"), eq(9001L), eq("ONLINE"), eq("线上一对一｜200 元/小时｜每周三 19:00-21:00"),
+                eq("每周三 19:00-21:00"), eq(2), eq("200 元/小时"), any(), any())).thenReturn(1);
 
         service.onCollaborationAccepted(88L, 9001L);
 
@@ -79,6 +100,7 @@ class CourseEnrollmentServiceTest {
                 any(),
                 any()
         );
+        verify(appointmentInternalClient).createAcceptedTrialEvent(any(AppointmentInternalFeignClient.InternalTrialEventRequest.class));
     }
 
     @Test
@@ -214,19 +236,42 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
         ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
+        ReflectionTestUtils.setField(service, "chatService", mock(ChatService.class));
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
-                .teacherUid(1001L)
-                .status("TRIALING")
+                .studentUid(2001L)
+                .status("TRIAL_WAIT_STUDENT_DECISION")
+                .roomId(88L)
+                .courseName("试课课程")
+                .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
                 .build());
-        when(courseEnrollmentMapper.updateStatus(66L, "TRIALING", "TEACHING", null, null, null)).thenReturn(1);
+        when(courseEnrollmentMapper.markTrialPassedWaitingWeeklySchedule(eq(66L), eq("TRIAL_WAIT_STUDENT_DECISION"), any())).thenReturn(1);
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(
+                CourseEnrollment.builder()
+                        .id(66L)
+                        .studentUid(2001L)
+                        .status("TRIAL_WAIT_STUDENT_DECISION")
+                        .roomId(88L)
+                        .courseName("试课课程")
+                        .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
+                        .build(),
+                CourseEnrollment.builder()
+                        .id(66L)
+                        .studentUid(2001L)
+                        .status("TRIAL_WAIT_WEEKLY_SCHEDULE")
+                        .roomId(88L)
+                        .courseName("试课课程")
+                        .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
+                        .weeklyScheduleDeadlineAt(java.time.LocalDateTime.of(2026, 4, 24, 21, 0))
+                        .build()
+        );
 
         SubmitTrialResultReq req = new SubmitTrialResultReq();
         req.setResult("PASS");
-        service.submitTrialResult(66L, req, 1001L);
+        service.submitTrialResult(66L, req, 2001L);
 
-        verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "TEACHING", null, null, null);
+        verify(courseEnrollmentMapper).markTrialPassedWaitingWeeklySchedule(eq(66L), eq("TRIAL_WAIT_STUDENT_DECISION"), any());
     }
 
     @Test
@@ -246,19 +291,96 @@ class CourseEnrollmentServiceTest {
                 .id(66L)
                 .applicationId(501L)
                 .roomId(88L)
-                .teacherUid(1001L)
+                .studentUid(2001L)
                 .teachingMode("ONLINE")
-                .status("TRIALING")
+                .status("TRIAL_WAIT_STUDENT_DECISION")
                 .build());
-        when(courseEnrollmentMapper.updateStatus(66L, "TRIALING", "FINISHED", null, null, null)).thenReturn(1);
+        when(courseEnrollmentMapper.updateStatus(66L, "TRIAL_WAIT_STUDENT_DECISION", "TRIAL_FAILED", null, null, null)).thenReturn(1);
 
         SubmitTrialResultReq req = new SubmitTrialResultReq();
         req.setResult("FAIL");
         req.setReason("试课后确认不合适");
-        service.submitTrialResult(66L, req, 1001L);
+        service.submitTrialResult(66L, req, 2001L);
 
-        verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "FINISHED", null, null, null);
+        verify(courseEnrollmentMapper).updateStatus(66L, "TRIAL_WAIT_STUDENT_DECISION", "TRIAL_FAILED", null, null, null);
         verify(tutorApplicationMapper).updateChatAccessStatus(501L, "NONE");
         verify(roomMapper).closeRoom(88L);
+    }
+
+    @Test
+    void confirmWeeklyScheduleSubmittedShouldPromoteTeachingByStudent() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
+        ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
+        ReflectionTestUtils.setField(service, "chatService", mock(ChatService.class));
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .studentUid(2001L)
+                .status("TRIAL_WAIT_WEEKLY_SCHEDULE")
+                .build());
+        when(courseEnrollmentMapper.markWeeklyScheduleSubmitted(66L, "TRIAL_WAIT_WEEKLY_SCHEDULE", "周二 19:00-21:00", 1, "200 元/节")).thenReturn(1);
+
+        service.confirmWeeklyScheduleSubmitted(66L, 2001L, "周二 19:00-21:00", 1, 20000L);
+
+        verify(courseEnrollmentMapper).markWeeklyScheduleSubmitted(66L, "TRIAL_WAIT_WEEKLY_SCHEDULE", "周二 19:00-21:00", 1, "200 元/节");
+    }
+
+    @Test
+    void confirmWeeklyScheduleSubmittedShouldRejectRepeatSubmissionWhenAlreadyTeaching() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
+        ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
+        ReflectionTestUtils.setField(service, "chatService", mock(ChatService.class));
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .studentUid(2001L)
+                .status("TEACHING")
+                .build());
+
+        assertThatThrownBy(() -> service.confirmWeeklyScheduleSubmitted(66L, 2001L, "周二 19:00-21:00", 1, 20000L))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能重复提交");
+    }
+
+    @Test
+    void markTrialCanceledShouldReturnToCommunicatingAndReopenChat() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", mock(BrokerageOrderMapper.class));
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .applicationId(501L)
+                .roomId(88L)
+                .teacherUid(1001L)
+                .studentUid(2001L)
+                .status("TRIALING")
+                .build());
+        when(courseEnrollmentMapper.updateStatus(66L, "TRIALING", "COMMUNICATING", null, null, null)).thenReturn(1);
+
+        service.markTrialCanceled(66L, 1001L, "临时取消试课");
+
+        verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "COMMUNICATING", null, null, null);
+        verify(tutorApplicationMapper).updateChatAccessStatus(501L, "CHAT_ENABLED");
+        verify(roomMapper).reopenRoom(88L);
     }
 }

@@ -45,7 +45,7 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
         String qv = normalize(q);
         String cv = CityCatalog.normalizeCityForFilter(city);
         String sv = normalize(subject);
-        Integer pageSize = pageRequest.getPageSize();
+        Integer pageSize = normalizePageSize(pageRequest.getPageSize());
         Long cursor = pageRequest.getCursor();
 
         List<TutorBrowseRow> rows = teacherProfileMapper.pageTutorCards(qv, cv, null, sv, rateMin, rateMax, cursor, pageSize);
@@ -73,6 +73,13 @@ public class ParentTutorBrowseServiceImpl implements ParentTutorBrowseService {
         Long nextCursor = rows.get(rows.size() - 1).getId();
         boolean isLast = rows.size() < pageSize;
         return new CursorPageResponse<>(nextCursor, isLast, list);
+    }
+
+    private Integer normalizePageSize(Integer pageSize) {
+        if (pageSize == null) {
+            return 10;
+        }
+        return Math.max(1, Math.min(pageSize, 100));
     }
 
     private String normalize(String raw) {

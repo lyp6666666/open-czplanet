@@ -17,7 +17,6 @@ const chatRealtime = useChatRealtimeStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-
 const rooms = ref<ChatRoomItemResp[]>([])
 const cursor = ref<number | null>(null)
 const isLast = ref(false)

@@ -19,7 +19,9 @@ import com.ai.tutor.videocallimservice.common.domain.entity.ImUser;
 import com.ai.tutor.videocallimservice.common.mapper.ImUserMapper;
 import com.ai.tutor.videocallimservice.common.mapper.StudentProfileLiteMapper;
 import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
+import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -29,9 +31,13 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class CollaborationProposalService {
+
+    private static final long PROPOSAL_EXPIRE_HOURS = 12L;
 
     @Resource
     private CollaborationProposalMapper collaborationProposalMapper;
@@ -53,9 +59,21 @@ public class CollaborationProposalService {
     private BrokerageOrderService brokerageOrderService;
     @Resource
     private CourseEnrollmentService courseEnrollmentService;
+    @Resource
+    private TutorApplicationService tutorApplicationService;
+    @Autowired(required = false)
+    private AppointmentInternalClient appointmentInternalClient;
 
     public Long createAndSend(CreateCollaborationProposalReq req, Long uid) {
         ThrowUtils.throwIf(req == null || uid == null, ErrorCode.PARAMS_ERROR);
+        normalizeTrialProposalReq(req);
+        String clientRequestId = trimNullable(req.getClientRequestId());
+        if (clientRequestId != null) {
+            CollaborationProposal existingByClientRequest = collaborationProposalMapper.selectByFromUidAndClientRequestId(uid, clientRequestId);
+            if (existingByClientRequest != null && existingByClientRequest.getId() != null) {
+                return sendProposalMessage(existingByClientRequest, uid);
+            }
+        }
         // #region debug-point
         dbg("{\"ts\":\"" + Instant.now() + "\",\"event\":\"collab_create_entry\""
                 + ",\"uid\":" + uid
@@ -111,6 +129,7 @@ public class CollaborationProposalService {
         // #endregion debug-point
         ThrowUtils.throwIf(teacherUid == null || studentUid == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(teacherUid) && !uid.equals(studentUid), ErrorCode.NO_AUTH_ERROR);
+        tutorApplicationService.assertRoomReadyForScheduling(req.getRoomId(), uid);
 
         CollaborationProposal existing = collaborationProposalMapper.selectLatestByRoomId(req.getRoomId());
         if (existing != null) {
@@ -126,7 +145,10 @@ public class CollaborationProposalService {
         }
 
         Long toUid = uid.equals(teacherUid) ? studentUid : teacherUid;
+        assertTrialScheduleAvailable(uid, toUid, req.getTrialStartAt(), req.getTrialEndAt());
         LocalDateTime now = LocalDateTime.now();
+        // 过渡期先将 12 小时有效期写入系统消息，后续表结构迁移后会持久化 expire_at 并由定时任务扫描过期。
+        LocalDateTime expireAt = now.plus(PROPOSAL_EXPIRE_HOURS, ChronoUnit.HOURS);
 
         CollaborationProposal proposal = CollaborationProposal.builder()
                 .roomId(req.getRoomId())
@@ -135,45 +157,40 @@ public class CollaborationProposalService {
                 .pricePerHour(req.getPricePerHour())
                 .classTime(req.getClassTime())
                 .frequencyPerWeek(req.getFrequencyPerWeek())
+                .trialStartAt(toLocalDateTime(req.getTrialStartAt()))
+                .trialEndAt(toLocalDateTime(req.getTrialEndAt()))
+                .remark(trimTo1024(req.getRemark()))
+                .expireAt(expireAt)
+                .clientRequestId(clientRequestId)
                 .status(CollaborationProposalStatus.PENDING.name())
                 .createTime(now)
                 .updateTime(now)
                 .build();
         collaborationProposalMapper.insert(proposal);
-
-        SystemMsgReq body = new SystemMsgReq();
-        body.setBizType("COLLAB_PROPOSAL");
-        body.setEventId(proposal.getId());
-        body.setTitle("家教合作");
-        body.setStatus(CollaborationProposalStatus.PENDING.name());
-        body.setCreatorUserId(uid);
-        body.setPricePerHour(req.getPricePerHour());
-        body.setClassTime(req.getClassTime());
-        body.setFrequencyPerWeek(req.getFrequencyPerWeek());
-
-        ChatMessageReq msgReq = ChatMessageReq.builder()
-                .roomId(req.getRoomId())
-                .msgType(8)
-                .body(body)
-                .build();
-        return chatService.sendMsg(msgReq, uid);
+        return sendProposalMessage(proposal, uid);
     }
 
     public Long updateAndSend(Long proposalId, CreateCollaborationProposalReq req, Long uid) {
         ThrowUtils.throwIf(proposalId == null || req == null || uid == null, ErrorCode.PARAMS_ERROR);
+        normalizeTrialProposalReq(req);
 
         CollaborationProposal proposal = collaborationProposalMapper.selectById(proposalId);
         ThrowUtils.throwIf(proposal == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(proposal.getFromUid()), ErrorCode.NO_AUTH_ERROR);
         ThrowUtils.throwIf(!CollaborationProposalStatus.PENDING.name().equals(proposal.getStatus()), ErrorCode.OPERATION_ERROR, "仅待确认提案可修改");
         ThrowUtils.throwIf(req.getRoomId() == null || !req.getRoomId().equals(proposal.getRoomId()), ErrorCode.PARAMS_ERROR);
+        assertTrialScheduleAvailable(uid, proposal.getToUid(), req.getTrialStartAt(), req.getTrialEndAt());
 
         int updated = collaborationProposalMapper.updateContent(
                 proposalId,
                 uid,
                 req.getPricePerHour(),
                 req.getClassTime(),
-                req.getFrequencyPerWeek()
+                req.getFrequencyPerWeek(),
+                toLocalDateTime(req.getTrialStartAt()),
+                toLocalDateTime(req.getTrialEndAt()),
+                trimTo1024(req.getRemark()),
+                LocalDateTime.now().plus(PROPOSAL_EXPIRE_HOURS, ChronoUnit.HOURS)
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
 
@@ -186,6 +203,10 @@ public class CollaborationProposalService {
         body.setPricePerHour(req.getPricePerHour());
         body.setClassTime(req.getClassTime());
         body.setFrequencyPerWeek(req.getFrequencyPerWeek());
+        body.setTrialStartAt(req.getTrialStartAt());
+        body.setTrialEndAt(req.getTrialEndAt());
+        body.setRemark(req.getRemark());
+        body.setExpireAt(toEpochMilli(LocalDateTime.now().plus(PROPOSAL_EXPIRE_HOURS, ChronoUnit.HOURS)));
 
         ChatMessageReq msgReq = ChatMessageReq.builder()
                 .roomId(proposal.getRoomId())
@@ -225,6 +246,7 @@ public class CollaborationProposalService {
         // #endregion debug-point
         ThrowUtils.throwIf(proposal == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(proposal.getToUid()), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(isExpiredPending(proposal), ErrorCode.OPERATION_ERROR, "该合作提案已超过12小时有效期，请重新发起");
 
         String action = req.getAction() == null ? "" : req.getAction().trim().toUpperCase();
         CollaborationProposalStatus next;
@@ -239,7 +261,17 @@ public class CollaborationProposalService {
 
         LocalDateTime now = LocalDateTime.now();
         int updated = collaborationProposalMapper.updateStatus(proposalId, next.name(), uid, now);
-        ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        if (updated <= 0) {
+            CollaborationProposal latest = collaborationProposalMapper.selectById(proposalId);
+            ThrowUtils.throwIf(latest == null, ErrorCode.NOT_FOUND_ERROR);
+            if (uid.equals(latest.getToUid()) && next.name().equals(latest.getStatus())) {
+                return sendStatusMessage(latest, next, uid);
+            }
+            ThrowUtils.throwIf(!CollaborationProposalStatus.PENDING.name().equals(latest.getStatus()),
+                    ErrorCode.OPERATION_ERROR,
+                    "该试课提案已被处理，请刷新页面查看最新状态");
+            ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
+        }
 
         if (CollaborationProposalStatus.ACCEPTED.equals(next) && proposal.getRoomId() != null) {
             TutorApplication application = tutorApplicationMapper.selectLatestByRoomId(proposal.getRoomId());
@@ -251,9 +283,13 @@ public class CollaborationProposalService {
             }
         }
 
+        return sendStatusMessage(proposal, next, uid);
+    }
+
+    private Long sendStatusMessage(CollaborationProposal proposal, CollaborationProposalStatus next, Long uid) {
         SystemMsgReq body = new SystemMsgReq();
         body.setBizType("COLLAB_PROPOSAL_STATUS");
-        body.setEventId(proposalId);
+        body.setEventId(proposal.getId());
         body.setTitle("家教合作");
         body.setStatus(next.name());
         body.setActorUserId(uid);
@@ -268,8 +304,8 @@ public class CollaborationProposalService {
             if (brokerageOrderService.hasPaidOrderInRoom(proposal.getRoomId())) {
                 return statusMsgId;
             }
-            BrokerageOrderVO order = brokerageOrderService.getOrCreateByProposal(proposalId, uid);
-            brokerageOrderService.sendBrokerageRequired(proposal.getRoomId(), proposalId, order, uid);
+            BrokerageOrderVO order = brokerageOrderService.getOrCreateByProposal(proposal.getId(), uid);
+            brokerageOrderService.sendBrokerageRequired(proposal.getRoomId(), proposal.getId(), order, uid);
         }
         return statusMsgId;
     }
@@ -297,6 +333,107 @@ public class CollaborationProposalService {
             return null;
         }
         return user.getId();
+    }
+
+    private static void normalizeTrialProposalReq(CreateCollaborationProposalReq req) {
+        ThrowUtils.throwIf(req.getPricePerHour() == null || req.getPricePerHour().trim().isEmpty(), ErrorCode.PARAMS_ERROR, "请填写课时费");
+        Long start = req.getTrialStartAt();
+        Long end = req.getTrialEndAt();
+        if (start != null || end != null) {
+            ThrowUtils.throwIf(start == null || end == null || end <= start, ErrorCode.PARAMS_ERROR, "请选择有效的试课时间");
+            // 兼容当前数据库仍保存 class_time 的过渡期，后续会迁移为独立 trial_start_at/trial_end_at 字段。
+            req.setClassTime(formatTrialTime(start, end));
+            if (req.getFrequencyPerWeek() == null || req.getFrequencyPerWeek() <= 0) {
+                req.setFrequencyPerWeek(1);
+            }
+            return;
+        }
+        ThrowUtils.throwIf(req.getClassTime() == null || req.getClassTime().trim().isEmpty(), ErrorCode.PARAMS_ERROR, "请选择试课时间");
+        if (req.getFrequencyPerWeek() == null || req.getFrequencyPerWeek() <= 0) {
+            req.setFrequencyPerWeek(1);
+        }
+    }
+
+    private static boolean isExpiredPending(CollaborationProposal proposal) {
+        if (proposal == null || proposal.getCreateTime() == null) {
+            return false;
+        }
+        if (!CollaborationProposalStatus.PENDING.name().equals(proposal.getStatus())) {
+            return false;
+        }
+        LocalDateTime expireAt = proposal.getExpireAt() == null
+                ? proposal.getCreateTime().plus(PROPOSAL_EXPIRE_HOURS, ChronoUnit.HOURS)
+                : proposal.getExpireAt();
+        return LocalDateTime.now().isAfter(expireAt);
+    }
+
+    private void assertTrialScheduleAvailable(Long uid, Long otherUid, Long startAt, Long endAt) {
+        if (appointmentInternalClient == null || startAt == null || endAt == null) {
+            return;
+        }
+        appointmentInternalClient.assertNoScheduleConflict(uid, otherUid, startAt, endAt);
+    }
+
+    private static Long toEpochMilli(LocalDateTime time) {
+        if (time == null) {
+            return null;
+        }
+        return time.atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+    }
+
+    private Long sendProposalMessage(CollaborationProposal proposal, Long uid) {
+        SystemMsgReq body = new SystemMsgReq();
+        body.setBizType("COLLAB_PROPOSAL");
+        body.setEventId(proposal.getId());
+        body.setTitle("试课合作");
+        body.setStatus(proposal.getStatus());
+        body.setCreatorUserId(proposal.getFromUid());
+        body.setPricePerHour(proposal.getPricePerHour());
+        body.setClassTime(proposal.getClassTime());
+        body.setFrequencyPerWeek(proposal.getFrequencyPerWeek());
+        body.setTrialStartAt(toEpochMilli(proposal.getTrialStartAt()));
+        body.setTrialEndAt(toEpochMilli(proposal.getTrialEndAt()));
+        body.setRemark(proposal.getRemark());
+        body.setExpireAt(toEpochMilli(proposal.getExpireAt()));
+
+        ChatMessageReq msgReq = ChatMessageReq.builder()
+                .roomId(proposal.getRoomId())
+                .msgType(8)
+                .body(body)
+                .build();
+        return chatService.sendMsg(msgReq, uid);
+    }
+
+    private static LocalDateTime toLocalDateTime(Long epochMs) {
+        if (epochMs == null) {
+            return null;
+        }
+        return Instant.ofEpochMilli(epochMs).atZone(ZoneId.of("Asia/Shanghai")).toLocalDateTime();
+    }
+
+    private static String trimNullable(String v) {
+        if (v == null) {
+            return null;
+        }
+        String s = v.trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private static String trimTo1024(String v) {
+        String s = trimNullable(v);
+        if (s == null) {
+            return null;
+        }
+        return s.length() > 1024 ? s.substring(0, 1024) : s;
+    }
+
+    private static String formatTrialTime(Long startMs, Long endMs) {
+        java.time.ZoneId zone = java.time.ZoneId.of("Asia/Shanghai");
+        java.time.format.DateTimeFormatter dateTime = java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+        java.time.format.DateTimeFormatter time = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        java.time.ZonedDateTime start = java.time.Instant.ofEpochMilli(startMs).atZone(zone);
+        java.time.ZonedDateTime end = java.time.Instant.ofEpochMilli(endMs).atZone(zone);
+        return start.format(dateTime) + " - " + end.format(time);
     }
 
     // #region debug-point

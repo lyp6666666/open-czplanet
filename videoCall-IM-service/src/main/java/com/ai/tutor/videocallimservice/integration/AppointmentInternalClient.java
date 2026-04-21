@@ -35,6 +35,24 @@ public class AppointmentInternalClient {
         return phone == null ? "" : phone;
     }
 
+    public void assertNoScheduleConflict(Long uid, Long otherUid, Long startAt, Long endAt) {
+        ThrowUtils.throwIf(uid == null || otherUid == null || startAt == null || endAt == null, ErrorCode.PARAMS_ERROR);
+        BaseResponse<Boolean> response = client.checkScheduleConflict(uid, otherUid, startAt, endAt);
+        unwrapData(response, "checkScheduleConflict");
+    }
+
+    public Long createAcceptedTrialEvent(AppointmentInternalFeignClient.InternalTrialEventRequest request) {
+        ThrowUtils.throwIf(request == null
+                || request.getCourseId() == null
+                || request.getRoomId() == null
+                || request.getTeacherUid() == null
+                || request.getStudentUid() == null
+                || request.getStartAt() == null
+                || request.getEndAt() == null, ErrorCode.PARAMS_ERROR);
+        BaseResponse<Long> response = client.createAcceptedTrialEvent(request);
+        return unwrapData(response, "createAcceptedTrialEvent");
+    }
+
     public void notifyInviteBrokeragePaid(InviteBrokeragePaidEvent event) {
         ThrowUtils.throwIf(event == null || event.getBrokerageOrderId() == null, ErrorCode.PARAMS_ERROR);
         BaseResponse<Boolean> response = client.notifyInviteBrokeragePaid(event);

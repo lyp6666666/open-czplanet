@@ -22,6 +22,39 @@ export interface CreateScheduleEventRequest {
 
 export type RespondScheduleAction = 'ACCEPT' | 'REJECT'
 
+export interface ScheduleBusyBlockVO {
+  eventId: number
+  courseId?: number | null
+  title?: string | null
+  lessonType?: 'TRIAL' | 'NORMAL' | string | null
+  startAt: number
+  endAt: number
+  status?: string | null
+}
+
+export interface ScheduleAvailabilityVO {
+  date: string
+  timezone: string
+  myUserId: number
+  otherUserId: number
+  myBusyBlocks: ScheduleBusyBlockVO[]
+  otherBusyBlocks: ScheduleBusyBlockVO[]
+}
+
+export interface SubmitWeeklyScheduleRequest {
+  participantUserId: number
+  roomId?: number
+  title?: string
+  description?: string
+  lessonPriceFen?: number
+  weeks?: number
+  slots: Array<{
+    dayOfWeek: number
+    startMinute: number
+    endMinute: number
+  }>
+}
+
 /**
  * 课程安排（日历）相关 API。
  *
@@ -30,6 +63,10 @@ export type RespondScheduleAction = 'ACCEPT' | 'REJECT'
 export const scheduleApi = {
   listEvents(params: ListScheduleEventsParams) {
     return http.get<unknown, ScheduleEventVO[]>('/api/v1/schedule/events', { params })
+  },
+
+  dayAvailability(params: { otherUid: number; dateAt: number }) {
+    return http.get<unknown, ScheduleAvailabilityVO>('/api/v1/schedule/availability/day', { params })
   },
 
   listCourseEvents(courseId: number) {
@@ -46,6 +83,10 @@ export const scheduleApi = {
 
   cancel(eventId: number, remark?: string) {
     return http.post<unknown, ScheduleEventVO>(`/api/v1/schedule/events/${eventId}/cancel`, remark ? { remark } : {})
+  },
+
+  submitWeeklySchedule(courseId: number, request: SubmitWeeklyScheduleRequest) {
+    return http.post<unknown, ScheduleEventVO[]>(`/api/v1/schedule/courses/${courseId}/weekly-schedule`, request)
   },
 
   listRecentContacts(limit = 50) {

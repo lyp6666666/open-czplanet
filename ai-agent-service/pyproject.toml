@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "ai-agent-service"
+version = "0.1.0"
+description = "AI agent microservice for lesson reports and IM chat summaries."
+authors = []
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+fastapi = "^0.115.12"
+uvicorn = {extras = ["standard"], version = "^0.34.0"}
+pydantic = "^2.10.6"
+pydantic-settings = "^2.8.1"
+redis = "^5.2.1"
+rq = "^2.1.0"
+sqlalchemy = "^2.0.39"
+pymysql = "^1.1.1"
+httpx = "^0.28.1"
+python-dotenv = "^1.0.1"
+langchain = "^0.3.25"
+langgraph = "^0.2.56"
+langchain-openai = "^0.2.14"
+websocket-client = "0.48.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+ruff = "^0.9.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra"]
+
+[tool.ruff]
+line-length = 100
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,127 +1,202 @@
-# Business Flows
+# 业务流程
 
-Read the section that matches the feature you are touching.
+请阅读与你当前修改功能相匹配的章节。
 
-## 1. Authentication And Identity
+## 1. 认证与身份
 
-- Public login entry is mainly in `tutor-appointment-service`
-- Main endpoints:
+- 对外登录入口主要在 `tutor-appointment-service`
+- 主要接口：
   - `/user/sendcode`
   - `/user/loginOrRegister`
   - `/user/wechatLogin`
   - `/user/me`
   - `/user/batch`
-- Identity path:
-  gateway parses JWT -> common identity signer/validator propagates uid and role -> service interceptors use `RequestHolder`
-- If auth work spans services, inspect:
-  - gateway JWT parsing
-  - `ai-tutor-common` identity signing
-  - service interceptors and request attributes
+- 身份链路：
+  网关解析 JWT -> 公共身份签名/校验组件透传 uid 与 role -> 各服务拦截器通过 `RequestHolder` 使用身份信息
+- 如果认证改动跨多个服务，重点检查：
+  - 网关 JWT 解析
+  - `ai-tutor-common` 的身份签名逻辑
+  - 服务拦截器与请求属性
 
-## 2. Teacher Demand Browsing And Start Chat
+## 2. 教师浏览需求并发起聊天
 
-- User web route area:
+- 用户端 Web 路由区域：
   `ai-tutor-web/src/pages/tutor/*`
-- Backend area:
-  `tutor-appointment-service` for job data, `videoCall-IM-service` for room creation and messaging
-- Typical flow:
-  teacher logs in -> browses parent jobs -> opens detail -> starts room -> enters chat
-- When changing this flow:
-  inspect both job APIs and chat room APIs, not just one side
+- 后端区域：
+  需求数据在 `tutor-appointment-service`，房间创建与消息在 `videoCall-IM-service`
+- 典型流程：
+  教师登录 -> 浏览家长需求 -> 打开详情 -> 创建房间 -> 进入聊天
+- 修改这个流程时：
+  不要只看单侧；需求 API 和聊天房间 API 都要一起检查
 
-## 3. Student Or Parent Posting And Managing Demand
+## 3. 学生或家长发布与管理需求
 
-- User web route area:
+- 用户端 Web 路由区域：
   `ai-tutor-web/src/pages/student/*`
-- Miniprogram area:
-  `ai-tutor-miniprogram/src/pages/post`, `pages/my-jobs`
-- Backend area:
-  `tutor-appointment-service` parent job posting controllers and services
-- Typical flow:
-  login -> post demand -> edit/view own demand -> attract teacher contact
+- 小程序区域：
+  `ai-tutor-miniprogram/src/pages/post`、`pages/my-jobs`
+- 后端区域：
+  `tutor-appointment-service` 中家长需求发布相关控制器与服务
+- 典型流程：
+  登录 -> 发布需求 -> 编辑/查看自己的需求 -> 吸引教师联系
 
-## 4. Organization Flow
+## 4. 机构端流程
 
-- User web route area:
+- 用户端 Web 路由区域：
   `ai-tutor-web/src/pages/org/*`
-- Backend area:
-  organization auth and organization job posting controllers in `tutor-appointment-service`
-- Typical flow:
-  org login -> manage org jobs -> browse tutors/favorites -> public profile
+- 后端区域：
+  `tutor-appointment-service` 中机构登录与机构需求发布相关控制器
+- 典型流程：
+  机构登录 -> 管理机构需求 -> 浏览教师/收藏 -> 对外展示机构主页
 
-## 5. Chat, Realtime, Unread, Collaboration
+## 5. 聊天、实时通信、未读与合作流程
 
-- User web route area:
+- 用户端 Web 路由区域：
   `ai-tutor-web/src/pages/chat/*`
-- Frontend realtime store:
+- 前端实时状态仓库：
   `ai-tutor-web/src/stores/chatRealtime.ts`
-- Backend area:
+- 后端区域：
   `videoCall-IM-service`
-- Typical flow:
-  list rooms -> load room messages -> send message -> SSE receive -> unread update -> read ack
-- Important reminder:
-  chat pages also render structured business cards such as collaboration proposals and unlock/contact states
-- Current supported IM capabilities in this repo:
-  text messages, image messages, failed-send retry, read receipts, delivery receipts, typing status, message recall, room pinning, in-room message search, presence query, realtime presence push, and last-online display
-- Current multi-end behavior:
-  presence uses first-connect / last-disconnect semantics, so multiple browser tabs or devices for the same user should not cause online/offline flicker for the peer
-- Realtime storage note:
-  unified realtime replay depends on the backend table `chat_realtime_event`; if presence or other SSE-driven features feel inconsistent across refresh/reconnect, verify migrations before debugging code
+- 典型流程：
+  房间列表 -> 加载消息 -> 发送消息 -> SSE 接收 -> 更新未读 -> 已读回执
+- 重要提醒：
+  聊天页还会渲染结构化业务卡片，例如合作提案、联系方式解锁状态等
+- 当前仓库已经支持的 IM 能力：
+  文本消息、图片消息、发送失败重试、已读回执、送达回执、正在输入状态、消息撤回、房间置顶、房内消息搜索、在线状态查询、实时在线状态推送、最后在线时间展示
+- 当前多端行为：
+  presence 使用 first-connect / last-disconnect 语义，所以同一用户开多个浏览器标签页或多个设备时，不应让对方看到在线状态频繁闪烁
+- 实时存储说明：
+  统一实时回放依赖后端表 `chat_realtime_event`；如果在线状态或其它 SSE 驱动能力在刷新/重连后表现异常，先确认迁移是否完整，再去排查代码
 
-## 6. Payment, Cashier, Brokerage
+### 当前线上需求口径：聊天申请、试课合作、正式课表闭环
 
-- User web route area:
+- 时间基准：
+  所有试课时间、正式课表、提醒时间、截止时间、冲突校验统一按北京时间处理
+- 聊天申请主链路：
+  教师或学生发起聊天申请 -> 对方同意 -> 教师支付信息费 -> 聊天解锁 -> 双方才能继续聊天、发合作、排试课
+- 门禁规则：
+  在 `chatAccessStatus=PAYMENT_REQUIRED` 时，前后端都必须阻断普通聊天、发合作、发授课申请、试课改期、试课取消之外的排课动作
+- 发起合作权限：
+  教师和学生都可以发起合作提案，但只能由接收方同意或拒绝
+- 合作提案语义：
+  当前“合作提案”只代表“试课合作提案”，不直接承载正式长期课表
+- 合作提案字段：
+  必填 `pricePerHour`、试课日期、试课开始时间、试课结束时间、备注
+- 合作提案唯一性：
+  同一个聊天房间同一时刻只能有一个待处理的合作提案，必须防重复提交
+- 合作提案有效期：
+  默认 12 小时，超时后自动过期并发送系统消息
+- 试课选时方式：
+  如果由学生发起合作，先选试课日期，再展示双方当日可视化时间表
+- 双列时间表要求：
+  左侧显示“我的时间”，右侧显示“对方时间”；用户在自己的列点击空白处生成试课块
+- 试课默认时长：
+  默认 2 小时，但允许拖拽调整；可以整体移动，也可以只调整开始或结束时间
+- 冲突校验：
+  试课排期和正式固定课表都必须进行前端提示与后端兜底双重冲突校验；需要同时校验自己和对方
+- 试课同意后：
+  在双方日程里创建带“试课”标签的课程事件；“我的课程”里同时出现长期课程记录，阶段为试课
+- 日程展示分层：
+  至少区分 `待确认试课`、`已确认试课`、`正式每周课`
+- 试课改期入口：
+  从“我的课程”进入；只有试课已确认后才有入口
+- 改期规则：
+  改期使用与发起试课相同的双列时间选择器；同一时刻只能存在一个待处理改期单；一方发起后聊天页发送系统消息并等待对方确认
+- 取消与改期冲突：
+  允许取消试课；取消优先级高于改期；取消后未决改期单自动失效
+- 试课取消时机：
+  试课开始前任何时刻都可取消；取消后课程退回聊天沟通阶段，可重新发起合作并重新安排试课；历史试课日程保留 `canceled` 记录
+- 试课结束判定：
+  默认以试课结束时间自然到达为准，系统自动切换到待学生决策；同时保留人工兜底能力
+- 试课后决策权限：
+  只有学生可以选择“通过/不通过”
+- 试课不通过后：
+  进入试课失败流程；聊天关闭；教师端课程状态应明确展示“不通过”；教师可按当前规则申请退还 80% 信息费
+- 试课通过后：
+  如果学生暂不提交正式课表，起算点为试课结束时间；系统进入待补正式课表状态
+- 正式课表提交权限：
+  只有学生可以提交正式每周课表；暂不支持教师发起建议课表
+- 正式课表选时方式：
+  在一周日程表中选择一个或多个固定上课时间；允许多日不同时间，但同一课程下所有固定课节时长必须一致
+- 正式课表生成范围：
+  当前默认生成 16 周；后续再支持修改、续课、申请结课
+- 正式课表重复提交：
+  完全禁止；提交成功后不能再次重复提交同一份正式课表
+- 试课通过后的提醒：
+  学生在试课结束时应收到弹窗提示选择“通过/不通过”；若选择通过则必须选择后续正式课表，可立即选择，也可稍后选择
+- 稍后选择入口：
+  “我的课程”中的试课阶段入口，以及聊天页面中的系统消息提醒入口
+- 正式课表截止与提醒：
+  学生必须在试课结束后 24 小时内提交正式课表；截止前 12 小时、6 小时、1 小时分别发送聊天提醒；邮件提醒先留 TODO
+- 提醒去重：
+  如果学生已经提交正式课表，则不再发送剩余 12h/6h/1h 提醒
+- 超时未提交：
+  超时自动判定为试课失败，走“不通过/失败”后续流程
+- 聊天能力与课程状态：
+  不继续后不允许聊天；正式结课后允许继续聊天，但聊天页要显示“课程已结课”标签，避免误以为还能继续排课
+- 防重复要求：
+  发合作、同意合作、生成试课日程、生成每周课表，都必须防重复提交
+- 常用状态命名：
+  代码实现应统一使用稳定状态码，不依赖页面文案做判断
+
+## 6. 支付、收银台与佣金/分账
+
+- 用户端 Web 路由区域：
   `ai-tutor-web/src/pages/pay/*`
-- Backend area:
+- 后端区域：
   `payment-service`
-- Cross-service dependency:
-  payment may need brokerage order info from IM-side integration
-- Typical flow:
-  business action creates payable context -> prepay/cashier page -> poll order status -> notify callback -> finalize business state
-- In the current shared remote test environment:
-  public callback hits `huoyue.online` on `111.229.64.41`, then `nginx` proxies to the real business host `111.228.20.88`
-- The app is not served from `huoyue.online` today.
-  laptop browser testing usually happens through the SSH tunnel at `localhost:5173`
-- Payment success is not complete until IM-side unlock logs appear, such as `brokerage_payment_success` and `tutor_application_paid`
-- When changing payment:
-  inspect both `payment-service` and any IM/admin integration that consumes the result
-  also read `references/payment-remote-testing.md` for the shared two-server callback topology and live verification routine
+- 跨服务依赖：
+  支付流程可能需要 IM 侧集成提供的佣金/订单信息
+- 典型流程：
+  某个业务动作创建待支付上下文 -> 进入预支付/收银台页面 -> 轮询订单状态 -> 接收回调 -> 落实业务状态
+- 在当前共享远程测试环境中：
+  对外支付回调先到 `111.229.64.41` 上的 `huoyue.online`，再由 `nginx` 反向代理到真正的业务主机 `111.228.20.88`
+- 当前应用本体并不是通过 `huoyue.online` 提供访问。
+  笔记本上的浏览器测试通常走 SSH 隧道访问 `localhost:5173`
+- 只有当 IM 侧出现解锁相关日志，例如 `brokerage_payment_success` 和 `tutor_application_paid`，支付成功链路才算真正完成
+- 信息费支付后解锁规则：
+  只有教师支付信息费成功，`tutor_application.chat_access_status` 才能进入 `CHAT_ENABLED`；在此之前学生端不能发送预约试课、不能发合作、也不能继续沟通
+- 修改支付时：
+  不仅要检查 `payment-service`，还要查看依赖支付结果的 IM 或管理后台集成
+  同时阅读 `references/payment-remote-testing.md`，了解当前双服务器回调拓扑和线上验证流程
 
-## 7. Refund And Dispute Flows
+## 7. 退款与争议流程
 
-- Admin backend and admin web both participate
-- Chat-side or IM-side state may also participate depending on refund type
-- Payment-side status changes may finalize or gate refund actions
-- When changing refund logic:
-  trace the end-to-end state machine before editing a single controller
+- 管理后台后端与前端都会参与
+- 根据退款类型，聊天侧或 IM 侧状态也可能参与
+- 支付侧状态变化可能决定退款流程的推进或阻塞
+- 修改退款逻辑时：
+  在改任何一个控制器之前，先把端到端状态机完整梳理出来
 
-## 8. Admin Moderation And Dashboard
+## 8. 管理后台审核与看板
 
-- Admin web route area:
+- 管理前端路由区域：
   `ai-tutor-admin-web/src/pages/*`
-- Admin backend area:
+- 管理后端区域：
   `ai-tutor-admin`
-- Typical domains:
-  verification review, job moderation, users, organizations, refunds, payments, dashboard stats
+- 典型领域：
+  认证审核、需求审核、用户、机构、退款、支付、仪表盘统计
 
-## 9. Home, Discovery, Recommendations
+## 9. 首页、发现页与推荐位
 
-- Main web home:
+- Web 首页主文件：
   `ai-tutor-web/src/pages/HomePage.vue`
-- Main backend area:
-  home guest service in `tutor-appointment-service`
-- Relevant for:
-  guest homepage cards, hot tabs, banner, hot demands, hot tutors, suggestions
+- 后端主区域：
+  `tutor-appointment-service` 中首页游客内容服务
+- 典型涉及内容：
+  首页游客卡片、热门标签、banner、热门需求、热门教师、推荐内容
+- 修改首页结构、销售文案或信任建立模块前：
+  还要同步阅读 `references/product-strategy.md`，确保页面体现的是当前第一阶段业务现实，而不是把第二阶段 AI 愿景写得过头
 
-## 10. How To Read A Cross-Module Request
+## 10. 如何判断一个跨模块请求该怎么读
 
-If a feature sounds simple but contains one of these words, widen the search:
+如果一个需求听起来很简单，但里面出现了下面这些关键词，就要主动扩大排查范围：
 
-- "login", "token", "role"
-  also inspect gateway and common identity
-- "chat", "message", "unread", "realtime"
-  also inspect SSE, read ack, and room page APIs
-- "pay", "cashier", "refund", "brokerage"
-  also inspect IM integration and QA tests
-- "admin"
-  inspect both `ai-tutor-admin` and `ai-tutor-admin-web`
+- “login”“token”“role”
+  还要检查网关和公共身份链路
+- “chat”“message”“unread”“realtime”
+  还要检查 SSE、已读回执与房间页面 API
+- “pay”“cashier”“refund”“brokerage”
+  还要检查 IM 集成和 QA 测试
+- “admin”
+  同时检查 `ai-tutor-admin` 和 `ai-tutor-admin-web`

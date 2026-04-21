@@ -5,6 +5,7 @@ const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
 const SettingsPage = () => import('@/pages/SettingsPage.vue')
 const UpdatePhonePage = () => import('@/pages/UpdatePhonePage.vue')
+const EmailSettingsPage = () => import('@/pages/EmailSettingsPage.vue')
 const StudentPostPage = () => import('@/pages/student/StudentPostPage.vue')
 const StudentOnboardingFirstDemandPage = () => import('@/pages/student/StudentOnboardingFirstDemandPage.vue')
 const StudentMineJobsPage = () => import('@/pages/student/StudentMineJobsPage.vue')
@@ -24,6 +25,7 @@ const BrokeragePayPage = () => import('@/pages/pay/BrokeragePayPage.vue')
 const CashierPayPage = () => import('@/pages/pay/CashierPayPage.vue')
 const MyCoursesPage = () => import('@/pages/course/MyCoursesPage.vue')
 const CourseDetailPage = () => import('@/pages/course/CourseDetailPage.vue')
+const LessonAiSummaryPage = () => import('@/pages/course/LessonAiSummaryPage.vue')
 const LivePreparePage = () => import('@/pages/live/LivePreparePage.vue')
 const LivePermissionGuidePage = () => import('@/pages/live/LivePermissionGuidePage.vue')
 const LiveClassroomPage = () => import('@/pages/live/LiveClassroomPage.vue')
@@ -154,6 +156,11 @@ export const router = createRouter({
       component: UpdatePhonePage,
     },
     {
+      path: '/settings/email',
+      name: 'emailSettings',
+      component: EmailSettingsPage,
+    },
+    {
       path: '/student/post',
       name: 'studentPost',
       component: StudentPostPage,
@@ -249,6 +256,11 @@ export const router = createRouter({
       path: '/courses/:courseId',
       name: 'courseDetail',
       component: CourseDetailPage,
+    },
+    {
+      path: '/courses/:courseId/ai-summary',
+      name: 'lessonAiSummary',
+      component: LessonAiSummaryPage,
     },
     {
       path: '/live/prepare/:courseId',

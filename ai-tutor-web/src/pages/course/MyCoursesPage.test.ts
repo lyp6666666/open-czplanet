@@ -59,6 +59,14 @@ describe('MyCoursesPage', () => {
     const enterChat = vi.fn(() => ok({ paymentRequired: true, waitingForTeacherPayment: false, orderId: 9001, roomId: null }))
 
     server.use(
+      http.get('http://localhost/user/email/reminder-hints', () =>
+        ok({
+          show: false,
+          title: '',
+          description: '',
+          actionText: '',
+        }),
+      ),
       http.get('http://localhost/courses/my', () =>
         ok([
           {
@@ -144,6 +152,14 @@ describe('MyCoursesPage', () => {
     })
 
     server.use(
+      http.get('http://localhost/user/email/reminder-hints', () =>
+        ok({
+          show: false,
+          title: '',
+          description: '',
+          actionText: '',
+        }),
+      ),
       http.get('http://localhost/courses/my', () =>
         ok([
           {
@@ -210,6 +226,14 @@ describe('MyCoursesPage', () => {
 
   it('hides offline trial refund action for online trial course', async () => {
     server.use(
+      http.get('http://localhost/user/email/reminder-hints', () =>
+        ok({
+          show: false,
+          title: '',
+          description: '',
+          actionText: '',
+        }),
+      ),
       http.get('http://localhost/courses/my', () =>
         ok([
           {

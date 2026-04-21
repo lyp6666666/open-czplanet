@@ -16,6 +16,8 @@ import com.ai.tutor.videocallimservice.chat.domain.vo.response.CursorPageResp;
 import com.ai.tutor.videocallimservice.chat.service.BrokerageOrderService;
 import com.ai.tutor.videocallimservice.chat.service.ChatRoomService;
 import com.ai.tutor.videocallimservice.chat.service.ChatService;
+import com.ai.tutor.videocallimservice.chat.service.CourseEnrollmentService;
+import com.ai.tutor.videocallimservice.chat.service.TutorApplicationService;
 import com.ai.tutor.videocallimservice.integration.dto.ImRoomRequest;
 import com.ai.tutor.videocallimservice.integration.dto.ImSystemMessageRequest;
 import jakarta.validation.Valid;
@@ -43,6 +45,8 @@ public class InternalFacadeController {
     private final ChatRoomService chatRoomService;
     private final ChatService chatService;
     private final BrokerageOrderService brokerageOrderService;
+    private final TutorApplicationService tutorApplicationService;
+    private final CourseEnrollmentService courseEnrollmentService;
 
     @PostMapping("/im/rooms/with-user")
     public BaseResponse<Long> getOrCreateRoomWithUser(@Valid @RequestBody ImRoomRequest request) {
@@ -60,6 +64,13 @@ public class InternalFacadeController {
                 .body(request.getBody())
                 .build();
         return ResultUtils.success(chatService.sendMsg(msgReq, uid));
+    }
+
+    @PostMapping("/im/rooms/{roomId}/schedule-ready")
+    public BaseResponse<Boolean> assertRoomReadyForScheduling(@PathVariable("roomId") Long roomId) {
+        Long uid = requireUid();
+        tutorApplicationService.assertRoomReadyForScheduling(roomId, uid);
+        return ResultUtils.success(Boolean.TRUE);
     }
 
     @GetMapping("/im/contacts/recent")
@@ -87,6 +98,32 @@ public class InternalFacadeController {
             }
         }
         return ResultUtils.success(new ArrayList<>(ordered));
+    }
+
+    @PostMapping("/courses/{courseId}/weekly-schedule-submitted")
+    public BaseResponse<Boolean> confirmWeeklyScheduleSubmitted(@PathVariable("courseId") Long courseId,
+                                                                @RequestBody ConfirmWeeklyScheduleRequest request) {
+        Long uid = requireUid();
+        courseEnrollmentService.confirmWeeklyScheduleSubmitted(
+                courseId,
+                uid,
+                request == null ? null : request.getClassTime(),
+                request == null ? null : request.getFrequencyPerWeek(),
+                request == null ? null : request.getLessonPriceFen()
+        );
+        return ResultUtils.success(Boolean.TRUE);
+    }
+
+    @PostMapping("/courses/{courseId}/trial-canceled")
+    public BaseResponse<Boolean> markTrialCanceled(@PathVariable("courseId") Long courseId,
+                                                   @RequestBody TrialCanceledRequest request) {
+        Long uid = requireUid();
+        courseEnrollmentService.markTrialCanceled(
+                courseId,
+                uid,
+                request == null ? null : request.getReason()
+        );
+        return ResultUtils.success(Boolean.TRUE);
     }
 
     @GetMapping("/brokerage/orders/{orderId}/payable")
@@ -125,5 +162,17 @@ public class InternalFacadeController {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
         return info.getUid();
+    }
+
+    @lombok.Data
+    public static class ConfirmWeeklyScheduleRequest {
+        private String classTime;
+        private Integer frequencyPerWeek;
+        private Long lessonPriceFen;
+    }
+
+    @lombok.Data
+    public static class TrialCanceledRequest {
+        private String reason;
     }
 }

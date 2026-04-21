@@ -107,6 +107,8 @@
             status = 2,
             update_time = CURRENT_TIMESTAMP
         WHERE id = #{id}
+          AND status = 3
+          AND proposed_start_time IS NOT NULL
     </update>
 
     <select id="listByUser" resultMap="TutorAppointmentMap">
@@ -134,7 +136,7 @@
         FROM tutor_appointment
         WHERE (parent_id = #{uid} OR tutor_id = #{uid})
           AND start_time &lt; #{end}
-          AND DATE_ADD(start_time, INTERVAL duration_minutes MINUTE) &gt; #{start}
+          AND TIMESTAMPADD(MINUTE, duration_minutes, start_time) &gt; #{start}
           AND status IN
           <choose>
               <when test="includePending != null and includePending">
@@ -171,7 +173,25 @@
               </foreach>
           )
           AND start_time &lt; #{end}
-          AND DATE_ADD(start_time, INTERVAL duration_minutes MINUTE) &gt; #{start}
+          AND TIMESTAMPADD(MINUTE, duration_minutes, start_time) &gt; #{start}
+    </select>
+
+    <select id="countAcceptedConflictsExcept" resultType="int">
+        SELECT COUNT(1)
+        FROM tutor_appointment
+        WHERE status = 2
+          AND id != #{excludeId}
+          AND (parent_id IN
+              <foreach collection="uids" item="u" open="(" close=")" separator=",">
+                  #{u}
+              </foreach>
+              OR tutor_id IN
+              <foreach collection="uids" item="u" open="(" close=")" separator=",">
+                  #{u}
+              </foreach>
+          )
+          AND start_time &lt; #{end}
+          AND TIMESTAMPADD(MINUTE, duration_minutes, start_time) &gt; #{start}
     </select>
 
 </mapper>

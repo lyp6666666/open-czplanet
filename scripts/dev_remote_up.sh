@@ -14,6 +14,7 @@ REMOTE_NACOS_GRPC_CHECK="${REMOTE_NACOS_GRPC_CHECK:-warn}"
 REMOTE_NACOS_SERVER_ADDR="${REMOTE_NACOS_SERVER_ADDR:-127.0.0.1:8848}"
 REMOTE_USE_TUNNEL="${REMOTE_USE_TUNNEL:-1}"
 REMOTE_BROWSER_HOST="${REMOTE_BROWSER_HOST:-$REMOTE_HOST}"
+REMOTE_ADMIN_WEB_BASE_PATH="${REMOTE_ADMIN_WEB_BASE_PATH:-/admin/}"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
@@ -36,6 +37,7 @@ echo "[dev_remote_up] remote NACOS_GRPC_CHECK=$REMOTE_NACOS_GRPC_CHECK"
 echo "[dev_remote_up] remote NACOS_SERVER_ADDR=$REMOTE_NACOS_SERVER_ADDR"
 echo "[dev_remote_up] remote USE_TUNNEL=$REMOTE_USE_TUNNEL"
 echo "[dev_remote_up] remote FRONTEND_HOST=$REMOTE_FRONTEND_HOST"
+echo "[dev_remote_up] remote ADMIN_WEB_BASE_PATH=$REMOTE_ADMIN_WEB_BASE_PATH"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
@@ -50,19 +52,19 @@ REMOTE_USER="$REMOTE_USER" REMOTE_HOST="$REMOTE_HOST" REMOTE_PORT="$REMOTE_PORT"
   bash scripts/sync_remote_dev_support.sh
 
 ssh -p "$REMOTE_PORT" "${REMOTE_USER}@${REMOTE_HOST}" \
-  "cd '$REMOTE_PATH' && MANAGE_INFRA='$REMOTE_MANAGE_INFRA' NACOS_GRPC_CHECK='$REMOTE_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$REMOTE_NACOS_SERVER_ADDR' FRONTEND_HOST='$REMOTE_FRONTEND_HOST' sh scripts/dev_all_up.sh"
+  "cd '$REMOTE_PATH' && MANAGE_INFRA='$REMOTE_MANAGE_INFRA' NACOS_GRPC_CHECK='$REMOTE_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$REMOTE_NACOS_SERVER_ADDR' FRONTEND_HOST='$REMOTE_FRONTEND_HOST' ADMIN_WEB_BASE_PATH='$REMOTE_ADMIN_WEB_BASE_PATH' sh scripts/dev_all_up.sh"
 
 case "$REMOTE_USE_TUNNEL" in
   1|true|yes)
     echo "[dev_remote_up] 本地访问："
     echo "  http://localhost:5173"
-    echo "  http://localhost:5174"
+    echo "  http://localhost:5174${REMOTE_ADMIN_WEB_BASE_PATH}"
     echo "  http://localhost:18080"
     ;;
   0|false|no)
     echo "[dev_remote_up] 远程直连访问："
     echo "  http://${REMOTE_BROWSER_HOST}:5173"
-    echo "  http://${REMOTE_BROWSER_HOST}:5174"
+    echo "  http://${REMOTE_BROWSER_HOST}:5174${REMOTE_ADMIN_WEB_BASE_PATH}"
     echo "  http://${REMOTE_BROWSER_HOST}:18080"
     echo "[dev_remote_up] 提示：需确保安全组/防火墙已放通 5173/5174/18080。"
     ;;

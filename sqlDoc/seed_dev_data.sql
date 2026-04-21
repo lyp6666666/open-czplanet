@@ -131,13 +131,13 @@ must_change_password=VALUES(must_change_password),
 status=VALUES(status),
 update_time=NOW(3);
 
-INSERT INTO `teacher_profile` (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, certificate_urls, status, create_time, update_time)
+INSERT INTO `teacher_profile` (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, city, highest_edu_school, teaching_mode, resume_completed, certificate_urls, status, create_time, update_time)
 VALUES
-(2001, 201, '李老师', 'C985', '数学', 6, 260.00, '擅长小学到初中数学提分，注重方法与错题复盘。', NULL, 1, NOW(3), NOW(3)),
-(2002, 202, '周老师', 'BACHELOR', '英语', 4, 220.00, '口语陪练+语法梳理，课堂节奏快但耐心。', NULL, 1, NOW(3), NOW(3)),
-(2003, 203, '王老师', 'C211', '物理', 5, 280.00, '重点突破模型与题型，适合中高考备考。', NULL, 1, NOW(3), NOW(3)),
-(2004, 204, '陈老师', 'OVERSEAS', '语文', 3, 240.00, '阅读理解与写作提分，善于引导表达。', NULL, 1, NOW(3), NOW(3)),
-(2005, 205, '张老师', 'QS50', '奥数', 7, 320.00, '奥数启蒙到竞赛进阶，强调思维训练。', NULL, 1, NOW(3), NOW(3))
+(2001, 201, '李老师', 'C985', '数学', 6, 260.00, '擅长小学到初中数学提分，注重方法与错题复盘。', '北京', '北京大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2002, 202, '周老师', 'BACHELOR', '英语', 4, 220.00, '口语陪练+语法梳理，课堂节奏快但耐心。', '北京', '北京外国语大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2003, 203, '王老师', 'C211', '物理', 5, 280.00, '重点突破模型与题型，适合中高考备考。', '北京', '北京理工大学', 'OFFLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2004, 204, '陈老师', 'OVERSEAS', '语文', 3, 240.00, '阅读理解与写作提分，善于引导表达。', '北京', '北京师范大学', 'BOTH', 1, NULL, 1, NOW(3), NOW(3)),
+(2005, 205, '张老师', 'QS50', '奥数', 7, 320.00, '奥数启蒙到竞赛进阶，强调思维训练。', '北京', '清华大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
 real_name=VALUES(real_name),
 education=VALUES(education),
@@ -145,6 +145,10 @@ subject=VALUES(subject),
 experience_years=VALUES(experience_years),
 rate_per_hour=VALUES(rate_per_hour),
 introduction=VALUES(introduction),
+city=VALUES(city),
+highest_edu_school=VALUES(highest_edu_school),
+teaching_mode=VALUES(teaching_mode),
+resume_completed=VALUES(resume_completed),
 status=VALUES(status),
 update_time=VALUES(update_time);
 
@@ -507,13 +511,13 @@ budget=VALUES(budget),
 status=VALUES(status),
 update_time=VALUES(update_time);
 
-INSERT INTO `teacher_profile` (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, certificate_urls, status, create_time, update_time)
+INSERT INTO `teacher_profile` (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, city, highest_edu_school, teaching_mode, resume_completed, certificate_urls, status, create_time, update_time)
 VALUES
-(2006, 206, '徐一鸣', 'DOUBLE_FIRST_CLASS', '初中数学,高中数学', 8, 320.00, '擅长中考/高考数学提分，讲解注重“方法-训练-复盘”闭环；可提供阶段测评、错题本与学习计划。', NULL, 1, NOW(3), NOW(3)),
-(2007, 207, '孙雨晴', 'OVERSEAS', '初中英语,高中英语', 6, 280.00, '阅读写作双线提升，擅长把语法融入语境；课堂互动多，适合口语与写作提升。', NULL, 1, NOW(3), NOW(3)),
-(2008, 208, '罗子涵', 'C985', '初中物理,高中物理', 7, 340.00, '模型化讲解+典型题归纳，带学生建立知识网络；课后提供讲义与练习讲评。', NULL, 1, NOW(3), NOW(3)),
-(2009, 209, '冯若兰', 'BACHELOR', '小学语文,初中语文', 5, 230.00, '阅读理解方法训练+写作素材积累，重视表达结构与写作思维。', NULL, 1, NOW(3), NOW(3)),
-(2010, 210, '高天', 'QS50', '小学英语,初中英语', 4, 240.00, '自然拼读+分级阅读+口语表达循序渐进，注重发音纠正与习惯养成。', NULL, 1, NOW(3), NOW(3))
+(2006, 206, '徐一鸣', 'DOUBLE_FIRST_CLASS', '初中数学,高中数学', 8, 320.00, '擅长中考/高考数学提分，讲解注重“方法-训练-复盘”闭环；可提供阶段测评、错题本与学习计划。', '北京', '中国人民大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2007, 207, '孙雨晴', 'OVERSEAS', '初中英语,高中英语', 6, 280.00, '阅读写作双线提升，擅长把语法融入语境；课堂互动多，适合口语与写作提升。', '北京', '对外经济贸易大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2008, 208, '罗子涵', 'C985', '初中物理,高中物理', 7, 340.00, '模型化讲解+典型题归纳，带学生建立知识网络；课后提供讲义与练习讲评。', '北京', '北京航空航天大学', 'OFFLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2009, 209, '冯若兰', 'BACHELOR', '小学语文,初中语文', 5, 230.00, '阅读理解方法训练+写作素材积累，重视表达结构与写作思维。', '北京', '首都师范大学', 'BOTH', 1, NULL, 1, NOW(3), NOW(3)),
+(2010, 210, '高天', 'QS50', '小学英语,初中英语', 4, 240.00, '自然拼读+分级阅读+口语表达循序渐进，注重发音纠正与习惯养成。', '北京', '北京语言大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
 real_name=VALUES(real_name),
 education=VALUES(education),
@@ -521,6 +525,10 @@ subject=VALUES(subject),
 experience_years=VALUES(experience_years),
 rate_per_hour=VALUES(rate_per_hour),
 introduction=VALUES(introduction),
+city=VALUES(city),
+highest_edu_school=VALUES(highest_edu_school),
+teaching_mode=VALUES(teaching_mode),
+resume_completed=VALUES(resume_completed),
 certificate_urls=VALUES(certificate_urls),
 status=VALUES(status),
 update_time=VALUES(update_time);

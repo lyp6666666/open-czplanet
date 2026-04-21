@@ -48,12 +48,41 @@ public class HttpImFacade implements ImFacade {
     }
 
     @Override
+    public void assertRoomReadyForScheduling(Long uid, Long roomId) {
+        ThrowUtils.throwIf(roomId == null, ErrorCode.PARAMS_ERROR);
+        requireCurrentUid(uid);
+        unwrapData(client.assertRoomReadyForScheduling(roomId), "assertRoomReadyForScheduling");
+    }
+
+    @Override
     public List<Long> listRecentContactUids(Long uid, int limit) {
         requireCurrentUid(uid);
         int safeLimit = normalizeLimit(limit);
         BaseResponse<List<Long>> response = client.listRecentContactUids(safeLimit);
         List<Long> data = unwrapData(response, "listRecentContactUids");
         return data == null ? List.of() : data;
+    }
+
+    @Override
+    public void confirmWeeklyScheduleSubmitted(Long uid, Long courseId, String classTime, Integer frequencyPerWeek, Long lessonPriceFen) {
+        ThrowUtils.throwIf(courseId == null, ErrorCode.PARAMS_ERROR);
+        requireCurrentUid(uid);
+
+        ImInternalFeignClient.ConfirmWeeklyScheduleRequest request = new ImInternalFeignClient.ConfirmWeeklyScheduleRequest();
+        request.setClassTime(classTime);
+        request.setFrequencyPerWeek(frequencyPerWeek);
+        request.setLessonPriceFen(lessonPriceFen);
+        unwrapData(client.confirmWeeklyScheduleSubmitted(courseId, request), "confirmWeeklyScheduleSubmitted");
+    }
+
+    @Override
+    public void markTrialCanceled(Long uid, Long courseId, String reason) {
+        ThrowUtils.throwIf(courseId == null, ErrorCode.PARAMS_ERROR);
+        requireCurrentUid(uid);
+
+        ImInternalFeignClient.TrialCanceledRequest request = new ImInternalFeignClient.TrialCanceledRequest();
+        request.setReason(reason);
+        unwrapData(client.markTrialCanceled(courseId, request), "markTrialCanceled");
     }
 
     private static void requireCurrentUid(Long uid) {

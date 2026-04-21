@@ -127,4 +127,45 @@ describe('AppTopBar live pill', () => {
     expect(wrapper.text()).toContain('实时课堂提醒')
     expect(toast.message).toContain('课程提醒')
   })
+
+  it('prefers account nickname in top bar for student user', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const auth = useAuthStore()
+    auth.token = 'token'
+    auth.user = { id: 2001, name: '这回忆那么空～', phone: '13800000000', avatar: null, sex: null, userType: 2, token: 'token' }
+    auth.me = {
+      id: 2001,
+      name: '这回忆那么空～',
+      phone: '13800000000',
+      avatar: null,
+      sex: null,
+      userType: 2,
+      teacherProfile: null,
+      studentProfile: { realName: '陆熠鹏' } as never,
+      organizationProfile: null,
+    }
+    remindersMock.mockResolvedValue([])
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    })
+    await router.push('/')
+    await router.isReady()
+
+    const wrapper = mount(AppTopBar, {
+      global: {
+        plugins: [router, pinia],
+        stubs: {
+          BrandLogoMark: { template: '<div />' },
+          CitySelectModal: { template: '<div />' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('这回忆那么空～')
+    expect(wrapper.text()).not.toContain('陆熠鹏')
+  })
 })

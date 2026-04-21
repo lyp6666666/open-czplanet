@@ -114,6 +114,7 @@ const eduSubmitBusy = ref(false)
 const eduHint = ref<string | null>(null)
 
 const studentRealName = ref('')
+const studentNickname = ref('')
 const studentChildAge = ref<number | null>(null)
 const studentAddress = ref('')
 const studentDemandDescription = ref('')
@@ -182,11 +183,14 @@ async function load() {
     }
 
     if (me?.studentProfile) {
+      studentNickname.value = me?.name || auth.user?.name || ''
       studentRealName.value = me.studentProfile.realName || ''
       studentChildAge.value = me.studentProfile.childAge ?? null
       studentAddress.value = me.studentProfile.address || ''
       studentDemandDescription.value = me.studentProfile.demandDescription || ''
       studentBudget.value = me.studentProfile.budget != null ? Number(me.studentProfile.budget) : null
+    } else if (!isTeacher.value) {
+      studentNickname.value = me?.name || auth.user?.name || ''
     }
   } catch (e) {
     toast.show(e instanceof Error ? e.message : '加载失败', 'error')
@@ -236,11 +240,12 @@ async function onSave() {
       }
     }
 
+    const studentNicknameText = !isTeacher.value ? studentNickname.value.trim() : ''
     const studentDisplayName = !isTeacher.value ? studentRealName.value.trim() : ''
 
     await userApi.updateUserInfo({
       baseUserInfo: {
-        name: isTeacher.value ? name.value.trim() || undefined : studentDisplayName || name.value.trim() || undefined,
+        name: isTeacher.value ? name.value.trim() || undefined : studentNicknameText || undefined,
         avatar: avatar.value.trim() || undefined,
         sex: sex.value ?? undefined,
       },
@@ -463,6 +468,10 @@ function openSettings() {
   void router.push({ name: 'settings' })
 }
 
+function openEmailSettings() {
+  void router.push({ name: 'emailSettings' })
+}
+
 onMounted(() => {
   void load()
 })
@@ -489,6 +498,13 @@ onBeforeUnmount(() => {
     <div class="card form">
       <div class="sec">
         <div class="sec-title">基础信息</div>
+        <div class="email-nudge">
+          <div>
+            <strong>邮箱提醒</strong>
+            <span>绑定后可接收未读消息提醒、开课提醒和课后总结。</span>
+          </div>
+          <button class="btn sm" type="button" @click="openEmailSettings">去设置</button>
+        </div>
         <div class="grid">
           <label class="field span2">
             <div class="label">头像</div>
@@ -605,8 +621,20 @@ onBeforeUnmount(() => {
 
         <div class="grid" v-else>
           <label class="field">
-            <div class="label">姓名</div>
-            <input v-model="studentRealName" class="input" placeholder="例如：王女士" />
+            <div class="label">昵称</div>
+            <input v-model="studentNickname" class="input" placeholder="请输入账号昵称" />
+          </label>
+          <label class="field">
+            <div class="label">性别</div>
+            <select v-model="sex" class="input">
+              <option :value="null">不设置</option>
+              <option :value="1">男</option>
+              <option :value="2">女</option>
+            </select>
+          </label>
+          <label class="field">
+            <div class="label">真实姓名</div>
+            <input v-model="studentRealName" class="input" placeholder="请输入真实姓名" />
           </label>
           <label class="field">
             <div class="label">年龄</div>
@@ -739,6 +767,28 @@ onBeforeUnmount(() => {
 
 .sec-title {
   font-weight: 900;
+  font-size: 13px;
+}
+
+.email-nudge {
+  padding: 14px;
+  border: 1px solid #d8f1e5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f0fbf5, #fff8ed);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.email-nudge strong,
+.email-nudge span {
+  display: block;
+}
+
+.email-nudge span {
+  margin-top: 4px;
+  color: #6a766f;
   font-size: 13px;
 }
 

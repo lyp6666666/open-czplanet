@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { applicationApi } from '@/api/application'
 import { appointmentApi } from '@/api/appointment'
 import { courseApi } from '@/api/course'
+import { liveApi } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import type { CourseDetailVO, ScheduleEventVO, TutorApplicationVO, UserCardVO, UserSimpleVO } from '@/api/types'
 import { userApi } from '@/api/user'
@@ -25,6 +26,7 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 
 const detail = ref<CourseDetailVO | null>(null)
+const emailHint = ref<{ show: boolean; title?: string; description?: string; actionText?: string } | null>(null)
 const application = ref<TutorApplicationVO | null>(null)
 const participant = ref<UserSimpleVO | null>(null)
 const participantCard = ref<UserCardVO | null>(null)
@@ -49,6 +51,19 @@ const rescheduleStartAt = ref<number>(roundToNextHalfHour(Date.now() + 24 * 60 *
 const rescheduleEndAt = ref<number>(rescheduleStartAt.value + 60 * 60 * 1000)
 const rescheduleRemark = ref('')
 const rescheduleError = ref<string | null>(null)
+
+const trialDecisionOpen = ref(false)
+const trialDecisionResult = ref<'PASS' | 'FAIL'>('PASS')
+const trialDecisionReason = ref('')
+const weeklyScheduleOpen = ref(false)
+const weeklyScheduleError = ref<string | null>(null)
+const weeklyLessonPriceYuan = ref('200')
+const weeklyWeeks = ref(16)
+const weeklyTitle = ref('正式每周课')
+const weeklyDescription = ref('试课通过后确认的固定课表')
+const weeklySlots = ref<Array<{ dayOfWeek: number; startMinute: number; endMinute: number }>>([
+  { dayOfWeek: 2, startMinute: 19 * 60, endMinute: 21 * 60 },
+])
 
 function roundToNextHalfHour(nowMs: number) {
   const d = new Date(nowMs)
@@ -130,6 +145,14 @@ function paymentStatusText(status?: string | null) {
   return '未出账'
 }
 
+function courseStatusText(status?: string | null) {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (normalized === 'TRIAL_WAIT_STUDENT_DECISION') return '待学生确认是否继续'
+  if (normalized === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return '待提交正式课表'
+  if (normalized === 'TRIAL_FAILED') return '试课失败'
+  return normalized || '未知状态'
+}
+
 function formatMoneyFen(value?: number | null) {
   if (value == null || !Number.isFinite(value)) return '--'
   return `¥${(value / 100).toFixed(2)}`
@@ -180,6 +203,17 @@ function goChat() {
   void router.push({ name: 'chatRoom', params: { roomId: String(detail.value.roomId) } })
 }
 
+function goLessonAiSummary() {
+  if (!detail.value?.courseId) return
+  const query: Record<string, string> = {}
+  if (detail.value.liveSessionId) query.sessionId = String(detail.value.liveSessionId)
+  void router.push({ name: 'lessonAiSummary', params: { courseId: String(detail.value.courseId) }, query })
+}
+
+function goEmailSettings() {
+  void router.push({ name: 'emailSettings' })
+}
+
 function isTrialLesson(index: number) {
   return index === 0
 }
@@ -210,6 +244,14 @@ function canCancelLesson(item: ScheduleEventVO) {
 function canRescheduleLesson(item: ScheduleEventVO) {
   return item.status === 'ACCEPTED'
 }
+
+const canStudentSubmitTrialDecision = computed(() =>
+  !isTeacher.value && detail.value?.status === 'TRIAL_WAIT_STUDENT_DECISION',
+)
+
+const canStudentSubmitWeeklySchedule = computed(() =>
+  !isTeacher.value && detail.value?.status === 'TRIAL_WAIT_WEEKLY_SCHEDULE',
+)
 
 function canConfirmReschedule(item: ScheduleEventVO) {
   if (item.status !== 'RESCHEDULE_PENDING') return false
@@ -270,6 +312,50 @@ function closeReschedule() {
   if (saving.value) return
   rescheduleOpen.value = false
   rescheduleLessonId.value = null
+}
+
+function minutesToTimeText(minutes: number) {
+  const h = String(Math.floor(minutes / 60)).padStart(2, '0')
+  const m = String(minutes % 60).padStart(2, '0')
+  return `${h}:${m}`
+}
+
+function parseWeeklyPriceFen() {
+  const raw = weeklyLessonPriceYuan.value.trim()
+  if (!raw) return undefined
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.round(n * 100)
+}
+
+function addWeeklySlot() {
+  weeklySlots.value = [...weeklySlots.value, { dayOfWeek: 4, startMinute: 19 * 60, endMinute: 21 * 60 }]
+}
+
+function removeWeeklySlot(index: number) {
+  weeklySlots.value = weeklySlots.value.filter((_, i) => i !== index)
+}
+
+function openTrialDecision() {
+  trialDecisionResult.value = 'PASS'
+  trialDecisionReason.value = ''
+  weeklyScheduleError.value = null
+  trialDecisionOpen.value = true
+}
+
+function closeTrialDecision() {
+  if (saving.value) return
+  trialDecisionOpen.value = false
+}
+
+function openWeeklySchedule() {
+  weeklyScheduleError.value = null
+  weeklyScheduleOpen.value = true
+}
+
+function closeWeeklySchedule() {
+  if (saving.value) return
+  weeklyScheduleOpen.value = false
 }
 
 async function submitScheduleCreate() {
@@ -414,6 +500,70 @@ async function submitReschedule() {
   }
 }
 
+async function submitTrialDecision() {
+  if (!detail.value || saving.value) return
+  if (trialDecisionResult.value === 'FAIL' && !trialDecisionReason.value.trim()) {
+    lessonActionError.value = '请选择不通过时请填写原因'
+    return
+  }
+  saving.value = true
+  lessonActionError.value = null
+  try {
+    await courseApi.submitTrialResult(detail.value.courseId, {
+      result: trialDecisionResult.value,
+      reason: trialDecisionReason.value.trim() || undefined,
+    })
+    trialDecisionOpen.value = false
+    if (trialDecisionResult.value === 'PASS') {
+      await load()
+      weeklyScheduleOpen.value = true
+      toast.show('试课结果已提交，请继续确认正式每周课表。', 'success')
+    } else {
+      await load()
+      toast.show('已提交试课不继续结果。', 'success')
+    }
+  } catch (e) {
+    lessonActionError.value = e instanceof Error ? e.message : '提交试课结果失败'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function submitWeeklySchedule() {
+  if (!detail.value || !participantUid.value || saving.value) return
+  if (!weeklySlots.value.length) {
+    weeklyScheduleError.value = '请至少选择一个固定课时'
+    return
+  }
+  const lessonPriceFen = parseWeeklyPriceFen()
+  if (lessonPriceFen === null) {
+    weeklyScheduleError.value = '请输入有效课时费'
+    return
+  }
+  saving.value = true
+  weeklyScheduleError.value = null
+  lessonActionError.value = null
+  try {
+    const created = await scheduleApi.submitWeeklySchedule(detail.value.courseId, {
+      participantUserId: participantUid.value,
+      roomId: detail.value.roomId || undefined,
+      title: weeklyTitle.value.trim() || undefined,
+      description: weeklyDescription.value.trim() || undefined,
+      lessonPriceFen,
+      weeks: weeklyWeeks.value,
+      slots: weeklySlots.value,
+    })
+    lessons.value = [...lessons.value, ...created]
+    weeklyScheduleOpen.value = false
+    await load()
+    toast.show('正式每周课表已提交。', 'success')
+  } catch (e) {
+    weeklyScheduleError.value = e instanceof Error ? e.message : '提交正式课表失败'
+  } finally {
+    saving.value = false
+  }
+}
+
 async function confirmReschedule(item: ScheduleEventVO) {
   if (saving.value || !canConfirmReschedule(item)) return
   const confirmed = window.confirm(`确认将「${item.title}」调整到新的时间吗？确认后会覆盖原上课时间。`)
@@ -442,6 +592,11 @@ async function load() {
   error.value = null
   lessonActionError.value = null
   try {
+    try {
+      emailHint.value = await userApi.emailReminderHint('COURSE_DETAIL')
+    } catch {
+      emailHint.value = null
+    }
     const current = await courseApi.detail(courseId.value)
     detail.value = current
     const [courseLessons, appDetail] = await Promise.all([
@@ -454,6 +609,43 @@ async function load() {
     const [users, card] = await Promise.all([userApi.batch([uid]), userApi.card(uid)])
     participant.value = users[0] || null
     participantCard.value = card
+
+    const latestLesson = courseLessons
+      .filter((item) => Number(item?.id || 0) > 0)
+      .slice()
+      .sort((a, b) => {
+        const aEnd = Number(a.endAt || 0)
+        const bEnd = Number(b.endAt || 0)
+        if (aEnd !== bEnd) return bEnd - aEnd
+        return Number(b.startAt || 0) - Number(a.startAt || 0)
+      })[0]
+
+    if (latestLesson?.id) {
+      try {
+        const live = await liveApi.getByCourse(latestLesson.id)
+        detail.value = {
+          ...detail.value,
+          liveSessionId: live.sessionId,
+        }
+        try {
+          const aiResult = await liveApi.aiResult(live.sessionId)
+          detail.value = {
+            ...detail.value,
+            liveSessionId: live.sessionId,
+            aiResultStatus: aiResult.resultStatus,
+            aiPreview: aiResult.preview,
+          }
+        } catch {
+          detail.value = {
+            ...detail.value,
+            liveSessionId: live.sessionId,
+            aiResultStatus: detail.value?.aiResultStatus || 'PENDING',
+          }
+        }
+      } catch {
+        // 课程未生成课堂会话时，页面继续按基础课程信息展示。
+      }
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载课程详情失败'
   } finally {
@@ -482,12 +674,24 @@ onMounted(() => {
         <button class="btn" type="button" @click="goBack">返回我的课程</button>
         <button class="btn" type="button" :disabled="!detail?.roomId" @click="goChat">进入聊天</button>
         <button class="btn btn-primary" type="button" :disabled="!detail || !participantUid" @click="openScheduleCreate">新增课节</button>
+        <button v-if="canStudentSubmitTrialDecision" class="btn btn-primary" type="button" @click="openTrialDecision">提交试课结果</button>
+        <button v-if="canStudentSubmitWeeklySchedule" class="btn btn-primary" type="button" @click="openWeeklySchedule">确认正式课表</button>
       </div>
     </section>
 
     <div v-if="loading" class="card hint">加载中...</div>
     <div v-else-if="error" class="card hint error">{{ error }}</div>
     <template v-else-if="detail">
+      <section v-if="emailHint?.show" class="card email-hint-banner">
+        <div>
+          <div class="email-hint-title">{{ emailHint.title || '绑定邮箱，重要课程提醒将更稳妥送达' }}</div>
+          <div class="email-hint-desc">
+            {{ emailHint.description || '绑定主邮箱后，可接收开课提醒和课后总结；学生还可以额外设置家长邮箱，仅接收课后总结。' }}
+          </div>
+        </div>
+        <button class="btn btn-primary" type="button" @click="goEmailSettings">{{ emailHint.actionText || '立即绑定' }}</button>
+      </section>
+
       <section class="summary-grid">
         <div class="card metric">
           <div class="metric-label">授课形式</div>
@@ -495,7 +699,7 @@ onMounted(() => {
         </div>
         <div class="card metric">
           <div class="metric-label">课程状态</div>
-          <div class="metric-value">{{ detail.status }}</div>
+          <div class="metric-value">{{ courseStatusText(detail.status) }}</div>
         </div>
         <div class="card metric">
           <div class="metric-label">已建课节</div>
@@ -504,6 +708,10 @@ onMounted(() => {
         <div class="card metric">
           <div class="metric-label">待确认课节</div>
           <div class="metric-value">{{ lessonStats.pending }}</div>
+        </div>
+        <div class="card metric">
+          <div class="metric-label">课堂 AI</div>
+          <div class="metric-value">{{ detail.aiResultStatus === 'READY' ? '已生成' : detail.aiResultStatus === 'FAILED' ? '失败' : detail.aiResultStatus === 'OFF' ? '未开启' : '整理中' }}</div>
         </div>
       </section>
 
@@ -597,6 +805,17 @@ onMounted(() => {
           </div>
         </section>
       </section>
+
+      <section class="card lessons-card">
+        <div class="section-head">
+          <div>
+            <div class="section-title">课堂 AI 结果</div>
+            <div class="section-desc">课程结束后，AI 会整理课后总结与报告草稿，帮助老师和家长快速回顾本节课。</div>
+          </div>
+          <button class="btn btn-primary" type="button" @click="goLessonAiSummary">查看课后总结</button>
+        </div>
+        <div class="lesson-sub">{{ detail.aiPreview || '当前暂无已生成的课后总结预览。' }}</div>
+      </section>
     </template>
 
     <div v-if="scheduleOpen" class="mask" @click.self="closeScheduleCreate">
@@ -666,6 +885,79 @@ onMounted(() => {
         <div class="modal-actions">
           <button class="btn" type="button" :disabled="saving" @click="closeReschedule">取消</button>
           <button class="btn btn-primary" type="button" :disabled="saving" @click="submitReschedule">{{ saving ? '提交中...' : '发起调课' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="trialDecisionOpen" class="mask" @click.self="closeTrialDecision">
+      <div class="modal card">
+        <div class="modal-title">提交试课结果</div>
+        <div class="modal-desc">试课结束后，是否继续只能由学生确认。</div>
+        <div class="field">
+          <div class="label">结果</div>
+          <select v-model="trialDecisionResult" class="input">
+            <option value="PASS">通过，继续上课</option>
+            <option value="FAIL">不通过，结束合作</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="label">说明</div>
+          <textarea v-model="trialDecisionReason" class="textarea" rows="4" placeholder="可填写试课反馈、继续原因或不通过原因" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" :disabled="saving" @click="closeTrialDecision">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="saving" @click="submitTrialDecision">{{ saving ? '提交中...' : '提交结果' }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="weeklyScheduleOpen" class="mask" @click.self="closeWeeklySchedule">
+      <div class="modal card">
+        <div class="modal-title">确认正式每周课表</div>
+        <div class="modal-desc">当前版本先要求所有固定课节时长一致，默认向后生成 {{ weeklyWeeks }} 周课程；正式课表提交后不可重复提交。</div>
+        <div v-if="weeklyScheduleError" class="hint error">{{ weeklyScheduleError }}</div>
+        <div class="field">
+          <div class="label">课表标题</div>
+          <input v-model="weeklyTitle" class="input" placeholder="例如：正式每周课" />
+        </div>
+        <div class="time-grid">
+          <div class="field">
+            <div class="label">课时费（元）</div>
+            <input v-model="weeklyLessonPriceYuan" class="input" inputmode="decimal" placeholder="例如：200" />
+          </div>
+          <div class="field">
+            <div class="label">生成周数</div>
+            <input v-model.number="weeklyWeeks" class="input" type="number" min="1" max="16" />
+          </div>
+        </div>
+        <div class="field">
+          <div class="label">课表说明</div>
+          <textarea v-model="weeklyDescription" class="textarea" rows="3" placeholder="例如：暂定周二/周四晚固定上课" />
+        </div>
+        <div class="field">
+          <div class="label">固定时段</div>
+          <div class="weekly-slot-list">
+            <div v-for="(slot, index) in weeklySlots" :key="index" class="weekly-slot-row">
+              <select v-model.number="slot.dayOfWeek" class="input">
+                <option :value="1">周一</option>
+                <option :value="2">周二</option>
+                <option :value="3">周三</option>
+                <option :value="4">周四</option>
+                <option :value="5">周五</option>
+                <option :value="6">周六</option>
+                <option :value="7">周日</option>
+              </select>
+              <input v-model.number="slot.startMinute" class="input" type="number" min="0" max="1439" />
+              <input v-model.number="slot.endMinute" class="input" type="number" min="1" max="1440" />
+              <button class="btn" type="button" @click="removeWeeklySlot(index)">删除</button>
+            </div>
+          </div>
+          <div class="field-hint">分钟值示例：19:00 = 1140，21:00 = 1260。当前时段：{{ weeklySlots.map((slot) => `${slot.dayOfWeek}-${minutesToTimeText(slot.startMinute)}~${minutesToTimeText(slot.endMinute)}`).join('；') }}</div>
+          <button class="btn" type="button" @click="addWeeklySlot">新增时段</button>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" :disabled="saving" @click="closeWeeklySchedule">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="saving" @click="submitWeeklySchedule">{{ saving ? '提交中...' : '提交正式课表' }}</button>
         </div>
       </div>
     </div>
@@ -741,6 +1033,29 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.email-hint-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(0, 181, 120, 0.16);
+  background: linear-gradient(135deg, rgba(240, 251, 244, 0.96), rgba(255, 248, 233, 0.96));
+}
+
+.email-hint-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #1d4f3a;
+}
+
+.email-hint-desc {
+  margin-top: 6px;
+  color: #5e6f66;
+  line-height: 1.6;
 }
 
 .metric {
@@ -981,6 +1296,7 @@ onMounted(() => {
 
 @media (max-width: 720px) {
   .hero,
+  .email-hint-banner,
   .hero-actions,
   .lesson-item,
   .modal-actions {

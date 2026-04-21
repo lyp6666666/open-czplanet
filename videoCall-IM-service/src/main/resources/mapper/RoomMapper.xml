@@ -85,6 +85,14 @@
           AND status = 1
     </update>
 
+    <update id="reopenRoom">
+        UPDATE room
+        SET status = 1,
+            update_time = CURRENT_TIMESTAMP
+        WHERE id = #{roomId}
+          AND status = 0
+    </update>
+
     <select id="listByTeacherProfileId" resultMap="RoomMap">
         SELECT
             id,

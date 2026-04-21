@@ -1,28 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0e1620"/>
-      <stop offset="1" stop-color="#001f2d"/>
+    <linearGradient id="bg1" x1="92" y1="24" x2="1080" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D1B38"/>
+      <stop offset="0.52" stop-color="#143D63"/>
+      <stop offset="1" stop-color="#0B6A72"/>
     </linearGradient>
-    <radialGradient id="glow1" cx="25%" cy="15%" r="65%">
-      <stop offset="0" stop-color="#00bebd" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#00bebd" stop-opacity="0"/>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(246 310) rotate(-23.4) scale(426 208)">
+      <stop offset="0" stop-color="#5AD0FF" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#5AD0FF" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="glow2" cx="85%" cy="80%" r="70%">
-      <stop offset="0" stop-color="#00bebd" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#00bebd" stop-opacity="0"/>
+    <radialGradient id="glow2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(950 98) rotate(159.5) scale(310 188)">
+      <stop offset="0" stop-color="#69F3D0" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#69F3D0" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="panelGlass" x1="632" y1="78" x2="1128" y2="314" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="white" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="white" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="940" y1="122" x2="1020" y2="218" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7DF2E3"/>
+      <stop offset="1" stop-color="#1AB7C8"/>
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.1"/>
+    </linearGradient>
+    <filter id="blurGlow" x="-80" y="-80" width="1360" height="520" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="softShadow" x="592" y="42" width="582" height="312" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#02162C" flood-opacity="0.28"/>
+    </filter>
   </defs>
-  <rect width="1200" height="360" fill="url(#bg)"/>
+
+  <rect width="1200" height="360" rx="0" fill="url(#bg1)"/>
   <rect width="1200" height="360" fill="url(#glow1)"/>
   <rect width="1200" height="360" fill="url(#glow2)"/>
-  <g fill="#ffffff">
-    <text x="64" y="160" font-size="44" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">创智星球</text>
-    <text x="64" y="208" font-size="20" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" opacity="0.9">快速匹配合适老师，先聊再约课</text>
+
+  <g opacity="0.24" filter="url(#blurGlow)">
+    <circle cx="1016" cy="268" r="74" fill="#65F4D0"/>
+    <circle cx="880" cy="108" r="68" fill="#82C8FF"/>
   </g>
-  <g opacity="0.18" fill="#ffffff">
-    <circle cx="980" cy="92" r="62"/>
-    <circle cx="1038" cy="160" r="42"/>
-    <circle cx="920" cy="188" r="36"/>
+
+  <path d="M0 262C112 212.48 208 194 288 206C357.333 216.667 420 249.333 476 304L0 360V262Z" fill="#081630" fill-opacity="0.62"/>
+  <path d="M92 302C166.667 252.667 233 228.667 291 230C363.667 231.667 428.333 272.333 485 352" stroke="#79E1FF" stroke-opacity="0.26" stroke-width="2"/>
+  <path d="M58 334C136 276.667 222 246.333 316 243C392.667 240.333 464 266.333 530 321" stroke="white" stroke-opacity="0.08" stroke-width="1.5"/>
+
+  <g opacity="0.96">
+    <rect x="62" y="52" width="118" height="34" rx="17" fill="url(#badgeGrad)" stroke="rgba(255,255,255,0.12)"/>
+    <text x="121" y="74" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">一对一严选师资</text>
+
+    <rect x="192" y="52" width="104" height="34" rx="17" fill="url(#badgeGrad)" stroke="rgba(255,255,255,0.12)"/>
+    <text x="244" y="74" fill="#D9FFF9" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">诚信经营</text>
+  </g>
+
+  <g fill="#E9F7FF" opacity="0.9">
+    <text x="66" y="118" font-size="21" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">真实资料审核</text>
+    <text x="184" y="118" font-size="21" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">价格透明可沟通</text>
+    <text x="360" y="118" font-size="21" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">平台保障全程留痕</text>
+  </g>
+
+  <g opacity="0.82">
+    <circle cx="74" cy="112" r="4.5" fill="#67E6D2"/>
+    <circle cx="192" cy="112" r="4.5" fill="#67E6D2"/>
+    <circle cx="368" cy="112" r="4.5" fill="#67E6D2"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="616" y="58" width="522" height="266" rx="30" fill="url(#panelGlass)" stroke="rgba(255,255,255,0.18)"/>
+  </g>
+
+  <g opacity="0.12">
+    <path d="M720 112C770 87.3333 820 75.3333 870 76C947.333 77.3333 1022 108.667 1094 170" stroke="white" stroke-width="2"/>
+    <path d="M694 278C758.667 242.667 825 226 893 228C964.333 230 1035 261.333 1105 322" stroke="white" stroke-width="2"/>
+  </g>
+
+  <g>
+    <rect x="672" y="92" width="176" height="96" rx="22" fill="#F9FDFF" fill-opacity="0.92"/>
+    <circle cx="724" cy="128" r="22" fill="#104F7B"/>
+    <path d="M708 126C708 117.716 714.716 111 723 111H725C733.284 111 740 117.716 740 126V132H708V126Z" fill="#D9F3FF"/>
+    <path d="M704 156C704 143.85 713.85 134 726 134H734C746.15 134 756 143.85 756 156V166H704V156Z" fill="#8DD8FF"/>
+    <text x="768" y="124" fill="#103150" font-size="17" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">名校教师档案</text>
+    <text x="768" y="148" fill="#53708B" font-size="13" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif">院校背景、学科特长、授课经历</text>
+    <rect x="768" y="164" width="58" height="22" rx="11" fill="#E6F7FF"/>
+    <text x="797" y="179" fill="#1270A2" font-size="12" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">实名审核</text>
+  </g>
+
+  <g>
+    <rect x="704" y="204" width="194" height="84" rx="22" fill="#FFFFFF" fill-opacity="0.9"/>
+    <text x="730" y="230" fill="#103150" font-size="17" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">需求匹配与试课沟通</text>
+    <rect x="730" y="246" width="72" height="22" rx="11" fill="#E6FFF8"/>
+    <text x="766" y="261" fill="#128E78" font-size="12" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">价格透明</text>
+    <rect x="810" y="246" width="72" height="22" rx="11" fill="#EEF5FF"/>
+    <text x="846" y="261" fill="#215AA6" font-size="12" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">先沟通后约课</text>
+  </g>
+
+  <g>
+    <path d="M928 170L976 122L1024 170L1014 216C999.333 228 986.667 234 976 234C965.333 234 952.667 228 938 216L928 170Z" fill="url(#shieldGrad)"/>
+    <path d="M957 176L972 191L996 162" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="976" y="260" fill="#E6FFFA" font-size="16" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800" text-anchor="middle">平台保障</text>
+    <text x="976" y="282" fill="#C7EFFF" font-size="12.5" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" text-anchor="middle">规则清晰 · 过程留痕 · 售后可追踪</text>
+  </g>
+
+  <g opacity="0.9">
+    <rect x="1042" y="90" width="64" height="64" rx="18" fill="#DFFFF8" fill-opacity="0.12" stroke="rgba(255,255,255,0.18)"/>
+    <path d="M1064 109H1084M1064 122H1084M1064 135H1078" stroke="#DFFCF6" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="1090" cy="136" r="10" fill="#64E5C7"/>
+    <path d="M1086 136L1089 139L1095 132" stroke="#0D5E58" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

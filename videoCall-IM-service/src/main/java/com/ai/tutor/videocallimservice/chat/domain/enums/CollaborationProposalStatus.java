@@ -3,5 +3,8 @@ package com.ai.tutor.videocallimservice.chat.domain.enums;
 public enum CollaborationProposalStatus {
     PENDING,
     ACCEPTED,
-    REJECTED
+    REJECTED,
+    CANCELED,
+    EXPIRED,
+    INVALIDATED
 }

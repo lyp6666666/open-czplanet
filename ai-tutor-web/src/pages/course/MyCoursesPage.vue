@@ -25,6 +25,7 @@ type CourseStageKey =
   | 'COLLAB_REJECTED'
   | 'TRIALING'
   | 'TRIAL_CONFIRMING'
+  | 'TRIAL_WAIT_WEEKLY_SCHEDULE'
   | 'TRIAL_FAILED'
   | 'TEACHING'
   | 'PAUSED'
@@ -65,6 +66,8 @@ type CourseViewModel = {
   lessonTimeText: string
   lessonSubtitle: string
   live: LiveSessionResp | null
+  aiResultStatus: string | null
+  aiPreview: string | null
   reminder: LiveReminderItemResp | null
   isOnlineCourse: boolean
   liveBadge: string
@@ -80,8 +83,10 @@ const isTeacher = computed(() => auth.user?.userType === 1)
 const role = computed<'TEACHER' | 'STUDENT'>(() => (isTeacher.value ? 'TEACHER' : 'STUDENT'))
 const loading = ref(false)
 const error = ref<string | null>(null)
+const emailHint = ref<{ show: boolean; title?: string; description?: string; actionText?: string } | null>(null)
 const list = ref<CourseItemVO[]>([])
 const liveMap = ref<Record<number, LiveSessionResp>>({})
+const aiResultMap = ref<Record<number, { resultStatus?: string | null; preview?: string | null; sessionId?: number | null }>>({})
 const lessonMap = ref<Record<number, ScheduleEventVO | null>>({})
 const reminderMap = ref<Record<number, LiveReminderItemResp>>({})
 const applicationMap = ref<Record<number, TutorApplicationVO | null>>({})
@@ -219,6 +224,39 @@ function resolveCourseStage(rawStatus: string, trialEndAt?: string | null) {
       sectionLabel: '试课阶段',
     }
   }
+  if (status === 'TRIAL_WAIT_STUDENT_DECISION') {
+    return {
+      key: 'TRIAL_CONFIRMING' as const,
+      label: '待学生确认试课结果',
+      tone: 'violet',
+      description: '试课已结束，需要学生确认是否继续合作。',
+      actionLabel: '查看试课',
+      phaseIndex: 5,
+      sectionLabel: '试课阶段',
+    }
+  }
+  if (status === 'TRIAL_WAIT_WEEKLY_SCHEDULE') {
+    return {
+      key: 'TRIAL_WAIT_WEEKLY_SCHEDULE' as const,
+      label: '待学生提交正式课表',
+      tone: 'violet',
+      description: '试课已通过，学生需要在试课结束后 24 小时内确认后续固定上课时间。',
+      actionLabel: '确认课表',
+      phaseIndex: 5,
+      sectionLabel: '试课转正式阶段',
+    }
+  }
+  if (status === 'TRIAL_FAILED') {
+    return {
+      key: 'TRIAL_FAILED' as const,
+      label: '试课未通过',
+      tone: 'rose',
+      description: '本次试课未继续，线上场景将结束合作沟通。',
+      actionLabel: '查看详情',
+      phaseIndex: 5,
+      sectionLabel: '试课阶段',
+    }
+  }
   if (status === 'TEACHING') {
     return {
       key: 'TEACHING' as const,
@@ -335,7 +373,7 @@ function resolveLessonState(lesson: ScheduleEventVO | null, live: LiveSessionRes
 }
 
 function buildCourseTitle(item: CourseItemVO, participantName: string, stage: ReturnType<typeof resolveCourseStage>) {
-  if (stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING') return `与${participantName}的试课安排`
+  if (stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return `与${participantName}的试课安排`
   if (stage.key === 'TEACHING') return `与${participantName}的正式课程`
   if (stage.key === 'COMMUNICATING') return `与${participantName}的课程沟通`
   if (stage.key === 'WAIT_PAY') return `与${participantName}的课程申请`
@@ -370,9 +408,10 @@ function buildCourseSummary(stage: ReturnType<typeof resolveCourseStage>, partic
 }
 
 function buildStageHint(stage: ReturnType<typeof resolveCourseStage>, lessonState: ReturnType<typeof resolveLessonState>, trialEndAt?: string | null) {
-  if ((stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING') && trialEndAt) {
-    return `试课截止：${fmtDateOnly(trialEndAt)}`
+  if ((stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') && trialEndAt) {
+    return `试课结束：${fmtDateOnly(trialEndAt)}`
   }
+  if (stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return '请在试课结束后一日内确认固定课表'
   if (stage.key === 'WAIT_PAY') return '支付信息费后即可进入沟通'
   if (stage.key === 'COMMUNICATING') return '可以继续聊天，也可以发起合作'
   if (stage.key === 'TEACHING' && lessonState.key === 'NOT_STARTED') return '建议尽快安排下一节课'
@@ -419,6 +458,7 @@ function buildCourseView(item: CourseItemVO): CourseViewModel {
   const participantName = displayNameOf(participant, participantUid)
   const stage = resolveCourseStage(item.status, item.trialEndAt)
   const live = liveMap.value[item.courseId] || null
+  const aiResult = aiResultMap.value[item.courseId] || null
   const lesson = lessonMap.value[item.courseId] || null
   const reminder = reminderMap.value[item.courseId] || null
   const lessonState = resolveLessonState(lesson, live)
@@ -446,7 +486,7 @@ function buildCourseView(item: CourseItemVO): CourseViewModel {
     progressStep: stage.phaseIndex,
     progressText: `${stage.sectionLabel} · 第 ${Math.min(stage.phaseIndex, progressSteps.length)} / ${progressSteps.length} 步`,
     nextActionLabel: stage.actionLabel,
-    nextActionTone: stage.key === 'WAIT_PAY' || stage.key === 'TRIALING' || stage.key === 'TEACHING' ? 'primary' : 'neutral',
+    nextActionTone: stage.key === 'WAIT_PAY' || stage.key === 'TRIALING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || stage.key === 'TEACHING' ? 'primary' : 'neutral',
     lessonCourseId: lesson?.id ?? null,
     latestLesson: lesson,
     lessonState,
@@ -454,6 +494,8 @@ function buildCourseView(item: CourseItemVO): CourseViewModel {
     lessonTimeText: lesson ? `${fmtDateTime(lesson.startAt)} - ${fmtDateTime(lesson.endAt, { hour: '2-digit', minute: '2-digit' })}` : '还没有安排具体课节',
     lessonSubtitle: buildLessonSubtitle(lesson, live),
     live,
+    aiResultStatus: aiResult?.resultStatus || item.aiResultStatus || null,
+    aiPreview: aiResult?.preview || item.aiPreview || null,
     reminder,
     isOnlineCourse: !!live || !!lesson,
     liveBadge: buildLiveBadge(live, reminder),
@@ -480,7 +522,7 @@ function markAvatarBroken(uid: number) {
 }
 
 function activeStageFilterKeys() {
-  return new Set<CourseStageKey>(['COMMUNICATING', 'COLLABORATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TEACHING', 'PAUSED'])
+  return new Set<CourseStageKey>(['COMMUNICATING', 'COLLABORATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TEACHING', 'PAUSED'])
 }
 
 const courseViews = computed(() => list.value.map((item) => buildCourseView(item)))
@@ -506,9 +548,9 @@ const selectedCourse = computed(() => {
 
 const overview = computed(() => {
   const all = courseViews.value
-  const active = all.filter((item) => ['COMMUNICATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TEACHING'].includes(item.stage.key)).length
+  const active = all.filter((item) => ['COMMUNICATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TEACHING'].includes(item.stage.key)).length
   const waitingPay = all.filter((item) => item.stage.key === 'WAIT_PAY').length
-  const trialing = all.filter((item) => item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING').length
+  const trialing = all.filter((item) => item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE').length
   const upcoming = all.filter((item) => ['ACCEPTED', 'UPCOMING', 'JOINABLE', 'IN_PROGRESS'].includes(item.lessonState.key)).length
   return { total: all.length, active, waitingPay, trialing, upcoming }
 })
@@ -540,21 +582,20 @@ function statusToneClass(tone: string) {
 
 function canOpenSchedule(item: CourseViewModel | null) {
   if (!item) return false
-  return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TEACHING'
+  return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || item.stage.key === 'TEACHING'
 }
 
 function canConfirmTrialPass(it: CourseItemVO) {
-  if (!isTeacher.value) return false
+  if (isTeacher.value) return false
   const s = String(it.status || '').trim().toUpperCase()
-  if (s !== 'TRIALING') return false
+  if (s !== 'TRIAL_WAIT_STUDENT_DECISION') return false
   return true
 }
 
 function canSubmitTrialFail(it: CourseItemVO) {
-  if (!isTeacher.value) return false
+  if (isTeacher.value) return false
   const s = String(it.status || '').trim().toUpperCase()
-  if (s !== 'TRIALING') return false
-  if (trialExpired(it.trialEndAt)) return false
+  if (s !== 'TRIAL_WAIT_STUDENT_DECISION' && s !== 'TRIAL_WAIT_WEEKLY_SCHEDULE') return false
   return true
 }
 
@@ -563,7 +604,7 @@ async function submitTrialPass(courseId: number) {
   actionBusyCourseId.value = courseId
   try {
     await courseApi.submitTrialResult(courseId, { result: 'PASS' })
-    toast.show('已确认试课合适，课程进入正式上课阶段。', 'success')
+    toast.show('已确认试课合适，请继续提交正式每周课表。', 'success')
     await load()
   } catch (e) {
     toast.show(e instanceof Error ? e.message : '提交失败', 'error')
@@ -591,6 +632,15 @@ function goSchedule() {
 
 function goCourseDetail(courseId: number) {
   void router.push({ name: 'courseDetail', params: { courseId: String(courseId) } })
+}
+
+function goLessonAiSummary(item: CourseViewModel | null) {
+  if (!item) return
+  const query: Record<string, string> = {}
+  if (item.live?.sessionId) {
+    query.sessionId = String(item.live.sessionId)
+  }
+  void router.push({ name: 'lessonAiSummary', params: { courseId: String(item.courseId) }, query })
 }
 
 async function openApplicationFlow(item: CourseViewModel) {
@@ -633,7 +683,7 @@ function onPrimaryAction(item: CourseViewModel) {
     void openApplicationFlow(item)
     return
   }
-  if (item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TEACHING') {
+  if (item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || item.stage.key === 'TEACHING') {
     openSchedule(item)
     return
   }
@@ -658,7 +708,7 @@ function openSchedule(item: CourseViewModel) {
   scheduleError.value = null
   scheduleCourseId.value = item.courseId
   scheduleTitle.value = `${item.headline}｜线上课`
-  scheduleDescription.value = item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' ? '试课安排' : '正式课程安排'
+  scheduleDescription.value = item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' ? '试课安排' : '正式课程安排'
   scheduleStartAt.value = roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000)
   scheduleEndAt.value = scheduleStartAt.value + 60 * 60 * 1000
   scheduleReminderMinutes.value = 30
@@ -958,6 +1008,21 @@ async function loadLive(items: CourseItemVO[]) {
     }),
   )
   liveMap.value = Object.fromEntries(liveEntries.filter(Boolean) as Array<readonly [number, LiveSessionResp]>)
+
+  const aiEntries = await Promise.all(
+    items.map(async (it) => {
+      const live = liveMap.value[it.courseId]
+      if (!live?.sessionId) return null
+      try {
+        const ai = await liveApi.aiResult(live.sessionId)
+        return [it.courseId, { resultStatus: ai.resultStatus, preview: ai.preview, sessionId: live.sessionId }] as const
+      } catch {
+        return [it.courseId, { resultStatus: 'PENDING', preview: null, sessionId: live.sessionId }] as const
+      }
+    }),
+  )
+  aiResultMap.value = Object.fromEntries(aiEntries.filter(Boolean) as Array<readonly [number, { resultStatus?: string | null; preview?: string | null; sessionId?: number | null }]>)
+
   try {
     const reminders = await liveApi.reminders()
     const mapped: Record<number, LiveReminderItemResp> = {}
@@ -994,7 +1059,20 @@ async function load() {
 
 onMounted(() => {
   void load()
+  void loadEmailHint()
 })
+
+async function loadEmailHint() {
+  try {
+    emailHint.value = await userApi.emailReminderHint('COURSE_LIST')
+  } catch {
+    emailHint.value = null
+  }
+}
+
+function goEmailSettings() {
+  void router.push({ name: 'emailSettings' })
+}
 </script>
 
 <template>
@@ -1029,6 +1107,14 @@ onMounted(() => {
         <button v-if="reminderBanner.roomId" class="btn" type="button" @click="goChat(reminderBanner.roomId)">进入聊天</button>
         <button v-if="reminderBanner.live" class="btn btn-primary" type="button" @click="goLivePrepare(reminderBanner.lessonCourseId)">进入课堂</button>
       </div>
+    </section>
+
+    <section v-if="emailHint?.show" class="email-course-banner card">
+      <div>
+        <div class="banner-title">{{ emailHint.title || '开课提醒将通过邮箱发送' }}</div>
+        <div class="banner-desc">{{ emailHint.description || '绑定主邮箱后，可按站内提醒时间同步收到邮件提醒。' }}</div>
+      </div>
+      <button class="btn btn-primary" type="button" @click="goEmailSettings">{{ emailHint.actionText || '去绑定邮箱' }}</button>
     </section>
 
     <section class="metrics">
@@ -1195,11 +1281,27 @@ onMounted(() => {
             </div>
             <div class="lesson-actions">
               <button class="btn btn-primary" type="button" :disabled="!canOpenSchedule(selectedCourse)" @click="openSchedule(selectedCourse)">
-                {{ selectedCourse.stage.key === 'TRIALING' || selectedCourse.stage.key === 'TRIAL_CONFIRMING' ? '发起试课预约' : '发起约课' }}
+                {{ selectedCourse.stage.key === 'TRIALING' || selectedCourse.stage.key === 'TRIAL_CONFIRMING' || selectedCourse.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' ? '发起试课预约' : '发起约课' }}
               </button>
               <button class="btn" type="button" :disabled="!selectedCourse.roomId" @click="goChat(selectedCourse.roomId)">聊天联动</button>
               <button class="btn" type="button" :disabled="!selectedCourse.live" @click="goLivePrepare(selectedCourse.lessonCourseId)">进入课堂</button>
               <button class="btn" type="button" :disabled="!selectedCourse.live" @click="openLiveTimeline(selectedCourse.courseId)">课堂详情</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-section">
+          <div class="section-title">课堂 AI 结果</div>
+          <div class="lesson-card">
+            <div class="lesson-top">
+              <span class="status-pill sm" :class="selectedCourse.aiResultStatus === 'READY' ? 'tone-emerald' : 'tone-slate'">
+                {{ selectedCourse.aiResultStatus === 'READY' ? 'AI 总结已生成' : selectedCourse.aiResultStatus === 'FAILED' ? 'AI 生成失败' : selectedCourse.aiResultStatus === 'OFF' ? '未开启 AI' : 'AI 正在整理中' }}
+              </span>
+            </div>
+            <div class="lesson-desc">{{ selectedCourse.aiPreview || '课程结束后，AI 会自动整理课后总结与报告草稿。' }}</div>
+            <div class="lesson-actions">
+              <button class="btn" type="button" :disabled="!selectedCourse.live?.sessionId && !selectedCourse.lessonCourseId" @click="goLessonAiSummary(selectedCourse)">查看课后总结</button>
+              <button class="btn" type="button" :disabled="!selectedCourse.courseId" @click="goCourseDetail(selectedCourse.courseId)">查看课程详情</button>
             </div>
           </div>
         </div>
@@ -1327,7 +1429,7 @@ onMounted(() => {
         <div class="m-desc">
           {{ selectedCourse?.raw.teachingMode === 'OFFLINE'
             ? '线下试课不通过需提交微信聊天记录滚动并删除拉黑的录屏，管理员审核通过后退还 80% 信息费并删除录屏。'
-            : '线上试课不合适会直接结束课程并关闭聊天，不退还信息费。' }}
+            : '线上试课不合适会直接结束课程并关闭聊天；如符合规则，教师可后续申请退还 80% 信息费。' }}
         </div>
         <div class="m-form">
           <textarea v-model="modalReason" class="txt" rows="4" placeholder="请填写试课不通过说明"></textarea>
@@ -1445,6 +1547,17 @@ onMounted(() => {
 .banner-actions {
   display: flex;
   gap: 10px;
+}
+
+.email-course-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border-color: rgba(0, 181, 120, 0.2);
+  background: linear-gradient(120deg, rgba(0, 181, 120, 0.1), rgba(255, 248, 232, 0.9));
 }
 
 .metrics {

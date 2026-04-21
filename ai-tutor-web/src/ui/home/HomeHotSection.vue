@@ -209,13 +209,13 @@ watch(
 </script>
 
 <template>
-  <section class="hot">
+  <section class="hot" :class="{ 'student-priority': auth.isLoggedIn && auth.user?.userType === 2 }">
     <div class="head">
       <div class="title">热门推荐</div>
       <div class="meta">{{ city }}</div>
     </div>
 
-    <div v-if="showServices" class="block card">
+    <div v-if="showServices" class="block card services-block">
       <div class="block-head">
         <div class="block-title">推荐需求</div>
         <button class="btn" type="button" @click="emit('shuffle-services')">换一批</button>
@@ -294,7 +294,7 @@ watch(
       </div>
     </div>
 
-    <div v-if="showDemands" class="block card">
+    <div v-if="showDemands" class="block card demands-block">
       <div class="block-head">
         <div class="block-title">热门需求</div>
         <button class="btn" type="button" @click="emit('shuffle-demands')">换一批</button>
@@ -388,7 +388,7 @@ watch(
       </div>
     </div>
 
-    <div v-if="showTutors" class="block card">
+    <div v-if="showTutors" class="block card tutors-block">
       <div class="block-head">
         <div class="block-title">推荐老师</div>
         <button class="btn" type="button" @click="emit('shuffle-tutors')">换一批</button>
@@ -475,6 +475,14 @@ watch(
 .hot {
   display: grid;
   gap: 16px;
+}
+
+.student-priority .tutors-block {
+  order: 2;
+}
+
+.student-priority .demands-block {
+  order: 3;
 }
 
 .head {

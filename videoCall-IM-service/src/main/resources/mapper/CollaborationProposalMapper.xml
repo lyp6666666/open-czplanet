@@ -11,6 +11,11 @@
         <result column="price_per_hour" property="pricePerHour"/>
         <result column="class_time" property="classTime"/>
         <result column="frequency_per_week" property="frequencyPerWeek"/>
+        <result column="trial_start_at" property="trialStartAt"/>
+        <result column="trial_end_at" property="trialEndAt"/>
+        <result column="remark" property="remark"/>
+        <result column="expire_at" property="expireAt"/>
+        <result column="client_request_id" property="clientRequestId"/>
         <result column="status" property="status"/>
         <result column="actor_uid" property="actorUid"/>
         <result column="action_time" property="actionTime"/>
@@ -27,6 +32,11 @@
             price_per_hour,
             class_time,
             frequency_per_week,
+            trial_start_at,
+            trial_end_at,
+            remark,
+            expire_at,
+            client_request_id,
             status,
             actor_uid,
             action_time,
@@ -41,6 +51,11 @@
             #{pricePerHour},
             #{classTime},
             #{frequencyPerWeek},
+            #{trialStartAt},
+            #{trialEndAt},
+            #{remark},
+            #{expireAt},
+            #{clientRequestId},
             #{status},
             #{actorUid},
             #{actionTime},
@@ -51,7 +66,7 @@
 
     <select id="selectById" resultMap="baseMap">
         SELECT
-            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, status, actor_uid, action_time, create_time, update_time
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, trial_start_at, trial_end_at, remark, expire_at, client_request_id, status, actor_uid, action_time, create_time, update_time
         FROM collaboration_proposal
         WHERE id = #{id}
         LIMIT 1
@@ -59,9 +74,19 @@
 
     <select id="selectLatestByRoomId" resultMap="baseMap">
         SELECT
-            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, status, actor_uid, action_time, create_time, update_time
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, trial_start_at, trial_end_at, remark, expire_at, client_request_id, status, actor_uid, action_time, create_time, update_time
         FROM collaboration_proposal
         WHERE room_id = #{roomId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectByFromUidAndClientRequestId" resultMap="baseMap">
+        SELECT
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, trial_start_at, trial_end_at, remark, expire_at, client_request_id, status, actor_uid, action_time, create_time, update_time
+        FROM collaboration_proposal
+        WHERE from_uid = #{fromUid}
+          AND client_request_id = #{clientRequestId}
         ORDER BY id DESC
         LIMIT 1
     </select>
@@ -83,6 +108,10 @@
             price_per_hour = #{pricePerHour},
             class_time = #{classTime},
             frequency_per_week = #{frequencyPerWeek},
+            trial_start_at = #{trialStartAt},
+            trial_end_at = #{trialEndAt},
+            remark = #{remark},
+            expire_at = #{expireAt},
             update_time = NOW()
         WHERE id = #{id}
           AND from_uid = #{fromUid}

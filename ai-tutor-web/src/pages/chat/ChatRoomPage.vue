@@ -3,15 +3,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { chatApi } from '@/api/chat'
-import type { ChatPresenceResp, ChatRefundStateResp } from '@/api/chat'
+import type { ChatPresenceResp, ChatRefundStateResp, CollaborationProposalPayload } from '@/api/chat'
 import { assetsApi } from '@/api/assets'
 import { contactApi } from '@/api/contact'
 import { applicationApi } from '@/api/application'
 import { courseApi } from '@/api/course'
+import { jobsApi } from '@/api/jobs'
 import { liveApi } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, CourseDetailVO, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, CourseDetailVO, DemandViewVO, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useToastStore } from '@/stores/toast'
@@ -21,6 +22,7 @@ import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
 import ContactUnlockedCard from '@/ui/chat/ContactUnlockedCard.vue'
+import LessonAiResultCard from '@/ui/chat/LessonAiResultCard.vue'
 import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
 import TutorApplicationCard from '@/ui/chat/TutorApplicationCard.vue'
 import UnlockedContactModal from '@/ui/chat/UnlockedContactModal.vue'
@@ -30,15 +32,25 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const chatRealtime = useChatRealtimeStore()
-const toast = useToastStore()
+useToastStore()
 
 const isTeacher = computed(() => auth.user?.userType === 1)
 
 const roomId = computed(() => Number(route.params.roomId))
-const otherUid = computed(() => {
+const routeOtherUid = computed(() => {
   const raw = route.query.otherUid
   const v = typeof raw === 'string' ? Number(raw) : NaN
   return Number.isFinite(v) ? v : null
+})
+const otherUid = computed(() => {
+  if (routeOtherUid.value) return routeOtherUid.value
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const uid = messages.value[i]?.fromUser?.uid
+    if (typeof uid === 'number' && Number.isFinite(uid) && uid !== myUid.value) {
+      return uid
+    }
+  }
+  return null
 })
 
 const otherUser = ref<UserSimpleVO | null>(null)
@@ -46,6 +58,7 @@ const otherPresence = ref<ChatPresenceResp | null>(null)
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const emailHint = ref<{ show: boolean; title?: string; description?: string; actionText?: string } | null>(null)
 
 const sending = ref(false)
 const input = ref('')
@@ -61,11 +74,11 @@ const searchIsLast = ref(true)
 const searchFocusedMsgId = ref<number | null>(null)
 const searchResults = ref<ChatMessageResp[]>([])
 
-const endRequestBusy = ref(false)
-const endActionBusy = ref(false)
-
 const refundState = ref<ChatRefundStateResp | null>(null)
 const refundStateLoading = ref(false)
+const boundDemand = ref<DemandViewVO | null>(null)
+const boundDemandLoading = ref(false)
+const boundDemandError = ref<string | null>(null)
 
 const appActionBusy = ref<Record<number, boolean>>({})
 const appActionError = ref<Record<number, string>>({})
@@ -75,16 +88,9 @@ const collabCreateBusy = ref(false)
 const collabCreateError = ref<string | null>(null)
 const collabEdit = ref<{
   proposalId: number
-  initial: { pricePerHour: string; classTime: string; frequencyPerWeek: number }
+  initial: { pricePerHour: string; trialStartAt: number; trialEndAt: number; remark?: string | null }
 } | null>(null)
 
-const scheduleOpen = ref(false)
-const scheduleBusy = ref(false)
-const scheduleError = ref<string | null>(null)
-const scheduleTitle = ref('')
-const scheduleDescription = ref('')
-const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now()))
-const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
 const currentCourse = ref<CourseDetailVO | null>(null)
 
 const cursor = ref<string | null>(null)
@@ -248,6 +254,10 @@ function toggleRoomPinned() {
   roomPinned.value = next
 }
 
+function goEmailSettings() {
+  void router.push({ name: 'emailSettings' })
+}
+
 function closeActionMenu() {
   actionMenuOpen.value = false
 }
@@ -313,6 +323,7 @@ function openCard(uid: number) {
   if (!uid || uid === myUid.value) return
   cardUid.value = uid
   cardOpen.value = true
+  void preloadUnlockedContactForUid(uid)
 }
 
 function closeCard() {
@@ -324,8 +335,50 @@ const unlockUid = ref<number | null>(null)
 const unlockPhone = ref('')
 const unlockLoading = ref(false)
 const unlockError = ref<string | null>(null)
+const unlockNote = ref('')
 const contactAutoShown = ref(false)
 const imageSending = ref(false)
+
+function contactAutoShowStorageKey() {
+  const uid = auth.user?.id
+  if (!uid || !(roomId.value > 0)) return ''
+  return `ai_tutor_contact_auto_shown:${uid}:${roomId.value}`
+}
+
+function hasAutoShownContactUnlock() {
+  const key = contactAutoShowStorageKey()
+  if (!key) return false
+  try {
+    return localStorage.getItem(key) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markAutoShownContactUnlock() {
+  const key = contactAutoShowStorageKey()
+  if (!key) return
+  try {
+    localStorage.setItem(key, '1')
+  } catch {
+    void 0
+  }
+}
+
+const unlockedContactPhoneByUid = ref<Record<number, string>>({})
+
+function setUnlockedContactPhone(uid: number | null, phone: string | null | undefined) {
+  if (!uid) return
+  const normalized = String(phone || '').trim()
+  if (!normalized) return
+  unlockedContactPhoneByUid.value = { ...unlockedContactPhoneByUid.value, [uid]: normalized }
+}
+
+const cardUnlockedContactPhone = computed(() => {
+  const uid = cardUid.value
+  if (!uid) return ''
+  return unlockedContactPhoneByUid.value[uid] || ''
+})
 
 function closeUnlock() {
   unlockOpen.value = false
@@ -342,12 +395,54 @@ async function viewUnlockedContact() {
   try {
     const contact = await contactApi.unlock(roomId.value, otherUid.value)
     unlockUid.value = contact.uid
-    unlockPhone.value = contact.phone || ''
+    unlockPhone.value = (contact.phone || '').trim()
+    setUnlockedContactPhone(contact.uid, contact.phone)
   } catch (e) {
-    unlockError.value = e instanceof Error ? e.message : '加载失败'
+    unlockError.value = '联系方式暂时加载失败，请稍后重试'
   } finally {
     unlockLoading.value = false
   }
+}
+
+async function preloadUnlockedContactForUid(targetUid: number | null | undefined) {
+  const normalizedUid = typeof targetUid === 'number' && Number.isFinite(targetUid) ? targetUid : null
+  if (!normalizedUid || normalizedUid === myUid.value) return
+  if (unlockedContactPhoneByUid.value[normalizedUid]) return
+  if (!canViewContact.value) return
+  try {
+    const contact = await contactApi.unlock(roomId.value, normalizedUid)
+    setUnlockedContactPhone(contact.uid, contact.phone)
+  } catch {
+    void 0
+  }
+}
+
+function isOfflineCollaborationAcceptedBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_status' }> {
+  return isCollaborationStatusBody(body) && String(body.status || '').trim().toUpperCase() === 'ACCEPTED'
+}
+
+const latestTeachingMode = computed<'ONLINE' | 'OFFLINE' | null>(() => {
+  let mode: 'ONLINE' | 'OFFLINE' | null = null
+  for (const m of messages.value) {
+    const body = normalizeBody(m.message.body)
+    if (!isTutorApplicationBody(body)) continue
+    const current = String(body.teachingMode || '').trim().toUpperCase()
+    if (current === 'ONLINE' || current === 'OFFLINE') {
+      mode = current
+    }
+  }
+  return mode
+})
+
+function latestOfflineCollaborationAcceptedMessageId() {
+  if (latestTeachingMode.value !== 'OFFLINE') return null
+  let latestId: number | null = null
+  for (const m of messages.value) {
+    const body = normalizeBody(m.message.body)
+    if (!isOfflineCollaborationAcceptedBody(body)) continue
+    latestId = m.message.id
+  }
+  return latestId
 }
 
 function goPay(orderId: number, applicationId?: number | null) {
@@ -365,9 +460,18 @@ onMounted(() => {
   if (auth.isLoggedIn && !auth.me) {
     void auth.refreshMe()
   }
+  void loadEmailHint()
   refreshRoomPinned()
   stopPinSync = subscribeChatPinChange(() => refreshRoomPinned())
 })
+
+async function loadEmailHint() {
+  try {
+    emailHint.value = await userApi.emailReminderHint('CHAT')
+  } catch {
+    emailHint.value = null
+  }
+}
 
 function openCollaboration() {
   if (!composerEnabled.value) {
@@ -379,7 +483,7 @@ function openCollaboration() {
   collabOpen.value = true
 }
 
-function openCollaborationEdit(payload: { proposalId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+function openCollaborationEdit(payload: { proposalId: number; pricePerHour: string; trialStartAt: number; trialEndAt: number; remark?: string | null }) {
   if (!composerEnabled.value) {
     error.value = composerLockedHint.value
     return
@@ -387,7 +491,7 @@ function openCollaborationEdit(payload: { proposalId: number; pricePerHour: stri
   collabCreateError.value = null
   collabEdit.value = {
     proposalId: payload.proposalId,
-    initial: { pricePerHour: payload.pricePerHour, classTime: payload.classTime, frequencyPerWeek: payload.frequencyPerWeek },
+    initial: { pricePerHour: payload.pricePerHour, trialStartAt: payload.trialStartAt, trialEndAt: payload.trialEndAt, remark: payload.remark },
   }
   collabOpen.value = true
 }
@@ -396,120 +500,6 @@ function closeCollaboration() {
   if (collabCreateBusy.value) return
   collabOpen.value = false
   collabEdit.value = null
-}
-
-function roundToNextHalfHour(nowMs: number) {
-  const d = new Date(nowMs)
-  d.setSeconds(0, 0)
-  const m = d.getMinutes()
-  const next = m <= 0 ? 0 : m <= 30 ? 30 : 60
-  d.setMinutes(next)
-  if (next === 60) d.setHours(d.getHours() + 1, 0, 0, 0)
-  return d.getTime()
-}
-
-function toLocalDateTimeInputValue(ms: number) {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-}
-
-function parseLocalDateTimeInputValue(value: string) {
-  const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : Date.now()
-}
-
-function openScheduleCreate() {
-  if (!composerEnabled.value) {
-    error.value = composerLockedHint.value
-    return
-  }
-  const peerName = otherUid.value ? pickDisplayName(otherUser.value, otherUid.value) : '对方'
-  const start = roundToNextHalfHour(Date.now())
-  scheduleTitle.value = currentCourse.value?.courseName?.trim() || `与${peerName}的线上课程`
-  scheduleDescription.value = currentCourse.value ? `课程 #${currentCourse.value.courseId} 下新增课节` : ''
-  scheduleStartAt.value = start
-  scheduleEndAt.value = start + 60 * 60 * 1000
-  scheduleError.value = null
-  scheduleOpen.value = true
-}
-
-function closeScheduleCreate() {
-  if (scheduleBusy.value) return
-  scheduleOpen.value = false
-}
-
-function applyScheduleStartInput(value: string) {
-  const nextStart = parseLocalDateTimeInputValue(value)
-  const previousDuration = Math.max(30 * 60 * 1000, scheduleEndAt.value - scheduleStartAt.value)
-  scheduleStartAt.value = nextStart
-  if (!(scheduleEndAt.value > scheduleStartAt.value)) {
-    scheduleEndAt.value = nextStart + previousDuration
-  }
-}
-
-function applyScheduleEndInput(value: string) {
-  scheduleEndAt.value = parseLocalDateTimeInputValue(value)
-}
-
-function makeLessonRequestMessage(event: { id: number; title: string; startAt: number; endAt: number; status: unknown; creatorUserId: number }): ChatMessageResp {
-  return {
-    fromUser: { uid: myUid.value },
-    message: {
-      id: Date.now(),
-      roomId: roomId.value,
-      sendTime: new Date().toISOString(),
-      body: {
-        type: 'lesson_request',
-        eventId: event.id,
-        title: event.title,
-        startAt: event.startAt,
-        endAt: event.endAt,
-        status: event.status === 'ACCEPTED' || event.status === 'REJECTED' || event.status === 'CANCELED' ? event.status : 'PENDING',
-        creatorUserId: event.creatorUserId,
-      },
-    },
-  }
-}
-
-async function submitScheduleCreate() {
-  if (scheduleBusy.value) return
-  scheduleError.value = null
-  const titleText = scheduleTitle.value.trim()
-  if (!titleText) {
-    scheduleError.value = '请输入课程名称'
-    return
-  }
-  if (!otherUid.value) {
-    scheduleError.value = '缺少授课对象'
-    return
-  }
-  if (!(scheduleEndAt.value > scheduleStartAt.value)) {
-    scheduleError.value = '结束时间必须晚于开始时间'
-    return
-  }
-  if (scheduleStartAt.value < Date.now() - 60_000) {
-    scheduleError.value = '请选择当前时间之后的课程'
-    return
-  }
-
-  scheduleBusy.value = true
-  try {
-    const event = await scheduleApi.createEvent({
-      courseId: currentCourse.value?.courseId,
-      title: titleText,
-      participantUserId: otherUid.value,
-      startAt: scheduleStartAt.value,
-      endAt: scheduleEndAt.value,
-      description: scheduleDescription.value.trim() || undefined,
-    })
-    mergeMessages([makeLessonRequestMessage(event)], 'append')
-    scheduleOpen.value = false
-    toast.show('授课申请已发送，对方确认后会自动开放线上课堂', 'success', 3200)
-  } catch (e) {
-    scheduleError.value = e instanceof Error ? e.message : '发起约课失败'
-  } finally {
-    scheduleBusy.value = false
-  }
 }
 
 // #region debug-point
@@ -527,15 +517,16 @@ async function dbgReport(event: string, payload: Record<string, unknown>) {
 }
 // #endregion debug-point
 
-async function createCollaboration(payload: { pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+async function createCollaboration(payload: Omit<CollaborationProposalPayload, 'roomId'>) {
   if (collabCreateBusy.value) return
   collabCreateBusy.value = true
   collabCreateError.value = null
   try {
     const editing = !!collabEdit.value
+    const clientRequestId = editing ? `collab-edit-${collabEdit.value!.proposalId}-${Date.now()}` : `collab-create-${roomId.value}-${Date.now()}`
     const msg = editing
-      ? await chatApi.updateCollaborationProposal(collabEdit.value!.proposalId, { roomId: roomId.value, ...payload })
-      : await chatApi.createCollaborationProposal({ roomId: roomId.value, ...payload })
+      ? await chatApi.updateCollaborationProposal(collabEdit.value!.proposalId, { roomId: roomId.value, ...payload, clientRequestId })
+      : await chatApi.createCollaborationProposal({ roomId: roomId.value, ...payload, clientRequestId })
     mergeMessages([msg], 'append')
     collabOpen.value = false
     collabEdit.value = null
@@ -585,6 +576,10 @@ function isLessonStatusBody(body: ChatMessageBody): body is Extract<ChatMessageB
   return body.type === 'lesson_status'
 }
 
+function isLessonAiResultBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'lesson_ai_result' }> {
+  return body.type === 'lesson_ai_result'
+}
+
 function isCollaborationProposalBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_proposal' }> {
   return body.type === 'collaboration_proposal'
 }
@@ -607,10 +602,6 @@ function isTutorApplicationBody(body: ChatMessageBody): body is Extract<ChatMess
 
 function isTutorApplicationStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'tutor_application_status' }> {
   return body.type === 'tutor_application_status'
-}
-
-function isEndChatRequestBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'end_chat_request' }> {
-  return body.type === 'end_chat_request'
 }
 
 function isEndChatStatusBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'end_chat_status' }> {
@@ -733,6 +724,17 @@ async function openLiveByStatus(eventId: number) {
   }
 }
 
+function openLessonAiSummary(body: Extract<ChatMessageBody, { type: 'lesson_ai_result' }>) {
+  const targetCourseId = Number(body.contextId || body.eventId || 0)
+  if (!(targetCourseId > 0)) return
+  const query: Record<string, string> = {}
+  const maybeSessionId = currentCourse.value && currentCourse.value.courseId === targetCourseId ? currentCourse.value.liveSessionId : null
+  if (maybeSessionId) {
+    query.sessionId = String(maybeSessionId)
+  }
+  void router.push({ name: 'lessonAiSummary', params: { courseId: String(targetCourseId) }, query })
+}
+
 function collabStatusText(s: unknown): string {
   const v = typeof s === 'string' ? s.trim().toUpperCase() : ''
   if (v === 'ACCEPTED') return '已同意'
@@ -740,6 +742,95 @@ function collabStatusText(s: unknown): string {
   if (v === 'PENDING') return '待确认'
   return v || '状态未知'
 }
+
+function isAcceptedCollaborationBody(body: ChatMessageBody): body is Extract<ChatMessageBody, { type: 'collaboration_status' }> {
+  return isCollaborationStatusBody(body) && String(body.status || '').trim().toUpperCase() === 'ACCEPTED'
+}
+
+const latestAcceptedCollaborationMessageId = computed(() => {
+  let latest = 0
+  for (const m of messages.value) {
+    const body = normalizeBody(m.message?.body)
+    if (!isAcceptedCollaborationBody(body)) continue
+    latest = Math.max(latest, m.message?.id || 0)
+  }
+  return latest
+})
+
+// 需求绑定以“最近一条未被合作接受消费的需求申请”为准，便于同一聊天后续重新沟通新需求。
+const boundDemandApplication = computed(() => {
+  let best: { msgId: number; demandId: number; body: Extract<ChatMessageBody, { type: 'tutor_application' }> } | null = null
+  const acceptedAfterMsgId = latestAcceptedCollaborationMessageId.value
+  for (const m of messages.value) {
+    const body = normalizeBody(m.message?.body)
+    if (!isTutorApplicationBody(body)) continue
+    if (body.contextType !== 'DEMAND') continue
+    const demandId = Number(body.contextId)
+    const msgId = m.message?.id || 0
+    if (!(demandId > 0) || msgId <= acceptedAfterMsgId) continue
+    if (!best || msgId > best.msgId) best = { msgId, demandId, body }
+  }
+  return best
+})
+
+const boundDemandId = computed(() => boundDemandApplication.value?.demandId || null)
+
+function classModeText(v: unknown): string {
+  const s = String(v || '').trim().toLowerCase()
+  if (s === 'online') return '线上'
+  if (s === 'offline') return '线下'
+  return '授课形式待确认'
+}
+
+function demandBudgetText(demand: Pick<DemandViewVO, 'budgetMin' | 'budgetMax'> | null): string {
+  if (!demand) return ''
+  if (!demand.budgetMin && !demand.budgetMax) return '预算待沟通'
+  return `${demand.budgetMin || '-'}-${demand.budgetMax || '-'}元/小时`
+}
+
+const boundDemandTitle = computed(() => {
+  const title = boundDemand.value?.title?.trim()
+  if (title) return title
+  return boundDemandApplication.value?.body.content?.trim() || '当前沟通需求'
+})
+
+const boundDemandMeta = computed(() => {
+  const demand = boundDemand.value
+  const parts = [
+    classModeText(demand?.classMode || boundDemandApplication.value?.body.teachingMode),
+    demand?.subjectName || '',
+    demandBudgetText(demand),
+  ].filter((it) => it && it !== '授课形式待确认')
+  return parts.join(' · ')
+})
+
+function openBoundDemandDetail() {
+  const id = boundDemandId.value
+  if (!(id && id > 0)) return
+  void router.push({ name: 'tutorJobDetail', params: { id: String(id) } })
+}
+
+watch(
+  boundDemandId,
+  async (id) => {
+    boundDemand.value = null
+    boundDemandError.value = null
+    if (!(id && id > 0)) return
+    const expectedId = id
+    boundDemandLoading.value = true
+    try {
+      const detail = await jobsApi.getDemandView(id)
+      if (boundDemandId.value === expectedId) boundDemand.value = detail
+    } catch (e) {
+      if (boundDemandId.value === expectedId) {
+        boundDemandError.value = e instanceof Error ? e.message : '需求信息加载失败'
+      }
+    } finally {
+      if (boundDemandId.value === expectedId) boundDemandLoading.value = false
+    }
+  },
+  { immediate: true },
+)
 
 async function respondCollaboration(proposalId: number, action: 'ACCEPT' | 'REJECT', msgId: number) {
   const current = effectiveCollabStatus(proposalId, 'PENDING')
@@ -910,21 +1001,6 @@ const recallByTargetMsgId = computed<Record<number, { operatorUid: number | null
   return out
 })
 
-const endStatusByRequestId = computed<Record<number, string>>(() => {
-  const out: Record<number, string> = {}
-  for (const m of sortedMessages.value) {
-    const b = normalizeBody(m.message?.body)
-    if (isEndChatRequestBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
-      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
-      continue
-    }
-    if (isEndChatStatusBody(b) && typeof b.requestId === 'number' && Number.isFinite(b.requestId)) {
-      if (typeof b.status === 'string' && b.status.trim()) out[b.requestId] = b.status
-    }
-  }
-  return out
-})
-
 const refundStatusByRequestId = computed<Record<number, string>>(() => {
   const out: Record<number, string> = {}
   for (const m of sortedMessages.value) {
@@ -1011,12 +1087,7 @@ const renderMessages = computed<RenderMessage[]>(() => {
       })
       continue
     }
-    if (isEndChatStatusBody(body)) continue
-    if (isEndChatRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
-      const effective = endStatusByRequestId.value[body.requestId]
-      list.push({ ...m, body: { ...body, status: effective || body.status } })
-      continue
-    }
+    if (isEndChatStatusBody(body) || body.type === 'end_chat_request') continue
     if (isRefundStatusBody(body)) continue
     if (isRefundRequestBody(body) && typeof body.requestId === 'number' && Number.isFinite(body.requestId)) {
       const effective = refundStatusByRequestId.value[body.requestId]
@@ -1207,37 +1278,6 @@ const composerEnabled = computed(() => {
   return chatUnlocked.value && !hasAnyRefundRequest.value
 })
 
-const hasPendingEndChatRequest = computed(() => {
-  return renderMessages.value.some((m) => {
-    const b = m.body
-    if (!isEndChatRequestBody(b)) return false
-    const s = typeof b.status === 'string' ? b.status.trim().toUpperCase() : ''
-    return s === 'PENDING_CONFIRM'
-  })
-})
-
-const canRequestEndChat = computed(() => {
-  if (!chatUnlocked.value) return false
-  if (hasAnyRefundRequest.value) return false
-  if (!isTeacher.value) return false
-  return !hasPendingEndChatRequest.value
-})
-
-async function requestEndChat() {
-  if (!roomId.value || !Number.isFinite(roomId.value)) return
-  if (!canRequestEndChat.value) return
-  if (endRequestBusy.value) return
-  endRequestBusy.value = true
-  try {
-    const msg = await chatApi.requestEndChat(roomId.value)
-    mergeMessages([msg], 'append')
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : '发起结束沟通失败'
-  } finally {
-    endRequestBusy.value = false
-  }
-}
-
 const composerLockedHint = computed(() => {
   if (hasAnyRefundRequest.value) {
     return '沟通已结束，退款等待管理员审核'
@@ -1250,11 +1290,16 @@ watch([roomId, () => messages.value.length], () => {
 }, { immediate: true })
 
 watch(
-  chatUnlocked,
-  (v) => {
-    if (!v) return
-    if (contactAutoShown.value) return
+  () => latestOfflineCollaborationAcceptedMessageId(),
+  (messageId) => {
+    if (!messageId) return
+    if (contactAutoShown.value || hasAutoShownContactUnlock()) {
+      contactAutoShown.value = true
+      return
+    }
     contactAutoShown.value = true
+    markAutoShownContactUnlock()
+    unlockNote.value = '本次合作达成后已为你展示一次对方真实联系方式，后续点击对方头像也可再次查看。'
     void viewUnlockedContact()
   },
 )
@@ -1265,28 +1310,6 @@ function refundStatusText(raw: unknown): string {
     return '已经退还支付宝/微信账户（到账可能有延迟），若有疑问请咨询后台电话'
   }
   return '已经发起，等待管理员审核中，平均审核时长约30分钟，超出8小时直接退回'
-}
-
-function endChatStatusText(raw: unknown): string {
-  const s = typeof raw === 'string' ? raw.trim().toUpperCase() : ''
-  if (s === 'CONFIRMED') return '对方已确认结束沟通'
-  if (s === 'REJECTED') return '对方暂不结束'
-  return isTeacher.value ? '等待对方确认结束' : '对方请求结束沟通'
-}
-
-async function respondEndChat(requestId: number, action: 'CONFIRMED' | 'REJECTED') {
-  if (endActionBusy.value) return
-  endActionBusy.value = true
-  try {
-    const statusMsg = await chatApi.respondEndChat(roomId.value, requestId, action)
-    mergeMessages([statusMsg], 'append')
-    if (action === 'CONFIRMED') {
-      const msg = await chatApi.requestBrokerageRefund(roomId.value)
-      mergeMessages([msg], 'append')
-    }
-  } finally {
-    endActionBusy.value = false
-  }
 }
 
 async function loadOtherUser() {
@@ -1738,10 +1761,6 @@ watch(
     collabCreateBusy.value = false
     collabCreateError.value = null
     collabEdit.value = null
-    scheduleOpen.value = false
-    scheduleBusy.value = false
-    scheduleError.value = null
-    endActionBusy.value = false
     appActionBusy.value = {}
     appActionError.value = {}
     collabActionBusy.value = {}
@@ -1755,7 +1774,7 @@ watch(
     resetMessageSearch(true)
     pendingOutgoingMessages.value = []
     sending.value = false
-    contactAutoShown.value = false
+    contactAutoShown.value = hasAutoShownContactUnlock()
     currentCourse.value = null
     void loadOtherUser()
     void loadOtherPresence()
@@ -1844,6 +1863,13 @@ watch(
     </div>
 
     <div v-if="error" class="hint error">{{ error }}</div>
+    <div v-if="emailHint?.show" class="card inline-email-hint">
+      <div>
+        <div class="inline-email-hint-title">{{ emailHint.title || '绑定邮箱，未读消息可在 2 小时后自动提醒你' }}</div>
+        <div class="inline-email-hint-desc">{{ emailHint.description || '绑定主邮箱后，不再错过老师的重要回复。' }}</div>
+      </div>
+      <button class="btn btn-primary" type="button" @click="goEmailSettings">{{ emailHint.actionText || '立即绑定' }}</button>
+    </div>
 
     <div v-if="searchPanelOpen" class="card search-panel">
       <div class="search-panel-head">
@@ -1898,6 +1924,14 @@ watch(
 
     <div class="card panel">
       <div class="msgs" ref="msgsRef">
+        <button v-if="boundDemandId" class="bound-demand-bar" type="button" @click="openBoundDemandDetail">
+          <span class="bound-demand-label">当前沟通需求</span>
+          <span class="bound-demand-title">{{ boundDemandTitle }}</span>
+          <span v-if="boundDemandMeta" class="bound-demand-meta">{{ boundDemandMeta }}</span>
+          <span v-else-if="boundDemandLoading" class="bound-demand-meta">需求信息加载中...</span>
+          <span v-else-if="boundDemandError" class="bound-demand-meta">点击查看需求详情</span>
+          <span class="bound-demand-action">查看详情 ›</span>
+        </button>
         <div class="top-hint" v-if="!isLast && !loading">
           <button class="btn btn-text" type="button" @click="loadMore">查看更多历史消息</button>
         </div>
@@ -1933,6 +1967,9 @@ watch(
                     进入课堂
                   </button>
                 </div>
+              </template>
+              <template v-else-if="isLessonAiResultBody(it.m.body)">
+                <LessonAiResultCard :body="it.m.body" @open-summary="openLessonAiSummary(it.m.body)" />
               </template>
               <template v-else-if="isTutorApplicationBody(it.m.body)">
                 <TutorApplicationCard
@@ -1978,28 +2015,6 @@ watch(
               </template>
               <template v-else-if="isContactUnlockedBody(it.m.body)">
                 <ContactUnlockedCard :body="it.m.body" :can-view="canViewContact" @view="viewUnlockedContact" />
-              </template>
-              <template v-else-if="isEndChatRequestBody(it.m.body)">
-                <div class="end-card">
-                  <div class="h1">结束沟通</div>
-                  <div class="hint">{{ endChatStatusText(it.m.body.status) }}</div>
-                  <div
-                    v-if="
-                      !isTeacher &&
-                      it.m.fromUser.uid !== myUid &&
-                      typeof it.m.body.requestId === 'number' &&
-                      String(it.m.body.status || '').trim().toUpperCase() === 'PENDING_CONFIRM'
-                    "
-                    class="ops"
-                  >
-                    <button class="btn" type="button" :disabled="endActionBusy" @click="respondEndChat(it.m.body.requestId, 'REJECTED')">
-                      暂不结束
-                    </button>
-                    <button class="btn btn-primary" type="button" :disabled="endActionBusy" @click="respondEndChat(it.m.body.requestId, 'CONFIRMED')">
-                      确认结束
-                    </button>
-                  </div>
-                </div>
               </template>
               <template v-else-if="isRefundRequestBody(it.m.body)">
                 <div class="refund-card">
@@ -2055,9 +2070,6 @@ watch(
               <button class="btn" type="button" :disabled="hasActiveCollabProposal || !composerEnabled" @click="openCollaboration">
                 {{ hasActiveCollabProposal ? '已发起合作' : '发起合作' }}
               </button>
-              <button class="btn schedule-action" type="button" :disabled="!composerEnabled || !otherUid" @click="openScheduleCreate">
-                发起约课
-              </button>
               <button v-if="currentCourse?.courseId" class="btn" type="button" @click="router.push({ name: 'courseDetail', params: { courseId: String(currentCourse.courseId) } })">
                 我的课程
               </button>
@@ -2066,9 +2078,6 @@ watch(
                   申请退费
                 </button>
               </span>
-              <button v-if="chatUnlocked" class="btn" type="button" :disabled="!canRequestEndChat || endRequestBusy" @click="requestEndChat">
-                {{ endRequestBusy ? '提交中...' : '结束沟通' }}
-              </button>
             </div>
           </template>
         </div>
@@ -2085,13 +2094,14 @@ watch(
       </div>
     </div>
 
-    <UserCardModal :open="cardOpen" :uid="cardUid" @close="closeCard" />
+    <UserCardModal :open="cardOpen" :uid="cardUid" :unlocked-contact-phone="cardUnlockedContactPhone" @close="closeCard" />
     <UnlockedContactModal
       :open="unlockOpen"
       :uid="unlockUid"
       :phone="unlockPhone"
       :loading="unlockLoading"
       :error="unlockError"
+      :note="unlockNote"
       @close="closeUnlock"
     />
     <CollaborationProposalModal
@@ -2100,64 +2110,11 @@ watch(
       :error="collabCreateError"
       :title="collabEdit ? '修改提案' : '发起合作'"
       :submit-text="collabEdit ? '保存修改' : '发送提案'"
+      :other-uid="otherUid"
       :initial="collabEdit ? collabEdit.initial : null"
       @close="closeCollaboration"
       @submit="createCollaboration"
     />
-
-    <div v-if="scheduleOpen" class="mask" @click.self="closeScheduleCreate">
-      <div class="modal card schedule-modal">
-        <div class="m-title">发起线上约课</div>
-        <div class="m-desc">
-          对方接收后，系统会自动生成实时课堂，并在开课前提醒双方进入。
-          <template v-if="currentCourse?.courseId">当前会挂到长期课程 #{{ currentCourse.courseId }} 下。</template>
-        </div>
-        <div v-if="scheduleError" class="m-error">{{ scheduleError }}</div>
-
-        <div class="field">
-          <div class="lab">课程名称</div>
-          <input v-model="scheduleTitle" class="ipt" placeholder="例如：初二数学｜函数强化" />
-        </div>
-
-        <div class="field">
-          <div class="lab">授课对象</div>
-          <div class="readonly-peer">{{ otherUid ? pickDisplayName(otherUser, otherUid) : '当前会话对象' }}</div>
-        </div>
-
-        <div class="time-grid">
-          <div class="field">
-            <div class="lab">开始时间</div>
-            <input
-              class="ipt"
-              type="datetime-local"
-              :value="toLocalDateTimeInputValue(scheduleStartAt)"
-              @change="applyScheduleStartInput(($event.target as HTMLInputElement).value)"
-            />
-          </div>
-          <div class="field">
-            <div class="lab">结束时间</div>
-            <input
-              class="ipt"
-              type="datetime-local"
-              :value="toLocalDateTimeInputValue(scheduleEndAt)"
-              @change="applyScheduleEndInput(($event.target as HTMLInputElement).value)"
-            />
-          </div>
-        </div>
-
-        <div class="field">
-          <div class="lab">备注</div>
-          <textarea v-model="scheduleDescription" class="txt" rows="3" placeholder="可填写课前准备、教材、会议说明等" />
-        </div>
-
-        <div class="m-ops">
-          <button class="btn" type="button" :disabled="scheduleBusy" @click="closeScheduleCreate">取消</button>
-          <button class="btn btn-primary" type="button" :disabled="scheduleBusy" @click="submitScheduleCreate">
-            {{ scheduleBusy ? '发送中...' : '发送约课邀请' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -2326,6 +2283,29 @@ watch(
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+.inline-email-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid rgba(0, 181, 120, 0.16);
+  background: linear-gradient(135deg, rgba(240, 251, 244, 0.96), rgba(255, 248, 233, 0.96));
+}
+
+.inline-email-hint-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1d4f3a;
+}
+
+.inline-email-hint-desc {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .search-panel {
@@ -2500,6 +2480,68 @@ watch(
   color: var(--muted);
 }
 
+.bound-demand-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(32, 128, 240, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(232, 244, 255, 0.96), rgba(255, 255, 255, 0.96));
+  box-shadow: 0 10px 24px rgba(15, 35, 65, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.bound-demand-bar:hover {
+  border-color: rgba(32, 128, 240, 0.34);
+  box-shadow: 0 12px 28px rgba(32, 128, 240, 0.1);
+}
+
+.bound-demand-label {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(32, 128, 240, 0.12);
+  padding: 3px 8px;
+  color: #1767c4;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.bound-demand-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.bound-demand-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bound-demand-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .time-divider {
   align-self: center;
   margin: 4px 0 2px;
@@ -2527,8 +2569,7 @@ watch(
 
 .search-focused .bubble,
 .search-focused .sys,
-.search-focused .refund-card,
-.search-focused .end-card {
+.search-focused .refund-card {
   box-shadow: 0 0 0 2px rgba(255, 196, 0, 0.45);
 }
 
@@ -2675,12 +2716,6 @@ watch(
   align-items: center;
 }
 
-.schedule-action {
-  border-color: rgba(32, 128, 240, 0.18);
-  background: linear-gradient(135deg, rgba(32, 128, 240, 0.1), rgba(32, 128, 240, 0.04));
-  color: #1767c4;
-}
-
 .refund-card {
   min-width: 260px;
   max-width: 360px;
@@ -2708,33 +2743,6 @@ watch(
   margin-top: 8px;
   font-size: 12px;
   font-weight: 800;
-}
-
-.end-card {
-  min-width: 260px;
-  max-width: 360px;
-  border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  padding: 10px 10px 12px;
-  background: rgba(18, 180, 171, 0.08);
-  display: grid;
-  gap: 8px;
-}
-
-.end-card .h1 {
-  font-weight: 900;
-}
-
-.end-card .hint {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 700;
-}
-
-.end-card .ops {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
 }
 
 .mask {
@@ -2897,9 +2905,15 @@ watch(
 }
 
 @media (max-width: 720px) {
+  .inline-email-hint,
   .time-grid,
   .send {
     grid-template-columns: 1fr;
+  }
+
+  .inline-email-hint {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

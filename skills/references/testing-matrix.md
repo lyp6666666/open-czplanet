@@ -1,86 +1,86 @@
-# Testing Matrix
+# 测试矩阵
 
-Choose the smallest meaningful validation that matches the touched area.
+针对受影响区域，选择“最小但有意义”的验证方式。
 
-## Backend Shared Or Auth
+## 后端公共层或认证相关
 
-- Touches:
-  gateway auth, common identity propagation, request interceptors, role checks
-- Minimum validation:
-  run the nearest module tests
-- Usual targets:
+- 适用范围：
+  网关鉴权、公共身份透传、请求拦截器、角色检查
+- 最低验证要求：
+  运行最接近的模块测试
+- 常见目标：
   - `./mvnw -pl tutor-appointment-service test`
   - `./mvnw -pl ai-tutor-admin test`
-  - specific tests around interceptors or auth controllers
+  - 与拦截器或认证控制器相关的定向测试
 
-## Appointment Or User/Profile Changes
+## Appointment 或用户/资料改动
 
-- Touches:
-  `/user/*`, profile updates, jobs, favorites, schedule, upload
-- Minimum validation:
+- 适用范围：
+  `/user/*`、资料更新、需求、收藏、日程、上传
+- 最低验证要求：
   `./mvnw -pl tutor-appointment-service test`
-- Also consider:
-  user web typecheck/test if UI changed
+- 还应考虑：
+  如果 UI 也改了，补跑用户端 Web 的类型检查或测试
 
-## Chat Or Realtime Changes
+## 聊天或实时通信改动
 
-- Touches:
-  room list, message page, SSE stream, unread counts, read ack, collaboration proposal
-- Minimum validation:
+- 适用范围：
+  房间列表、消息页面、SSE 流、未读数、已读回执、合作提案
+- 最低验证要求：
   `./mvnw -pl videoCall-IM-service test`
-- Also consider:
+- 同时可考虑：
   `cd ai-tutor-web && npm run test`
-  if frontend chat page or store changed
-- QA candidates:
+  如果改到了前端聊天页或 store
+- 可选 QA 目标：
   `qa/automation/tests/api/test_chat_smoke.py`
   `qa/automation/tests/e2e/test_chat_e2e.py`
 
-## Payment Or Refund Changes
+## 支付或退款改动
 
-- Touches:
-  prepay, cashier UI, order polling, notify callback, refund app service
-- Minimum validation:
+- 适用范围：
+  预支付、收银台 UI、订单轮询、回调通知、退款应用服务
+- 最低验证要求：
   `./mvnw -pl payment-service test`
-- Also consider:
-  QA payment smoke and regression
-  admin refund paths if state is surfaced there
+- 同时可考虑：
+  QA 支付 smoke / regression
+  如果状态在管理端有展示，也要覆盖管理端退款路径
 
-## Admin Changes
+## 管理端改动
 
-- Touches:
-  `ai-tutor-admin` or `ai-tutor-admin-web`
-- Minimum validation:
-  - backend: `./mvnw -pl ai-tutor-admin test`
-  - frontend: `cd ai-tutor-admin-web && npm run typecheck && npm run lint`
+- 适用范围：
+  `ai-tutor-admin` 或 `ai-tutor-admin-web`
+- 最低验证要求：
+  - 后端：`./mvnw -pl ai-tutor-admin test`
+  - 前端：`cd ai-tutor-admin-web && npm run typecheck && npm run lint`
 
-## User Web Changes
+## 用户端 Web 改动
 
-- Touches:
+- 适用范围：
   `ai-tutor-web/src`
-- Minimum validation:
+- 最低验证要求：
   `cd ai-tutor-web && npm run typecheck`
-- Also run when available:
+- 如果可用，也建议执行：
   `npm run lint`
   `npm run test`
 
-## Miniprogram Changes
+## 小程序改动
 
-- Touches:
+- 适用范围：
   `ai-tutor-miniprogram/src`
-- Minimum validation:
+- 最低验证要求：
   `cd ai-tutor-miniprogram && npm run type-check`
 
-## QA Or E2E Changes
+## QA 或 E2E 改动
 
-- Touches:
-  `qa/automation` or `e2e-tests`
-- Minimum validation:
-  run the nearest relevant suite or test file
+- 适用范围：
+  `qa/automation` 或 `e2e-tests`
+- 最低验证要求：
+  运行最近、最相关的测试套件或单个测试文件
 
-## Cross-Module Rule
+## 跨模块规则
 
-If a change spans more than one of these areas:
+如果一次改动跨越多个区域：
 
-- validate each touched module at least once
-- prefer one focused backend suite plus one focused frontend or QA check
-- if you cannot run validation, say exactly what was skipped and why
+- 每个被影响的模块至少验证一次
+- 优先组合成“一组定向后端测试 + 一组定向前端或 QA 检查”
+- 如果你没法执行验证，就明确说明跳过了什么，以及为什么跳过

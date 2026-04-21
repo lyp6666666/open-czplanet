@@ -232,7 +232,7 @@ function textPreview(raw: unknown): string {
     if (type === 'brokerage_required') return '收到新消息：信息费支付提醒'
     if (type === 'contact_unlocked') return '收到新消息：聊天功能已开启'
     if (type === 'brokerage_refund_request' || type === 'brokerage_refund_status') return '收到新消息：退款进度更新'
-    if (type === 'end_chat_request' || type === 'end_chat_status') return '收到新消息：结束沟通状态更新'
+    if (type === 'end_chat_request' || type === 'end_chat_status') return '收到新消息：沟通状态更新'
   }
   return '您有一条新消息'
 }

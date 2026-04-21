@@ -1,24 +1,107 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b1d33"/>
-      <stop offset="1" stop-color="#071321"/>
+    <linearGradient id="bg2" x1="98" y1="18" x2="1108" y2="352" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#13224B"/>
+      <stop offset="0.46" stop-color="#254A84"/>
+      <stop offset="1" stop-color="#147C87"/>
     </linearGradient>
-    <radialGradient id="glow" cx="30%" cy="25%" r="70%">
-      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    <radialGradient id="sunGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(876 102) rotate(145.257) scale(280 176)">
+      <stop offset="0" stop-color="#FFF3A4" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#FFF3A4" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="bookGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(506 278) rotate(-7.1) scale(390 156)">
+      <stop offset="0" stop-color="#74C6FF" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#74C6FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cardGrad2" x1="656" y1="56" x2="1122" y2="306" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="white" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="white" stop-opacity="0.08"/>
+    </linearGradient>
+    <linearGradient id="pageGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7FBFF"/>
+      <stop offset="1" stop-color="#DCEEFF"/>
+    </linearGradient>
+    <filter id="cardShadow2" x="620" y="42" width="554" height="302" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#071631" flood-opacity="0.26"/>
+    </filter>
   </defs>
-  <rect width="1200" height="360" fill="url(#bg)"/>
-  <rect width="1200" height="360" fill="url(#glow)"/>
-  <g fill="#ffffff">
-    <text x="64" y="160" font-size="40" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800">初中数学提分</text>
-    <text x="64" y="208" font-size="20" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" opacity="0.9">一对一讲解 + 习题巩固，循序渐进</text>
+
+  <rect width="1200" height="360" fill="url(#bg2)"/>
+  <rect width="1200" height="360" fill="url(#sunGlow)"/>
+  <rect width="1200" height="360" fill="url(#bookGlow)"/>
+
+  <path d="M0 286C110 250 206 234.667 288 240C367.333 245.333 448.333 271 531 317L0 360V286Z" fill="#0D1736" fill-opacity="0.58"/>
+  <path d="M116 284C206.667 248 289.333 232.333 364 237C430 241.667 499 265 571 307" stroke="#A7D8FF" stroke-opacity="0.18" stroke-width="2"/>
+
+  <g opacity="0.96">
+    <rect x="62" y="50" width="132" height="34" rx="17" fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.14)"/>
+    <text x="128" y="72" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">名校师资同行</text>
+
+    <rect x="206" y="50" width="148" height="34" rx="17" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.14)"/>
+    <text x="280" y="72" fill="#E9FFF6" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">全学科辅导与陪伴</text>
   </g>
-  <g opacity="0.18" fill="#ffffff">
-    <rect x="860" y="86" width="260" height="180" rx="20"/>
-    <rect x="900" y="118" width="180" height="18" rx="9"/>
-    <rect x="900" y="152" width="220" height="18" rx="9"/>
-    <rect x="900" y="186" width="140" height="18" rx="9"/>
+
+  <g fill="#EAF5FF" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif">
+    <text x="66" y="118" font-size="18" font-weight="800">把优质教育资源，带到每个孩子身边</text>
+    <text x="66" y="146" font-size="14" opacity="0.86">从知识提升、方法建立到视野拓展，让高质量教学真正发生</text>
+  </g>
+
+  <g>
+    <rect x="66" y="170" width="68" height="34" rx="17" fill="rgba(255,255,255,0.18)"/>
+    <rect x="144" y="170" width="68" height="34" rx="17" fill="rgba(255,255,255,0.14)"/>
+    <rect x="222" y="170" width="68" height="34" rx="17" fill="rgba(255,255,255,0.14)"/>
+    <rect x="300" y="170" width="68" height="34" rx="17" fill="rgba(255,255,255,0.14)"/>
+    <rect x="378" y="170" width="68" height="34" rx="17" fill="rgba(255,255,255,0.14)"/>
+    <rect x="456" y="170" width="76" height="34" rx="17" fill="rgba(255,255,255,0.14)"/>
+    <text x="100" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">清华</text>
+    <text x="178" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">北大</text>
+    <text x="256" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">复旦</text>
+    <text x="334" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">浙大</text>
+    <text x="412" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">上交</text>
+    <text x="494" y="192" fill="white" font-size="14" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="700" text-anchor="middle">北师大</text>
+  </g>
+
+  <g filter="url(#cardShadow2)">
+    <rect x="648" y="58" width="498" height="250" rx="30" fill="url(#cardGrad2)" stroke="rgba(255,255,255,0.18)"/>
+  </g>
+
+  <g opacity="0.16">
+    <path d="M702 236C742 206.667 782.333 192 823 192C884.333 192 944.667 225.333 1004 292" stroke="white" stroke-width="2"/>
+    <path d="M744 126C782 101.333 823.333 89 868 89C935.333 89 1005.33 117.333 1078 174" stroke="white" stroke-width="2"/>
+  </g>
+
+  <g>
+    <path d="M716 258L804 214C822 205 844 207.4 860 220L942 285L716 285V258Z" fill="#0E3158" fill-opacity="0.72"/>
+    <path d="M734 252L810 220C823 214.2 838.8 216 850 224.8L916 277H734V252Z" fill="#3A79C0" fill-opacity="0.78"/>
+    <path d="M772 226L794 216L821 232" stroke="#A6E4FF" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="818" cy="205" r="8" fill="#FFF0A5"/>
+  </g>
+
+  <g>
+    <path d="M690 250C721.333 230.667 752 221 782 221C812 221 842.333 230.667 873 250" stroke="#F7FCFF" stroke-opacity="0.78" stroke-width="3" stroke-linecap="round"/>
+    <path d="M712 260C732.667 246 756.333 239 783 239C809.667 239 834.333 246 857 260" stroke="#F7FCFF" stroke-opacity="0.58" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M678 252L783 296L888 252" stroke="#DCEEFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M783 296V232" stroke="#DCEEFF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M678 252L783 208L888 252" fill="url(#pageGrad)" stroke="#F5FAFF" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M783 208V296" stroke="#BDDFFF" stroke-width="3"/>
+    <path d="M710 243L755 229" stroke="#7EA7D8" stroke-width="2" stroke-linecap="round"/>
+    <path d="M811 229L856 243" stroke="#7EA7D8" stroke-width="2" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <rect x="928" y="92" width="178" height="136" rx="24" fill="#FFFFFF" fill-opacity="0.88"/>
+    <path d="M956 200H1078" stroke="#D4E7F6" stroke-width="2"/>
+    <path d="M946 188C954 174 962 162 970 152C978.667 140.667 987 132 995 126C1003.67 132 1012 140.667 1020 152C1028 162 1035.67 174 1043 188H946Z" fill="#79A7F0" fill-opacity="0.36"/>
+    <path d="M972 160L986 150L1000 164L1016 146L1032 160L1048 144L1068 160" stroke="#3B6CC4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M956 188L972 166L990 188L1009 154L1028 188L1048 164L1068 188" stroke="#2A568E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="1017" y="110" fill="#143152" font-size="16" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" font-weight="800" text-anchor="middle">高质量教学与陪伴</text>
+    <text x="1017" y="131" fill="#5A738C" font-size="12.5" font-family="system-ui,-apple-system,Segoe UI,Roboto,Noto Sans SC,Helvetica,Arial,sans-serif" text-anchor="middle">从学科能力到方法、表达与眼界</text>
+  </g>
+
+  <g opacity="0.9">
+    <circle cx="1090" cy="84" r="5" fill="#FFF1A7"/>
+    <circle cx="1058" cy="62" r="3.5" fill="#B8F6E8"/>
+    <circle cx="1109" cy="122" r="3.5" fill="#B8F6E8"/>
+    <path d="M1085 74L1088 80L1094 82L1088 85L1085 91L1082 85L1076 82L1082 80L1085 74Z" fill="#FFF1A7"/>
   </g>
 </svg>

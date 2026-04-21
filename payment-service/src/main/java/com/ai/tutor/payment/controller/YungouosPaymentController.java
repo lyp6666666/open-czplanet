@@ -1,12 +1,15 @@
 package com.ai.tutor.payment.controller;
 
 import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.payment.config.OpsProperties;
 import com.ai.tutor.payment.controller.dto.PrepayRequest;
 import com.ai.tutor.payment.controller.dto.PrepayResponse;
 import com.ai.tutor.payment.controller.dto.PaymentOrderStatusResponse;
 import com.ai.tutor.payment.service.YungouosPaymentAppService;
 import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
+import com.ai.tutor.utils.ThrowUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.*;
 public class YungouosPaymentController {
 
     private final YungouosPaymentAppService yungouosPaymentAppService;
+    private final OpsProperties opsProperties;
 
     @PostMapping("/prepay")
     @Operation(summary = "统一下单（扫码支付出码）")
@@ -39,6 +43,16 @@ public class YungouosPaymentController {
     public BaseResponse<PaymentOrderStatusResponse> getOrderStatus(@PathVariable("orderNo") String orderNo) {
         Long uid = RequestHolder.get().getUid();
         return ResultUtils.success(yungouosPaymentAppService.getOrderStatus(orderNo, uid));
+    }
+
+    @PostMapping("/dev/orders/{orderNo}/mock-success")
+    @Operation(summary = "DEV/E2E 模拟支付成功", description = "仅供端到端测试模拟第三方支付成功，仍会触发真实业务结算完结逻辑")
+    public BaseResponse<PaymentOrderStatusResponse> mockPaySuccess(@PathVariable("orderNo") String orderNo,
+                                                                   @RequestHeader(value = "X-Ops-Token", required = false) String token) {
+        String expected = opsProperties == null ? null : opsProperties.getVerifyToken();
+        ThrowUtils.throwIf(expected == null || expected.isBlank(), ErrorCode.NO_AUTH_ERROR, "ops token not configured");
+        ThrowUtils.throwIf(token == null || !token.equals(expected), ErrorCode.NO_AUTH_ERROR, "ops token invalid");
+        return ResultUtils.success(yungouosPaymentAppService.mockPaySuccessForE2e(orderNo));
     }
 
     @PostMapping("/notify/yungouos")

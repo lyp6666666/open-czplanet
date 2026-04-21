@@ -21,6 +21,10 @@ class SystemMsgHandlerCollaborationTest {
         body.setPricePerHour("200 元/小时");
         body.setClassTime("周二/四 19:00-21:00");
         body.setFrequencyPerWeek(2);
+        body.setTrialStartAt(1771412400000L);
+        body.setTrialEndAt(1771419600000L);
+        body.setRemark("先试课，再确认长期固定时间");
+        body.setExpireAt(1771455600000L);
 
         Message msg = Message.builder().content("合作提案").extra(JSONUtil.toJsonStr(body)).build();
         Object out = new SystemMsgHandler().showMsg(msg);
@@ -34,6 +38,10 @@ class SystemMsgHandlerCollaborationTest {
         assertThat(m.get("pricePerHour")).isEqualTo("200 元/小时");
         assertThat(m.get("classTime")).isEqualTo("周二/四 19:00-21:00");
         assertThat(m.get("frequencyPerWeek")).isEqualTo(2);
+        assertThat(m.get("trialStartAt")).isEqualTo(1771412400000L);
+        assertThat(m.get("trialEndAt")).isEqualTo(1771419600000L);
+        assertThat(m.get("remark")).isEqualTo("先试课，再确认长期固定时间");
+        assertThat(m.get("expireAt")).isEqualTo(1771455600000L);
     }
 
     @Test

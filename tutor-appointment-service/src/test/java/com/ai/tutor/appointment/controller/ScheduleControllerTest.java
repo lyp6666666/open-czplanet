@@ -1,6 +1,7 @@
 package com.ai.tutor.appointment.controller;
 
 import com.ai.tutor.appointment.model.vo.UserSimpleVO;
+import com.ai.tutor.appointment.model.vo.schedule.ScheduleAvailabilityVO;
 import com.ai.tutor.appointment.model.vo.schedule.ScheduleEventVO;
 import com.ai.tutor.appointment.service.ScheduleService;
 import com.ai.tutor.common.service.dto.RequestInfo;
@@ -95,6 +96,33 @@ class ScheduleControllerTest {
     }
 
     @Test
+    void dayAvailabilityShouldMatchPathAndReturnBusyBlocks() throws Exception {
+        ScheduleAvailabilityVO vo = ScheduleAvailabilityVO.builder()
+                .date("2026-04-21")
+                .timezone("Asia/Shanghai")
+                .myUserId(1001L)
+                .otherUserId(1002L)
+                .myBusyBlocks(List.of(ScheduleAvailabilityVO.BusyBlockVO.builder()
+                        .eventId(1L)
+                        .title("我的试课")
+                        .startAt(1_771_412_400_000L)
+                        .endAt(1_771_419_600_000L)
+                        .status("ACCEPTED")
+                        .build()))
+                .otherBusyBlocks(List.of())
+                .build();
+        when(scheduleService.getDayAvailability(eq(1001L), eq(1002L), eq(1771412400000L))).thenReturn(vo);
+
+        mockMvc.perform(get("/api/v1/schedule/availability/day")
+                        .param("otherUid", "1002")
+                        .param("dateAt", "1771412400000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data.timezone").value("Asia/Shanghai"))
+                .andExpect(jsonPath("$.data.myBusyBlocks[0].title").value("我的试课"));
+    }
+
+    @Test
     void createShouldMatchPathAndReturnEvent() throws Exception {
         ScheduleEventVO item = ScheduleEventVO.builder()
                 .id(2L)
@@ -185,6 +213,34 @@ class ScheduleControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].courseId").value(66))
                 .andExpect(jsonPath("$.data[0].id").value(5));
+    }
+
+    @Test
+    void submitWeeklyScheduleShouldMatchPathAndReturnData() throws Exception {
+        ScheduleEventVO item = ScheduleEventVO.builder()
+                .id(6L)
+                .courseId(66L)
+                .title("正式每周课")
+                .status("ACCEPTED")
+                .build();
+        when(scheduleService.submitWeeklySchedule(eq(66L), any(), eq(1001L))).thenReturn(List.of(item));
+
+        String body = "{"
+                + "\"participantUserId\":1002,"
+                + "\"roomId\":11,"
+                + "\"title\":\"正式每周课\","
+                + "\"lessonPriceFen\":20000,"
+                + "\"weeks\":8,"
+                + "\"slots\":[{\"dayOfWeek\":2,\"startMinute\":1140,\"endMinute\":1260}]"
+                + "}";
+
+        mockMvc.perform(post("/api/v1/schedule/courses/66/weekly-schedule")
+                        .contentType(APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(0))
+                .andExpect(jsonPath("$.data[0].courseId").value(66))
+                .andExpect(jsonPath("$.data[0].id").value(6));
     }
 
     @SpringBootConfiguration

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.LessonSummaryMapper">
+    <resultMap id="LessonSummaryMap" type="com.ai.tutor.appointment.model.entity.LessonSummary">
+        <id column="id" property="id"/>
+        <result column="lesson_id" property="lessonId"/>
+        <result column="course_id" property="courseId"/>
+        <result column="teacher_uid" property="teacherUid"/>
+        <result column="student_uid" property="studentUid"/>
+        <result column="title" property="title"/>
+        <result column="summary_status" property="summaryStatus"/>
+        <result column="summary_brief" property="summaryBrief"/>
+        <result column="summary_content" property="summaryContent"/>
+        <result column="homework" property="homework"/>
+        <result column="ready_at" property="readyAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.LessonSummary" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO lesson_summary
+        (lesson_id, course_id, teacher_uid, student_uid, title, summary_status, summary_brief, summary_content, homework, ready_at)
+        VALUES
+        (#{lessonId}, #{courseId}, #{teacherUid}, #{studentUid}, #{title}, #{summaryStatus}, #{summaryBrief}, #{summaryContent}, #{homework}, #{readyAt})
+    </insert>
+
+    <insert id="upsertReady" parameterType="com.ai.tutor.appointment.model.entity.LessonSummary">
+        INSERT INTO lesson_summary
+        (lesson_id, course_id, teacher_uid, student_uid, title, summary_status, summary_brief, summary_content, homework, ready_at)
+        VALUES
+        (#{lessonId}, #{courseId}, #{teacherUid}, #{studentUid}, #{title}, 'READY', #{summaryBrief}, #{summaryContent}, #{homework}, #{readyAt})
+        ON DUPLICATE KEY UPDATE
+            course_id = VALUES(course_id),
+            teacher_uid = VALUES(teacher_uid),
+            student_uid = VALUES(student_uid),
+            title = VALUES(title),
+            summary_status = 'READY',
+            summary_brief = VALUES(summary_brief),
+            summary_content = VALUES(summary_content),
+            homework = VALUES(homework),
+            ready_at = VALUES(ready_at),
+            update_time = CURRENT_TIMESTAMP(3)
+    </insert>
+
+    <select id="selectByLessonId" resultMap="LessonSummaryMap">
+        SELECT * FROM lesson_summary WHERE lesson_id = #{lessonId} LIMIT 1
+    </select>
+
+    <select id="selectLatestReadyForUser" resultMap="LessonSummaryMap">
+        SELECT *
+        FROM lesson_summary
+        WHERE summary_status = 'READY'
+          AND ready_at &gt;= #{since}
+          AND (teacher_uid = #{userId} OR student_uid = #{userId})
+        ORDER BY ready_at DESC, id DESC
+        LIMIT 1
+    </select>
+</mapper>

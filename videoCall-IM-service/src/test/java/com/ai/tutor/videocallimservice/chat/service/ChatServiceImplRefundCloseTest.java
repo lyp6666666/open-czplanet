@@ -4,6 +4,7 @@ import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
 import com.ai.tutor.videocallimservice.chat.domain.entity.TutorApplication;
 import com.ai.tutor.videocallimservice.chat.domain.vo.request.ChatMessageReq;
+import com.ai.tutor.videocallimservice.chat.mapper.CourseEnrollmentMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.MessageMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.RoomMapper;
 import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
@@ -34,6 +35,7 @@ class ChatServiceImplRefundCloseTest {
         RoomMapper roomMapper = mock(RoomMapper.class);
         MessageMapper messageMapper = mock(MessageMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
         TeacherProfileLiteMapper teacherProfileLiteMapper = mock(TeacherProfileLiteMapper.class);
         StudentProfileLiteMapper studentProfileLiteMapper = mock(StudentProfileLiteMapper.class);
         ImUserMapper imUserMapper = mock(ImUserMapper.class);
@@ -74,7 +76,9 @@ class ChatServiceImplRefundCloseTest {
 
         ChatServiceImpl svc = new ChatServiceImpl();
         ReflectionTestUtils.setField(svc, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(svc, "messageMapper", messageMapper);
         ReflectionTestUtils.setField(svc, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(svc, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(svc, "teacherProfileLiteMapper", teacherProfileLiteMapper);
         ReflectionTestUtils.setField(svc, "studentProfileLiteMapper", studentProfileLiteMapper);
         ReflectionTestUtils.setField(svc, "applicationEventPublisher", publisher);
@@ -98,4 +102,3 @@ class ChatServiceImplRefundCloseTest {
         verify(roomMapper).closeRoom(10L);
     }
 }
-

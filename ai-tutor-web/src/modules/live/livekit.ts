@@ -43,7 +43,7 @@ export type LiveRoomConnectPayload = {
 }
 
 export class BrowserMediaError extends Error {
-  code: 'UNSUPPORTED' | 'PERMISSION_DENIED' | 'DEVICE_NOT_FOUND' | 'DEVICE_BUSY' | 'UNKNOWN'
+  code: 'UNSUPPORTED' | 'INSECURE_CONTEXT' | 'PERMISSION_DENIED' | 'DEVICE_NOT_FOUND' | 'DEVICE_BUSY' | 'UNKNOWN'
 
   constructor(code: BrowserMediaError['code'], message: string) {
     super(message)
@@ -65,15 +65,70 @@ function normalizeMediaError(error: unknown): BrowserMediaError {
   return new BrowserMediaError('UNKNOWN', error instanceof Error ? error.message : '媒体设备初始化失败')
 }
 
+export type BrowserMediaPermissionState = 'granted' | 'denied' | 'prompt' | 'unsupported' | 'unknown'
+
+export type BrowserMediaSupportSnapshot = {
+  secureContext: boolean
+  hasMediaDevices: boolean
+  canEnumerateDevices: boolean
+  canGetUserMedia: boolean
+  canSelectSpeaker: boolean
+  supported: boolean
+}
+
+export function inspectBrowserMediaSupport(): BrowserMediaSupportSnapshot {
+  const mediaDevices = navigator.mediaDevices
+  const secureContext = typeof window !== 'undefined' ? window.isSecureContext !== false : true
+  const canEnumerateDevices = !!mediaDevices?.enumerateDevices
+  const canGetUserMedia = !!mediaDevices?.getUserMedia
+  const canSelectSpeaker = typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype
+  return {
+    secureContext,
+    hasMediaDevices: !!mediaDevices,
+    canEnumerateDevices,
+    canGetUserMedia,
+    canSelectSpeaker,
+    supported: secureContext && canGetUserMedia,
+  }
+}
+
+async function querySinglePermission(name: 'camera' | 'microphone'): Promise<BrowserMediaPermissionState> {
+  if (!navigator.permissions?.query) return 'unknown'
+  try {
+    const status = await navigator.permissions.query({ name: name as PermissionName })
+    const value = status?.state
+    if (value === 'granted' || value === 'denied' || value === 'prompt') return value
+    return 'unknown'
+  } catch {
+    return 'unsupported'
+  }
+}
+
+export async function queryBrowserMediaPermissions() {
+  const support = inspectBrowserMediaSupport()
+  if (!support.secureContext || !support.canGetUserMedia) {
+    return {
+      camera: support.secureContext ? 'unsupported' : 'denied',
+      microphone: support.secureContext ? 'unsupported' : 'denied',
+    } as const
+  }
+  const [camera, microphone] = await Promise.all([querySinglePermission('camera'), querySinglePermission('microphone')])
+  return { camera, microphone } as const
+}
+
 export async function listLocalMediaDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) {
     return { cameras: [] as MediaDeviceInfo[], microphones: [] as MediaDeviceInfo[], speakers: [] as MediaDeviceInfo[] }
   }
-  const devices = await navigator.mediaDevices.enumerateDevices()
-  return {
-    cameras: devices.filter((item) => item.kind === 'videoinput'),
-    microphones: devices.filter((item) => item.kind === 'audioinput'),
-    speakers: devices.filter((item) => item.kind === 'audiooutput'),
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices()
+    return {
+      cameras: devices.filter((item) => item.kind === 'videoinput'),
+      microphones: devices.filter((item) => item.kind === 'audioinput'),
+      speakers: devices.filter((item) => item.kind === 'audiooutput'),
+    }
+  } catch {
+    return { cameras: [] as MediaDeviceInfo[], microphones: [] as MediaDeviceInfo[], speakers: [] as MediaDeviceInfo[] }
   }
 }
 
@@ -83,6 +138,9 @@ export async function requestUserMediaPreview(options: {
   cameraDeviceId?: string | null
   micDeviceId?: string | null
 }) {
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    throw new BrowserMediaError('INSECURE_CONTEXT', '当前页面不是安全连接，浏览器不会开放摄像头或麦克风权限')
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new BrowserMediaError('UNSUPPORTED', '当前浏览器不支持音视频采集')
   }
@@ -106,6 +164,31 @@ export async function requestUserMediaPreview(options: {
         : false,
     })
     return stream
+  } catch (error) {
+    throw normalizeMediaError(error)
+  }
+}
+
+const TEST_TONE_DATA_URI =
+  'data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTAAAAABAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA'
+
+export async function playSpeakerTestTone(options?: { speakerDeviceId?: string | null }) {
+  if (typeof Audio === 'undefined') {
+    throw new BrowserMediaError('UNSUPPORTED', '当前浏览器不支持扬声器试听')
+  }
+  const audio = new Audio(TEST_TONE_DATA_URI) as HTMLAudioElement & { setSinkId?: (sinkId: string) => Promise<void> }
+  audio.volume = 0.85
+  audio.preload = 'auto'
+  const canSelectSpeaker = typeof audio.setSinkId === 'function'
+  if (options?.speakerDeviceId && canSelectSpeaker) {
+    await audio.setSinkId!(options.speakerDeviceId)
+  }
+  try {
+    await audio.play()
+    await new Promise((resolve) => window.setTimeout(resolve, 900))
+    audio.pause()
+    audio.currentTime = 0
+    return { canSelectSpeaker }
   } catch (error) {
     throw normalizeMediaError(error)
   }

@@ -71,3 +71,8 @@ ai-tutor-miniprogram/unpackage/
 playwright-report/
 test-results/
 ai-tutor-web/playwright/.auth/
+
+node_modules/
+huoyue.online_nginx.zip
+.idea/IntelliLang.xml
+.idea/db-forest-config.xml

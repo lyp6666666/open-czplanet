@@ -9,6 +9,8 @@ import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
@@ -65,6 +67,27 @@ public class LiveSessionController {
     public BaseResponse<LiveSessionResp> status(@PathVariable("sessionId") Long sessionId) {
         Long uid = RequestHolder.get().getUid();
         return ResultUtils.success(liveClassService.status(sessionId, uid));
+    }
+
+    @GetMapping("/sessions/{sessionId}/ai/state")
+    @Operation(summary = "查询课堂 AI 当前状态")
+    public BaseResponse<LiveAiStateResp> aiState(@PathVariable("sessionId") Long sessionId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.aiState(sessionId, uid));
+    }
+
+    @GetMapping("/sessions/{sessionId}/ai/result")
+    @Operation(summary = "查询课堂 AI 课后结果")
+    public BaseResponse<LiveAiResultResp> aiResult(@PathVariable("sessionId") Long sessionId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.aiResult(sessionId, uid));
+    }
+
+    @PostMapping("/sessions/{sessionId}/ai/result/retry")
+    @Operation(summary = "重试生成课堂 AI 课后结果")
+    public BaseResponse<LiveAiResultResp> retryAiResult(@PathVariable("sessionId") Long sessionId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.retryAiResult(sessionId, uid));
     }
 
     @PostMapping("/sessions/{sessionId}/device-report")

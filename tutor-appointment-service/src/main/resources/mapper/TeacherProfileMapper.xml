@@ -144,7 +144,7 @@
                  JOIN user u ON u.id = tp.user_id
         WHERE u.user_type = 1
           AND u.status = 0
-          AND tp.status = 1
+          AND (tp.status IS NULL OR tp.status = 1)
         <if test="cursor != null">
             AND tp.id &lt; #{cursor}
         </if>

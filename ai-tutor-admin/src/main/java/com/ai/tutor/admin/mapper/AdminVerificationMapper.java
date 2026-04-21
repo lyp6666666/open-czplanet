@@ -20,15 +20,15 @@ public interface AdminVerificationMapper {
     @Select("SELECT * FROM teacher_profile WHERE user_id = #{userId} LIMIT 1")
     TeacherProfile selectByUserId(@Param("userId") Long userId);
 
-    @Update("UPDATE teacher_profile SET realname_verify_status = 2, realname_verify_time = NOW(), realname_reject_reason = NULL, update_time = NOW() WHERE user_id = #{userId}")
+    @Update("UPDATE teacher_profile SET realname_verify_status = 2, realname_verify_time = NOW(), realname_verify_reject_reason = NULL, update_time = NOW() WHERE user_id = #{userId} AND realname_verify_status = 1")
     int approveRealname(@Param("userId") Long userId);
 
-    @Update("UPDATE teacher_profile SET realname_verify_status = 3, realname_reject_reason = #{reason}, update_time = NOW() WHERE user_id = #{userId}")
+    @Update("UPDATE teacher_profile SET realname_verify_status = 3, realname_verify_reject_reason = #{reason}, realname_verify_time = NOW(), update_time = NOW() WHERE user_id = #{userId} AND realname_verify_status = 1")
     int rejectRealname(@Param("userId") Long userId, @Param("reason") String reason);
 
-    @Update("UPDATE teacher_profile SET edu_verify_status = 2, edu_verify_time = NOW(), edu_reject_reason = NULL, update_time = NOW() WHERE user_id = #{userId}")
+    @Update("UPDATE teacher_profile SET edu_verify_status = 2, edu_verify_time = NOW(), edu_verify_reject_reason = NULL, update_time = NOW() WHERE user_id = #{userId} AND edu_verify_status = 1")
     int approveEdu(@Param("userId") Long userId);
 
-    @Update("UPDATE teacher_profile SET edu_verify_status = 3, edu_reject_reason = #{reason}, update_time = NOW() WHERE user_id = #{userId}")
+    @Update("UPDATE teacher_profile SET edu_verify_status = 3, edu_verify_reject_reason = #{reason}, edu_verify_time = NOW(), update_time = NOW() WHERE user_id = #{userId} AND edu_verify_status = 1")
     int rejectEdu(@Param("userId") Long userId, @Param("reason") String reason);
 }

@@ -61,12 +61,11 @@ class ParentTutorBrowseControllerTest {
                 "本科",
                 3,
                 "120",
-                "offline",
                 List.of("数学"),
                 List.of("响应快"),
                 "简介"
         );
-        when(parentTutorBrowseService.pageTutors(eq(2001L), any(), any(), any(), any(), any(), any(), any()))
+        when(parentTutorBrowseService.pageTutors(eq(2001L), any(), any(), any(), any(), any(), any()))
                 .thenReturn(new CursorPageResponse<>(10L, true, List.of(item)));
 
         mockMvc.perform(get("/api/v1/parent/tutors/page")
@@ -89,4 +88,3 @@ class ParentTutorBrowseControllerTest {
     static class TestConfig {
     }
 }
-

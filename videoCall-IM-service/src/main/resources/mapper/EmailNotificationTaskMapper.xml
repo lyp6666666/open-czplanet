@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.videocallimservice.chat.mapper.EmailNotificationTaskMapper">
+    <resultMap id="EmailNotificationTaskMap" type="com.ai.tutor.videocallimservice.chat.domain.entity.EmailNotificationTask">
+        <id column="id" property="id"/>
+        <result column="task_key" property="taskKey"/>
+        <result column="template_code" property="templateCode"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="biz_id" property="bizId"/>
+        <result column="receiver_uid" property="receiverUid"/>
+        <result column="receiver_role" property="receiverRole"/>
+        <result column="email_type" property="emailType"/>
+        <result column="email" property="email"/>
+        <result column="subject" property="subject"/>
+        <result column="payload_json" property="payloadJson"/>
+        <result column="scheduled_at" property="scheduledAt"/>
+        <result column="status" property="status"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="max_retry_count" property="maxRetryCount"/>
+        <result column="last_error" property="lastError"/>
+        <result column="sent_at" property="sentAt"/>
+        <result column="opened_at" property="openedAt"/>
+        <result column="clicked_at" property="clickedAt"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insertIgnore" parameterType="com.ai.tutor.videocallimservice.chat.domain.entity.EmailNotificationTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO email_notification_task
+        (task_key, template_code, biz_type, biz_id, receiver_uid, receiver_role, email_type, email, subject, payload_json,
+         scheduled_at, status, retry_count, max_retry_count, last_error)
+        VALUES
+        (#{taskKey}, #{templateCode}, #{bizType}, #{bizId}, #{receiverUid}, #{receiverRole}, #{emailType}, #{email}, #{subject}, #{payloadJson},
+         #{scheduledAt}, #{status}, #{retryCount}, #{maxRetryCount}, #{lastError})
+    </insert>
+
+    <select id="listDuePending" resultMap="EmailNotificationTaskMap">
+        SELECT * FROM email_notification_task
+        WHERE status = 'PENDING'
+          AND biz_type = 'UNREAD_MESSAGE'
+          AND scheduled_at &lt;= #{now}
+        ORDER BY scheduled_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="updateStatusIfCurrent">
+        UPDATE email_notification_task
+        SET status = #{toStatus},
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+          AND status = #{fromStatus}
+    </update>
+
+    <update id="markSent">
+        UPDATE email_notification_task
+        SET status = 'SENT',
+            subject = #{subject},
+            sent_at = #{sentAt},
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="markCanceled">
+        UPDATE email_notification_task
+        SET status = 'CANCELED',
+            last_error = #{reason},
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="markFailedOrRetry">
+        UPDATE email_notification_task
+        SET status = #{status},
+            last_error = #{lastError},
+            retry_count = #{retryCount},
+            scheduled_at = #{nextScheduledAt},
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+    </update>
+
+    <select id="countSentSince" resultType="int">
+        SELECT COUNT(1)
+        FROM email_notification_task
+        WHERE receiver_uid = #{receiverUid}
+          AND template_code = #{templateCode}
+          <if test="bizType != null">AND biz_type = #{bizType}</if>
+          <if test="bizId != null">AND biz_id = #{bizId}</if>
+          AND status = 'SENT'
+          AND sent_at &gt;= #{since}
+    </select>
+</mapper>

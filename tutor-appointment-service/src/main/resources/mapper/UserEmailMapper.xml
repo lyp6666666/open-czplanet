@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.appointment.mapper.UserEmailMapper">
+    <resultMap id="UserEmailMap" type="com.ai.tutor.appointment.model.entity.UserEmail">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="email_type" property="emailType"/>
+        <result column="email" property="email"/>
+        <result column="email_masked" property="emailMasked"/>
+        <result column="verify_status" property="verifyStatus"/>
+        <result column="verified_at" property="verifiedAt"/>
+        <result column="bind_source" property="bindSource"/>
+        <result column="bounce_status" property="bounceStatus"/>
+        <result column="last_notify_at" property="lastNotifyAt"/>
+        <result column="status" property="status"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.ai.tutor.appointment.model.entity.UserEmail" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user_email
+        (user_id, email_type, email, email_masked, verify_status, verified_at, bind_source, bounce_status, last_notify_at, status)
+        VALUES
+        (#{userId}, #{emailType}, #{email}, #{emailMasked}, #{verifyStatus}, #{verifiedAt}, #{bindSource}, #{bounceStatus}, #{lastNotifyAt}, #{status})
+    </insert>
+
+    <select id="selectActiveByUserAndType" resultMap="UserEmailMap">
+        SELECT * FROM user_email
+        WHERE user_id = #{userId}
+          AND email_type = #{emailType}
+          AND status = 1
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectActiveByUser" resultMap="UserEmailMap">
+        SELECT * FROM user_email
+        WHERE user_id = #{userId}
+          AND status = 1
+        ORDER BY email_type ASC, id DESC
+    </select>
+
+    <select id="selectPrimaryVerifiedByEmail" resultMap="UserEmailMap">
+        SELECT * FROM user_email
+        WHERE email = #{email}
+          AND email_type = 'PRIMARY'
+          AND verify_status = 'VERIFIED'
+          AND status = 1
+        LIMIT 1
+    </select>
+
+    <update id="deactivateByUserAndType">
+        UPDATE user_email
+        SET status = 0,
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE user_id = #{userId}
+          AND email_type = #{emailType}
+          AND status = 1
+    </update>
+
+    <update id="markInvalid">
+        UPDATE user_email
+        SET verify_status = 'INVALID',
+            bounce_status = 'HARD_BOUNCE',
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateLastNotifyAt">
+        UPDATE user_email
+        SET last_notify_at = #{lastNotifyAt},
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+    </update>
+</mapper>

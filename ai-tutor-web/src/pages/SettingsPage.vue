@@ -119,6 +119,10 @@ function goUpdatePhone() {
   router.push({ name: 'updatePhone' })
 }
 
+function goEmailSettings() {
+  router.push({ name: 'emailSettings' })
+}
+
 onMounted(() => {
   void load()
 })
@@ -184,6 +188,11 @@ onMounted(() => {
             <div class="item-label">手机号</div>
             <div class="item-value">{{ phoneMasked }}</div>
             <button class="btn-text" type="button" @click="goUpdatePhone">更换</button>
+          </div>
+          <div class="list-item">
+            <div class="item-label">邮箱提醒</div>
+            <div class="item-value">接收未读消息、开课提醒和课后总结</div>
+            <button class="btn-text" type="button" @click="goEmailSettings">管理</button>
           </div>
         </section>
 

@@ -50,7 +50,7 @@ class ContactUnlockServiceTest {
     private ContactUnlockService contactUnlockService;
 
     @Test
-    void shouldReturnPhoneWhenApplicationChatAlreadyEnabledEvenWithoutProposalOrder() {
+    void shouldReturnPhoneWhenOfflineCollaborationAcceptedEvenWithoutProposalOrder() {
         Room room = Room.builder()
                 .id(10L)
                 .teacherProfileId(100L)
@@ -62,12 +62,16 @@ class ContactUnlockServiceTest {
         when(studentProfileLiteMapper.selectUserIdById(200L)).thenReturn(4001L);
         when(brokerageOrderMapper.selectPaidByRoomId(10L)).thenReturn(null);
         when(courseEnrollmentMapper.selectLatestByRoomId(10L)).thenReturn(null);
-        when(collaborationProposalMapper.selectLatestByRoomId(10L)).thenReturn(null);
-        when(tutorApplicationMapper.selectLatestUnlockedBetween(3001L, 4001L)).thenReturn(TutorApplication.builder()
-                .id(9527L)
-                .status("ACCEPTED")
+        when(collaborationProposalMapper.selectLatestByRoomId(10L)).thenReturn(com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal.builder()
+                .id(7001L)
                 .roomId(10L)
-                .chatAccessStatus("CHAT_ENABLED")
+                .status("ACCEPTED")
+                .build());
+        when(tutorApplicationMapper.selectLatestByRoomId(10L)).thenReturn(TutorApplication.builder()
+                .id(9527L)
+                .roomId(10L)
+                .status("ACCEPTED")
+                .teachingMode("OFFLINE")
                 .build());
         when(jdbcTemplate.queryForObject(any(String.class), any(Object[].class), any(org.springframework.jdbc.core.RowMapper.class)))
                 .thenReturn("13800138000");
@@ -76,7 +80,7 @@ class ContactUnlockServiceTest {
 
         assertThat(result.getUid()).isEqualTo(4001L);
         assertThat(result.getPhone()).isEqualTo("13800138000");
-        verify(tutorApplicationMapper).selectLatestUnlockedBetween(3001L, 4001L);
+        verify(tutorApplicationMapper).selectLatestByRoomId(10L);
     }
 
     @Test
@@ -105,7 +109,7 @@ class ContactUnlockServiceTest {
     }
 
     @Test
-    void shouldReturnPhoneWhenLatestRoomApplicationChangedButAcceptedUnlockedApplicationStillExistsBetweenUsers() {
+    void shouldNotUnlockContactWhenCollaborationAcceptedButTeachingModeIsOnline() {
         Room room = Room.builder()
                 .id(12L)
                 .teacherProfileId(102L)
@@ -117,21 +121,21 @@ class ContactUnlockServiceTest {
         when(studentProfileLiteMapper.selectUserIdById(202L)).thenReturn(4003L);
         when(brokerageOrderMapper.selectPaidByRoomId(12L)).thenReturn(null);
         when(courseEnrollmentMapper.selectLatestByRoomId(12L)).thenReturn(null);
-        when(collaborationProposalMapper.selectLatestByRoomId(12L)).thenReturn(null);
-        when(tutorApplicationMapper.selectLatestUnlockedBetween(3003L, 4003L)).thenReturn(TutorApplication.builder()
+        when(collaborationProposalMapper.selectLatestByRoomId(12L)).thenReturn(com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal.builder()
+                .id(7002L)
+                .roomId(12L)
+                .status("ACCEPTED")
+                .build());
+        when(tutorApplicationMapper.selectLatestByRoomId(12L)).thenReturn(TutorApplication.builder()
                 .id(9528L)
                 .roomId(12L)
                 .status("ACCEPTED")
-                .chatAccessStatus("CHAT_ENABLED")
+                .teachingMode("ONLINE")
                 .build());
-        when(jdbcTemplate.queryForObject(any(String.class), any(Object[].class), any(org.springframework.jdbc.core.RowMapper.class)))
-                .thenReturn("13700137000");
 
-        UnlockedContactVO result = contactUnlockService.getUnlockedContact(12L, 3003L, 4003L);
-
-        assertThat(result.getPhone()).isEqualTo("13700137000");
-        verify(tutorApplicationMapper, never()).selectLatestByRoomId(12L);
-        verify(tutorApplicationMapper).selectLatestUnlockedBetween(3003L, 4003L);
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> contactUnlockService.getUnlockedContact(12L, 3003L, 4003L));
+        verify(tutorApplicationMapper).selectLatestByRoomId(12L);
     }
 
     @Test
@@ -153,5 +157,29 @@ class ContactUnlockServiceTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
                 () -> contactUnlockService.getUnlockedContact(13L, 4004L, 3004L));
+    }
+
+    @Test
+    void shouldThrowWhenPhoneIsBlank() {
+        Room room = Room.builder()
+                .id(14L)
+                .teacherProfileId(104L)
+                .studentProfileId(204L)
+                .status(1)
+                .build();
+        when(roomMapper.selectById(14L)).thenReturn(room);
+        when(teacherProfileLiteMapper.selectUserIdById(104L)).thenReturn(3005L);
+        when(studentProfileLiteMapper.selectUserIdById(204L)).thenReturn(4005L);
+        when(courseEnrollmentMapper.selectLatestByRoomId(14L)).thenReturn(null);
+        when(brokerageOrderMapper.selectPaidByRoomId(14L)).thenReturn(BrokerageOrder.builder()
+                .id(99L)
+                .roomId(14L)
+                .status("PAID")
+                .build());
+        when(jdbcTemplate.queryForObject(any(String.class), any(Object[].class), any(org.springframework.jdbc.core.RowMapper.class)))
+                .thenReturn("   ");
+
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> contactUnlockService.getUnlockedContact(14L, 3005L, 4005L));
     }
 }

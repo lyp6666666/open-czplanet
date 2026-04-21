@@ -18,7 +18,7 @@ const emit = defineEmits<{
     <div class="hint">
       平台已确认信息费支付，可以使用聊天商定具体细节，注意不能透露任何联系方式，合适即可点击发起合作。
     </div>
-    <button v-if="canView" class="view-btn" type="button" @click="emit('view')">查看联系方式</button>
+    <button v-if="canView" class="view-btn" type="button" @click="emit('view')">查看对方的联系方式</button>
   </div>
 </template>
 

@@ -32,6 +32,15 @@ export type ChatPresenceResp = {
   lastOnlineAt?: string | number | Date | null
 }
 
+export type CollaborationProposalPayload = {
+  roomId: number
+  pricePerHour: string
+  trialStartAt: number
+  trialEndAt: number
+  remark?: string
+  clientRequestId?: string
+}
+
 export const chatApi = {
   getOrCreateRoom(targetUid: number) {
     return http.post<unknown, number>('/chat/room', { targetUid })
@@ -85,27 +94,11 @@ export const chatApi = {
     return http.post<unknown, ChatMessageResp>('/chat/refund/apply', { roomId, reason })
   },
 
-  requestEndChat(roomId: number) {
-    return http.post<unknown, ChatMessageResp>('/chat/msg', {
-      roomId,
-      msgType: 8,
-      body: { bizType: 'END_CHAT_REQUEST', eventId: Date.now(), title: '结束沟通', status: 'PENDING_CONFIRM' },
-    })
-  },
-
-  respondEndChat(roomId: number, requestId: number, status: 'CONFIRMED' | 'REJECTED') {
-    return http.post<unknown, ChatMessageResp>('/chat/msg', {
-      roomId,
-      msgType: 8,
-      body: { bizType: 'END_CHAT_STATUS', eventId: requestId, title: '结束沟通', status },
-    })
-  },
-
-  createCollaborationProposal(params: { roomId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+  createCollaborationProposal(params: CollaborationProposalPayload) {
     return http.post<unknown, ChatMessageResp>('/chat/collaboration/proposal', params)
   },
 
-  updateCollaborationProposal(proposalId: number, params: { roomId: number; pricePerHour: string; classTime: string; frequencyPerWeek: number }) {
+  updateCollaborationProposal(proposalId: number, params: CollaborationProposalPayload) {
     return http.put<unknown, ChatMessageResp>(`/chat/collaboration/proposal/${proposalId}`, params)
   },
 

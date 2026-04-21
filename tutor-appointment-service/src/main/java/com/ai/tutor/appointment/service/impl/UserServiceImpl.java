@@ -107,36 +107,9 @@ public class UserServiceImpl implements UserService {
         ThrowUtils.throwIf(code == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(role == null, ErrorCode.PARAMS_ERROR);
 
-        if (testBackdoorTeacherProperties != null
-                && testBackdoorTeacherProperties.isEnabled()
-                && role == UserRoleEnum.TEACHER
-                && phone.trim().equals(testBackdoorTeacherProperties.getPhone())
-                && code.trim().equals(testBackdoorTeacherProperties.getCode())) {
-            User user = userMapper.selectByPhone(phone.trim());
-            if (user == null) {
-                testBackdoorSeedService.ensureSeed();
-                user = userMapper.selectByPhone(phone.trim());
-            }
-            ThrowUtils.throwIf(user == null || user.getId() == null, ErrorCode.NO_AUTH_ERROR, "后门账号未初始化");
-            ThrowUtils.throwIf(user.getUserType() == null || user.getUserType() != UserRoleEnum.TEACHER.getValue(), ErrorCode.NO_AUTH_ERROR, "后门账号角色异常");
-            String token = jwtUtil.generateToken(user.getId(), user.getPhone(), UserRoleEnum.TEACHER);
-            String key = RedisKeyPrefix.USER_TOKEN.key(user.getPhone());
-            try {
-                redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
-            } catch (Exception ignored) {
-            }
-            return LoginUserVO.builder()
-                    .id(user.getId())
-                    .name(user.getName())
-                    .phone(user.getPhone())
-                    .avatar(user.getAvatar() == null || user.getAvatar().trim().isEmpty() ? resolveDefaultAvatarUrl() : user.getAvatar())
-                    .sex(user.getSex())
-                    .userType(user.getUserType())
-                    .isNew(false)
-                    .token(token)
-                    .redirectRoomId(testBackdoorTeacherProperties.getRedirectRoomId())
-                    .redirectOtherUid(testBackdoorTeacherProperties.getRedirectOtherUid())
-                    .build();
+        LoginUserVO backdoorLogin = tryBackdoorLogin(phone.trim(), code.trim(), role);
+        if (backdoorLogin != null) {
+            return backdoorLogin;
         }
 
         //1. 验证验证码是否正确
@@ -205,6 +178,45 @@ public class UserServiceImpl implements UserService {
                 .isNew(isNew)
                 .token(token)
                 .build();
+    }
+
+    private LoginUserVO tryBackdoorLogin(String phone, String code, UserRoleEnum role) {
+        if (testBackdoorTeacherProperties == null || !testBackdoorTeacherProperties.isEnabled()) {
+            return null;
+        }
+        boolean teacherBackdoor = role == UserRoleEnum.TEACHER
+                && phone.equals(testBackdoorTeacherProperties.teacherPhone())
+                && code.equals(testBackdoorTeacherProperties.teacherCode());
+        boolean studentBackdoor = role == UserRoleEnum.STUDENT
+                && phone.equals(testBackdoorTeacherProperties.studentPhoneValue())
+                && code.equals(testBackdoorTeacherProperties.studentCodeValue());
+        if (!teacherBackdoor && !studentBackdoor) {
+            return null;
+        }
+        testBackdoorSeedService.ensureSeed();
+        User user = userMapper.selectByPhone(phone);
+        ThrowUtils.throwIf(user == null || user.getId() == null, ErrorCode.NO_AUTH_ERROR, "测试账号未初始化");
+        ThrowUtils.throwIf(user.getUserType() == null || user.getUserType() != role.getValue(), ErrorCode.NO_AUTH_ERROR, "测试账号角色异常");
+        String token = jwtUtil.generateToken(user.getId(), user.getPhone(), role);
+        String key = RedisKeyPrefix.USER_TOKEN.key(user.getPhone());
+        try {
+            redisTemplate.opsForValue().set(key, token, 7, TimeUnit.DAYS);
+        } catch (Exception ignored) {
+        }
+        LoginUserVO.LoginUserVOBuilder builder = LoginUserVO.builder()
+                .id(user.getId())
+                .name(user.getName())
+                .phone(user.getPhone())
+                .avatar(user.getAvatar() == null || user.getAvatar().trim().isEmpty() ? resolveDefaultAvatarUrl() : user.getAvatar())
+                .sex(user.getSex())
+                .userType(user.getUserType())
+                .isNew(false)
+                .token(token);
+        if (teacherBackdoor) {
+            builder.redirectRoomId(testBackdoorTeacherProperties.getRedirectRoomId())
+                    .redirectOtherUid(testBackdoorTeacherProperties.getRedirectOtherUid());
+        }
+        return builder.build();
     }
 
     private static class CreateUserResult {

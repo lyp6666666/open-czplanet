@@ -12,8 +12,10 @@ import com.ai.tutor.appointment.model.dto.user.BaseUserInfo;
 import com.ai.tutor.appointment.model.dto.user.TeacherExtInfo;
 import com.ai.tutor.appointment.model.dto.user.UserUpdateRequest;
 import com.ai.tutor.appointment.model.vo.LoginUserVO;
+import com.ai.tutor.appointment.config.TestBackdoorTeacherProperties;
 import com.ai.tutor.appointment.service.impl.UserServiceImpl;
 import com.ai.tutor.appointment.service.InviteService;
+import com.ai.tutor.appointment.service.TestBackdoorSeedService;
 import com.ai.tutor.appointment.utils.JwtUtil;
 import com.ai.tutor.appointment.storage.MinioProperties;
 import com.ai.tutor.exception.BusinessException;
@@ -60,6 +62,8 @@ class UserServiceImplTest {
     private TransactionTemplate transactionTemplate;
     @Mock
     private InviteService inviteService;
+    @Mock
+    private TestBackdoorSeedService testBackdoorSeedService;
 
     private UserServiceImpl userService;
 
@@ -74,6 +78,10 @@ class UserServiceImplTest {
         ReflectionTestUtils.setField(userService, "studentProfileMapper", studentProfileMapper);
         ReflectionTestUtils.setField(userService, "transactionTemplate", transactionTemplate);
         ReflectionTestUtils.setField(userService, "inviteService", inviteService);
+        ReflectionTestUtils.setField(userService, "testBackdoorSeedService", testBackdoorSeedService);
+
+        TestBackdoorTeacherProperties backdoorProps = new TestBackdoorTeacherProperties();
+        ReflectionTestUtils.setField(userService, "testBackdoorTeacherProperties", backdoorProps);
 
         MinioProperties minioProperties = new MinioProperties();
         minioProperties.setEnabled(true);
@@ -250,6 +258,72 @@ class UserServiceImplTest {
         assertThat(vo.getId()).isEqualTo(5005L);
         verify(inviteService).ensureInviteCode(5005L);
         verify(inviteService).bindInviteCodeIfNeeded(5005L, "ABC123");
+    }
+
+    @Test
+    void shouldLoginTeacherBackdoorAndReturnRedirectInfo() {
+        User teacher = new User();
+        teacher.setId(666888L);
+        teacher.setPhone("28888888888");
+        teacher.setName("后门教师");
+        teacher.setUserType(UserRoleEnum.TEACHER.getValue());
+        teacher.setSex(1);
+        when(userMapper.selectByPhone("28888888888")).thenReturn(teacher);
+        when(jwtUtil.generateToken(666888L, "28888888888", UserRoleEnum.TEACHER)).thenReturn("backdoor-teacher-token");
+
+        LoginUserVO vo = userService.userLoginOrRegister("28888888888", "1888", UserRoleEnum.TEACHER, null);
+
+        assertThat(vo.getId()).isEqualTo(666888L);
+        assertThat(vo.getToken()).isEqualTo("backdoor-teacher-token");
+        assertThat(vo.getRedirectRoomId()).isEqualTo(666001L);
+        assertThat(vo.getRedirectOtherUid()).isEqualTo(666777L);
+        verify(testBackdoorSeedService).ensureSeed();
+        verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldLoginStudentBackdoorWithoutRedirectInfo() {
+        User student = new User();
+        student.setId(666777L);
+        student.setPhone("26666666666");
+        student.setName("测试学生");
+        student.setUserType(UserRoleEnum.STUDENT.getValue());
+        student.setSex(0);
+        when(userMapper.selectByPhone("26666666666")).thenReturn(student);
+        when(jwtUtil.generateToken(666777L, "26666666666", UserRoleEnum.STUDENT)).thenReturn("backdoor-student-token");
+
+        LoginUserVO vo = userService.userLoginOrRegister("26666666666", "1666", UserRoleEnum.STUDENT, null);
+
+        assertThat(vo.getId()).isEqualTo(666777L);
+        assertThat(vo.getToken()).isEqualTo("backdoor-student-token");
+        assertThat(vo.getRedirectRoomId()).isNull();
+        assertThat(vo.getRedirectOtherUid()).isNull();
+        verify(testBackdoorSeedService).ensureSeed();
+        verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldStillUseCanonicalBackdoorCredentialsWhenPropertiesCarryLegacyValues() {
+        TestBackdoorTeacherProperties staleProps = new TestBackdoorTeacherProperties();
+        staleProps.setPhone("188");
+        staleProps.setCode("188");
+        staleProps.setStudentPhone("166");
+        staleProps.setStudentCode("166");
+        ReflectionTestUtils.setField(userService, "testBackdoorTeacherProperties", staleProps);
+
+        User teacher = new User();
+        teacher.setId(666888L);
+        teacher.setPhone("28888888888");
+        teacher.setName("后门教师");
+        teacher.setUserType(UserRoleEnum.TEACHER.getValue());
+        when(userMapper.selectByPhone("28888888888")).thenReturn(teacher);
+        when(jwtUtil.generateToken(666888L, "28888888888", UserRoleEnum.TEACHER)).thenReturn("canonical-token");
+
+        LoginUserVO vo = userService.userLoginOrRegister("28888888888", "1888", UserRoleEnum.TEACHER, null);
+
+        assertThat(vo.getToken()).isEqualTo("canonical-token");
+        verify(testBackdoorSeedService).ensureSeed();
+        verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
     }
 
     @Test

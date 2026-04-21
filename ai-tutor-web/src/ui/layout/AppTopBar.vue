@@ -31,12 +31,12 @@ function normalizedText(raw: string | null | undefined) {
 
 const displayName = computed(() => {
   if (!auth.isLoggedIn) return '未登录'
+  const userName = normalizedText(auth.user?.name)
+  if (userName) return userName
   const teacherName = normalizedText(auth.me?.teacherProfile?.realName)
   if (teacherName) return teacherName
   const studentName = normalizedText(auth.me?.studentProfile?.realName)
   if (studentName) return studentName
-  const userName = normalizedText(auth.user?.name)
-  if (userName) return userName
   return '未填写姓名'
 })
 const unread = computed(() => chatRealtime.totalUnread)
@@ -373,7 +373,9 @@ async function loadLiveQuickJoin() {
             <button v-if="!isOrg" class="menu-item" type="button" @click="go('/me'); closeMenu()">{{ isTeacher ? '简历' : '我的' }}</button>
             <button v-else class="menu-item" type="button" @click="go('/org/change-password'); closeMenu()">修改密码</button>
             <button v-if="!isOrg" class="menu-item" type="button" @click="go(favoritePath()); closeMenu()">收藏</button>
-            <button v-if="!isOrg" class="menu-item" type="button" @click="go('/invite'); closeMenu()">邀请有礼</button>
+            <button v-if="!isOrg" class="menu-item invite-entry" type="button" @click="go('/invite'); closeMenu()">
+              <span class="invite-text">邀请有礼</span>
+            </button>
             <button v-if="isTeacher" class="menu-item" type="button" @click="onGreetingClick">默认打招呼语</button>
             <button class="menu-item" type="button" @click="go('/settings'); closeMenu()">设置</button>
             <button v-if="!isOrg" class="menu-item" type="button" @click="onSwitchClick">{{ switchLabel }}</button>
@@ -494,9 +496,9 @@ async function loadLiveQuickJoin() {
 }
 
 .logo-mark {
-  width: 56px;
+  width: 88px;
   height: 40px;
-  flex: 0 0 56px;
+  flex: 0 0 88px;
   display: block;
   object-fit: contain;
   filter: drop-shadow(0 6px 16px rgba(58, 106, 255, 0.18));
@@ -706,6 +708,42 @@ async function loadLiveQuickJoin() {
 
 .menu-item:hover {
   background: rgba(31, 35, 41, 0.06);
+}
+
+.invite-entry {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 156, 86, 0.2);
+  background: linear-gradient(135deg, rgba(255, 156, 86, 0.18), rgba(255, 219, 111, 0.1));
+}
+
+.invite-entry::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 18%, rgba(255, 255, 255, 0.72) 50%, transparent 82%);
+  transform: translateX(-140%);
+  transition: transform 420ms ease;
+}
+
+.invite-entry:hover {
+  border-color: rgba(255, 156, 86, 0.4);
+  background: linear-gradient(135deg, rgba(255, 156, 86, 0.24), rgba(255, 219, 111, 0.16));
+}
+
+.invite-entry:hover::after {
+  transform: translateX(140%);
+}
+
+.invite-text {
+  position: relative;
+  z-index: 1;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, #ff7a00, #ff4d4f 52%, #f59e0b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 .menu-item.danger {

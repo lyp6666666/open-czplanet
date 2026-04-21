@@ -54,6 +54,32 @@ export type LiveTimelineItemResp = {
   occurredAt: string
 }
 
+export type LiveAiStateResp = {
+  sessionId: number
+  courseId: number
+  aiStatus: string
+  realtimeEnabled: boolean
+  summaryStatus: string
+  currentTopic?: string | null
+  latestStageSummary?: string | null
+  studentQuestions: string[]
+  homeworkCandidates: string[]
+  keyPoints: string[]
+  updatedAt?: string | null
+  rawState?: Record<string, unknown> | null
+}
+
+export type LiveAiResultResp = {
+  sessionId: number
+  courseId: number
+  resultStatus: string
+  reportStatus?: string | null
+  summary?: Record<string, unknown> | null
+  report?: Record<string, unknown> | null
+  preview?: string | null
+  updatedAt?: string | null
+}
+
 export type LiveReminderItemResp = {
   sessionId: number
   courseId: number
@@ -102,5 +128,17 @@ export const liveApi = {
 
   timeline(sessionId: number) {
     return http.get<unknown, LiveTimelineItemResp[]>(`/live/sessions/${sessionId}/timeline`)
+  },
+
+  aiState(sessionId: number) {
+    return http.get<unknown, LiveAiStateResp>(`/live/sessions/${sessionId}/ai/state`)
+  },
+
+  aiResult(sessionId: number) {
+    return http.get<unknown, LiveAiResultResp>(`/live/sessions/${sessionId}/ai/result`)
+  },
+
+  retryAiResult(sessionId: number) {
+    return http.post<unknown, LiveAiResultResp>(`/live/sessions/${sessionId}/ai/result/retry`, {})
   },
 }

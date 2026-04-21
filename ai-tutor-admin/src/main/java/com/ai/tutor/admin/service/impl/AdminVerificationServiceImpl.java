@@ -33,15 +33,30 @@ public class AdminVerificationServiceImpl implements AdminVerificationService {
 
     @Override
     public TeacherProfile getVerificationDetails(Long userId) {
-        return adminVerificationMapper.selectByUserId(userId);
+        TeacherProfile profile = adminVerificationMapper.selectByUserId(userId);
+        ThrowUtils.throwIf(profile == null, ErrorCode.NOT_FOUND_ERROR, "教师资料不存在");
+        return profile;
     }
 
     @Override
     public void approveVerification(Long userId, String type) {
+        TeacherProfile profile = getVerificationDetails(userId);
         if ("REALNAME".equalsIgnoreCase(type)) {
-            adminVerificationMapper.approveRealname(userId);
+            ThrowUtils.throwIf(profile.getRealnameVerifyStatus() == null || profile.getRealnameVerifyStatus() != 1,
+                    ErrorCode.OPERATION_ERROR, "实名认证当前不可审核");
+            ThrowUtils.throwIf(!"ID_PHOTO".equalsIgnoreCase(profile.getRealnameVerifyMethod()),
+                    ErrorCode.OPERATION_ERROR, "实名认证需基于身份证照片审核，请先要求老师重新提交图片材料");
+            ThrowUtils.throwIf(isBlank(profile.getRealnameVerifyIdFrontUrl()) || isBlank(profile.getRealnameVerifyIdBackUrl()),
+                    ErrorCode.OPERATION_ERROR, "身份证照片不完整，无法通过审核");
+            int updated = adminVerificationMapper.approveRealname(userId);
+            ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "实名认证审核失败");
         } else if ("EDU".equalsIgnoreCase(type)) {
-            adminVerificationMapper.approveEdu(userId);
+            ThrowUtils.throwIf(profile.getEduVerifyStatus() == null || profile.getEduVerifyStatus() != 1,
+                    ErrorCode.OPERATION_ERROR, "学信网认证当前不可审核");
+            ThrowUtils.throwIf(isBlank(profile.getEduVerifyProofUrls()),
+                    ErrorCode.OPERATION_ERROR, "学信网截图为空，无法通过审核");
+            int updated = adminVerificationMapper.approveEdu(userId);
+            ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "学信网认证审核失败");
         } else {
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "Invalid verification type");
         }
@@ -49,12 +64,26 @@ public class AdminVerificationServiceImpl implements AdminVerificationService {
 
     @Override
     public void rejectVerification(Long userId, String type, String reason) {
+        String rejectReason = reason == null ? "" : reason.trim();
+        ThrowUtils.throwIf(rejectReason.isEmpty(), ErrorCode.PARAMS_ERROR, "请填写驳回原因");
+        ThrowUtils.throwIf(rejectReason.length() > 200, ErrorCode.PARAMS_ERROR, "驳回原因过长");
+        TeacherProfile profile = getVerificationDetails(userId);
         if ("REALNAME".equalsIgnoreCase(type)) {
-            adminVerificationMapper.rejectRealname(userId, reason);
+            ThrowUtils.throwIf(profile.getRealnameVerifyStatus() == null || profile.getRealnameVerifyStatus() != 1,
+                    ErrorCode.OPERATION_ERROR, "实名认证当前不可审核");
+            int updated = adminVerificationMapper.rejectRealname(userId, rejectReason);
+            ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "实名认证驳回失败");
         } else if ("EDU".equalsIgnoreCase(type)) {
-            adminVerificationMapper.rejectEdu(userId, reason);
+            ThrowUtils.throwIf(profile.getEduVerifyStatus() == null || profile.getEduVerifyStatus() != 1,
+                    ErrorCode.OPERATION_ERROR, "学信网认证当前不可审核");
+            int updated = adminVerificationMapper.rejectEdu(userId, rejectReason);
+            ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "学信网认证驳回失败");
         } else {
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR, "Invalid verification type");
         }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

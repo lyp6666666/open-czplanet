@@ -22,6 +22,8 @@ public interface RoomMapper {
 
     int closeRoom(@Param("roomId") Long roomId);
 
+    int reopenRoom(@Param("roomId") Long roomId);
+
     List<Room> listByTeacherProfileId(@Param("teacherProfileId") Long teacherProfileId,
                                       @Param("cursor") Long cursor,
                                       @Param("pageSize") Integer pageSize);

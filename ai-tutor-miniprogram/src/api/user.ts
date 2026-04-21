@@ -15,5 +15,31 @@ export const userApi = {
       method: 'POST',
       data
     });
+  },
+  emailStatus() {
+    return request({
+      url: '/user/email',
+      method: 'GET'
+    });
+  },
+  sendEmailCode(data: { email: string; emailType: 'PRIMARY' | 'SUMMARY_ONLY'; scene?: string }) {
+    return request({
+      url: '/user/email/code',
+      method: 'POST',
+      data
+    });
+  },
+  verifyEmail(data: { email: string; emailType: 'PRIMARY' | 'SUMMARY_ONLY'; code: string; scene?: string; bindSource?: string }) {
+    return request({
+      url: '/user/email/verify',
+      method: 'POST',
+      data
+    });
+  },
+  deleteSummaryEmail() {
+    return request({
+      url: '/user/email/summary',
+      method: 'DELETE'
+    });
   }
 };

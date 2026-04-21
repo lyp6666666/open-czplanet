@@ -26,6 +26,7 @@ const useAppFrame = computed(() => {
     p.startsWith('/org/') ||
     p.startsWith('/organization/') ||
     p.startsWith('/chat') ||
+    p.startsWith('/courses') ||
     p.startsWith('/live/') ||
     p === '/me' ||
     p.startsWith('/schedule')
