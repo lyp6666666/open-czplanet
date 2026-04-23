@@ -4,9 +4,11 @@ import com.ai.tutor.common.service.dto.RequestInfo;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
+import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
+import com.ai.tutor.liveclass.service.LiveKitUrlResolver;
 import com.ai.tutor.utils.RequestHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +47,8 @@ class LiveSessionControllerTest {
 
     @MockBean
     private LiveClassService liveClassService;
+    @MockBean
+    private LiveKitUrlResolver liveKitUrlResolver;
 
     @BeforeEach
     void setUp() {
@@ -114,6 +118,46 @@ class LiveSessionControllerTest {
                 .andExpect(jsonPath("$.code").value(0))
                 .andExpect(jsonPath("$.data[0].courseId").value(66))
                 .andExpect(jsonPath("$.data[0].joinableNow").value(true));
+    }
+
+    @Test
+    void shouldIssueJoinTokenWithResolvedPublicWsUrl() throws Exception {
+        when(liveKitUrlResolver.resolvePublicWsUrl(any())).thenReturn("wss://huoyue.online/livekit");
+        when(liveClassService.issueJoinToken(eq(8L), eq(1001L), any(), eq("wss://huoyue.online/livekit")))
+                .thenReturn(IssueJoinTokenResp.builder()
+                        .provider("LIVEKIT")
+                        .serverUrl("wss://huoyue.online/livekit")
+                        .roomName("class-66")
+                        .participantName("王老师")
+                        .participantIdentity("1001")
+                        .accessToken("mock-token")
+                        .expireAt(LocalDateTime.of(2026, 4, 21, 23, 0))
+                        .build());
+
+        mockMvc.perform(post("/live/sessions/8/join-token")
+                        .header("Host", "huoyue.online")
+                        .header("X-Forwarded-Proto", "https")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"clientType\":\"WEB\",\"deviceFingerprint\":\"test-device\",\"joinMode\":\"CLASSROOM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.serverUrl").value("wss://huoyue.online/livekit"))
+                .andExpect(jsonPath("$.data.roomName").value("class-66"));
+    }
+
+    @Test
+    void shouldAckJoinedSession() throws Exception {
+        when(liveClassService.joinAck(eq(8L), eq(1001L), any())).thenReturn(LiveSessionResp.builder()
+                .sessionId(8L)
+                .courseId(66L)
+                .status("IN_PROGRESS")
+                .peerJoined(false)
+                .build());
+
+        mockMvc.perform(post("/live/sessions/8/join-ack")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"clientType\":\"WEB\",\"joinMode\":\"CLASSROOM\",\"connectionState\":\"CONNECTED\",\"cameraEnabled\":true,\"micEnabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
     }
 
     @Test

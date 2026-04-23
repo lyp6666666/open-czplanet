@@ -75,6 +75,37 @@ class GatewayIdentityInterceptorTest {
         assertThrows(BusinessException.class, () -> badInterceptor.preHandle(req, resp, new Object()));
     }
 
+    @Test
+    void shouldAllowWhitelistedRequestWithoutSignature() throws Exception {
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/live/webhooks/livekit");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertTrue(interceptor.preHandle(req, resp, new Object()));
+        assertEquals(null, RequestHolder.get());
+    }
+
+    @Test
+    void shouldPopulateRequestHolderForWhitelistedRequestWhenSignaturePresent() throws Exception {
+        long ts = System.currentTimeMillis();
+        String path = "/internal/facade/payment/success";
+        String sign = signatureUtils.sign(0L, 0, ts, "POST", path);
+        MockHttpServletRequest req = new MockHttpServletRequest("POST", path);
+        req.addHeader("X-Uid", "0");
+        req.addHeader("X-Role", "0");
+        req.addHeader("X-Ts", String.valueOf(ts));
+        req.addHeader("X-Auth-Sign", sign);
+        req.setRemoteAddr("127.0.0.1");
+        MockHttpServletResponse resp = new MockHttpServletResponse();
+
+        assertTrue(interceptor.preHandle(req, resp, new Object()));
+
+        RequestInfo info = RequestHolder.get();
+        assertNotNull(info);
+        assertEquals(0L, info.getUid());
+        assertEquals(0, info.getRole());
+        assertEquals("127.0.0.1", info.getIp());
+    }
+
     private MockHttpServletRequest signedRequest(long ts, String sign) {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/test");
         request.addHeader("X-Uid", "206");

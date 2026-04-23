@@ -261,7 +261,7 @@ class UserServiceImplTest {
     }
 
     @Test
-    void shouldLoginTeacherBackdoorAndReturnRedirectInfo() {
+    void shouldLoginTeacherBackdoorWithoutRedirectInfo() {
         User teacher = new User();
         teacher.setId(666888L);
         teacher.setPhone("28888888888");
@@ -275,8 +275,8 @@ class UserServiceImplTest {
 
         assertThat(vo.getId()).isEqualTo(666888L);
         assertThat(vo.getToken()).isEqualTo("backdoor-teacher-token");
-        assertThat(vo.getRedirectRoomId()).isEqualTo(666001L);
-        assertThat(vo.getRedirectOtherUid()).isEqualTo(666777L);
+        assertThat(vo.getRedirectRoomId()).isNull();
+        assertThat(vo.getRedirectOtherUid()).isNull();
         verify(testBackdoorSeedService).ensureSeed();
         verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
     }

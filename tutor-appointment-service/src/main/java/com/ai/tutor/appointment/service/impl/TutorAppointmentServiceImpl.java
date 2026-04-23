@@ -10,6 +10,7 @@ import com.ai.tutor.appointment.model.entity.StudentJobPosting;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.model.entity.User;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.common.integration.AppointmentEventPublisher;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
@@ -46,6 +47,9 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
 
     @Resource
     private com.ai.tutor.appointment.service.EmailNotificationService emailNotificationService;
+
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Override
     public Long create(CreateAppointmentRequest request, Long uid) {
@@ -144,6 +148,11 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
                 .build();
         int updated = tutorAppointmentMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        /*
+         * 中文注释：改期创建指标只在预约成功进入“待确认改期”状态后累计，
+         * 避免同一方反复打开弹窗或前端重试把同一轮改期误记成多次创建。
+         */
+        bizKpiMetrics.incTrialRescheduleCreated();
         emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson reschedule requested");
     }
 
@@ -166,6 +175,11 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
 
         int updated = tutorAppointmentMapper.confirmReschedule(db.getId());
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        /*
+         * 中文注释：改期处理指标只在对方真正确认改期且数据库状态成功迁移后累计，
+         * 这样可以稳定代表一次有效的“改期同意”，不会被重复确认请求放大。
+         */
+        bizKpiMetrics.incTrialRescheduleDecision("accepted");
         TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
         emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson rescheduled");
         emailNotificationService.createLessonStartTasks(latest == null ? db : latest);

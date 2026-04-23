@@ -11,6 +11,7 @@ public class LiveKitProperties {
     private String apiKey;
     private String apiSecret;
     private String wsUrl;
+    private String publicWsUrl;
     private String roomPrefix = "class";
     private long tokenTtlSeconds = 7200L;
 }

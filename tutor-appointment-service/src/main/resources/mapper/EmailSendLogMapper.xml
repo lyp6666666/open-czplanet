@@ -8,4 +8,11 @@
         VALUES
         (#{taskId}, #{provider}, #{providerMessageId}, #{email}, #{sendStatus}, #{errorCode}, #{errorMessage}, #{requestId})
     </insert>
+
+    <select id="listByTaskId" resultType="com.ai.tutor.appointment.model.entity.EmailSendLog">
+        SELECT id, task_id, provider, provider_message_id, email, send_status, error_code, error_message, request_id, create_time
+        FROM email_send_log
+        WHERE task_id = #{taskId}
+        ORDER BY id DESC
+    </select>
 </mapper>

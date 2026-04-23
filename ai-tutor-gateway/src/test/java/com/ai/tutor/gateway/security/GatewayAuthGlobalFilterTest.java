@@ -65,7 +65,8 @@ class GatewayAuthGlobalFilterTest {
         webTestClient.get()
                 .uri("/api/v1/public/home/config")
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus().isOk()
+                .expectHeader().exists("X-Request-Id");
     }
 
     @Test
@@ -98,6 +99,7 @@ class GatewayAuthGlobalFilterTest {
         assertEquals("206", body.get("uid"));
         assertEquals("1", body.get("role"));
         assertNull(body.get("auth"));
+        assertNotNull(body.get("requestId"));
 
         String ts = body.get("ts");
         assertNotNull(ts);
@@ -107,6 +109,25 @@ class GatewayAuthGlobalFilterTest {
         assertNotNull(sign);
         String expected = signService.sign(206L, 1, timestamp, "GET", "/chat/room/page?pageSize=10");
         assertEquals(expected, sign);
+    }
+
+    @Test
+    void shouldReuseIncomingRequestIdForProtectedPath() {
+        String token = tokenWithClaims(206L, 1);
+
+        Map<String, String> body = webTestClient.get()
+                .uri("/chat/room/page?pageSize=10")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header("X-Request-Id", "req-123")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("X-Request-Id", "req-123")
+                .expectBody(new ParameterizedTypeReference<Map<String, String>>() {})
+                .returnResult()
+                .getResponseBody();
+
+        assertNotNull(body);
+        assertEquals("req-123", body.get("requestId"));
     }
 
     private String tokenWithClaims(long uid, int role) {
@@ -145,6 +166,7 @@ class GatewayAuthGlobalFilterTest {
             body.put("role", headers.getFirst("X-Role"));
             body.put("ts", headers.getFirst("X-Ts"));
             body.put("sign", headers.getFirst("X-Auth-Sign"));
+            body.put("requestId", headers.getFirst("X-Request-Id"));
             body.put("auth", headers.getFirst(HttpHeaders.AUTHORIZATION));
             return ServerResponse.ok().bodyValue(body);
         }

@@ -153,6 +153,12 @@ public class UserServiceImpl implements UserService {
              * 说明：仅在首次创建用户成功时计数（isNew=true），避免重复登录/重试导致重复计数。
              */
             bizKpiMetrics.incUserRegister(role.getCode());
+        } else if (!isNew && bizKpiMetrics != null) {
+            /*
+             * 中文注释：这里统计“老用户登录成功次数”，仅在账号已存在且登录成功后计数，
+             * 避免首次注册被误算成登录活跃。
+             */
+            bizKpiMetrics.incUserLogin(role.getCode());
         }
 
         user.setUserType(role.getValue());
@@ -212,10 +218,6 @@ public class UserServiceImpl implements UserService {
                 .userType(user.getUserType())
                 .isNew(false)
                 .token(token);
-        if (teacherBackdoor) {
-            builder.redirectRoomId(testBackdoorTeacherProperties.getRedirectRoomId())
-                    .redirectOtherUid(testBackdoorTeacherProperties.getRedirectOtherUid());
-        }
         return builder.build();
     }
 
@@ -313,6 +315,8 @@ public class UserServiceImpl implements UserService {
             validateAvatarUrl(baseUserInfo.getAvatar());
         }
 
+        boolean profileCompletedBefore = isProfileCompleted(user);
+
         transactionTemplate.execute(status ->{
             try {
                 int updateCount = userMapper.updateUserBaseInfo(baseUserInfo, user.getId());
@@ -390,6 +394,15 @@ public class UserServiceImpl implements UserService {
             }
             return false;
         });
+
+        User latestUser = userMapper.selectById(user.getId());
+        if (bizKpiMetrics != null && !profileCompletedBefore && isProfileCompleted(latestUser)) {
+            /*
+             * 中文注释：资料完成只统计“第一次达到业务准入门槛”的瞬间，后续重复编辑资料不再累计，
+             * 这样 dashboard 上展示的才是完成 onboarding 的真实用户数。
+             */
+            bizKpiMetrics.incProfileCompleted(resolveRoleCode(latestUser));
+        }
 
     }
 
@@ -514,6 +527,40 @@ public class UserServiceImpl implements UserService {
         }
         int count = teacherProfileMapper.updateTeacherProfile(teacherExtInfo, userId);
         return count;
+    }
+
+    private boolean isProfileCompleted(User user) {
+        if (user == null || user.getId() == null || user.getUserType() == null) {
+            return false;
+        }
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        if (role == null) {
+            return false;
+        }
+        if (role == UserRoleEnum.TEACHER) {
+            TeacherProfile teacherProfile = teacherProfileMapper.selectByUserId(user.getId());
+            return teacherProfile != null
+                    && hasText(user.getAvatar())
+                    && hasText(teacherProfile.getRealName())
+                    && hasText(teacherProfile.getIntroduction())
+                    && hasText(teacherProfile.getSubject());
+        }
+        StudentProfile studentProfile = studentProfileMapper.selectByUserId(user.getId());
+        return studentProfile != null
+                && hasText(user.getAvatar())
+                && hasText(studentProfile.getRealName());
+    }
+
+    private static String resolveRoleCode(User user) {
+        if (user == null || user.getUserType() == null) {
+            return "unknown";
+        }
+        UserRoleEnum role = UserRoleEnum.fromValue(user.getUserType());
+        return role == null ? "unknown" : role.getCode();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 
     @Override

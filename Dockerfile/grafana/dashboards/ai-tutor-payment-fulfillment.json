@@ -1,0 +1,63 @@
+{
+  "uid": "ai-tutor-payment-fulfillment",
+  "title": "AI Tutor - Payment & Fulfillment",
+  "timezone": "Asia/Shanghai",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "信息费订单创建",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ai_tutor_biz_payment_order_created_total{biz_type=\"info_fee\"}[1d])) or vector(0)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "信息费支付成功",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ai_tutor_biz_payment_success_total{biz_type=\"info_fee\"}[1d])) or vector(0)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "聊天解锁成功",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ai_tutor_biz_chat_unlock_total[1d])) or vector(0)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "聊天解锁失败",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (reason) (increase(ai_tutor_biz_chat_unlock_failed_total[1d])) or vector(0)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "支付-解锁偏差",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "(sum(increase(ai_tutor_biz_payment_success_total{biz_type=\"info_fee\"}[1d])) or vector(0)) - (sum(increase(ai_tutor_biz_chat_unlock_total[1d])) or vector(0))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "退款成功与金额",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ai_tutor_biz_refund_total[1d])) or vector(0)" },
+        { "refId": "B", "expr": "(sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) or vector(0)) / 100" }
+      ]
+    }
+  ]
+}

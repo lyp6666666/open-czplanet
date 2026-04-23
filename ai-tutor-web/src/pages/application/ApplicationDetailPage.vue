@@ -112,12 +112,14 @@ async function enterChat() {
     const res = await applicationApi.enterChat(id.value)
     if (res.paymentRequired) {
       if (res.orderId) {
+        const otherUid = data.value ? (myUid.value === data.value.senderUid ? data.value.receiverUid : data.value.senderUid) : null
         await router.push({
           name: 'cashierPay',
           query: {
             contextType: 'BROKERAGE_ORDER',
             contextId: String(res.orderId),
             applicationId: String(id.value),
+            ...(otherUid ? { otherUid: String(otherUid) } : {}),
           },
         })
       } else {
@@ -144,12 +146,14 @@ async function enterChat() {
 
 function openCashier() {
   if (!data.value?.orderId) return
+  const otherUid = data.value ? (myUid.value === data.value.senderUid ? data.value.receiverUid : data.value.senderUid) : null
   void router.push({
     name: 'cashierPay',
     query: {
       contextType: 'BROKERAGE_ORDER',
       contextId: String(data.value.orderId),
       ...(id.value ? { applicationId: String(id.value) } : {}),
+      ...(otherUid ? { otherUid: String(otherUid) } : {}),
     },
   })
 }

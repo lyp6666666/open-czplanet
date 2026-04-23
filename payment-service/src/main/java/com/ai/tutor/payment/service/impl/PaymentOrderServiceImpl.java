@@ -1,5 +1,6 @@
 package com.ai.tutor.payment.service.impl;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.payment.enums.PaymentStatus;
 import com.ai.tutor.payment.mapper.PaymentOrderMapper;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
@@ -28,6 +29,9 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
     @Autowired(required = false)
     private RocketMQTemplate rocketMQTemplate;
 
+    @Autowired(required = false)
+    private BizKpiMetrics bizKpiMetrics;
+
     @Override
     public PaymentOrder getByOrderNo(String orderNo) {
         return this.getOne(new QueryWrapper<PaymentOrder>().eq("order_no", orderNo));
@@ -47,6 +51,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         
         boolean updated = this.update(updateWrapper);
         if (updated) {
+            recordPaymentSuccessMetrics(orderNo);
             log.info("Payment order {} updated to SUCCESS, transactionId: {}", orderNo, transactionId);
             try {
                 PaymentOrder order = getByOrderNo(orderNo);
@@ -151,6 +156,13 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         order.setEventSent(0);
         order.setExpireTime(now.plus(5, ChronoUnit.MINUTES));
         this.save(order);
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：这里只在真正创建新的待支付订单后计数，复用旧的 pending 订单时不重复计数，
+             * 避免把用户重复打开收银台误判成新的支付入口流量。
+             */
+            bizKpiMetrics.incPaymentOrderCreated(normalizeBizType(order.getContextType()), normalizeChannel(order.getChannel()));
+        }
         return order;
     }
 
@@ -196,6 +208,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
 
         boolean updated = this.update(updateWrapper);
         if (updated) {
+            recordPaymentSuccessMetrics(orderNo);
             log.info("Payment order {} updated to SUCCESS by notify, transactionId: {}", orderNo, transactionId);
             try {
                 PaymentOrder order = getByOrderNo(orderNo);
@@ -250,6 +263,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
 
         boolean updated = this.update(updateWrapper);
         if (updated) {
+            recordPaymentSuccessMetrics(orderNo);
             log.info("Payment order {} updated to SUCCESS by provider query, transactionId: {}", orderNo, transactionId);
             try {
                 PaymentOrder order = getByOrderNo(orderNo);
@@ -328,5 +342,52 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         String r = reason.trim();
         if (r.length() <= 256) return r;
         return r.substring(0, 256);
+    }
+
+    private void recordPaymentSuccessMetrics(String orderNo) {
+        if (bizKpiMetrics == null || orderNo == null || orderNo.trim().isEmpty()) {
+            return;
+        }
+        PaymentOrder latest = getByOrderNo(orderNo);
+        if (latest == null || !isInfoFeeOrder(latest)) {
+            return;
+        }
+        /*
+         * 中文注释：支付成功指标只在 payment-service 的状态机首次把订单从 PENDING 改成 SUCCESS 时累计，
+         * 这样即使支付回调、查单补偿、MQ 重放同时存在，也只会对同一笔信息费记一次成功和一次金额。
+         */
+        bizKpiMetrics.incPaymentSuccess("info_fee", normalizeChannel(latest.getChannel()));
+        Long amountFen = latest.getAmount();
+        if (amountFen != null && amountFen > 0) {
+            bizKpiMetrics.addPaymentInfoFeeAmountFen(amountFen);
+        }
+    }
+
+    private static boolean isInfoFeeOrder(PaymentOrder order) {
+        if (order == null || order.getContextType() == null) {
+            return false;
+        }
+        return "BROKERAGE_ORDER".equalsIgnoreCase(order.getContextType().trim());
+    }
+
+    private static String normalizeBizType(String contextType) {
+        if (contextType == null || contextType.trim().isEmpty()) {
+            return "unknown";
+        }
+        String normalized = contextType.trim().toUpperCase();
+        if ("BROKERAGE_ORDER".equals(normalized)) {
+            return "info_fee";
+        }
+        if ("LESSON_PAYMENT_ORDER".equals(normalized)) {
+            return "lesson_payment_order";
+        }
+        return normalized.toLowerCase();
+    }
+
+    private static String normalizeChannel(String channel) {
+        if (channel == null || channel.trim().isEmpty()) {
+            return "unknown";
+        }
+        return channel.trim().toLowerCase();
     }
 }

@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
@@ -22,6 +23,7 @@ import com.ai.tutor.videocallimservice.common.mapper.TeacherProfileLiteMapper;
 import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -33,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class CollaborationProposalService {
@@ -61,6 +64,8 @@ public class CollaborationProposalService {
     private CourseEnrollmentService courseEnrollmentService;
     @Resource
     private TutorApplicationService tutorApplicationService;
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
     @Autowired(required = false)
     private AppointmentInternalClient appointmentInternalClient;
 
@@ -167,6 +172,13 @@ public class CollaborationProposalService {
                 .updateTime(now)
                 .build();
         collaborationProposalMapper.insert(proposal);
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：试课合作提案只在真正插入成功后计数，命中 clientRequestId 幂等直接返回旧提案时不重复累计，
+             * 这样看板上的提案量才等于真实发起量。
+             */
+            bizKpiMetrics.incTrialProposalCreated(uid.equals(teacherUid) ? "teacher" : "student");
+        }
         return sendProposalMessage(proposal, uid);
     }
 
@@ -214,6 +226,32 @@ public class CollaborationProposalService {
                 .body(body)
                 .build();
         return chatService.sendMsg(msgReq, uid);
+    }
+
+    @Scheduled(fixedDelayString = "${course.collaboration-proposal.scheduler-delay-ms:60000}")
+    public void processExpiredProposals() {
+        List<Long> expiredIds = collaborationProposalMapper.selectExpiredPendingIds(LocalDateTime.now(), 100);
+        if (expiredIds == null || expiredIds.isEmpty()) {
+            return;
+        }
+        for (Long proposalId : expiredIds) {
+            if (proposalId == null) {
+                continue;
+            }
+            int updated = collaborationProposalMapper.updateStatus(
+                    proposalId,
+                    CollaborationProposalStatus.EXPIRED.name(),
+                    0L,
+                    LocalDateTime.now()
+            );
+            if (updated > 0 && bizKpiMetrics != null) {
+                /*
+                 * 中文注释：试课提案过期指标只在定时任务把待处理提案首次迁移为 EXPIRED 后统计，
+                 * 避免任务重复扫描或并发执行时把同一条提案重复累计。
+                 */
+                bizKpiMetrics.incTrialProposalExpired();
+            }
+        }
     }
 
     public Long respondAndSend(Long proposalId, RespondCollaborationProposalReq req, Long uid) {
@@ -271,6 +309,12 @@ public class CollaborationProposalService {
                     ErrorCode.OPERATION_ERROR,
                     "该试课提案已被处理，请刷新页面查看最新状态");
             ThrowUtils.throwIf(true, ErrorCode.OPERATION_ERROR);
+        }
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：提案处理结果只在待处理提案首次成功流转后统计，避免重复点击“同意/拒绝”造成双计数。
+             */
+            bizKpiMetrics.incTrialProposalDecision(CollaborationProposalStatus.ACCEPTED.equals(next) ? "accepted" : "rejected");
         }
 
         if (CollaborationProposalStatus.ACCEPTED.equals(next) && proposal.getRoomId() != null) {

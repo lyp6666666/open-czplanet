@@ -57,3 +57,16 @@ spring:
           uri: http://127.0.0.1:18086
           predicates:
             - Path=/internal/ai/**
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-none}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

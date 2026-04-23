@@ -43,6 +43,8 @@ springdoc:
     path: /swagger-ui.html
 
 logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-none}]"
   level:
     org.springframework.web: DEBUG
 

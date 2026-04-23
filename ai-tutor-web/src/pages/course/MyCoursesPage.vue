@@ -218,8 +218,8 @@ function resolveCourseStage(rawStatus: string, trialEndAt?: string | null) {
       key: 'TRIALING' as const,
       label: '试课中',
       tone: 'violet',
-      description: '合作已建立，当前处于一周试课观察期。',
-      actionLabel: '预约试课',
+      description: '合作已建立，试课日程会直接展示在双方课表与课程页中。',
+      actionLabel: '查看试课',
       phaseIndex: 5,
       sectionLabel: '试课阶段',
     }
@@ -335,9 +335,9 @@ function resolveLessonState(lesson: ScheduleEventVO | null, live: LiveSessionRes
   if (!lesson) {
     return {
       key: 'NOT_STARTED' as const,
-      label: '待约课',
+      label: '待生成课节',
       tone: 'slate',
-      description: '还没有安排具体课节。',
+      description: '当前还没有同步出具体课节。',
     }
   }
   const now = Date.now()
@@ -408,6 +408,7 @@ function buildCourseSummary(stage: ReturnType<typeof resolveCourseStage>, partic
 }
 
 function buildStageHint(stage: ReturnType<typeof resolveCourseStage>, lessonState: ReturnType<typeof resolveLessonState>, trialEndAt?: string | null) {
+  if (stage.key === 'TRIALING' && lessonState.key === 'NOT_STARTED') return '试课时间已确认，正在同步到双方日程'
   if ((stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') && trialEndAt) {
     return `试课结束：${fmtDateOnly(trialEndAt)}`
   }
@@ -429,7 +430,7 @@ function buildTrialCountdown(trialEndAt?: string | null) {
 }
 
 function buildLessonSubtitle(lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
-  if (!lesson && !live) return '试课或正式上课后，会在这里看到具体课节。'
+  if (!lesson && !live) return '合作同意后会自动生成试课课节，并展示在双方日程中。'
   if (live?.joinableNow) return '课堂已开放，双方可进入课前准备。'
   if (lesson) return `${formatDuration(lesson.startAt, lesson.endAt)} · ${lessonStatusText(lesson.status)}`
   return '课堂信息已生成'
@@ -582,7 +583,12 @@ function statusToneClass(tone: string) {
 
 function canOpenSchedule(item: CourseViewModel | null) {
   if (!item) return false
-  return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || item.stage.key === 'TEACHING'
+  return item.stage.key === 'TEACHING'
+}
+
+function canViewTrialSchedule(item: CourseViewModel | null) {
+  if (!item) return false
+  return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE'
 }
 
 function canConfirmTrialPass(it: CourseItemVO) {
@@ -683,7 +689,15 @@ function onPrimaryAction(item: CourseViewModel) {
     void openApplicationFlow(item)
     return
   }
-  if (item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || item.stage.key === 'TEACHING') {
+  if (item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') {
+    if (item.live) {
+      goLivePrepare(item.lessonCourseId)
+      return
+    }
+    goSchedule()
+    return
+  }
+  if (item.stage.key === 'TEACHING') {
     openSchedule(item)
     return
   }
@@ -1085,7 +1099,7 @@ function goEmailSettings() {
       </div>
       <div class="hero-actions">
         <button class="btn btn-primary" type="button" :disabled="!selectedCourse || !canOpenSchedule(selectedCourse)" @click="selectedCourse && openSchedule(selectedCourse)">
-          发起约课
+          安排正式课
         </button>
         <button class="btn" type="button" :disabled="loading" @click="load">{{ loading ? '刷新中...' : '刷新列表' }}</button>
       </div>
@@ -1210,7 +1224,14 @@ function goEmailSettings() {
 
           <div class="card-actions">
             <button class="btn" type="button" :disabled="!item.roomId" @click.stop="goChat(item.roomId)">进入聊天</button>
-            <button class="btn" type="button" :disabled="!canOpenSchedule(item)" @click.stop="openSchedule(item)">约课</button>
+            <button
+              class="btn"
+              type="button"
+              :disabled="!(canOpenSchedule(item) || canViewTrialSchedule(item))"
+              @click.stop="canOpenSchedule(item) ? openSchedule(item) : goSchedule()"
+            >
+              {{ canViewTrialSchedule(item) ? '查看试课' : '约课' }}
+            </button>
             <button class="btn" type="button" :disabled="!item.live" @click.stop="goLivePrepare(item.lessonCourseId)">课堂</button>
             <button class="btn" type="button" @click.stop="goCourseDetail(item.courseId)">详情</button>
             <button class="btn" type="button" :disabled="actionBusyCourseId === item.courseId" @click.stop="onPrimaryAction(item)">
@@ -1281,7 +1302,7 @@ function goEmailSettings() {
             </div>
             <div class="lesson-actions">
               <button class="btn btn-primary" type="button" :disabled="!canOpenSchedule(selectedCourse)" @click="openSchedule(selectedCourse)">
-                {{ selectedCourse.stage.key === 'TRIALING' || selectedCourse.stage.key === 'TRIAL_CONFIRMING' || selectedCourse.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' ? '发起试课预约' : '发起约课' }}
+                安排正式课
               </button>
               <button class="btn" type="button" :disabled="!selectedCourse.roomId" @click="goChat(selectedCourse.roomId)">聊天联动</button>
               <button class="btn" type="button" :disabled="!selectedCourse.live" @click="goLivePrepare(selectedCourse.lessonCourseId)">进入课堂</button>

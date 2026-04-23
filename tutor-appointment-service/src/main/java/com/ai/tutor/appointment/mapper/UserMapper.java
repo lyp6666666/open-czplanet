@@ -9,16 +9,28 @@ import java.util.List;
 @Mapper
 public interface UserMapper {
 
-    @Select("SELECT * FROM user WHERE open_id = #{openId} LIMIT 1")
+    @Select("SELECT id, name, phone, avatar, sex, open_id AS openId, active_status AS activeStatus, "
+            + "last_opt_time AS lastOptTime, ip_info AS ipInfo, item_id AS itemId, status, "
+            + "user_type AS userType, ref_id AS refId, create_time AS createTime, update_time AS updateTime "
+            + "FROM user WHERE open_id = #{openId} LIMIT 1")
     User selectByOpenId(@Param("openId") String openId);
 
-    @Select("SELECT * FROM user WHERE phone = #{phone} LIMIT 1")
+    @Select("SELECT id, name, phone, avatar, sex, open_id AS openId, active_status AS activeStatus, "
+            + "last_opt_time AS lastOptTime, ip_info AS ipInfo, item_id AS itemId, status, "
+            + "user_type AS userType, ref_id AS refId, create_time AS createTime, update_time AS updateTime "
+            + "FROM user WHERE phone = #{phone} LIMIT 1")
     User selectByPhone(String phone);
 
-    @Select("SELECT * FROM user WHERE id = #{id} LIMIT 1")
+    @Select("SELECT id, name, phone, avatar, sex, open_id AS openId, active_status AS activeStatus, "
+            + "last_opt_time AS lastOptTime, ip_info AS ipInfo, item_id AS itemId, status, "
+            + "user_type AS userType, ref_id AS refId, create_time AS createTime, update_time AS updateTime "
+            + "FROM user WHERE id = #{id} LIMIT 1")
     User selectById(@Param("id") Long id);
 
-    @Select("SELECT * FROM user WHERE status = 0")
+    @Select("SELECT id, name, phone, avatar, sex, open_id AS openId, active_status AS activeStatus, "
+            + "last_opt_time AS lastOptTime, ip_info AS ipInfo, item_id AS itemId, status, "
+            + "user_type AS userType, ref_id AS refId, create_time AS createTime, update_time AS updateTime "
+            + "FROM user WHERE status = 0")
     List<User> selectActiveUsers();
 
     int insert(User user);

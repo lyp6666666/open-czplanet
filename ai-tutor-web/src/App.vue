@@ -61,7 +61,7 @@ watch(
 )
 
 watch(
-  () => route.fullPath,
+  () => [route.name, currentChatRoomId.value] as const,
   () => {
     if (!auth.isLoggedIn || !canUseChatRealtime.value) {
       chatRealtime.setActiveRoom(null)

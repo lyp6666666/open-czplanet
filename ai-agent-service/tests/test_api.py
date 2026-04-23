@@ -9,12 +9,15 @@ def _client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setenv("AI_AGENT_DATABASE_URL", f"sqlite:///{tmp_path}/test.db")
     monkeypatch.setenv("AI_AGENT_USE_ASYNC_WORKER", "false")
     monkeypatch.setenv("AI_AGENT_LLM_PROVIDER", "template")
+    monkeypatch.setenv("AI_AGENT_REDIS_URL", "memory://local")
 
     import app.core.config as config
+    import app.queue.redis_queue as redis_queue
     import app.storage.database as database
     import app.main as main
 
     config.get_settings.cache_clear()
+    importlib.reload(redis_queue)
     importlib.reload(database)
     importlib.reload(main)
     return TestClient(main.app)
@@ -122,3 +125,18 @@ def test_realtime_session_and_segment_flow(tmp_path, monkeypatch):
     finalized = client.post("/internal/ai/live-lessons/303/finalize")
     assert finalized.status_code == 200
     assert finalized.json()["data"]["status"] == "FINALIZED"
+
+
+def test_metrics_endpoint_exposes_prometheus_samples(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+
+    health = client.get("/health")
+    assert health.status_code == 200
+
+    metrics = client.get("/metrics")
+    assert metrics.status_code == 200
+    assert metrics.headers["content-type"].startswith("text/plain")
+    body = metrics.text
+    assert "ai_agent_service_up 1" in body
+    assert 'ai_agent_http_requests_total{method="GET",path="/health",status="200"}' in body
+    assert 'ai_agent_http_request_duration_seconds_count{method="GET",path="/health"}' in body

@@ -40,15 +40,15 @@ storage:
     secretKey: minioadmin
     # 存储桶
     bucket: ai-tutor-assets
-    # 公网/前端访问资源的 base url（如果前面有网关/域名，这里应改为对应域名）
-    publicBaseUrl: http://127.0.0.1:9000/ai-tutor-assets
+    # 公网/前端访问资源的 base url；浏览器侧统一走同源网关代理，避免 HTTPS 页面加载 http 静态资源。
+    publicBaseUrl: /api/v1/public/assets
     # 默认头像对象 key（需确保桶里存在该对象）
     defaultAvatarObjectKey: avatars/default.svg
     # 启动时是否自动创建 bucket（DEV 可开；PROD 建议由运维预创建）
     autoCreateBucket: true
     # 允许的头像外链前缀（用于安全校验，防止恶意外链）
     allowedAvatarUrlPrefixes:
-      - http://127.0.0.1:9000/ai-tutor-assets
+      - /api/v1/public/assets
   upload:
     # 普通上传最大字节数（20MB）
     maxSizeBytes: 20971520
@@ -71,8 +71,8 @@ gateway:
     clock-skew-ms: 60000
     # 不需要签名校验的路径（应与网关保持一致/或为服务级别白名单）
     whitelist-paths:
+      - /internal/live/**
       - /user/loginOrRegister
       - /user/sendcode
       - /api/v1/public/**
       - /payment/notify/**
-

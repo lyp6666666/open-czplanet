@@ -3,7 +3,9 @@ package com.ai.tutor.videocallimservice.chat.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
@@ -68,6 +70,9 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
     @Autowired
     private StudentProfileLiteMapper studentProfileLiteMapper;
 
+    @Autowired(required = false)
+    private BizKpiMetrics bizKpiMetrics;
+
     @Value("${tutor-application.skip-payment-check:false}")
     private boolean skipPaymentCheck;
 
@@ -114,19 +119,46 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
 
     @Override
     public Long sendMsg(ChatMessageReq request, Long uid) {
-        assertCanSend(request, uid);
-        //根据消息类型，得到专门处理该消息的处理器
-        AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
-        Long msgId = msgHandler.checkAndSaveMsg(request, uid);
-        roomMapper.updateAfterSend(request.getRoomId(), msgId);
-        if (Integer.valueOf(8).equals(request.getMsgType())) {
-            String bizType = extractBizType(request.getBody());
-            if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
-                roomMapper.closeRoom(request.getRoomId());
+        try {
+            assertCanSend(request, uid);
+            //根据消息类型，得到专门处理该消息的处理器
+            AbstractMsgHandler<?> msgHandler = MsgHandlerFactory.getStrategyNoNull(request.getMsgType());
+            Long msgId = msgHandler.checkAndSaveMsg(request, uid);
+            roomMapper.updateAfterSend(request.getRoomId(), msgId);
+            if (Integer.valueOf(8).equals(request.getMsgType())) {
+                String bizType = extractBizType(request.getBody());
+                if ("BROKERAGE_REFUND_REQUEST".equals(bizType)) {
+                    roomMapper.closeRoom(request.getRoomId());
+                }
             }
+            applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：消息发送成功指标放在“消息已落库 + 房间已更新 + 异步推送事件已发布”之后，
+                 * 这样更接近用户真正看到“发送成功”的时刻。
+                 */
+                bizKpiMetrics.incChatMessageSent(resolveMessageType(request));
+            }
+            return msgId;
+        } catch (BusinessException e) {
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：门禁拒绝、权限拒绝等业务异常统一记为 access_denied，
+                 * 方便区分“用户被规则挡住”与“系统自己发不出去”。
+                 */
+                bizKpiMetrics.incChatMessageFailed("access_denied");
+            }
+            throw e;
+        } catch (RuntimeException e) {
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：落库、房间更新、事件发布等运行期异常统一记为 persist_error，
+                 * 便于在 Grafana 上快速判断聊天失败是否来自服务端故障。
+                 */
+                bizKpiMetrics.incChatMessageFailed("persist_error");
+            }
+            throw e;
         }
-        applicationEventPublisher.publishEvent(new MessageSendEvent(this, msgId));
-        return msgId;
     }
 
     private void assertCanSend(ChatMessageReq request, Long uid) {
@@ -192,6 +224,19 @@ public class ChatServiceImpl extends ServiceImpl<MessageMapper, Message> impleme
             return v == null ? "" : String.valueOf(v).trim().toUpperCase();
         }
         return "";
+    }
+
+    private static String resolveMessageType(ChatMessageReq request) {
+        if (request == null || request.getMsgType() == null) {
+            return "other";
+        }
+        if (Integer.valueOf(1).equals(request.getMsgType())) {
+            return "text";
+        }
+        if (Integer.valueOf(8).equals(request.getMsgType())) {
+            return "system";
+        }
+        return "other";
     }
 
 

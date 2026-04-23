@@ -113,4 +113,36 @@
         WHERE task_key LIKE CONCAT(#{taskKeyPrefix}, '%')
           AND status = 'SENT'
     </select>
+
+    <sql id="AdminTaskWhere">
+        <where>
+            <if test="userId != null">AND receiver_uid = #{userId}</if>
+            <if test="email != null and email != ''">AND email LIKE CONCAT('%', #{email}, '%')</if>
+            <if test="templateCode != null and templateCode != ''">AND template_code = #{templateCode}</if>
+            <if test="bizType != null and bizType != ''">AND biz_type = #{bizType}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+        </where>
+    </sql>
+
+    <select id="pageAdminTasks" resultMap="EmailNotificationTaskMap">
+        SELECT * FROM email_notification_task
+        <include refid="AdminTaskWhere"/>
+        ORDER BY id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countAdminTasks" resultType="long">
+        SELECT COUNT(1) FROM email_notification_task
+        <include refid="AdminTaskWhere"/>
+    </select>
+
+    <update id="retryNow">
+        UPDATE email_notification_task
+        SET status = 'PENDING',
+            scheduled_at = #{nextScheduledAt},
+            last_error = NULL,
+            update_time = CURRENT_TIMESTAMP(3)
+        WHERE id = #{id}
+          AND status IN ('FAILED', 'CANCELED')
+    </update>
 </mapper>

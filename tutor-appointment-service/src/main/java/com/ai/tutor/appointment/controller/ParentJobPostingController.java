@@ -49,7 +49,7 @@ public class ParentJobPostingController {
     @GetMapping("/{id}/view")
     @Operation(summary = "教师端需求贴详情视图（含发布者信息）")
     public BaseResponse<DemandViewVO> view(@PathVariable("id") Long id) {
-        return ResultUtils.success(studentJobPostingService.getViewById(id));
+        return ResultUtils.success(studentJobPostingService.getViewById(id, RequestHolder.get().getUid()));
     }
 
     @GetMapping("/mine")
@@ -74,6 +74,10 @@ public class ParentJobPostingController {
                                                                     @RequestParam(value = "q", required = false) String keyword,
                                                                     @RequestParam(value = "sort", required = false) String sort,
                                                                     @Valid CursorPageRequest request) {
-        return ResultUtils.success(studentJobPostingService.listPublished(subjectId, subjectName, subjectOther, city, classMode, stageCode, frequencyPerWeek, educationRequirement, teacherGenderPreference, budgetMin, budgetMax, keyword, sort, request));
+        return ResultUtils.success(studentJobPostingService.listPublished(
+                subjectId, subjectName, subjectOther, city, classMode, stageCode, frequencyPerWeek,
+                educationRequirement, teacherGenderPreference, budgetMin, budgetMax, keyword, sort,
+                RequestHolder.get().getUid(), request
+        ));
     }
 }

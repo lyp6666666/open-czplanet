@@ -8,6 +8,7 @@ from app.api.lesson_report import router as lesson_report_router
 from app.api.realtime import router as realtime_router
 from app.api.task import router as task_router
 from app.core.config import get_settings
+from app.observability import register_metrics
 from app.storage.database import init_database
 
 
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
         description="AI agent microservice for lesson reports and IM summaries.",
     )
     app.state.settings = settings
+    register_metrics(app)
     app.include_router(health_router)
     app.include_router(task_router)
     app.include_router(lesson_report_router)

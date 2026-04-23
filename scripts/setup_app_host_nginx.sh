@@ -8,6 +8,7 @@ GATEWAY_PORT="${GATEWAY_PORT:-18080}"
 ADMIN_PORT="${ADMIN_PORT:-18084}"
 ADMIN_BASE_PATH="${ADMIN_BASE_PATH:-/admin/}"
 NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/ai-tutor-app-host.conf}"
+PUBLIC_HOST="${PUBLIC_HOST:-huoyue.online}"
 
 if [ "$(id -u)" != "0" ]; then
   echo "[setup_app_host_nginx] 请使用 root 执行"
@@ -44,48 +45,118 @@ server {
 
     location ^~ /payment/notify/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /payment/return/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /api/admin/ {
         proxy_pass http://127.0.0.1:$ADMIN_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /api/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /org/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /user/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /invite/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /chat/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    location = /livekit {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $PUBLIC_HOST;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /livekit/ {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_read_timeout 3600s;
     }
 
     location ^~ /payment/ {
         proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
+    }
+
+    location = /ops {
+        return 302 /ops/;
+    }
+
+    location = /ops/ {
+        return 302 /ops/grafana/;
+    }
+
+    location ^~ /ops/grafana/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_HOST;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+
+    location = /ops/prometheus {
+        return 302 /ops/prometheus/;
+    }
+
+    location ^~ /ops/prometheus/ {
+        rewrite ^/ops/prometheus/(.*)$ /\$1 break;
+        proxy_pass http://127.0.0.1:9090;
+        proxy_set_header Host $PUBLIC_HOST;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_HOST;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_read_timeout 300s;
     }
 
     location / {

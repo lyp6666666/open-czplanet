@@ -43,6 +43,8 @@ public class UnreadEmailReminderServiceImpl implements UnreadEmailReminderServic
     private EmailSendLogMapper sendLogMapper;
     @Resource
     private AppointmentInternalFeignClient appointmentInternalFeignClient;
+    @Resource
+    private UnreadEmailSender unreadEmailSender;
 
     @Value("${email.notification.unread-delay-minutes:120}")
     private int unreadDelayMinutes;
@@ -72,8 +74,11 @@ public class UnreadEmailReminderServiceImpl implements UnreadEmailReminderServic
         payload.put("msgId", message.getId());
         payload.put("roomId", message.getRoomId());
         payload.put("fromUid", message.getFromUid());
+        payload.put("receiverName", "用户");
+        payload.put("senderName", "站内联系人");
+        payload.put("senderRole", "用户");
+        payload.put("messageSummary", messageTypeSummary(message));
         payload.put("messageTypeSummary", messageTypeSummary(message));
-        payload.put("link", "/#/chat/" + message.getRoomId() + "?otherUid=" + message.getFromUid());
         EmailNotificationTask task = EmailNotificationTask.builder()
                 .taskKey("UNREAD:" + message.getRoomId() + ":" + message.getToUid() + ":" + message.getId())
                 .templateCode("UNREAD_MESSAGE_REMINDER")
@@ -114,15 +119,24 @@ public class UnreadEmailReminderServiceImpl implements UnreadEmailReminderServic
                 taskMapper.markCanceled(task.getId(), "message read or business state invalid");
                 return;
             }
+            Map<String, Object> payload = parsePayload(task.getPayloadJson());
+            UnreadEmailSender.SendResult sendResult = unreadEmailSender.sendUnreadReminder(
+                    task.getEmail(),
+                    "未读消息待查看",
+                    payload,
+                    UUID.randomUUID().toString());
+            if (!sendResult.success()) {
+                throw new IllegalStateException(sendResult.errorCode() + ":" + sendResult.errorMessage());
+            }
             sendLogMapper.insert(EmailSendLog.builder()
                     .taskId(task.getId())
-                    .provider("MOCK")
-                    .providerMessageId("mock-im-" + task.getId())
+                    .provider(sendResult.provider())
+                    .providerMessageId(sendResult.providerMessageId())
                     .email(task.getEmail())
                     .sendStatus("SUCCESS")
-                    .requestId(UUID.randomUUID().toString())
+                    .requestId(sendResult.requestId())
                     .build());
-            taskMapper.markSent(task.getId(), LocalDateTime.now(), "你有一条未读消息");
+            taskMapper.markSent(task.getId(), LocalDateTime.now(), "未读消息待查看");
         } catch (Exception e) {
             int retry = task.getRetryCount() == null ? 1 : task.getRetryCount() + 1;
             boolean canRetry = retry <= (task.getMaxRetryCount() == null ? 3 : task.getMaxRetryCount());
@@ -210,6 +224,17 @@ public class UnreadEmailReminderServiceImpl implements UnreadEmailReminderServic
             return objectMapper.writeValueAsString(payload);
         } catch (Exception e) {
             return "{}";
+        }
+    }
+
+    private Map<String, Object> parsePayload(String json) {
+        try {
+            if (json == null || json.isBlank()) {
+                return Map.of();
+            }
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Map.of();
         }
     }
 }

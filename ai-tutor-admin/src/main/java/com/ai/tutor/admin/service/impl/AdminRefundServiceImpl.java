@@ -64,19 +64,10 @@ public class AdminRefundServiceImpl implements AdminRefundService {
         int updated = adminRefundMapper.approveRefund(orderId);
         if (updated > 0 && bizKpiMetrics != null) {
             /*
-             * Grafana 业务 KPI 指标打点（每日退款次数 & 退款总额）。
-             * - metric(次数): ai_tutor_biz_refund_total
-             * - metric(金额): ai_tutor_biz_refund_amount_cents_total（单位：分）
-             * - PromQL（按天，次数）：sum(increase(ai_tutor_biz_refund_total[1d]))
-             * - PromQL（按天，金额元）：sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) / 100
-             *
-             * 说明：仅在订单状态从 DISPUTE -> REFUNDED 的更新成功路径计数（updated>0），保证幂等。
+             * 中文注释：这个旧退款审批流里只保留“审核通过”动作统计，
+             * 最终退款成功与退款金额统一由 payment-service 的真实退款成功回执负责累计，避免重复统计。
              */
-            bizKpiMetrics.incRefund();
-            Long amountFen = order.getAmountFen();
-            if (amountFen != null && amountFen > 0) {
-                bizKpiMetrics.addRefundAmountFen(amountFen);
-            }
+            bizKpiMetrics.incRefundReview("approved");
         }
         // Trigger actual refund logic here if integrated with payment gateway
     }

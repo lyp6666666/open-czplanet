@@ -23,7 +23,7 @@ public class LiveKitTokenService {
     @Resource
     private LiveKitProperties liveKitProperties;
 
-    public IssueJoinTokenResp issueToken(Long uid, String participantName, String roomName) {
+    public IssueJoinTokenResp issueToken(Long uid, String participantName, String roomName, String serverUrl) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expireAt = now.plusSeconds(Math.max(300L, liveKitProperties.getTokenTtlSeconds()));
 
@@ -49,7 +49,7 @@ public class LiveKitTokenService {
 
         return IssueJoinTokenResp.builder()
                 .provider("LIVEKIT")
-                .serverUrl(liveKitProperties.getWsUrl())
+                .serverUrl(serverUrl)
                 .roomName(roomName)
                 .participantName(participantName)
                 .participantIdentity(String.valueOf(uid))

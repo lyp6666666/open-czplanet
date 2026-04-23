@@ -42,6 +42,8 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
   先读 `references/product-strategy.md`，再读 `references/module-map.md`，最后读 `references/business-flows.md` 中对应流程
 - 本地启动、远程测试、基础设施、Nacos、Docker、环境变量或运行时配置排查：
   先读 `references/commands.md`，再读 `references/runtime-config.md`，然后读 `references/payment-remote-testing.md`，最后读 `references/gotchas.md`
+- 实时课堂、LiveKit、课堂准备页、课堂页、双端入会、远端音视频不可见/不可听：
+  先读 `references/live-classroom-media.md`，再读 `references/testing-matrix.md` 和 `references/gotchas.md`
 - 测试、QA 自动化、回归方案：
   读取 `references/testing-matrix.md`
 
@@ -84,6 +86,8 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
   `references/payment-remote-testing.md`
 - 不同变更类型的验证建议：
   `references/testing-matrix.md`
+- 实时课堂线上媒体链路、LiveKit 端口要求和远程验证方法：
+  `references/live-classroom-media.md`
 - 已知陷阱、过时文档与跨模块注意事项：
   `references/gotchas.md`
 - 这个 skill 的持续维护记录：

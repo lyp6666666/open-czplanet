@@ -676,24 +676,68 @@ application_greeting=VALUES(application_greeting),
 settings_json=VALUES(settings_json),
 update_time=VALUES(update_time);
 
-INSERT INTO user
-(id, name, phone, avatar, sex, status, user_type, ref_id, create_time, update_time)
+INSERT INTO `user`
+(id, name, phone, avatar, sex, open_id, active_status, last_opt_time, ip_info, item_id, status, user_type, ref_id, create_time, update_time)
 VALUES
-(666888, '后门教师', '666888', 'http://127.0.0.1:9000/ai-tutor-assets/avatars/default.svg', 1, 0, 1, 666888, NOW(3), NOW(3)),
-(666777, '测试学生', '15500006667', 'http://127.0.0.1:9000/ai-tutor-assets/avatars/default.svg', 0, 0, 2, 666777, NOW(3), NOW(3))
+(117, '家长-郭女士', '15268836917', '/avatars/u117.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1017, NOW(3), NOW(3)),
+(118, '家长-蒋先生', '15268836918', '/avatars/u118.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1018, NOW(3), NOW(3)),
+(119, '学生-袁同学', '15268836919', '/avatars/u119.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1019, NOW(3), NOW(3)),
+(120, '家长-彭女士', '15268836920', '/avatars/u120.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1020, NOW(3), NOW(3)),
+(121, '家长-谢先生', '15268836921', '/avatars/u121.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1021, NOW(3), NOW(3)),
+(122, '学生-曹同学', '15268836922', '/avatars/u122.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1022, NOW(3), NOW(3)),
+(123, '家长-赖女士', '15268836923', '/avatars/u123.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1023, NOW(3), NOW(3)),
+(124, '家长-宋先生', '15268836924', '/avatars/u124.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 2, 1024, NOW(3), NOW(3)),
+(211, '教师-顾老师', '13812345011', '/avatars/t211.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2011, NOW(3), NOW(3)),
+(212, '教师-梁老师', '13812345012', '/avatars/t212.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2012, NOW(3), NOW(3)),
+(213, '教师-唐老师', '13812345013', '/avatars/t213.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2013, NOW(3), NOW(3)),
+(214, '教师-许老师', '13812345014', '/avatars/t214.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2014, NOW(3), NOW(3)),
+(215, '教师-贺老师', '13812345015', '/avatars/t215.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2015, NOW(3), NOW(3)),
+(216, '教师-程老师', '13812345016', '/avatars/t216.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2016, NOW(3), NOW(3)),
+(217, '教师-苏老师', '13812345017', '/avatars/t217.png', 1, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2017, NOW(3), NOW(3)),
+(218, '教师-林老师', '13812345018', '/avatars/t218.png', 2, NULL, 2, NOW(3), NULL, NULL, 0, 1, 2018, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
 name=VALUES(name),
+phone=VALUES(phone),
 avatar=VALUES(avatar),
 sex=VALUES(sex),
+active_status=VALUES(active_status),
+last_opt_time=VALUES(last_opt_time),
 status=VALUES(status),
 user_type=VALUES(user_type),
 ref_id=VALUES(ref_id),
 update_time=VALUES(update_time);
 
-INSERT INTO teacher_profile
+INSERT INTO `student_profile`
+(id, user_id, real_name, age, address, demand_description, budget, status, create_time, update_time)
+VALUES
+(1017, 117, '郭女士', 11, '上海·徐汇·漕河泾', '孩子五年级，应用题和几何题都不稳定，希望老师能先测评再做阶段训练。', 210.00, 1, NOW(3), NOW(3)),
+(1018, 118, '蒋先生', 16, '广州·天河·珠江新城', '高一英语写作和阅读偏弱，想提升考试得分并养成复盘习惯。', 260.00, 1, NOW(3), NOW(3)),
+(1019, 119, '袁同学', 17, '成都·高新·金融城', '高二化学有机部分容易混淆，希望老师能系统梳理反应路线。', 300.00, 1, NOW(3), NOW(3)),
+(1020, 120, '彭女士', 8, '南京·鼓楼·龙江', '二年级语文识字量和阅读兴趣不足，想找耐心的老师打基础。', 150.00, 1, NOW(3), NOW(3)),
+(1021, 121, '谢先生', 13, '杭州·拱墅·武林广场', '初二物理力学、电学都不稳，希望老师能结合错题做专题突破。', 240.00, 1, NOW(3), NOW(3)),
+(1022, 122, '曹同学', 10, '武汉·武昌·徐东', '想学 Python 做小游戏和简单动画，培养编程兴趣。', 190.00, 1, NOW(3), NOW(3)),
+(1023, 123, '赖女士', 12, '苏州·工业园区·湖西', '六年级英语自然拼读一般，口语不敢开口，想配合阅读和打卡。', 180.00, 1, NOW(3), NOW(3)),
+(1024, 124, '宋先生', 14, '西安·雁塔·高新路', '初三数学压轴题失分严重，希望老师有中考冲刺经验。', 280.00, 1, NOW(3), NOW(3))
+ON DUPLICATE KEY UPDATE
+real_name=VALUES(real_name),
+age=VALUES(age),
+address=VALUES(address),
+demand_description=VALUES(demand_description),
+budget=VALUES(budget),
+status=VALUES(status),
+update_time=VALUES(update_time);
+
+INSERT INTO `teacher_profile`
 (id, user_id, real_name, education, subject, experience_years, rate_per_hour, introduction, city, highest_edu_school, teaching_mode, resume_completed, certificate_urls, status, create_time, update_time)
 VALUES
-(666888, 666888, '后门教师', '测试 本科', '初中数学', 3, 199.00, '用于联调支付权限的测试教师账号。', '北京', '测试大学', 'ONLINE', 1, '[]', 1, NOW(3), NOW(3))
+(2011, 211, '顾承宇', 'C985', '小学数学,初中数学', 7, 260.00, '擅长诊断薄弱点并制定提升节奏，课堂重视方法拆解与错题复盘。', '上海', '复旦大学', 'BOTH', 1, NULL, 1, NOW(3), NOW(3)),
+(2012, 212, '梁知夏', 'OVERSEAS', '初中英语,高中英语', 6, 280.00, '阅读与写作双线提升，善于把语法融入真实语境，适合提分与表达训练。', '广州', '香港中文大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2013, 213, '唐哲远', 'DOUBLE_FIRST_CLASS', '高中化学,初中化学', 8, 320.00, '讲解逻辑清晰，擅长把知识点串成体系，适合基础补齐与冲刺提分。', '成都', '四川大学', 'OFFLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2014, 214, '许若宁', 'BACHELOR', '小学语文,初中语文', 5, 210.00, '阅读理解与作文结构训练经验丰富，课堂互动足，适合低龄孩子建立兴趣。', '南京', '南京师范大学', 'OFFLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2015, 215, '贺青川', 'C211', '初中物理,高中物理', 6, 290.00, '擅长把力学、电学模型讲透，配套练习与阶段讲评，帮助学生建立知识网络。', '杭州', '浙江大学', 'BOTH', 1, NULL, 1, NOW(3), NOW(3)),
+(2016, 216, '程可欣', 'BACHELOR', '编程(Python),小学数学', 4, 220.00, '从兴趣切入做项目，注重鼓励式教学，让学生边学边看到作品成果。', '武汉', '华中科技大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2017, 217, '苏晚秋', 'QS50', '小学英语,初中英语', 7, 240.00, '自然拼读、口语陪练和分级阅读经验丰富，擅长帮助孩子建立开口自信。', '苏州', '上海外国语大学', 'ONLINE', 1, NULL, 1, NOW(3), NOW(3)),
+(2018, 218, '林若岚', 'C985', '初中数学,高中数学', 9, 340.00, '专注中考数学冲刺，擅长压轴题拆解、规范书写与阶段测评。', '西安', '西安交通大学', 'OFFLINE', 1, NULL, 1, NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
 real_name=VALUES(real_name),
 education=VALUES(education),
@@ -709,86 +753,104 @@ certificate_urls=VALUES(certificate_urls),
 status=VALUES(status),
 update_time=VALUES(update_time);
 
-INSERT INTO student_profile
-(id, user_id, real_name, age, address, demand_description, budget, status, create_time, update_time)
+INSERT INTO `teacher_job_posting`
+(id, tutor_id, subject_id, title, description, price_per_hour, mode, city, available_time, max_students, status, create_time, update_time)
 VALUES
-(666777, 666777, '测试学生', 13, '北京市海淀区', '用于联调支付权限的测试学生账号。', 120.00, 1, NOW(3), NOW(3))
+(70109, 211, 101, '上海小学数学应用题专项（诊断+提升）', '先做知识点诊断，再按题型分层训练，适合想提升正确率和审题能力的学生。', 220.00, 'offline', '上海', '["Tue 19-21","Sat 09-11"]', 1, 1, NOW(), NOW()),
+(70110, 211, 201, '上海初中数学同步补弱（函数/几何）', '同步巩固+错题复盘，帮助学生把步骤和思路真正讲清楚。', 260.00, 'both', '上海', '["Wed 19-21","Sun 10-12"]', 1, 1, NOW(), NOW()),
+(70111, 212, 202, '广州初中英语阅读提分（词汇+长难句）', '阅读定位、词汇复习和长难句拆解结合，适合阶段提分。', 230.00, 'online', '全国', '["Mon 19-21","Thu 19-21"]', 1, 1, NOW(), NOW()),
+(70112, 212, 302, '线上高中英语写作精批', '每次课聚焦一个写作主题，讲模板、改表达、做复盘。', 280.00, 'online', '全国', '["Sat 19-21","Sun 14-16"]', 1, 1, NOW(), NOW()),
+(70113, 213, 204, '成都初中化学基础夯实（方程式/计算）', '从核心概念到方程式规范书写，配套练习与课后讲评。', 240.00, 'offline', '成都', '["Tue 18-20","Fri 19-21"]', 1, 1, NOW(), NOW()),
+(70114, 213, 304, '成都高中化学有机反应路线系统课', '梳理官能团、反应条件和常见题型，适合高一高二补体系。', 320.00, 'offline', '成都', '["Wed 20-22","Sat 14-16"]', 1, 1, NOW(), NOW()),
+(70115, 214, 102, '南京小学语文阅读启蒙与表达训练', '通过绘本、短文和复述训练提升阅读兴趣与表达能力。', 180.00, 'offline', '南京', '["Tue 18-20","Sun 10-12"]', 1, 1, NOW(), NOW()),
+(70116, 214, 205, '南京初中语文阅读理解与作文结构', '题型方法+素材积累双线推进，适合基础一般但想稳定提分的学生。', 220.00, 'offline', '南京', '["Thu 19-21","Sat 10-12"]', 1, 1, NOW(), NOW()),
+(70117, 215, 203, '杭州初中物理力学模型课', '把受力分析、牛顿定律和典型题型串成完整框架。', 260.00, 'both', '杭州', '["Tue 20-22","Sun 09-11"]', 1, 1, NOW(), NOW()),
+(70118, 215, 303, '杭州高中物理电学冲刺（诊断+专项）', '适合高一高二学生查漏补缺，也适合高三专题强化。', 300.00, 'both', '杭州', '["Thu 20-22","Sat 19-21"]', 1, 1, NOW(), NOW()),
+(70119, 216, 403, '线上 Python 启蒙（小游戏/小项目）', '从零开始写出看得见的小作品，建立逻辑和成就感。', 200.00, 'online', '全国', '["Wed 19-21","Sat 14-16"]', 1, 1, NOW(), NOW()),
+(70120, 216, 101, '线上小学数学思维启蒙', '用趣味题和互动方式培养数学兴趣，适合低年级孩子。', 180.00, 'online', '全国', '["Sun 10-12"]', 1, 1, NOW(), NOW()),
+(70121, 217, 103, '苏州小学英语自然拼读+分级阅读', '发音纠正、拼读规则和阅读复述结合，帮助孩子敢开口。', 190.00, 'online', '全国', '["Mon 18-20","Thu 18-20"]', 1, 1, NOW(), NOW()),
+(70122, 217, 202, '苏州初中英语口语与听力训练', '场景对话+听力跟读+课后打卡，适合想快速提升语感的学生。', 220.00, 'online', '全国', '["Sat 09-11","Sun 09-11"]', 1, 1, NOW(), NOW()),
+(70123, 218, 201, '西安初中数学中考冲刺（压轴拆解）', '把压轴题拆成步骤和模型，适合冲刺阶段稳定提分。', 300.00, 'offline', '西安', '["Tue 19-21","Fri 19-21"]', 1, 1, NOW(), NOW()),
+(70124, 218, 301, '西安高中数学函数导数专项', '专题讲解+高频题型演练，帮助学生把思路真正落到书写上。', 340.00, 'offline', '西安', '["Sat 14-16","Sun 14-16"]', 1, 1, NOW(), NOW())
 ON DUPLICATE KEY UPDATE
-real_name=VALUES(real_name),
-age=VALUES(age),
-address=VALUES(address),
-demand_description=VALUES(demand_description),
-budget=VALUES(budget),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
-INSERT INTO student_job_posting
-(id, parent_id, subject_name, subject_is_other, title, description, student_gender, teacher_gender_preference, teacher_requirement_detail, class_mode, frequency_per_week, publisher_identity, budget_min, budget_max, stage_code, education_requirement, schedule, biz_status, status, create_time, update_time)
-VALUES
-(666600, 666777, '数学', 0, '测试需求（后门教师支付联调）', '用于联调：学生已同意申请，教师侧应展示信息费支付卡片。', 'male', 'both', '希望老师讲解清晰、按时上课。', 'online', 2, 'PARENT', 80, 120, 'PRIMARY', 'UNLIMITED', JSON_ARRAY('Tue 19-21'), 2, 1, NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
+tutor_id=VALUES(tutor_id),
+subject_id=VALUES(subject_id),
 title=VALUES(title),
 description=VALUES(description),
+price_per_hour=VALUES(price_per_hour),
+mode=VALUES(mode),
+city=VALUES(city),
+available_time=VALUES(available_time),
+max_students=VALUES(max_students),
+status=VALUES(status),
+update_time=VALUES(update_time);
+
+INSERT INTO `student_job_posting`
+(id, parent_id, subject_id, subject_name, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, title, description, child_age, class_mode, city, address, frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, status, create_time, update_time)
+VALUES
+(3036, 117, 101, '小学数学', 'female', 'GRADE5', '周二、周四晚上 19:00 后；周六上午优先', 'both', '希望老师能先做能力诊断，课后有简短练习和反馈；孩子比较敏感，希望老师有耐心。', '上海五年级数学应用题专项提升', '目前主要问题是审题不完整、列式不稳定。希望老师能围绕应用题、几何和错题整理做系统训练，目标是提升校内测试稳定性。', 11, 'offline', '上海', '徐汇区漕河泾附近', 2, 180.00, 260.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Tue 19-21","Thu 19-21","Sat 09-11"]', 1, NOW(), NOW()),
+(3037, 118, 302, '高中英语', 'male', 'SENIOR1', '工作日晚上 20:00 后；周日下午可协调', 'female', '偏好擅长写作精批和阅读定位的老师，希望老师能给出每周背诵/复习计划。', '广州高一英语阅读写作提分（目标期中明显提升）', '孩子基础不差，但写作得分不稳定、阅读速度偏慢。希望老师从句型表达、词汇复盘和真题阅读方法入手，逐步形成自己的答题节奏。', 16, 'online', '全国', NULL, 2, 220.00, 320.00, 'SENIOR', 'C211', 'PARENT', '["Wed 20-22","Sun 15-17"]', 1, NOW(), NOW()),
+(3038, 119, 304, '高中化学', 'male', 'SENIOR2', '周二、周六 20:00-22:00；可额外线上答疑', 'both', '希望老师把有机反应路线和常考题型讲透，不希望只刷题；最好能提供讲义。', '成都高二化学有机体系梳理+真题训练', '我自己是学生，目前有机部分知识点容易串不起来，做题时反应条件和产物判断常出错。希望先补体系再做专题训练。', 17, 'offline', '成都', '高新区金融城附近', 2, 240.00, 360.00, 'SENIOR', 'DOUBLE_FIRST_CLASS', 'STUDENT_SELF', '["Tue 20-22","Sat 20-22"]', 1, NOW(), NOW()),
+(3039, 120, 102, '小学语文', 'female', 'GRADE2', '周三 18:00-20:00；周日 10:00-12:00', 'both', '希望老师温和、有互动感，能培养阅读兴趣，不要一开始就太偏应试。', '南京二年级语文识字阅读启蒙', '孩子现在识字量有限，阅读时容易分神。想先把阅读兴趣和复述表达带起来，慢慢过渡到看图写话和基础写作。', 8, 'offline', '南京', '鼓楼区龙江附近', 2, 120.00, 180.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Wed 18-20","Sun 10-12"]', 1, NOW(), NOW()),
+(3040, 121, 203, '初中物理', 'male', 'JUNIOR2', '周二/周四 19:30 后；周末白天可商量', 'male', '希望老师擅长力学和电学专题训练，最好能结合错题讲方法，课后有简洁作业。', '杭州初二物理专题补弱（力学/电学）', '目前班内成绩中等偏下，受力分析和电路判断总出错。希望通过 6-8 周的系统训练把基础题和中档题稳定下来。', 13, 'both', '杭州', '拱墅区武林广场附近', 2, 180.00, 280.00, 'JUNIOR', 'C211', 'PARENT', '["Tue 20-22","Thu 20-22","Sun 10-12"]', 1, NOW(), NOW()),
+(3041, 122, 403, '编程(Python)', 'female', 'GRADE4', '周三晚和周六下午最合适', 'both', '希望老师能够循序渐进、鼓励式教学，最好每几节课就能做一个小作品。', '武汉四年级 Python 兴趣启蒙（小游戏方向）', '我想学编程做小游戏和动画，现在完全零基础。希望老师上课有趣一点，能带我一点点完成自己的作品。', 10, 'online', '全国', NULL, 2, 150.00, 240.00, 'PRIMARY', 'UNLIMITED', 'STUDENT_SELF', '["Wed 19-20","Sat 14-16"]', 1, NOW(), NOW()),
+(3042, 123, 103, '小学英语', 'female', 'GRADE6', '工作日 18:30 后；周六上午', 'female', '希望老师有自然拼读和口语陪练经验，能布置阅读打卡并及时反馈。', '苏州六年级英语自然拼读+口语提升', '孩子词汇积累一般、发音不够准，也不太愿意开口。希望老师帮忙建立朗读和背词习惯，同时通过阅读和对话提升自信。', 12, 'online', '全国', NULL, 2, 140.00, 220.00, 'PRIMARY', 'BACHELOR', 'PARENT', '["Tue 18-20","Thu 18-20","Sat 09-11"]', 1, NOW(), NOW()),
+(3043, 124, 201, '初中数学', 'male', 'JUNIOR3', '周一/周五晚上，周日下午也可以', 'both', '希望老师非常熟悉中考压轴题，能讲透函数和几何综合，最好有阶段测评。', '西安初三数学冲刺（函数/几何压轴题）', '孩子基础题还可以，但综合题和压轴题拿分少。目标是中考前把大题步骤和思路稳定下来，提升 10-15 分。', 14, 'offline', '西安', '雁塔区高新路附近', 2, 240.00, 360.00, 'JUNIOR', 'C985', 'PARENT', '["Mon 19-21","Fri 19-21","Sun 14-16"]', 1, NOW(), NOW()),
+(3044, 117, 202, '初中英语', 'female', 'JUNIOR1', '周末下午优先，工作日晚间可协调', 'both', '想找发音和阅读都比较强的老师，孩子需要建立学习节奏，不希望课堂太沉闷。', '上海初一英语阅读理解+口语表达', '想趁着初一尽快把词汇、发音和阅读方法补上，后面进入初二初三会更轻松。希望老师能多鼓励孩子开口。', 12, 'both', '上海', '徐汇区漕河泾附近，可线上/线下', 2, 160.00, 240.00, 'JUNIOR', 'BACHELOR', 'PARENT', '["Sat 14-16","Sun 10-12"]', 1, NOW(), NOW()),
+(3045, 121, 301, '高中数学', 'male', 'SENIOR1', '周末晚上为主，平时可安排一节答疑', 'both', '希望老师能够把函数、数列讲得有体系，配合阶段性小测和错题整理。', '杭州高一数学函数数列同步拔高', '孩子课内内容能跟上，但综合题一难就不会，想找老师从知识网络和题型方法两方面一起带。', 16, 'online', '全国', NULL, 2, 220.00, 320.00, 'SENIOR', 'DOUBLE_FIRST_CLASS', 'PARENT', '["Sat 19-21","Sun 19-21"]', 1, NOW(), NOW())
+ON DUPLICATE KEY UPDATE
+subject_name=VALUES(subject_name),
+student_gender=VALUES(student_gender),
+grade_code=VALUES(grade_code),
+available_time=VALUES(available_time),
+teacher_gender_preference=VALUES(teacher_gender_preference),
 teacher_requirement_detail=VALUES(teacher_requirement_detail),
+title=VALUES(title),
+description=VALUES(description),
+child_age=VALUES(child_age),
+class_mode=VALUES(class_mode),
+city=VALUES(city),
+address=VALUES(address),
+frequency_per_week=VALUES(frequency_per_week),
 budget_min=VALUES(budget_min),
 budget_max=VALUES(budget_max),
-biz_status=VALUES(biz_status),
+stage_code=VALUES(stage_code),
+education_requirement=VALUES(education_requirement),
+publisher_identity=VALUES(publisher_identity),
+schedule=VALUES(schedule),
 status=VALUES(status),
 update_time=VALUES(update_time);
 
-INSERT INTO room
-(id, teacher_profile_id, student_profile_id, active_time, last_msg_id, status, create_time, update_time)
+INSERT IGNORE INTO tutor_favorite_demand (tutor_id, demand_id, create_time)
 VALUES
-(666001, 666888, 666777, NOW(3), 9000103, 1, NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
-active_time=VALUES(active_time),
-last_msg_id=VALUES(last_msg_id),
-status=VALUES(status),
-update_time=VALUES(update_time);
+(211, 3036, NOW()),
+(212, 3037, NOW()),
+(213, 3038, NOW()),
+(215, 3040, NOW()),
+(217, 3042, NOW()),
+(218, 3043, NOW());
 
-INSERT INTO tutor_application
-(id, sender_uid, receiver_uid, sender_role, receiver_role, context_type, context_id, content, client_request_id, status, chat_access_status, room_id, receiver_read, decided_at, create_time, update_time)
+INSERT IGNORE INTO parent_favorite_tutor (parent_id, tutor_id, create_time)
 VALUES
-(666002, 666888, 666777, 'TEACHER', 'STUDENT', 'DEMAND', 666600, '您好，我看了您的需求，和我的授课方向非常匹配，我们可以进一步详细沟通吗？', 'backdoor-seed-666002', 'ACCEPTED', 'PAYMENT_REQUIRED', 666001, 1, NOW(3), NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
-status=VALUES(status),
-chat_access_status=VALUES(chat_access_status),
-room_id=VALUES(room_id),
-receiver_read=VALUES(receiver_read),
-decided_at=VALUES(decided_at),
-update_time=VALUES(update_time);
+(117, 211, NOW()),
+(118, 212, NOW()),
+(120, 214, NOW()),
+(121, 215, NOW()),
+(123, 217, NOW()),
+(124, 218, NOW());
 
-INSERT INTO brokerage_order
-(id, proposal_id, application_id, room_id, payer_uid, amount_fen, pay_method, status, proof_url, proof_note, paid_at, create_time, update_time)
+INSERT INTO user_settings
+(user_id, application_greeting, settings_json, create_time, update_time)
 VALUES
-(666003, NULL, 666002, 666001, 666888, 19900, NULL, 'PENDING', NULL, NULL, NULL, NOW(3), NOW(3))
+(211, '您好，我会先帮您做一次学习情况诊断，再给出阶段提升计划，我们可以详细聊聊吗？', JSON_OBJECT('version', 1), NOW(3), NOW(3)),
+(212, '您好，我看了您的需求，阅读和写作部分正好是我的强项，方便沟通下孩子目前情况吗？', JSON_OBJECT('version', 1), NOW(3), NOW(3)),
+(215, '您好，我擅长力学和电学专题训练，可以先帮您定位薄弱点，再安排针对性课程。', JSON_OBJECT('version', 1), NOW(3), NOW(3)),
+(217, '您好，我这边可以提供自然拼读、口语陪练和阅读打卡方案，想先了解下孩子现在的学习状态。', JSON_OBJECT('version', 1), NOW(3), NOW(3)),
+(117, '您好，我想先了解老师的上课节奏、作业反馈方式和是否方便做阶段测评。', JSON_OBJECT('version', 1), NOW(3), NOW(3)),
+(121, '老师您好，我比较看重讲题是否清晰、课后是否能有错题复盘，方便详细聊聊吗？', JSON_OBJECT('version', 1), NOW(3), NOW(3))
 ON DUPLICATE KEY UPDATE
-application_id=VALUES(application_id),
-room_id=VALUES(room_id),
-payer_uid=VALUES(payer_uid),
-amount_fen=VALUES(amount_fen),
-status=VALUES(status),
-update_time=VALUES(update_time);
-
-INSERT INTO application_brokerage_order
-(id, application_id, order_id, create_time, update_time)
-VALUES
-(666004, 666002, 666003, NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
-order_id=VALUES(order_id),
-update_time=VALUES(update_time);
-
-INSERT INTO message
-(id, room_id, from_uid, to_uid, content, reply_msg_id, status, gap_count, type, extra, create_time, update_time)
-VALUES
-(9000101, 666001, 666888, 666777, '家教申请', NULL, 0, NULL, 8, JSON_OBJECT('bizType','TUTOR_APPLICATION','eventId',666002,'title','家教申请','status','PENDING','creatorUserId',666888,'contextType','DEMAND','contextId',666600,'content','您好，我看了您的需求，和我的授课方向非常匹配，我们可以进一步详细沟通吗？'), NOW(3), NOW(3)),
-(9000102, 666001, 666777, 666888, '家教申请：ACCEPTED', NULL, 0, NULL, 8, JSON_OBJECT('bizType','TUTOR_APPLICATION_STATUS','eventId',666002,'title','家教申请','status','ACCEPTED','actorUserId',666777), NOW(3), NOW(3)),
-(9000103, 666001, 666777, 666888, '信息费支付', NULL, 0, NULL, 8, JSON_OBJECT('bizType','BROKERAGE_REQUIRED','eventId',666003,'proposalId',666002,'title','信息费支付','status','PENDING','creatorUserId',666888,'amountFen',19900), NOW(3), NOW(3))
-ON DUPLICATE KEY UPDATE
-content=VALUES(content),
-status=VALUES(status),
-type=VALUES(type),
-extra=VALUES(extra),
+application_greeting=VALUES(application_greeting),
+settings_json=VALUES(settings_json),
 update_time=VALUES(update_time);
 
 SET FOREIGN_KEY_CHECKS = 1;

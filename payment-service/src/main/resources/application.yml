@@ -22,3 +22,16 @@ spring:
       discovery:
         server-addr: ${NACOS_SERVER_ADDR:111.228.20.88:8848}
         namespace: ${NACOS_DISCOVERY_NAMESPACE:${NACOS_NAMESPACE:481e4376-4576-4b18-ac19-f61e170ca3ae}}
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-none}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

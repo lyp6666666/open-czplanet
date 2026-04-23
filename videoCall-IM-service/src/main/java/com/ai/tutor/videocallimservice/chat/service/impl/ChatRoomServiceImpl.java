@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service.impl;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Message;
@@ -72,6 +73,9 @@ public class ChatRoomServiceImpl implements ChatRoomService {
     @Resource
     private TutorApplicationMapper tutorApplicationMapper;
 
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
+
     @Value("${tutor-application.gating-enabled:true}")
     private boolean tutorApplicationGatingEnabled;
 
@@ -109,6 +113,12 @@ public class ChatRoomServiceImpl implements ChatRoomService {
 
         Room existing = roomMapper.selectByTeacherAndStudent(teacherProfileId, studentProfileId);
         if (existing != null) {
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：进入已存在会话也记一次聊天入口，用于判断用户是否真的尝试进入沟通，而不是只创建了申请。
+                 */
+                bizKpiMetrics.incChatRoomEnter("existing");
+            }
             return existing.getId();
         }
 
@@ -125,10 +135,22 @@ public class ChatRoomServiceImpl implements ChatRoomService {
         try {
             int inserted = roomMapper.insert(room);
             ThrowUtils.throwIf(inserted <= 0 || room.getId() == null, ErrorCode.OPERATION_ERROR);
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：这里只统计真正新建房间的聊天入口，避免和重用旧房间的进入混在一起看不清。
+                 */
+                bizKpiMetrics.incChatRoomEnter("created");
+            }
             return room.getId();
         } catch (DuplicateKeyException e) {
             Room latest = roomMapper.selectByTeacherAndStudent(teacherProfileId, studentProfileId);
             ThrowUtils.throwIf(latest == null, ErrorCode.OPERATION_ERROR);
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：并发建房命中唯一键时，仍视为进入已有会话，不额外制造新的业务事件。
+                 */
+                bizKpiMetrics.incChatRoomEnter("existing");
+            }
             return latest.getId();
         }
     }

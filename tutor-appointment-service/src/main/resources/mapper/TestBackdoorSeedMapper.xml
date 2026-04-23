@@ -60,6 +60,106 @@
             update_time = VALUES(update_time)
     </insert>
 
+    <insert id="upsertExclusiveStudentJobPosting">
+        INSERT INTO student_job_posting (
+            id, parent_id, subject_name, subject_is_other, title, description, student_gender,
+            teacher_gender_preference, teacher_requirement_detail, class_mode, frequency_per_week,
+            publisher_identity, budget_min, budget_max, stage_code, education_requirement, schedule,
+            biz_status, status, create_time, update_time
+        )
+        VALUES (
+            #{id}, #{parentId}, '数学', 0, '测试学生新发布需求（支付验证专用）', '仅供测试教师验证完整链路：打开需求页、发起申请、学生通过、进入信息费支付。',
+            'male', 'both', '仅用于支付与申请链路联调，请勿对普通用户展示。', 'online', 2, 'STUDENT_SELF', 1, 1, 'PRIMARY', 'UNLIMITED',
+            JSON_ARRAY('Tue 19:00-20:00', 'Thu 19:00-20:00'), 1, 1, NOW(3), NOW(3)
+        )
+        ON DUPLICATE KEY UPDATE
+            parent_id = VALUES(parent_id),
+            subject_name = VALUES(subject_name),
+            subject_is_other = VALUES(subject_is_other),
+            title = VALUES(title),
+            description = VALUES(description),
+            student_gender = VALUES(student_gender),
+            teacher_gender_preference = VALUES(teacher_gender_preference),
+            teacher_requirement_detail = VALUES(teacher_requirement_detail),
+            class_mode = VALUES(class_mode),
+            frequency_per_week = VALUES(frequency_per_week),
+            publisher_identity = VALUES(publisher_identity),
+            budget_min = VALUES(budget_min),
+            budget_max = VALUES(budget_max),
+            stage_code = VALUES(stage_code),
+            education_requirement = VALUES(education_requirement),
+            schedule = VALUES(schedule),
+            biz_status = VALUES(biz_status),
+            status = VALUES(status),
+            update_time = VALUES(update_time)
+    </insert>
+
+    <delete id="deleteRefundRequestsByRoomId">
+        DELETE FROM refund_request
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteApplicationBrokerageOrdersByRoomId">
+        DELETE FROM application_brokerage_order
+        WHERE order_id IN (
+            SELECT id FROM brokerage_order WHERE room_id = #{roomId}
+        )
+        OR application_id IN (
+            SELECT id
+            FROM tutor_application
+            WHERE room_id = #{roomId}
+               OR (
+                    (sender_uid = #{teacherUid} AND receiver_uid = #{studentUid})
+                 OR (sender_uid = #{studentUid} AND receiver_uid = #{teacherUid})
+               )
+        )
+    </delete>
+
+    <delete id="deleteBrokerageOrdersByRoomId">
+        DELETE FROM brokerage_order
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteTutorAppointmentsByRoomId">
+        DELETE FROM tutor_appointment
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteCourseEnrollmentsByRoomId">
+        DELETE FROM course_enrollment
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteCollaborationProposalsByRoomId">
+        DELETE FROM collaboration_proposal
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteTutorApplicationsByUsers">
+        DELETE FROM tutor_application
+        WHERE room_id = #{roomId}
+           OR (
+                (sender_uid = #{teacherUid} AND receiver_uid = #{studentUid})
+             OR (sender_uid = #{studentUid} AND receiver_uid = #{teacherUid})
+           )
+    </delete>
+
+    <delete id="deleteChatRealtimeEvents">
+        DELETE FROM chat_realtime_event
+        WHERE room_id = #{roomId}
+           OR target_uid IN (#{teacherUid}, #{studentUid})
+    </delete>
+
+    <delete id="deleteRoomReadStatesByRoomId">
+        DELETE FROM room_read_state
+        WHERE room_id = #{roomId}
+    </delete>
+
+    <delete id="deleteMessagesByRoomId">
+        DELETE FROM message
+        WHERE room_id = #{roomId}
+    </delete>
+
     <insert id="upsertRoom">
         INSERT INTO room (id, teacher_profile_id, student_profile_id, active_time, last_msg_id, status, create_time, update_time)
         VALUES (#{id}, #{teacherProfileId}, #{studentProfileId}, NOW(3), #{lastMsgId}, 1, NOW(3), NOW(3))

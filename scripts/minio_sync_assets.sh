@@ -24,7 +24,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BANNERS_DIR="$ROOT_DIR/ai-tutor-web/public/banners"
 
-MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://host.docker.internal:9000}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://127.0.0.1:9000}"
 MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
 MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 MINIO_BUCKET="${MINIO_BUCKET:-ai-tutor-assets}"
@@ -35,6 +35,7 @@ if [[ ! -d "$BANNERS_DIR" ]]; then
 fi
 
 docker run --rm \
+  --network host \
   --entrypoint /bin/sh \
   -v "$BANNERS_DIR:/data/banners:ro" \
   quay.io/minio/mc:latest \

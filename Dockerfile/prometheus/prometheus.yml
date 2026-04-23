@@ -1,11 +1,116 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
 
 scrape_configs:
-  - job_name: ai-tutor
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:18080
+        labels:
+          service: ai-tutor-gateway
+          env: local
+
+  - job_name: appointment
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
           - host.docker.internal:18081
+        labels:
+          service: tutor-appointment-service
+          env: local
+
+  - job_name: im
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
           - host.docker.internal:18082
+        labels:
+          service: videoCall-IM-service
+          env: local
+
+  - job_name: payment
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:18083
+        labels:
+          service: payment-service
+          env: local
+
+  - job_name: admin
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
           - host.docker.internal:18084
+        labels:
+          service: ai-tutor-admin
+          env: local
+
+  - job_name: live-class
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:18085
+        labels:
+          service: live-class-service
+          env: local
+
+  - job_name: ai-agent
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - host.docker.internal:18086
+        labels:
+          service: ai-agent-service
+          env: local
+
+  - job_name: node-exporter
+    static_configs:
+      - targets:
+          - node-exporter:9100
+        labels:
+          service: node-exporter
+          env: local
+
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+        labels:
+          service: cadvisor
+          env: local
+
+  - job_name: mysqld-exporter
+    static_configs:
+      - targets:
+          - mysqld-exporter:9104
+        labels:
+          service: mysql
+          env: local
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+        labels:
+          service: redis
+          env: local
+
+  - job_name: rabbitmq-exporter
+    static_configs:
+      - targets:
+          - rabbitmq-exporter:9419
+        labels:
+          service: rabbitmq
+          env: local

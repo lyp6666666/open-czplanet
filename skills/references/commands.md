@@ -249,6 +249,18 @@ ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/payment-service.log
 ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/videoCall-IM-service.log | grep --line-buffered -E 'payment_success_received|brokerage_payment_success|tutor_application_paid'"
 ```
 
+实时课堂媒体链路验证：
+
+```bash
+nc -vz -w 4 111.228.20.88 7881
+ssh root@111.228.20.88 'timeout 90 tcpdump -n -i any "(udp portrange 50000-50100) or tcp port 7881" -vv -c 220'
+cd ai-tutor-web
+PLAYWRIGHT_BASE_URL=https://huoyue.online \
+PLAYWRIGHT_API_BASE_URL=https://huoyue.online \
+OPS_VERIFY_TOKEN=DevOpsVerifyTokenForE2E \
+npx playwright test e2e/live-classroom.spec.ts --project=chromium
+```
+
 ## 后端
 
 ```bash

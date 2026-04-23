@@ -30,3 +30,34 @@ wechat:
     # 是否开启微信相关 mock（仅 DEV 建议 true）
     mock-enabled: true
 
+email:
+  # 邮件能力总开关
+  enabled: true
+  verify:
+    expire-minutes: 10
+    resend-cooldown-seconds: 60
+    max-try-count: 5
+  notification:
+    max-retry-count: 3
+    scheduler-batch-size: 50
+  lesson:
+    reminder-minutes: [30]
+    summary-backfill-window-hours: 24
+  sender:
+    # MOCK / TENCENT
+    provider: "MOCK"
+    enabled: true
+    endpoint: "ses.tencentcloudapi.com"
+    region: "ap-guangzhou"
+    secret-id: "<TODO:TENCENT_SES_SECRET_ID>"
+    secret-key: "<TODO:TENCENT_SES_SECRET_KEY>"
+    from-email: "<TODO:no-reply@your-domain.com>"
+    from-name: "创智星球"
+    reply-to-email: "<TODO:support@your-domain.com>"
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+    template-dir: "email-templates/tencent"
+    template-ids:
+      EMAIL_VERIFY_CODE: 173982
+      LESSON_START_REMINDER: 173984
+      LESSON_SUMMARY: 173985

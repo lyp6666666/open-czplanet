@@ -1,6 +1,7 @@
 package com.ai.tutor.payment.controller;
 
 import com.ai.tutor.common.service.dto.RequestInfo;
+import com.ai.tutor.payment.config.OpsProperties;
 import com.ai.tutor.payment.controller.dto.PaymentOrderStatusResponse;
 import com.ai.tutor.payment.controller.dto.PrepayResponse;
 import com.ai.tutor.payment.service.YungouosPaymentAppService;
@@ -57,6 +58,9 @@ public class YungouosPaymentControllerTest {
 
     @MockBean
     private YungouosPaymentAppService yungouosPaymentAppService;
+
+    @MockBean
+    private OpsProperties opsProperties;
 
     @Test
     void prepay_returnsData() throws Exception {

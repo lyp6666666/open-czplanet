@@ -4,6 +4,7 @@ import {
   RoomEvent,
   setLogLevel,
   Track,
+  VideoPresets,
   type LocalTrackPublication,
   type Participant,
   type RemoteTrack,
@@ -149,8 +150,9 @@ export async function requestUserMediaPreview(options: {
       video: options.cameraEnabled
         ? {
             deviceId: options.cameraDeviceId ? { exact: options.cameraDeviceId } : undefined,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { min: 960, ideal: 1280, max: 1920 },
+            height: { min: 540, ideal: 720, max: 1080 },
+            frameRate: { min: 24, ideal: 30, max: 30 },
             facingMode: 'user',
           }
         : false,
@@ -206,6 +208,9 @@ export function attachMediaStream(element: HTMLMediaElement | null, stream: Medi
   if ('playsInline' in element) {
     ;(element as HTMLVideoElement).playsInline = true
   }
+  if (stream) {
+    void element.play?.().catch(() => undefined)
+  }
 }
 
 type TrackListener = (track: RemoteTrack, publication: RemoteTrackPublication, participant: Participant) => void
@@ -247,9 +252,13 @@ export class LiveRoomClient {
       adaptiveStream: true,
       dynacast: true,
       singlePeerConnection: !LIVEKIT_FORCE_V0,
+      videoCaptureDefaults: {
+        resolution: VideoPresets.h720.resolution,
+        frameRate: 30,
+      },
       publishDefaults: {
-        simulcast: false,
-        backupCodec: false,
+        simulcast: true,
+        backupCodec: true,
         videoCodec: 'vp8',
       },
     })
@@ -356,9 +365,9 @@ export class LiveRoomClient {
 
 export function attachTrackToElement(track: RemoteTrack | LocalTrackPublication['track'], element: HTMLMediaElement | null) {
   if (!track || !element) return
-  const attached = track.attach()
-  if (attached === element) return
-  element.srcObject = (attached as HTMLMediaElement).srcObject
+  // 直接把 LiveKit track 绑定到目标元素，避免先 attach 到临时元素再拷贝
+  // srcObject 导致真实摄像头场景下出现“已订阅视频轨但画面仍是黑屏”的不同步问题。
+  track.attach(element)
   element.autoplay = true
   if ('playsInline' in element) {
     ;(element as HTMLVideoElement).playsInline = true
@@ -366,6 +375,7 @@ export function attachTrackToElement(track: RemoteTrack | LocalTrackPublication[
   if (track.kind === Track.Kind.Audio) {
     element.muted = false
   }
+  void element.play?.().catch(() => undefined)
 }
 
 export function detachTrack(track: RemoteTrack | LocalTrackPublication['track'] | undefined | null, element?: HTMLMediaElement | null) {

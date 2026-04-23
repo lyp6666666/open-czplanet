@@ -56,4 +56,6 @@ public interface StudentJobPostingMapper {
                                                   @Param("limit") Integer limit);
 
     Integer countActiveApplicationCandidates(@Param("id") Long id);
+
+    StudentJobPosting selectByIdVisibleForTestTeacher(@Param("id") Long id);
 }

@@ -11,6 +11,7 @@ MYSQL_USER="${MYSQL_USER:-root}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-Aa123456}"
 DB_NAME="${DB_NAME:-ai_tutor}"
 DB_CONTAINER="${DB_CONTAINER:-mysql}"
+BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS="${BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS:-0}"
 
 find_mysql_container() {
   if docker ps --format '{{.Names}}' | grep -Fx "$DB_CONTAINER" >/dev/null 2>&1; then
@@ -101,6 +102,21 @@ apply_migrations() {
   done
 }
 
+should_apply_historical_migrations() {
+  case "$BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS" in
+    1|true|yes)
+      return 0
+      ;;
+    0|false|no)
+      return 1
+      ;;
+    *)
+      echo "[db_bootstrap_if_missing] 不支持的 BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS=$BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS，可选值：1/0 true/false yes/no"
+      exit 1
+      ;;
+  esac
+}
+
 apply_live_class_migration_if_needed() {
   if table_exists "live_class_session"; then
     echo "[db_bootstrap_if_missing] 实时课堂表已存在，跳过课堂增量迁移"
@@ -138,7 +154,12 @@ if table_exists "user"; then
 fi
 
 apply_baseline
-apply_migrations
+if should_apply_historical_migrations; then
+  echo "[db_bootstrap_if_missing] 已启用历史迁移回放，将继续执行 sqlDoc/migrations/*.sql"
+  apply_migrations
+else
+  echo "[db_bootstrap_if_missing] 空库已导入最新基线，默认跳过历史迁移回放；如需强制重放，请设置 BOOTSTRAP_APPLY_HISTORICAL_MIGRATIONS=1"
+fi
 apply_seed
 
 echo "[db_bootstrap_if_missing] 开发库初始化完成: $DB_NAME"

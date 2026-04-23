@@ -12,6 +12,7 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.UUID;
 import java.util.List;
 import java.util.Objects;
 
@@ -34,10 +35,15 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
+        String requestId = resolveRequestId(request.getHeaders().getFirst("X-Request-Id"));
+        exchange.getResponse().getHeaders().set("X-Request-Id", requestId);
         String path = request.getURI().getPath();
 
         if (isWhitelisted(path)) {
-            return chain.filter(exchange);
+            ServerHttpRequest whitelistedRequest = request.mutate()
+                    .headers(headers -> headers.set("X-Request-Id", requestId))
+                    .build();
+            return chain.filter(exchange.mutate().request(whitelistedRequest).build());
         }
 
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -71,6 +77,7 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
                     headers.set("X-Role", String.valueOf(identity.role()));
                     headers.set("X-Ts", String.valueOf(ts));
                     headers.set("X-Auth-Sign", sign);
+                    headers.set("X-Request-Id", requestId);
                 })
                 .build();
 
@@ -104,5 +111,15 @@ public class GatewayAuthGlobalFilter implements GlobalFilter, Ordered {
     private Mono<Void> unauthorized(ServerHttpResponse response) {
         response.setStatusCode(HttpStatus.UNAUTHORIZED);
         return response.setComplete();
+    }
+
+    private static String resolveRequestId(String incomingRequestId) {
+        if (incomingRequestId != null) {
+            String trimmed = incomingRequestId.trim();
+            if (!trimmed.isEmpty()) {
+                return trimmed;
+            }
+        }
+        return UUID.randomUUID().toString().replace("-", "");
     }
 }

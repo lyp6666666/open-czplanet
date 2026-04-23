@@ -206,7 +206,7 @@ public class TutorApplicationService {
              *
              * 说明：仅在申请记录创建成功后计数，避免客户端幂等重试导致重复计数。
              */
-            bizKpiMetrics.incCommApply(toRoleLower(application.getSenderRole()));
+            bizKpiMetrics.incCommApply(toRoleLower(application.getSenderRole()), toContextLower(application.getContextType()));
         }
         log.info("tutor_application_created applicationId={} senderUid={} receiverUid={} contextType={} contextId={}",
                 application.getId(), application.getSenderUid(), application.getReceiverUid(), application.getContextType(), application.getContextId());
@@ -274,6 +274,13 @@ public class TutorApplicationService {
         if (uid.equals(application.getReceiverUid())) {
             tutorApplicationMapper.markReceiverRead(applicationId, uid, LocalDateTime.now());
             application = tutorApplicationMapper.selectById(applicationId);
+        }
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：申请详情查看只在真正查询成功后计数，用于衡量接收方是否进入处理动作，
+             * 不把不存在、越权或其他失败请求计入业务漏斗。
+             */
+            bizKpiMetrics.incCommApplyDetailView(resolveViewerRole(application, uid));
         }
         Long orderId = resolveOrderId(applicationId);
         return toVO(application, orderId);
@@ -373,6 +380,30 @@ public class TutorApplicationService {
         if (ROLE_TEACHER.equals(v)) return "teacher";
         if (ROLE_STUDENT.equals(v)) return "student";
         if (ROLE_ORG.equals(v)) return "org";
+        return "unknown";
+    }
+
+    private static String toContextLower(String contextType) {
+        if (contextType == null) {
+            return "unknown";
+        }
+        String v = contextType.trim().toUpperCase();
+        if (CONTEXT_DEMAND.equals(v)) return "demand";
+        if (CONTEXT_TUTOR.equals(v)) return "tutor";
+        if (CONTEXT_ORG_POSTING.equals(v)) return "org_posting";
+        return "unknown";
+    }
+
+    private static String resolveViewerRole(TutorApplication application, Long uid) {
+        if (application == null || uid == null) {
+            return "unknown";
+        }
+        if (uid.equals(application.getSenderUid())) {
+            return toRoleLower(application.getSenderRole());
+        }
+        if (uid.equals(application.getReceiverUid())) {
+            return toRoleLower(application.getReceiverRole());
+        }
         return "unknown";
     }
 
@@ -510,9 +541,16 @@ public class TutorApplicationService {
         if (applicationId == null) {
             return;
         }
-        tutorApplicationMapper.updateChatAccessStatus(applicationId, TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
+        int updated = tutorApplicationMapper.updateChatAccessStatus(applicationId, TutorApplicationChatAccessStatus.CHAT_ENABLED.name());
         TutorApplication application = tutorApplicationMapper.selectById(applicationId);
         if (application != null) {
+            if (updated > 0 && bizKpiMetrics != null) {
+                /*
+                 * 中文注释：聊天解锁指标只在 chat_access_status 首次成功切到 CHAT_ENABLED 时累计，
+                 * 避免支付回调重放、MQ 重试或人工补偿导致重复统计同一笔解锁。
+                 */
+                bizKpiMetrics.incChatUnlock("payment_success");
+            }
             if (courseEnrollmentService != null) {
                 courseEnrollmentService.onPaymentSuccess(application);
             }

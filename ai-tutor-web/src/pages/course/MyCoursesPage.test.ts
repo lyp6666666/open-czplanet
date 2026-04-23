@@ -135,7 +135,7 @@ describe('MyCoursesPage', () => {
     })
   })
 
-  it('creates a lesson request from the course page and updates the current lesson state', async () => {
+  it('creates a formal lesson request from the course page and updates the current lesson state', async () => {
     const createEvent = vi.fn(async ({ request }: { request: Request }) => {
       const body = (await request.json()) as { title: string; participantUserId: number; startAt: number; endAt: number }
       return ok({
@@ -168,7 +168,7 @@ describe('MyCoursesPage', () => {
             roomId: 88,
             teacherUid: 1001,
             studentUid: 2001,
-            status: 'TRIALING',
+            status: 'TEACHING',
             trialEndAt: '2026-04-27T10:00:00',
           },
         ]),
@@ -222,6 +222,97 @@ describe('MyCoursesPage', () => {
 
     expect(createEvent).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('约课待确认')
+  })
+
+  it('shows trial lesson instead of asking to schedule again while course is trialing', async () => {
+    server.use(
+      http.get('http://localhost/user/email/reminder-hints', () =>
+        ok({
+          show: false,
+          title: '',
+          description: '',
+          actionText: '',
+        }),
+      ),
+      http.get('http://localhost/courses/my', () =>
+        ok([
+          {
+            courseId: 66,
+            applicationId: 501,
+            roomId: 88,
+            teacherUid: 1001,
+            studentUid: 2001,
+            status: 'TRIALING',
+            trialEndAt: '2026-04-27T10:00:00',
+          },
+        ]),
+      ),
+      http.get('http://localhost/chat/application/501', () =>
+        ok({
+          id: 501,
+          senderUid: 2001,
+          receiverUid: 1001,
+          senderRole: 'STUDENT',
+          receiverRole: 'TEACHER',
+          contextType: 'TUTOR',
+          contextId: 11,
+          content: '想约数学课',
+          status: 'ACCEPTED',
+          chatAccessStatus: 'CHAT_ENABLED',
+          paymentPayerRole: 'TEACHER',
+          orderId: 9001,
+          roomId: 88,
+          receiverRead: true,
+          decidedAt: null,
+          createTime: '2026-04-20T10:00:00',
+        }),
+      ),
+      http.get('http://localhost/user/batch', () =>
+        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
+      ),
+      http.get('http://localhost/user/card', () =>
+        ok({
+          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
+          studentProfile: null,
+          jobPosting: null,
+        }),
+      ),
+      http.get('http://localhost/api/v1/schedule/events', () =>
+        ok([
+          {
+            id: 701,
+            title: '试课｜线上一对一',
+            description: null,
+            startAt: new Date('2026-04-24T19:00:00+08:00').getTime(),
+            endAt: new Date('2026-04-24T21:00:00+08:00').getTime(),
+            status: 'ACCEPTED',
+            creatorUserId: 1001,
+            participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+            chatRoomId: 88,
+          },
+        ]),
+      ),
+      http.get('http://localhost/live/sessions/by-course/701', () =>
+        ok({
+          sessionId: null,
+          courseId: 701,
+          status: 'CREATED',
+          scheduledStartAt: null,
+          scheduledEndAt: null,
+          joinableNow: false,
+        }),
+      ),
+      http.get('http://localhost/live/sessions/reminders', () => ok([])),
+    )
+
+    const wrapper = mount(MyCoursesPage, { global: { plugins: [createPinia()] } })
+    seedStudentAuth()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('查看试课')
+    expect(wrapper.text()).not.toContain('发起试课预约')
+    expect(wrapper.text()).toContain('已预约')
   })
 
   it('hides offline trial refund action for online trial course', async () => {
@@ -279,7 +370,31 @@ describe('MyCoursesPage', () => {
           jobPosting: null,
         }),
       ),
-      http.get('http://localhost/api/v1/schedule/events', () => ok([])),
+      http.get('http://localhost/api/v1/schedule/events', () =>
+        ok([
+          {
+            id: 701,
+            title: '试课｜线上一对一',
+            description: null,
+            startAt: new Date('2026-04-24T19:00:00+08:00').getTime(),
+            endAt: new Date('2026-04-24T21:00:00+08:00').getTime(),
+            status: 'ACCEPTED',
+            creatorUserId: 1001,
+            participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+            chatRoomId: 88,
+          },
+        ]),
+      ),
+      http.get('http://localhost/live/sessions/by-course/701', () =>
+        ok({
+          sessionId: null,
+          courseId: 701,
+          status: 'CREATED',
+          scheduledStartAt: null,
+          scheduledEndAt: null,
+          joinableNow: false,
+        }),
+      ),
       http.get('http://localhost/live/sessions/reminders', () => ok([])),
     )
 

@@ -1,5 +1,6 @@
 package com.ai.tutor.payment.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
@@ -39,6 +40,7 @@ public class PaymentRefundAppService {
     private final PaymentOrderService paymentOrderService;
     private final PaymentRefundService paymentRefundService;
     private final YungouosClient yungouosClient;
+    private final BizKpiMetrics bizKpiMetrics;
 
     public InternalRefundResponse refund(InternalRefundRequest req) {
         ThrowUtils.throwIf(Boolean.FALSE.equals(paymentProperties.getEnabled()), ErrorCode.OPERATION_ERROR, "支付功能已禁用");
@@ -65,6 +67,13 @@ public class PaymentRefundAppService {
         refund.setStatus("PENDING");
         refund.setRequestId(req.getRequestId());
         paymentRefundService.save(refund);
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：退款申请量和最终退款成功量需要拆开看，这里只在退款申请记录真正创建成功后计数一次，
+             * 便于运营区分“用户申请退款变多”和“支付域真的打款成功变多”。
+             */
+            bizKpiMetrics.incRefundRequest("brokerage_order");
+        }
 
         try {
             RefundOrder result = callProviderRefund(paymentOrder, refund, req.getReason().trim());
@@ -75,6 +84,14 @@ public class PaymentRefundAppService {
             refund.setStatus(status);
             refund.setFailReason(null);
             paymentRefundService.updateById(refund);
+            if ("SUCCESS".equals(status) && bizKpiMetrics != null) {
+                /*
+                 * 中文注释：退款成功指标只在支付域收到提供方成功结果并把状态落库为 SUCCESS 后累计，
+                 * 避免管理端审批、重复调用或轮询查询造成同一笔退款重复记数。
+                 */
+                bizKpiMetrics.incRefund();
+                bizKpiMetrics.addRefundAmountFen(refund.getRefundAmountFen());
+            }
         } catch (PayException e) {
             String msg = e.getMessage() == null ? "YunGouOS 退款失败" : e.getMessage();
             log.warn("YunGouOS 退款失败，orderNo={}, refundNo={}, msg={}", paymentOrder.getOrderNo(), refund.getRefundNo(), msg);
@@ -157,4 +174,3 @@ public class PaymentRefundAppService {
         return v.substring(0, 200);
     }
 }
-

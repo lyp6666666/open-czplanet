@@ -29,7 +29,7 @@ JWT_ISSUER="${JWT_ISSUER:-ai-tutor}"
 JWT_SECRET_PRIMARY="${JWT_SECRET_PRIMARY:-LypJwtSecretKey123LypJwtSecretKey123}"
 GATEWAY_JWT_ISSUER="${GATEWAY_JWT_ISSUER:-$JWT_ISSUER}"
 GATEWAY_JWT_SECRET="${GATEWAY_JWT_SECRET:-$JWT_SECRET_PRIMARY}"
-GATEWAY_SIGN_SECRET="${GATEWAY_SIGN_SECRET:-DevGatewaySignSecretKey_ChangeMe_AtLeast32Bytes}"
+GATEWAY_SIGN_SECRET="${GATEWAY_SIGN_SECRET:-DevGatewaySignSecret_1234567890_abcd}"
 
 JWT_SECRETS_0="${JWT_SECRETS_0:-$JWT_SECRET_PRIMARY}"
 GATEWAY_JWT_SECRETS_0="${GATEWAY_JWT_SECRETS_0:-$JWT_SECRET_PRIMARY}"
@@ -40,6 +40,7 @@ IM_PORT="${IM_PORT:-18082}"
 PAYMENT_PORT="${PAYMENT_PORT:-18083}"
 ADMIN_PORT="${ADMIN_PORT:-18084}"
 LIVE_CLASS_PORT="${LIVE_CLASS_PORT:-18085}"
+AI_AGENT_PORT="${AI_AGENT_PORT:-18086}"
 LIVEKIT_PORT="${LIVEKIT_PORT:-7880}"
 WEB_PORT="${WEB_PORT:-5173}"
 ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
@@ -50,13 +51,15 @@ MANAGE_INFRA="${MANAGE_INFRA:-auto}"
 SERVICE_STARTUP_WAIT_LOOPS="${SERVICE_STARTUP_WAIT_LOOPS:-300}"
 FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
-INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana livekit}"
+INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana loki alertmanager promtail node-exporter cadvisor mysqld-exporter redis-exporter rabbitmq-exporter livekit}"
 AUTO_BOOTSTRAP_DEV_DB="${AUTO_BOOTSTRAP_DEV_DB:-1}"
 LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-dev-api-key}"
 LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-CHANGE_ME_LIVEKIT_API_SECRET}"
 LIVEKIT_WS_URL="${LIVEKIT_WS_URL:-ws://127.0.0.1:${LIVEKIT_PORT}}"
 OPS_VERIFY_TOKEN="${OPS_VERIFY_TOKEN:-DevOpsVerifyTokenForE2E}"
 DEV_EXPOSE_SMS_CODE="${DEV_EXPOSE_SMS_CODE:-true}"
+ENABLE_AI_AGENT="${ENABLE_AI_AGENT:-0}"
+AI_AGENT_HOST="${AI_AGENT_HOST:-127.0.0.1}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
@@ -295,6 +298,14 @@ start_service() {
     fi
     rm -f "$pid_file"
   fi
+  if [ -f "$worker_pid_file" ]; then
+    old_worker_pid="$(cat "$worker_pid_file" 2>/dev/null || true)"
+    if [ -n "$old_worker_pid" ] && kill -0 "$old_worker_pid" >/dev/null 2>&1; then
+      echo "[dev_all_up] $worker_name 已在运行 pid=$old_worker_pid"
+    else
+      rm -f "$worker_pid_file"
+    fi
+  fi
 
   existing_listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)"
   if [ -n "$existing_listen_pid" ]; then
@@ -320,6 +331,91 @@ start_service() {
       nohup ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run >"$log_file" 2>&1 &
     launcher_pid=$!
     echo "$launcher_pid" >"$pid_file"
+  )
+
+  i=0
+  while true; do
+    listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | sed -n '1p' || true)"
+    if [ -n "$listen_pid" ]; then
+      echo "$listen_pid" >"$pid_file"
+      return 0
+    fi
+    i=$((i + 1))
+    if [ "$i" -ge "$SERVICE_STARTUP_WAIT_LOOPS" ]; then
+      echo "[dev_all_up] $svc_name 启动失败（端口 $port 未监听）"
+      if [ -f "$log_file" ]; then
+        echo "[dev_all_up] $svc_name 最近日志（$log_file）"
+        tail -n 120 "$log_file" || true
+      fi
+      return 1
+    fi
+    sleep 0.2
+  done
+}
+
+start_ai_agent_service() {
+  svc_name="ai-agent-service"
+  worker_name="ai-agent-worker"
+  port="$AI_AGENT_PORT"
+  log_file="$LOG_DIR/$svc_name.log"
+  pid_file="$PID_DIR/$svc_name.pid"
+  worker_log_file="$LOG_DIR/$worker_name.log"
+  worker_pid_file="$PID_DIR/$worker_name.pid"
+
+  case "$ENABLE_AI_AGENT" in
+    1|true|yes)
+      ;;
+    0|false|no)
+      echo "[dev_all_up] 跳过 $svc_name（ENABLE_AI_AGENT=$ENABLE_AI_AGENT）"
+      return 0
+      ;;
+    *)
+      echo "[dev_all_up] 不支持的 ENABLE_AI_AGENT=$ENABLE_AI_AGENT，可选值：1/0 true/false yes/no"
+      return 1
+      ;;
+  esac
+
+  if [ -f "$pid_file" ]; then
+    old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" >/dev/null 2>&1; then
+      echo "[dev_all_up] $svc_name 已在运行 pid=$old_pid"
+      return 0
+    fi
+    rm -f "$pid_file"
+  fi
+
+  existing_listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+  if [ -n "$existing_listen_pid" ]; then
+    echo "[dev_all_up] $svc_name port=$port 已被占用，尝试停止 pid=$existing_listen_pid"
+    kill "$existing_listen_pid" >/dev/null 2>&1 || true
+    i=0
+    while lsof -ti tcp:"$port" -sTCP:LISTEN >/dev/null 2>&1; do
+      i=$((i + 1))
+      if [ "$i" -ge 20 ]; then
+        kill -9 "$existing_listen_pid" >/dev/null 2>&1 || true
+        break
+      fi
+      sleep 0.2
+    done
+  fi
+
+  echo "[dev_all_up] 启动 $svc_name host=$AI_AGENT_HOST port=$port"
+  (
+    cd "$ROOT_DIR/ai-agent-service"
+    AI_AGENT_HOST="$AI_AGENT_HOST" AI_AGENT_PORT="$port" sh scripts/bootstrap_env.sh >/dev/null
+    eval "$(.venv/bin/python scripts/export_nacos_env.py)"
+    export AI_AGENT_HOST="$AI_AGENT_HOST"
+    export AI_AGENT_PORT="$port"
+    nohup sh scripts/run_prod.sh >"$log_file" 2>&1 &
+    launcher_pid=$!
+    echo "$launcher_pid" >"$pid_file"
+    case "${AI_AGENT_USE_ASYNC_WORKER:-true}" in
+      1|true|yes)
+        nohup sh scripts/run_worker.sh >"$worker_log_file" 2>&1 &
+        worker_pid=$!
+        echo "$worker_pid" >"$worker_pid_file"
+        ;;
+    esac
   )
 
   i=0
@@ -428,11 +524,12 @@ start_service "tutor-appointment-service" "tutor-appointment-service" "$APPOINTM
 start_service "videoCall-IM-service" "videoCall-IM-service" "$IM_PORT"
 start_service "payment-service" "payment-service" "$PAYMENT_PORT"
 start_service "ai-tutor-admin" "ai-tutor-admin" "$ADMIN_PORT"
+start_ai_agent_service
 start_service "live-class-service" "live-class-service" "$LIVE_CLASS_PORT"
 start_frontend "ai-tutor-web" "ai-tutor-web" "$WEB_PORT" "$WEB_BASE_PATH"
 start_frontend "ai-tutor-admin-web" "ai-tutor-admin-web" "$ADMIN_WEB_PORT" "$ADMIN_WEB_BASE_PATH"
 
-echo "[dev_all_up] 已拉起网关 + 5 个服务 + 2 个前端"
+echo "[dev_all_up] 已拉起网关 + 5 个 Java 服务 + 可选 ai-agent-service + 2 个前端"
 echo "[dev_all_up] 日志目录：$LOG_DIR"
 echo "[dev_all_up] PID 目录：$PID_DIR"
 echo "[dev_all_up] 用户端前端：http://$FRONTEND_HOST:$WEB_PORT"

@@ -25,7 +25,7 @@ class LiveKitTokenServiceTest {
         LiveKitTokenService service = new LiveKitTokenService();
         ReflectionTestUtils.setField(service, "liveKitProperties", properties);
 
-        IssueJoinTokenResp resp = service.issueToken(1001L, "张老师", "class-66");
+        IssueJoinTokenResp resp = service.issueToken(1001L, "张老师", "class-66", "wss://huoyue.online/livekit");
         Claims claims = Jwts.parserBuilder()
                 .setSigningKey(Keys.hmacShaKeyFor(properties.getApiSecret().getBytes(StandardCharsets.UTF_8)))
                 .build()
@@ -34,6 +34,7 @@ class LiveKitTokenServiceTest {
 
         assertThat(claims.getIssuer()).isEqualTo("dev-api-key");
         assertThat(claims.getSubject()).isEqualTo("1001");
+        assertThat(resp.getServerUrl()).isEqualTo("wss://huoyue.online/livekit");
         assertThat(claims.get("name", String.class)).isEqualTo("张老师");
         Map<?, ?> video = (Map<?, ?>) claims.get("video");
         assertThat(video.get("roomJoin")).isEqualTo(true);

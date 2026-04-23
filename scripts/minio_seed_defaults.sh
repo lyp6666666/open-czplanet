@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DEFAULT_AVATAR_FILE="$ROOT_DIR/ai-tutor-web/public/avatars/default-avatar.svg"
 
-MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://host.docker.internal:9000}"
+MINIO_ENDPOINT="${MINIO_ENDPOINT:-http://127.0.0.1:9000}"
 MINIO_ACCESS_KEY="${MINIO_ACCESS_KEY:-minioadmin}"
 MINIO_SECRET_KEY="${MINIO_SECRET_KEY:-minioadmin}"
 MINIO_BUCKET="${MINIO_BUCKET:-ai-tutor-assets}"
@@ -15,6 +15,7 @@ if [[ ! -f "$DEFAULT_AVATAR_FILE" ]]; then
 fi
 
 docker run --rm \
+  --network host \
   --entrypoint /bin/sh \
   -v "$DEFAULT_AVATAR_FILE:/data/default-avatar.svg:ro" \
   quay.io/minio/mc:latest \

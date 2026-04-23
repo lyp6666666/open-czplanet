@@ -3,6 +3,7 @@ package com.ai.tutor.appointment.service.impl;
 import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.config.TestBackdoorTeacherProperties;
 import com.ai.tutor.appointment.mapper.OrganizationProfileMapper;
 import com.ai.tutor.appointment.enums.PublisherIdentityEnum;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
@@ -15,7 +16,9 @@ import com.ai.tutor.appointment.model.entity.PositionPost;
 import com.ai.tutor.appointment.model.vo.CursorPageResponse;
 import com.ai.tutor.appointment.model.vo.DemandViewVO;
 import com.ai.tutor.appointment.service.StudentJobPostingService;
+import com.ai.tutor.appointment.service.TestBackdoorSeedService;
 import com.ai.tutor.appointment.utils.CityCatalog;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
@@ -40,6 +43,14 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
 
     @Resource
     private PositionPostMapper positionPostMapper;
+    @Resource
+    private TestBackdoorTeacherProperties testBackdoorTeacherProperties;
+    @Resource
+    private TestBackdoorSeedService testBackdoorSeedService;
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
+
+    private static final long TEST_EXCLUSIVE_DEMAND_ID = 666601L;
 
     @Override
     public Long create(CreateStudentJobPostingRequest request, Long uid) {
@@ -93,6 +104,12 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .build();
         int inserted = studentJobPostingMapper.insert(posting);
         ThrowUtils.throwIf(inserted <= 0 || posting.getId() == null, ErrorCode.OPERATION_ERROR);
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：需求发布指标只在需求贴真实落库成功后累计，避免参数校验失败或重试未入库时污染供给口径。
+             */
+            bizKpiMetrics.incJobPostCreated(resolvePublisherRole(posting.getPublisherIdentity()));
+        }
         return posting.getId();
     }
 
@@ -103,6 +120,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         StudentJobPosting db = studentJobPostingMapper.selectById(id);
         ThrowUtils.throwIf(db == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!uid.equals(db.getParentId()), ErrorCode.NO_AUTH_ERROR);
+        boolean closingPosting = isManualClose(db, request);
 
         validateUpdate(request, db);
 
@@ -180,6 +198,12 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .build();
         int updated = studentJobPostingMapper.updateById(toUpdate);
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR);
+        if (bizKpiMetrics != null && closingPosting) {
+            /*
+             * 中文注释：需求关闭只在“发布中 -> 已关闭”首次状态迁移成功后计数，手动编辑或重复关闭不重复累计。
+             */
+            bizKpiMetrics.incJobPostClosed(resolvePublisherRole(db.getPublisherIdentity()), "cancelled");
+        }
     }
 
     @Override
@@ -191,7 +215,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     }
 
     @Override
-    public DemandViewVO getViewById(Long id) {
+    public DemandViewVO getViewById(Long id, Long viewerUid) {
         StudentJobPosting posting = getById(id);
         User user = userMapper.selectById(posting.getParentId());
         OrganizationProfile orgProfile = null;
@@ -205,7 +229,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .identityLabel(resolvePublisherIdentityLabel(posting.getPublisherIdentity()))
                 .build();
 
-        return DemandViewVO.builder()
+        DemandViewVO view = DemandViewVO.builder()
                 .id(posting.getId())
                 .parentId(posting.getParentId())
                 .subjectId(posting.getSubjectId())
@@ -235,6 +259,13 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 .updateTime(posting.getUpdateTime())
                 .publisher(publisher)
                 .build();
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：需求详情浏览只在后端成功返回有效详情后计数，404 或无权限请求不会进入这个打点口径。
+             */
+            bizKpiMetrics.incJobDetailView(resolveViewerRole(viewerUid));
+        }
+        return view;
     }
 
     @Override
@@ -260,6 +291,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                                                               BigDecimal budgetMax,
                                                               String keyword,
                                                               String sort,
+                                                              Long viewerUid,
                                                               CursorPageRequest request) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         Integer pageSize = request.getPageSize();
@@ -284,7 +316,46 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 request.getCursor(),
                 pageSize
         );
+        list = mergeExclusiveTestDemandForViewer(list, viewerUid, request);
         return buildCursorResponse(list, pageSize);
+    }
+
+    private List<StudentJobPosting> mergeExclusiveTestDemandForViewer(List<StudentJobPosting> list, Long viewerUid, CursorPageRequest request) {
+        if (!shouldShowExclusiveTestDemand(viewerUid, request)) {
+            return list;
+        }
+        if (testBackdoorSeedService != null) {
+            testBackdoorSeedService.ensureSeed();
+        }
+        StudentJobPosting exclusive = studentJobPostingMapper.selectByIdVisibleForTestTeacher(TEST_EXCLUSIVE_DEMAND_ID);
+        if (exclusive == null) {
+            return list;
+        }
+        java.util.List<StudentJobPosting> merged = new java.util.ArrayList<>();
+        merged.add(exclusive);
+        if (list != null) {
+            for (StudentJobPosting item : list) {
+                if (item == null || TEST_EXCLUSIVE_DEMAND_ID == (item.getId() == null ? -1L : item.getId())) {
+                    continue;
+                }
+                merged.add(item);
+            }
+        }
+        Integer pageSize = request == null ? null : request.getPageSize();
+        if (pageSize != null && pageSize > 0 && merged.size() > pageSize) {
+            return new java.util.ArrayList<>(merged.subList(0, pageSize));
+        }
+        return merged;
+    }
+
+    private boolean shouldShowExclusiveTestDemand(Long viewerUid, CursorPageRequest request) {
+        if (testBackdoorTeacherProperties == null || !testBackdoorTeacherProperties.isEnabled()) {
+            return false;
+        }
+        if (viewerUid == null || !viewerUid.equals(testBackdoorTeacherProperties.getUserId())) {
+            return false;
+        }
+        return request == null || request.getCursor() == null;
     }
 
     private static final Set<String> CLASS_MODES = Set.of("online", "offline");
@@ -495,6 +566,38 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
             return 1;
         }
         return null;
+    }
+
+    private static boolean isManualClose(StudentJobPosting db, UpdateStudentJobPostingRequest request) {
+        if (db == null || request == null || request.getStatus() == null) {
+            return false;
+        }
+        return Integer.valueOf(1).equals(db.getStatus()) && Integer.valueOf(0).equals(request.getStatus());
+    }
+
+    private static String resolvePublisherRole(String publisherIdentity) {
+        PublisherIdentityEnum identity = PublisherIdentityEnum.fromCode(publisherIdentity);
+        return identity == PublisherIdentityEnum.ORGANIZATION ? "org" : "student";
+    }
+
+    private String resolveViewerRole(Long viewerUid) {
+        if (viewerUid == null) {
+            return "unknown";
+        }
+        User viewer = userMapper.selectById(viewerUid);
+        if (viewer == null || viewer.getUserType() == null) {
+            return "unknown";
+        }
+        if (viewer.getUserType() == 1) {
+            return "teacher";
+        }
+        if (viewer.getUserType() == 2) {
+            return "student";
+        }
+        if (viewer.getUserType() == 3) {
+            return "org";
+        }
+        return "unknown";
     }
 
     private static String normalizePublisherIdentity(String raw) {

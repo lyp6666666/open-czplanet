@@ -34,6 +34,7 @@ public class JwtInterceptor implements HandlerInterceptor {
         if (uri != null) {
             if (uri.startsWith("/api/v1/public/")) return true;
             if (uri.startsWith("/api/admin/")) return true;
+            if (uri.startsWith("/internal/facade/")) return true;
             if (uri.equals("/user/loginOrRegister") || uri.equals("/user/sendcode")) return true;
             if (uri.equals("/org/auth/login")) return true;
             if (uri.startsWith("/swagger-ui/") || uri.equals("/swagger-ui.html")) return true;

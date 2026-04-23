@@ -63,6 +63,20 @@
   `npm run lint`
   `npm run test`
 
+## 实时课堂 / LiveKit / 远端音视频改动
+
+- 适用范围：
+  `live-class-service`、`ai-tutor-web/src/pages/live/*`、`ai-tutor-web/src/modules/live/livekit.ts`、`Dockerfile/livekit/*`、`nginx /livekit` 转发、云安全组
+- 最低验证要求：
+  `cd ai-tutor-web && PLAYWRIGHT_BASE_URL=https://huoyue.online PLAYWRIGHT_API_BASE_URL=https://huoyue.online OPS_VERIFY_TOKEN=DevOpsVerifyTokenForE2E npx playwright test e2e/live-classroom.spec.ts --project=chromium -g "teacher and student can join same livekit room with media permissions"`
+- 如果怀疑网络层或云防火墙：
+  同时在 `111.228.20.88` 上抓包 `tcpdump`，确认浏览器是否真正回包到 `50000-50100/udp` 或 `7881/tcp`
+- 通过标准：
+  - 页面状态进入 `connected`
+  - 双方都收到 `participant:connected`
+  - 双方都收到远端 `track:subscribed` 的 `video/audio`
+  - 不再出现双方都显示“等待对方加入”
+
 ## 小程序改动
 
 - 适用范围：

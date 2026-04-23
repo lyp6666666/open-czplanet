@@ -337,7 +337,7 @@ async function confirmSwitch() {
                 <span>我已阅读并同意</span>
               </label>
               <a class="link" href="javascript:void(0)">《用户协议》</a>
-              <a class="link" href="javascript:void(0)">《隐私政策》</a>
+              <RouterLink class="link" :to="{ name: 'privacyPolicy' }">《隐私政策》</RouterLink>
             </div>
 
             <div v-if="hint" class="hint">{{ hint }}</div>

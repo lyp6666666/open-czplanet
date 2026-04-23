@@ -159,6 +159,19 @@
         ORDER BY start_time ASC, id ASC
     </select>
 
+    <select id="selectAcceptedTrialByCourseId" resultMap="TutorAppointmentMap">
+        SELECT
+            id, course_id, parent_id, tutor_id, parent_job_posting_id, tutor_job_posting_id, title, lesson_type, lesson_price_fen, trial_price_percent,
+            payable_amount_fen, subject_id, class_mode, city, address,
+            start_time, duration_minutes, status, created_by, room_id, proposed_start_time, proposed_by, cancel_by, remark, create_time, update_time
+        FROM tutor_appointment
+        WHERE course_id = #{courseId}
+          AND lesson_type = 'TRIAL'
+          AND status IN (2, 3, 5)
+        ORDER BY start_time ASC, id ASC
+        LIMIT 1
+    </select>
+
     <select id="countAcceptedConflicts" resultType="int">
         SELECT COUNT(1)
         FROM tutor_appointment

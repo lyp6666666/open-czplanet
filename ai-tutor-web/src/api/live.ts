@@ -110,6 +110,18 @@ export const liveApi = {
     return http.post<unknown, IssueJoinTokenResp>(`/live/sessions/${sessionId}/join-token`, payload)
   },
 
+  joinAck(sessionId: number, payload: {
+    clientType: string
+    joinMode?: string
+    connectionState?: string
+    cameraEnabled?: boolean
+    micEnabled?: boolean
+    cameraDeviceId?: string | null
+    micDeviceId?: string | null
+  }) {
+    return http.post<unknown, LiveSessionResp>(`/live/sessions/${sessionId}/join-ack`, payload)
+  },
+
   status(sessionId: number) {
     return http.get<unknown, LiveSessionResp>(`/live/sessions/${sessionId}/status`)
   },

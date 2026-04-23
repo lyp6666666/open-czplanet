@@ -118,4 +118,47 @@
             update_time = NOW(3)
         WHERE id = #{id}
     </update>
+
+    <update id="tryMarkAiSessionCreating">
+        UPDATE live_class_session
+        SET extra_json = JSON_SET(
+                COALESCE(extra_json, JSON_OBJECT()),
+                '$.aiSessionCreating', TRUE
+            ),
+            update_time = NOW(3)
+        WHERE id = #{id}
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json, '$.aiSessionCreated')), 'false') &lt;&gt; 'true'
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json, '$.aiSessionCreating')), 'false') &lt;&gt; 'true'
+    </update>
+
+    <update id="clearAiSessionCreating">
+        UPDATE live_class_session
+        SET extra_json = JSON_REMOVE(
+                COALESCE(extra_json, JSON_OBJECT()),
+                '$.aiSessionCreating'
+            ),
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+
+    <update id="tryMarkAiReportTaskQueued">
+        UPDATE live_class_session
+        SET extra_json = JSON_SET(
+                COALESCE(extra_json, JSON_OBJECT()),
+                '$.aiReportTaskQueued', TRUE
+            ),
+            update_time = NOW(3)
+        WHERE id = #{id}
+          AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(extra_json, '$.aiReportTaskQueued')), 'false') &lt;&gt; 'true'
+    </update>
+
+    <update id="clearAiReportTaskQueued">
+        UPDATE live_class_session
+        SET extra_json = JSON_REMOVE(
+                JSON_REMOVE(COALESCE(extra_json, JSON_OBJECT()), '$.aiReportTaskQueued'),
+                '$.aiReportTaskId'
+            ),
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
 </mapper>

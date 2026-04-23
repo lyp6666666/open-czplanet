@@ -31,26 +31,37 @@ public class LiveClassAiService {
         }
         Map<String, Object> extra = parseExtra(session.getExtraJson());
         Object sessionCreated = extra.get("aiSessionCreated");
-        if (Boolean.TRUE.equals(sessionCreated)) {
+        if (Boolean.TRUE.equals(sessionCreated) || Boolean.TRUE.equals(extra.get("aiSessionCreating"))) {
+            return;
+        }
+        if (liveClassSessionMapper.tryMarkAiSessionCreating(session.getId()) <= 0) {
             return;
         }
 
-        AiAgentClient.CreateLiveLessonSessionRequest request = new AiAgentClient.CreateLiveLessonSessionRequest();
-        request.setTeacherId(session.getTeacherUid());
-        request.setStudentId(session.getStudentUid());
-        request.setSubject("未配置");
-        request.setGrade("未配置");
-        request.setCourseType("ONLINE_FORMAL");
-        request.setAudioEnabled(Boolean.TRUE);
-        request.setRealtimeAiMode(isAiEnabled(session) ? "LIGHT" : "OFF");
-        AiAgentClient.LiveLessonSessionView created = aiAgentClient.createSession(session.getCourseId(), request);
+        try {
+            AiAgentClient.CreateLiveLessonSessionRequest request = new AiAgentClient.CreateLiveLessonSessionRequest();
+            request.setTeacherId(session.getTeacherUid());
+            request.setStudentId(session.getStudentUid());
+            request.setSubject("未配置");
+            request.setGrade("未配置");
+            request.setCourseType("ONLINE_FORMAL");
+            request.setAudioEnabled(Boolean.TRUE);
+            request.setRealtimeAiMode(isAiEnabled(session) ? "LIGHT" : "OFF");
+            AiAgentClient.LiveLessonSessionView created = aiAgentClient.createSession(session.getCourseId(), request);
 
-        extra.put("aiSessionCreated", Boolean.TRUE);
-        extra.put("aiSessionId", created.getSessionId());
-        extra.put("aiSessionStatus", created.getStatus());
-        extra.put("aiUpdatedAt", LocalDateTime.now().toString());
-        session.setExtraJson(JSONUtil.toJsonStr(extra));
-        liveClassSessionMapper.updateExtraJsonById(session.getId(), session.getExtraJson());
+            LiveClassSession latest = liveClassSessionMapper.selectById(session.getId());
+            Map<String, Object> latestExtra = parseExtra(latest == null ? session.getExtraJson() : latest.getExtraJson());
+            latestExtra.remove("aiSessionCreating");
+            latestExtra.put("aiSessionCreated", Boolean.TRUE);
+            latestExtra.put("aiSessionId", created.getSessionId());
+            latestExtra.put("aiSessionStatus", created.getStatus());
+            latestExtra.put("aiUpdatedAt", LocalDateTime.now().toString());
+            session.setExtraJson(JSONUtil.toJsonStr(latestExtra));
+            liveClassSessionMapper.updateExtraJsonById(session.getId(), session.getExtraJson());
+        } catch (Exception ex) {
+            liveClassSessionMapper.clearAiSessionCreating(session.getId());
+            throw ex;
+        }
     }
 
     public LiveAiStateResp getAiState(LiveClassSession session) {
@@ -141,6 +152,7 @@ public class LiveClassAiService {
 
         try {
             aiAgentClient.finalizeLesson(session.getCourseId());
+            queueLessonReportTask(session);
             LiveAiResultResp result = getAiResult(session);
             extra.put("aiResultStatus", result.getResultStatus());
             extra.put("aiUpdatedAt", LocalDateTime.now().toString());
@@ -181,6 +193,51 @@ public class LiveClassAiService {
         payload.put("content", result.getPreview());
         payload.put("reportStatus", result.getReportStatus());
         httpImFacade.sendSystemMessage(operatorUid, session.getRoomId(), payload);
+    }
+
+    private void queueLessonReportTask(LiveClassSession session) {
+        if (session == null || session.getId() == null || session.getCourseId() == null) {
+            return;
+        }
+        if (liveClassSessionMapper.tryMarkAiReportTaskQueued(session.getId()) <= 0) {
+            return;
+        }
+        try {
+            LiveClassSession latest = liveClassSessionMapper.selectById(session.getId());
+            LiveClassSession source = latest == null ? session : latest;
+            AiAgentClient.CreateLessonReportTaskRequest request = new AiAgentClient.CreateLessonReportTaskRequest();
+            request.setTeacherId(source.getTeacherUid());
+            request.setStudentId(source.getStudentUid());
+            request.setSubject("未配置");
+            request.setGrade("未配置");
+            request.setLessonTopic("课程 #" + session.getCourseId() + " 实时课堂总结");
+            request.setTeacherNotes("课程已结束，请基于实时课堂转写、阶段摘要和课堂状态生成课后报告。");
+            request.setStudentPerformance("请结合实时课堂中的提问、总结与互动表现生成学生学习情况。");
+            request.setHomework("请结合课堂内容自动给出课后作业与复习建议。");
+            request.setNextPlan("请结合课堂表现生成下节课建议。");
+            request.setForceRegenerate(Boolean.FALSE);
+            Map<String, Object> extraContext = new HashMap<>();
+            extraContext.put("sessionId", session.getId());
+            extraContext.put("providerRoomName", source.getProviderRoomName());
+            Map<String, Object> sessionExtra = parseExtra(source.getExtraJson());
+            Object aiSessionId = sessionExtra.get("aiSessionId");
+            if (aiSessionId != null) {
+                extraContext.put("aiSessionId", aiSessionId);
+            }
+            request.setExtraContext(extraContext);
+
+            AiAgentClient.LessonReportTaskView created = aiAgentClient.createLessonReportTask(session.getCourseId(), request);
+            LiveClassSession latestAfterQueue = liveClassSessionMapper.selectById(session.getId());
+            Map<String, Object> latestExtra = parseExtra(latestAfterQueue == null ? source.getExtraJson() : latestAfterQueue.getExtraJson());
+            latestExtra.put("aiReportTaskQueued", Boolean.TRUE);
+            latestExtra.put("aiReportTaskId", created.getTaskId());
+            latestExtra.put("aiUpdatedAt", LocalDateTime.now().toString());
+            session.setExtraJson(JSONUtil.toJsonStr(latestExtra));
+            liveClassSessionMapper.updateExtraJsonById(session.getId(), session.getExtraJson());
+        } catch (Exception ex) {
+            liveClassSessionMapper.clearAiReportTaskQueued(session.getId());
+            throw ex;
+        }
     }
 
     private static Map<String, Object> parseExtra(String extraJson) {

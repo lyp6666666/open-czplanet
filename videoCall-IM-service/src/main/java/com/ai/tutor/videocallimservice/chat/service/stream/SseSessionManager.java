@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service.stream;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamMessageEvent;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatPresenceResp;
 import com.ai.tutor.videocallimservice.chat.domain.vo.response.ChatStreamDeliveryEvent;
@@ -51,6 +52,8 @@ public class SseSessionManager {
 
     @Resource
     private RealtimeEventStoreService realtimeEventStoreService;
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Resource
     private RoomMapper roomMapper;
@@ -153,6 +156,13 @@ public class SseSessionManager {
                 } else {
                     holder.emitter.send(SseEmitter.event().name(eventName).data(data));
                 }
+                if (bizKpiMetrics != null) {
+                    /*
+                     * 中文注释：这里按“成功推送到一个在线 SSE 会话”计一次实时投递，
+                     * 方便观察聊天、申请等实时事件是否真的送到了在线客户端。
+                     */
+                    bizKpiMetrics.incChatRealtimeDelivered(eventName);
+                }
             } catch (IOException e) {
                 remove(uid, holder);
             }
@@ -171,6 +181,13 @@ public class SseSessionManager {
                     holder.emitter.send(SseEmitter.event().name("event").data(envelope));
                 } else {
                     holder.emitter.send(SseEmitter.event().name(eventName).data(data));
+                }
+                if (bizKpiMetrics != null) {
+                    /*
+                     * 中文注释：短生命周期事件同样需要统计真实投递成功次数，
+                     * 用来补充观测“在线状态/输入中”等即时信号是否正常分发。
+                     */
+                    bizKpiMetrics.incChatRealtimeDelivered(eventName);
                 }
             } catch (IOException e) {
                 remove(uid, holder);

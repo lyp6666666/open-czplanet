@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>邮箱变更通知</title>
+</head>
+<body style="margin:0;padding:0;background-color:#fff1f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#fff1f2;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:640px;max-width:640px;background-color:#ffffff;border-radius:16px;overflow:hidden;">
+          <tr>
+            <td style="padding:32px 40px;background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#ffffff;">
+              <div style="font-size:24px;font-weight:700;">邮箱变更通知</div>
+              <div style="margin-top:8px;font-size:14px;line-height:22px;opacity:0.92;">你的账号绑定邮箱发生变化，请确认是否为本人操作。</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:36px 40px;">
+              <p style="margin:0 0 16px;font-size:15px;line-height:26px;">你好，</p>
+              <p style="margin:0 0 20px;font-size:15px;line-height:26px;">你在创智星球账号绑定的邮箱已发生变更。</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background-color:#fef2f2;border:1px solid #fecaca;border-radius:12px;">
+                <tr>
+                  <td style="padding:14px 16px;font-size:14px;line-height:24px;"><strong>原邮箱：</strong>{{oldEmailMasked}}</td>
+                </tr>
+                <tr>
+                  <td style="padding:0 16px 14px;font-size:14px;line-height:24px;"><strong>变更时间：</strong>{{changeTime}}</td>
+                </tr>
+              </table>
+              <p style="margin:18px 0 12px;font-size:15px;line-height:26px;">如果这次变更是你本人操作，无需处理。</p>
+              <p style="margin:0 0 24px;font-size:15px;line-height:26px;">如果这不是你本人操作，请尽快进行申诉或联系客服处理。</p>
+              <div style="display:inline-block;padding:12px 24px;background-color:#fef2f2;border:1px solid #fecaca;border-radius:999px;color:#b91c1c;font-size:14px;font-weight:600;">如非本人操作，请尽快通过创智星球官方渠道申诉</div>
+              <p style="margin:24px 0 0;font-size:13px;line-height:22px;color:#6b7280;">为保障账号安全，请勿将验证码泄露给他人。</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

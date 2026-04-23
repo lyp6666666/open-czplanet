@@ -1,8 +1,10 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 const HomePage = () => import('@/pages/HomePage.vue')
+const AboutPage = () => import('@/pages/AboutPage.vue')
 const AuthPage = () => import('@/pages/AuthPage.vue')
 const MePage = () => import('@/pages/MePage.vue')
+const PrivacyPolicyPage = () => import('@/pages/PrivacyPolicyPage.vue')
 const SettingsPage = () => import('@/pages/SettingsPage.vue')
 const UpdatePhonePage = () => import('@/pages/UpdatePhonePage.vue')
 const EmailSettingsPage = () => import('@/pages/EmailSettingsPage.vue')
@@ -65,6 +67,16 @@ export const router = createRouter({
       path: '/',
       name: 'home',
       component: HomePage,
+    },
+    {
+      path: '/about',
+      name: 'about',
+      component: AboutPage,
+    },
+    {
+      path: '/privacy',
+      name: 'privacyPolicy',
+      component: PrivacyPolicyPage,
     },
     {
       path: '/auth/tutor',

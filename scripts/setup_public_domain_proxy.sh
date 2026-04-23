@@ -4,8 +4,10 @@ set -eu
 
 PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"
 UPSTREAM_HOST="${UPSTREAM_HOST:-111.228.20.88}"
-USER_WEB_PORT="${USER_WEB_PORT:-80}"
-ADMIN_PORT="${ADMIN_PORT:-5174}"
+USER_WEB_PORT="${USER_WEB_PORT:-5173}"
+GATEWAY_PORT="${GATEWAY_PORT:-18080}"
+ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
+ADMIN_API_PORT="${ADMIN_API_PORT:-18084}"
 ADMIN_BASE_PATH="${ADMIN_BASE_PATH:-/admin/}"
 NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/ai-tutor-public-domain.conf}"
 TLS_CERT_PATH="${TLS_CERT_PATH:-}"
@@ -34,14 +36,14 @@ if [ -n "$TLS_CERT_PATH" ] && [ -n "$TLS_KEY_PATH" ] && [ -f "$TLS_CERT_PATH" ] 
 server {
     listen 80;
     listen [::]:80;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
+    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN;
     return 301 https://\$host\$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
+    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN;
 
     ssl_certificate $TLS_CERT_PATH;
     ssl_certificate_key $TLS_KEY_PATH;
@@ -57,11 +59,130 @@ server {
     proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Forwarded-Port \$server_port;
 
-    location / {
-        proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
+    location = ${ADMIN_BASE_PATH%/} {
+        return 302 $ADMIN_BASE_PATH;
+    }
+
+    location ^~ $ADMIN_BASE_PATH {
+        proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
+    }
+
+    location ^~ /api/admin/ {
+        proxy_pass http://127.0.0.1:$ADMIN_API_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /org/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /user/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /invite/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /chat/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /payment/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location = /ops {
+        return 302 /ops/;
+    }
+
+    location = /ops/ {
+        return 302 /ops/grafana/;
+    }
+
+    location ^~ /ops/grafana/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+
+    location = /ops/prometheus {
+        return 302 /ops/prometheus/;
+    }
+
+    location ^~ /ops/prometheus/ {
+        rewrite ^/ops/prometheus/(.*)$ /\$1 break;
+        proxy_pass http://127.0.0.1:9090;
+        proxy_set_header Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_read_timeout 300s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:$USER_WEB_PORT;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+
+    location = /livekit {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /livekit/ {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
     }
 }
 EOF
@@ -70,7 +191,7 @@ else
 server {
     listen 80;
     listen [::]:80;
-    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN _;
+    server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN;
 
     access_log /var/log/nginx/ai-tutor-public-domain.access.log;
     error_log /var/log/nginx/ai-tutor-public-domain.error.log warn;
@@ -88,17 +209,125 @@ server {
     }
 
     location ^~ $ADMIN_BASE_PATH {
-        proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
+        proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
-    location / {
-        proxy_pass http://$UPSTREAM_HOST:$USER_WEB_PORT;
+    location ^~ /api/admin/ {
+        proxy_pass http://127.0.0.1:$ADMIN_API_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /api/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /org/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /user/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /invite/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location ^~ /chat/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /payment/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_read_timeout 60s;
+    }
+
+    location = /ops {
+        return 302 /ops/;
+    }
+
+    location = /ops/ {
+        return 302 /ops/grafana/;
+    }
+
+    location ^~ /ops/grafana/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Forwarded-Port 443;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
+    }
+
+    location = /ops/prometheus {
+        return 302 /ops/prometheus/;
+    }
+
+    location ^~ /ops/prometheus/ {
+        rewrite ^/ops/prometheus/(.*)$ /\$1 break;
+        proxy_pass http://127.0.0.1:9090;
+        proxy_set_header Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $PUBLIC_DOMAIN;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_read_timeout 300s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:$USER_WEB_PORT;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+
+    location = /livekit {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /livekit/ {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
     }
 }
 EOF

@@ -12,89 +12,243 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "每日新注册用户数（按角色）",
-      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "title": "登录成功（按角色）",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (role) (increase(ai_tutor_biz_user_register_total[1d]))"
+          "expr": "sum by (role) (increase(ai_tutor_biz_user_login_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "每日新注册用户数（按角色）",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (role) (increase(ai_tutor_biz_user_register_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "资料完成（按角色）",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (role) (increase(ai_tutor_biz_profile_completed_total[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "每日申请沟通数量（按发起方）",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (initiator) (increase(ai_tutor_biz_comm_apply_total[1d]))"
+          "expr": "sum by (initiator) (increase(ai_tutor_biz_comm_apply_total[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "每日申请沟通通过/拒绝（按发起方+决策）",
-      "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d]))"
+          "expr": "sum by (initiator, decision) (increase(ai_tutor_biz_comm_apply_decision_total[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "每日验证码发送次数",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "title": "信息费订单创建数",
+      "gridPos": { "x": 0, "y": 16, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(ai_tutor_biz_sms_code_send_total[1d]))"
+          "expr": "sum(increase(ai_tutor_biz_payment_order_created_total{biz_type=\"info_fee\"}[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "每日支付信息费总额（元）",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "gridPos": { "x": 8, "y": 16, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) / 100"
+          "expr": "(sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) or vector(0)) / 100"
         }
       ]
     },
     {
       "type": "timeseries",
-      "title": "每日达成合作次数",
-      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "title": "支付后聊天解锁成功数",
+      "gridPos": { "x": 16, "y": 16, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(ai_tutor_biz_collaboration_success_total[1d]))"
+          "expr": "sum(increase(ai_tutor_biz_chat_unlock_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "试课提案创建数",
+      "gridPos": { "x": 0, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_trial_proposal_created_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "试课安排成功数",
+      "gridPos": { "x": 6, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_trial_scheduled_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "试课结果（通过/失败）",
+      "gridPos": { "x": 12, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (decision) (increase(ai_tutor_biz_trial_decision_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "正式课表提交成功数",
+      "gridPos": { "x": 18, "y": 24, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_weekly_schedule_submitted_total[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "每日退款次数",
-      "gridPos": { "x": 12, "y": 24, "w": 6, "h": 8 },
+      "gridPos": { "x": 0, "y": 32, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(ai_tutor_biz_refund_total[1d]))"
+          "expr": "sum(increase(ai_tutor_biz_refund_total[1d])) or vector(0)"
         }
       ]
     },
     {
       "type": "timeseries",
       "title": "每日退款总额（元）",
-      "gridPos": { "x": 18, "y": 24, "w": 6, "h": 8 },
+      "gridPos": { "x": 8, "y": 32, "w": 8, "h": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) / 100"
+          "expr": "(sum(increase(ai_tutor_biz_refund_amount_cents_total[1d])) or vector(0)) / 100"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "退款审核通过/拒绝",
+      "gridPos": { "x": 16, "y": 32, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (decision) (increase(ai_tutor_biz_refund_review_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "短信验证码发送数",
+      "gridPos": { "x": 0, "y": 40, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_sms_code_send_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "需求发布数",
+      "gridPos": { "x": 6, "y": 40, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (publisher_role) (increase(ai_tutor_biz_job_post_created_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "需求关闭数",
+      "gridPos": { "x": 12, "y": 40, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (publisher_role, close_reason) (increase(ai_tutor_biz_job_post_closed_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "需求详情浏览数",
+      "gridPos": { "x": 18, "y": 40, "w": 6, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (viewer_role) (increase(ai_tutor_biz_job_detail_view_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "试课提案过期数",
+      "gridPos": { "x": 0, "y": 48, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_trial_proposal_expired_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "聊天消息失败数",
+      "gridPos": { "x": 8, "y": 48, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (increase(ai_tutor_biz_chat_message_failed_total[1d])) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "正式课表超时数",
+      "gridPos": { "x": 16, "y": 48, "w": 8, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(ai_tutor_biz_weekly_schedule_timeout_total[1d])) or vector(0)"
         }
       ]
     }

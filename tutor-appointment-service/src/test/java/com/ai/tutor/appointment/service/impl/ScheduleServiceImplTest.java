@@ -5,6 +5,7 @@ import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
 import com.ai.tutor.appointment.model.dto.schedule.CreateScheduleEventRequest;
+import com.ai.tutor.appointment.model.dto.schedule.InternalTrialEventRequest;
 import com.ai.tutor.appointment.model.dto.schedule.SubmitWeeklyScheduleRequest;
 import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.model.entity.User;
@@ -44,8 +45,14 @@ class ScheduleServiceImplTest {
         CreateScheduleEventRequest req = new CreateScheduleEventRequest();
         req.setTitle("线上试课");
         req.setParticipantUserId(2001L);
-        req.setStartAt(System.currentTimeMillis() + 3_600_000L);
-        req.setEndAt(System.currentTimeMillis() + 7_200_000L);
+        long tomorrowTen = java.time.LocalDate.now()
+                .plusDays(1)
+                .atTime(10, 0)
+                .atZone(java.time.ZoneId.of("Asia/Shanghai"))
+                .toInstant()
+                .toEpochMilli();
+        req.setStartAt(tomorrowTen);
+        req.setEndAt(tomorrowTen + 2 * 3_600_000L);
 
         assertThatThrownBy(() -> service.createEvent(req, 1001L))
                 .isInstanceOf(BusinessException.class)
@@ -86,8 +93,14 @@ class ScheduleServiceImplTest {
         req.setCourseId(66L);
         req.setTitle("线上试课");
         req.setParticipantUserId(2001L);
-        req.setStartAt(System.currentTimeMillis() + 3_600_000L);
-        req.setEndAt(System.currentTimeMillis() + 7_200_000L);
+        long tomorrowTen = java.time.LocalDate.now()
+                .plusDays(1)
+                .atTime(10, 0)
+                .atZone(java.time.ZoneId.of("Asia/Shanghai"))
+                .toInstant()
+                .toEpochMilli();
+        req.setStartAt(tomorrowTen);
+        req.setEndAt(tomorrowTen + 2 * 3_600_000L);
         req.setDescription("先试课");
 
         service.createEvent(req, 1001L);
@@ -215,5 +228,58 @@ class ScheduleServiceImplTest {
         assertThatThrownBy(() -> service.submitWeeklySchedule(66L, req, 2001L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("正式课表已提交");
+    }
+
+    @Test
+    void createAcceptedTrialEventShouldSyncLiveSessionWithCourseId() {
+        TutorAppointmentMapper tutorAppointmentMapper = mock(TutorAppointmentMapper.class);
+        UserMapper userMapper = mock(UserMapper.class);
+        PositionPostMapper positionPostMapper = mock(PositionPostMapper.class);
+        ImFacade imFacade = mock(ImFacade.class);
+        LiveClassInternalFeignClient liveClassInternalFeignClient = mock(LiveClassInternalFeignClient.class);
+        LessonPaymentOrderService lessonPaymentOrderService = mock(LessonPaymentOrderService.class);
+
+        ScheduleServiceImpl service = new ScheduleServiceImpl();
+        ReflectionTestUtils.setField(service, "tutorAppointmentMapper", tutorAppointmentMapper);
+        ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "positionPostMapper", positionPostMapper);
+        ReflectionTestUtils.setField(service, "imFacade", imFacade);
+        ReflectionTestUtils.setField(service, "liveClassInternalFeignClient", liveClassInternalFeignClient);
+        ReflectionTestUtils.setField(service, "lessonPaymentOrderService", lessonPaymentOrderService);
+
+        when(userMapper.selectById(1001L)).thenReturn(User.builder().id(1001L).userType(1).name("老师").build());
+        when(userMapper.selectById(2001L)).thenReturn(User.builder().id(2001L).userType(2).name("学生").build());
+        when(tutorAppointmentMapper.selectAcceptedTrialByCourseId(66L)).thenReturn(null);
+        when(tutorAppointmentMapper.countAcceptedConflicts(any(), any(), any())).thenReturn(0);
+        when(positionPostMapper.selectFirstEnabledLeafId()).thenReturn(201L);
+        when(tutorAppointmentMapper.insert(any())).thenAnswer(invocation -> {
+            TutorAppointment appointment = invocation.getArgument(0);
+            appointment.setId(92081L);
+            return 1;
+        });
+        when(imFacade.sendSystemMessage(eq(1001L), eq(7001L), any())).thenReturn(9001L);
+
+        InternalTrialEventRequest req = new InternalTrialEventRequest();
+        req.setCourseId(66L);
+        req.setRoomId(7001L);
+        req.setTeacherUid(1001L);
+        req.setStudentUid(2001L);
+        req.setCreatedBy(1001L);
+        req.setStartAt(java.time.LocalDate.now()
+                .plusDays(1)
+                .atTime(10, 0)
+                .atZone(java.time.ZoneId.of("Asia/Shanghai"))
+                .toInstant()
+                .toEpochMilli());
+        req.setEndAt(req.getStartAt() + 2 * 3_600_000L);
+
+        Long appointmentId = service.createAcceptedTrialEvent(req);
+
+        assertThat(appointmentId).isEqualTo(92081L);
+        ArgumentCaptor<LiveClassInternalFeignClient.SyncCourseSessionRequest> captor =
+                ArgumentCaptor.forClass(LiveClassInternalFeignClient.SyncCourseSessionRequest.class);
+        verify(liveClassInternalFeignClient).syncFromCourse(captor.capture());
+        assertThat(captor.getValue().getCourseId()).isEqualTo(66L);
+        assertThat(captor.getValue().getScheduleEventId()).isEqualTo(92081L);
     }
 }

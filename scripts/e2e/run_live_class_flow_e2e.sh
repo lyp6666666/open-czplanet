@@ -9,7 +9,7 @@ export E2E_GATEWAY_BASE_URL="${E2E_GATEWAY_BASE_URL:-http://localhost:18080}"
 export E2E_IM_BASE_URL="${E2E_IM_BASE_URL:-http://localhost:18082}"
 export E2E_PAYMENT_BASE_URL="${E2E_PAYMENT_BASE_URL:-http://localhost:18083}"
 export E2E_ADMIN_BASE_URL="${E2E_ADMIN_BASE_URL:-http://localhost:18084}"
-export E2E_GATEWAY_SIGN_SECRET="${E2E_GATEWAY_SIGN_SECRET:-DevGatewaySignSecretKey_ChangeMe_AtLeast32Bytes}"
+export E2E_GATEWAY_SIGN_SECRET="${E2E_GATEWAY_SIGN_SECRET:-DevGatewaySignSecret_1234567890_abcd}"
 
 if [ -z "${E2E_MYSQL_URL:-}" ]; then
   MYSQL_HOST="${E2E_MYSQL_HOST:-127.0.0.1}"

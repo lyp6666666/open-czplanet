@@ -3,11 +3,13 @@ package com.ai.tutor.common.log;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.UUID;
 
 /**
  * 请求入口自动设置 traceId，请求结束自动清理。
@@ -27,15 +29,18 @@ public class TraceIdFilter implements Filter {
         try {
             String traceId = request.getHeader("X-Request-Id");
             if (traceId == null || traceId.isBlank()) {
-                // 自动生成，getTraceId() 内部会处理
-                traceId = BizLogger.getTraceId();
+                traceId = UUID.randomUUID().toString().replace("-", "");
             }
             BizLogger.setTraceId(traceId);
+            MDC.put("requestId", traceId);
+            MDC.put("traceId", traceId);
 
             response.setHeader("X-Request-Id", traceId);
 
             chain.doFilter(servletRequest, servletResponse);
         } finally {
+            MDC.remove("requestId");
+            MDC.remove("traceId");
             BizLogger.removeTraceId();
         }
     }

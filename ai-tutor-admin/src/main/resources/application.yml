@@ -29,3 +29,16 @@ spring:
 security:
   gateway-identity:
     enabled: false
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-none}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

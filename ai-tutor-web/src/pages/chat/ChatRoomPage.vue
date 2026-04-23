@@ -397,7 +397,7 @@ async function viewUnlockedContact() {
     unlockUid.value = contact.uid
     unlockPhone.value = (contact.phone || '').trim()
     setUnlockedContactPhone(contact.uid, contact.phone)
-  } catch (e) {
+  } catch {
     unlockError.value = '联系方式暂时加载失败，请稍后重试'
   } finally {
     unlockLoading.value = false
@@ -452,6 +452,7 @@ function goPay(orderId: number, applicationId?: number | null) {
       contextType: 'BROKERAGE_ORDER',
       contextId: String(orderId),
       ...(applicationId ? { applicationId: String(applicationId) } : {}),
+      ...(otherUid.value ? { otherUid: String(otherUid.value) } : {}),
     },
   })
 }
@@ -1313,7 +1314,10 @@ function refundStatusText(raw: unknown): string {
 }
 
 async function loadOtherUser() {
-  if (!otherUid.value) return
+  if (!otherUid.value) {
+    otherUser.value = null
+    return
+  }
   const v = roomVersion.value
   const users = await userApi.batch([otherUid.value])
   if (v !== roomVersion.value) return
@@ -1665,29 +1669,6 @@ function readImageDimensions(file: File): Promise<{ width: number | null; height
   })
 }
 
-async function ackFromRoomList() {
-  if (!auth.isLoggedIn) return
-  const v = roomVersion.value
-  const targetRoomId = roomId.value
-  let cursor: number | null = null
-  for (let i = 0; i < 10; i++) {
-    try {
-      const page = await chatApi.listRooms({ pageSize: 50, cursor })
-      if (v !== roomVersion.value || targetRoomId !== roomId.value) return
-      const list = page.list || []
-      const found = list.find((r) => r.roomId === targetRoomId)
-      if (found?.lastMsgId) {
-        void chatRealtime.ackRoomRead(targetRoomId, found.lastMsgId)
-        return
-      }
-      cursor = page.cursor ?? null
-      if (page.isLast || list.length === 0) return
-    } catch {
-      return
-    }
-  }
-}
-
 onBeforeUnmount(() => {
   clearTypingStopTimer()
   clearPresenceRefreshTimer()
@@ -1738,6 +1719,22 @@ watch(
 )
 
 watch(
+  () => otherUid.value,
+  (nextUid, prevUid) => {
+    if (nextUid === prevUid) return
+    if (!nextUid) {
+      clearPresenceRefreshTimer()
+      otherUser.value = null
+      otherPresence.value = null
+      return
+    }
+    void loadOtherUser()
+    void loadOtherPresence()
+    startPresenceRefresh()
+  },
+)
+
+watch(
   () => roomId.value,
   (nextRoomId, previousRoomId) => {
     if (previousRoomId && previousRoomId !== nextRoomId) {
@@ -1750,7 +1747,7 @@ watch(
 )
 
 watch(
-  () => [roomId.value, otherUid.value] as const,
+  () => roomId.value,
   () => {
     closeActionMenu()
     searchPanelOpen.value = false
@@ -1780,8 +1777,6 @@ watch(
     void loadOtherPresence()
     void loadCurrentCourse()
     startPresenceRefresh()
-    void chatRealtime.refreshUnreadFromServer()
-    void ackFromRoomList()
     void loadMore().then(() => ackLatest())
     chatRealtime.setActiveRoom(roomId.value)
   },

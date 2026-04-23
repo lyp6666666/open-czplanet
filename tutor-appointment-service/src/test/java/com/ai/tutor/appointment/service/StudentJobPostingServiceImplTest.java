@@ -3,6 +3,8 @@ package com.ai.tutor.appointment.service;
 import com.ai.tutor.appointment.mapper.PositionPostMapper;
 import com.ai.tutor.appointment.mapper.StudentJobPostingMapper;
 import com.ai.tutor.appointment.mapper.UserMapper;
+import com.ai.tutor.appointment.config.TestBackdoorTeacherProperties;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.appointment.model.dto.common.CursorPageRequest;
 import com.ai.tutor.appointment.model.dto.job.CreateStudentJobPostingRequest;
 import com.ai.tutor.appointment.model.dto.job.UpdateStudentJobPostingRequest;
@@ -29,6 +31,9 @@ class StudentJobPostingServiceImplTest {
     private PositionPostMapper positionPostMapper;
     private StudentJobPostingMapper studentJobPostingMapper;
     private UserMapper userMapper;
+    private BizKpiMetrics bizKpiMetrics;
+    private TestBackdoorTeacherProperties testBackdoorTeacherProperties;
+    private TestBackdoorSeedService testBackdoorSeedService;
     private StudentJobPostingServiceImpl service;
 
     @BeforeEach
@@ -36,10 +41,16 @@ class StudentJobPostingServiceImplTest {
         positionPostMapper = mock(PositionPostMapper.class);
         studentJobPostingMapper = mock(StudentJobPostingMapper.class);
         userMapper = mock(UserMapper.class);
+        bizKpiMetrics = mock(BizKpiMetrics.class);
+        testBackdoorTeacherProperties = new TestBackdoorTeacherProperties();
+        testBackdoorSeedService = mock(TestBackdoorSeedService.class);
         service = new StudentJobPostingServiceImpl();
         ReflectionTestUtils.setField(service, "studentJobPostingMapper", studentJobPostingMapper);
         ReflectionTestUtils.setField(service, "userMapper", userMapper);
+        ReflectionTestUtils.setField(service, "bizKpiMetrics", bizKpiMetrics);
         ReflectionTestUtils.setField(service, "positionPostMapper", positionPostMapper);
+        ReflectionTestUtils.setField(service, "testBackdoorTeacherProperties", testBackdoorTeacherProperties);
+        ReflectionTestUtils.setField(service, "testBackdoorSeedService", testBackdoorSeedService);
     }
 
     @Test
@@ -110,6 +121,7 @@ class StudentJobPostingServiceImplTest {
         assertThat(saved.getEducationRequirement()).isEqualTo("UNLIMITED");
         assertThat(saved.getPublisherIdentity()).isEqualTo("PARENT");
         assertThat(saved.getFrequencyPerWeek()).isEqualTo(2);
+        verify(bizKpiMetrics).incJobPostCreated("student");
     }
 
     @Test
@@ -192,6 +204,7 @@ class StudentJobPostingServiceImplTest {
                 null,
                 null,
                 "latest",
+                10001L,
                 page
         );
 
@@ -212,6 +225,55 @@ class StudentJobPostingServiceImplTest {
                 isNull(),
                 eq(10)
         );
+    }
+
+    @Test
+    void listPublishedShouldPrependExclusiveDemandForTestTeacherOnFirstPage() {
+        CursorPageRequest page = new CursorPageRequest();
+        page.setCursor(null);
+        page.setPageSize(3);
+
+        StudentJobPosting regular = StudentJobPosting.builder().id(3001L).title("普通需求").status(1).build();
+        StudentJobPosting exclusive = StudentJobPosting.builder().id(666601L).title("测试学生新发布需求（支付验证专用）").status(1).build();
+
+        when(studentJobPostingMapper.listPublishedFiltered(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(java.util.List.of(regular));
+        when(studentJobPostingMapper.selectByIdVisibleForTestTeacher(666601L)).thenReturn(exclusive);
+
+        com.ai.tutor.appointment.model.vo.CursorPageResponse<StudentJobPosting> resp = service.listPublished(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, "latest",
+                666888L, page
+        );
+
+        assertThat(resp.getList()).hasSize(2);
+        assertThat(resp.getList().get(0).getId()).isEqualTo(666601L);
+        assertThat(resp.getList().get(1).getId()).isEqualTo(3001L);
+        verify(testBackdoorSeedService).ensureSeed();
+    }
+
+    @Test
+    void listPublishedShouldNotExposeExclusiveDemandToNormalTeacher() {
+        CursorPageRequest page = new CursorPageRequest();
+        page.setCursor(null);
+        page.setPageSize(3);
+
+        StudentJobPosting regular = StudentJobPosting.builder().id(3001L).title("普通需求").status(1).build();
+        when(studentJobPostingMapper.listPublishedFiltered(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(java.util.List.of(regular));
+
+        com.ai.tutor.appointment.model.vo.CursorPageResponse<StudentJobPosting> resp = service.listPublished(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, "latest",
+                123456L, page
+        );
+
+        assertThat(resp.getList()).hasSize(1);
+        assertThat(resp.getList().get(0).getId()).isEqualTo(3001L);
+        verify(studentJobPostingMapper, never()).selectByIdVisibleForTestTeacher(anyLong());
+        verifyNoInteractions(testBackdoorSeedService);
     }
 
 
@@ -238,12 +300,18 @@ class StudentJobPostingServiceImplTest {
         u.setAvatar("/avatars/u101.png");
         when(userMapper.selectById(101L)).thenReturn(u);
 
-        DemandViewVO vo = service.getViewById(3001L);
+        User viewer = new User();
+        viewer.setId(2002L);
+        viewer.setUserType(1);
+        when(userMapper.selectById(2002L)).thenReturn(viewer);
+
+        DemandViewVO vo = service.getViewById(3001L, 2002L);
         assertThat(vo.getId()).isEqualTo(3001L);
         assertThat(vo.getPublisher()).isNotNull();
         assertThat(vo.getPublisher().getDisplayName()).isEqualTo("学生-陈同学");
         assertThat(vo.getPublisher().getAvatar()).isEqualTo("/avatars/u101.png");
         assertThat(vo.getPublisher().getIdentityLabel()).isEqualTo("学生本人");
+        verify(bizKpiMetrics).incJobDetailView("teacher");
     }
 
     @Test
@@ -283,5 +351,40 @@ class StudentJobPostingServiceImplTest {
         StudentJobPosting saved = captor.getValue();
         assertThat(saved.getStatus()).isEqualTo(1);
         assertThat(saved.getBizStatus()).isEqualTo(1);
+    }
+
+    @Test
+    void updateShouldCountJobCloseOnlyWhenOpenDemandIsClosed() {
+        StudentJobPosting existing = StudentJobPosting.builder()
+                .id(3003L)
+                .parentId(101L)
+                .subjectId(201L)
+                .subjectName("数学")
+                .subjectIsOther(0)
+                .title("初中数学一对一")
+                .description("学生基础一般，需要巩固提升。")
+                .studentGender("female")
+                .gradeCode("JUNIOR1")
+                .teacherGenderPreference("both")
+                .teacherRequirementDetail("希望老师有耐心，经验丰富。")
+                .classMode("online")
+                .frequencyPerWeek(2)
+                .budgetMin(new BigDecimal("100"))
+                .budgetMax(new BigDecimal("200"))
+                .stageCode("JUNIOR")
+                .educationRequirement("BACHELOR")
+                .publisherIdentity("PARENT")
+                .status(1)
+                .bizStatus(1)
+                .build();
+        when(studentJobPostingMapper.selectById(3003L)).thenReturn(existing);
+        when(studentJobPostingMapper.updateById(any(StudentJobPosting.class))).thenReturn(1);
+
+        UpdateStudentJobPostingRequest req = new UpdateStudentJobPostingRequest();
+        req.setStatus(0);
+
+        service.update(3003L, req, 101L);
+
+        verify(bizKpiMetrics).incJobPostClosed("student", "cancelled");
     }
 }

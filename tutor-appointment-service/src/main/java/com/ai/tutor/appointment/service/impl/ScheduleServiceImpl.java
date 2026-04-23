@@ -19,6 +19,7 @@ import com.ai.tutor.common.integration.ImFacade;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
  * 并通过 IM 系统消息向聊天侧投递“授课申请/状态变更”。</p>
  */
 @Service
+@Slf4j
 public class ScheduleServiceImpl implements ScheduleService {
 
     private static final ZoneId BEIJING_ZONE = ZoneId.of("Asia/Shanghai");
@@ -159,6 +161,12 @@ public class ScheduleServiceImpl implements ScheduleService {
         ThrowUtils.throwIf(teacher == null || student == null, ErrorCode.NOT_FOUND_ERROR);
         ThrowUtils.throwIf(!Integer.valueOf(1).equals(teacher.getUserType()), ErrorCode.PARAMS_ERROR, "teacherUid 必须是老师");
         ThrowUtils.throwIf(!Integer.valueOf(2).equals(student.getUserType()) && !Integer.valueOf(3).equals(student.getUserType()), ErrorCode.PARAMS_ERROR, "studentUid 必须是学生/家长");
+
+        TutorAppointment existingTrial = tutorAppointmentMapper.selectAcceptedTrialByCourseId(request.getCourseId());
+        if (existingTrial != null && existingTrial.getId() != null) {
+            syncLiveSession(existingTrial);
+            return existingTrial.getId();
+        }
 
         LocalDateTime start = toLocalDateTime(request.getStartAt());
         LocalDateTime end = toLocalDateTime(request.getEndAt());
@@ -417,7 +425,15 @@ public class ScheduleServiceImpl implements ScheduleService {
         payload.put("endAt", endAt);
         payload.put("status", status);
         payload.put("actorUserId", actorUid);
-        imFacade.sendSystemMessage(actorUid, appointment.getRoomId(), payload);
+        try {
+            imFacade.sendSystemMessage(actorUid, appointment.getRoomId(), payload);
+        } catch (Exception ex) {
+            log.warn("send lesson status message failed, appointmentId={}, roomId={}, status={}",
+                    appointment.getId(),
+                    appointment.getRoomId(),
+                    status,
+                    ex);
+        }
     }
 
     private void syncLiveSession(TutorAppointment appointment) {
@@ -426,7 +442,7 @@ public class ScheduleServiceImpl implements ScheduleService {
         }
         int minutes = appointment.getDurationMinutes() == null ? 60 : appointment.getDurationMinutes();
         LiveClassInternalFeignClient.SyncCourseSessionRequest request = new LiveClassInternalFeignClient.SyncCourseSessionRequest();
-        request.setCourseId(appointment.getId());
+        request.setCourseId(appointment.getCourseId());
         request.setScheduleEventId(appointment.getId());
         request.setRoomId(appointment.getRoomId());
         request.setTeacherUid(appointment.getTutorId());

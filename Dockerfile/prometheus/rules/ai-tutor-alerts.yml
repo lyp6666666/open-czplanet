@@ -1,0 +1,116 @@
+groups:
+  - name: ai-tutor-service-health
+    rules:
+      - alert: AiTutorServiceDown
+        expr: up{job=~"gateway|appointment|im|payment|admin|live-class|ai-agent"} == 0
+        for: 2m
+        labels:
+          severity: P1
+          team: backend
+        annotations:
+          summary: "{{ $labels.job }} 服务不可用"
+          description: "{{ $labels.service }} 连续 2 分钟抓取失败，请先检查进程、端口和网关流量。"
+          runbook: "docs/runbooks/p0-observability.md#service-down"
+
+      - alert: AiTutorHighHttp5xx
+        expr: sum by (job, service) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 1
+        for: 5m
+        labels:
+          severity: P2
+          team: backend
+        annotations:
+          summary: "{{ $labels.service }} 5xx 错误率升高"
+          description: "{{ $labels.service }} 近 5 分钟每秒 5xx 超过 1 次，请结合日志和最近发布排查。"
+          runbook: "docs/runbooks/p0-observability.md#high-http-5xx"
+
+      - alert: AiTutorHighLatencyP95
+        expr: histogram_quantile(0.95, sum by (le, job, service) (rate(http_server_requests_seconds_bucket[5m]))) > 1.5
+        for: 10m
+        labels:
+          severity: P2
+          team: backend
+        annotations:
+          summary: "{{ $labels.service }} P95 延迟升高"
+          description: "{{ $labels.service }} 近 10 分钟 P95 延迟超过 1.5 秒，请检查下游依赖和线程池。"
+          runbook: "docs/runbooks/p0-observability.md#high-latency"
+
+  - name: ai-tutor-business-kpi
+    rules:
+      - alert: AiTutorPaymentUnlockGap
+        expr: sum(increase(ai_tutor_biz_payment_success_total{biz_type="info_fee"}[10m])) - sum(increase(ai_tutor_biz_chat_unlock_total[10m])) > 3
+        for: 10m
+        labels:
+          severity: P1
+          team: backend
+        annotations:
+          summary: "支付成功与聊天解锁出现偏差"
+          description: "最近 10 分钟信息费支付成功数明显高于聊天解锁数，请重点排查支付回调、事件消费和房间解锁状态机。"
+          runbook: "docs/runbooks/p0-observability.md#payment-unlock-gap"
+
+      - alert: AiTutorChatMessageFailedSpike
+        expr: sum(increase(ai_tutor_biz_chat_message_failed_total[10m])) > 20
+        for: 5m
+        labels:
+          severity: P2
+          team: backend
+        annotations:
+          summary: "聊天消息失败突增"
+          description: "近 10 分钟聊天消息失败超过 20 次，请检查门禁、消息存储和 SSE 投递链路。"
+          runbook: "docs/runbooks/p0-observability.md#chat-message-failed"
+
+      - alert: AiTutorTrialProposalExpiredSpike
+        expr: sum(increase(ai_tutor_biz_trial_proposal_expired_total[1h])) > 10
+        for: 10m
+        labels:
+          severity: P3
+          team: backend
+        annotations:
+          summary: "试课提案过期数升高"
+          description: "近 1 小时试课提案过期数超过 10，建议排查消息触达、排课流程和用户响应链路。"
+          runbook: "docs/runbooks/p0-observability.md#trial-proposal-expired"
+
+      - alert: AiTutorWeeklyScheduleTimeoutSpike
+        expr: sum(increase(ai_tutor_biz_weekly_schedule_timeout_total[1h])) > 5
+        for: 10m
+        labels:
+          severity: P3
+          team: backend
+        annotations:
+          summary: "正式课表超时数升高"
+          description: "近 1 小时正式课表超时数超过 5，请检查试课通过后的排课提醒和状态迁移。"
+          runbook: "docs/runbooks/p0-observability.md#weekly-schedule-timeout"
+
+      - alert: AiTutorRefundSpike
+        expr: sum(increase(ai_tutor_biz_refund_total[1h])) > 5
+        for: 10m
+        labels:
+          severity: P2
+          team: backend
+        annotations:
+          summary: "退款成功数升高"
+          description: "近 1 小时退款成功数超过 5，请结合退款申请、审批和课程履约情况排查。"
+          runbook: "docs/runbooks/p0-observability.md#refund-spike"
+
+  - name: ai-tutor-infra
+    rules:
+      - alert: AiTutorHighHostCpu
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: P2
+          team: backend
+        annotations:
+          summary: "宿主机 CPU 使用率高"
+          description: "{{ $labels.instance }} CPU 持续超过 85%，请检查容器、JVM 和批处理任务。"
+          runbook: "docs/runbooks/p0-observability.md#high-host-cpu"
+
+      - alert: AiTutorRedisDown
+        expr: up{job="redis-exporter"} == 0
+        for: 2m
+        labels:
+          severity: P1
+          team: backend
+        annotations:
+          summary: "Redis exporter 不可用"
+          description: "Redis exporter 连续 2 分钟不可用，请检查 Redis 实例和 exporter 配置。"
+          runbook: "docs/runbooks/p0-observability.md#redis-down"

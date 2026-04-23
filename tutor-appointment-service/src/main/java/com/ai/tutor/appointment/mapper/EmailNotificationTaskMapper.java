@@ -40,4 +40,20 @@ public interface EmailNotificationTaskMapper {
                        @Param("since") LocalDateTime since);
 
     int countSentByTaskKeyPrefix(@Param("taskKeyPrefix") String taskKeyPrefix);
+
+    List<EmailNotificationTask> pageAdminTasks(@Param("userId") Long userId,
+                                               @Param("email") String email,
+                                               @Param("templateCode") String templateCode,
+                                               @Param("bizType") String bizType,
+                                               @Param("status") String status,
+                                               @Param("offset") Integer offset,
+                                               @Param("size") Integer size);
+
+    long countAdminTasks(@Param("userId") Long userId,
+                         @Param("email") String email,
+                         @Param("templateCode") String templateCode,
+                         @Param("bizType") String bizType,
+                         @Param("status") String status);
+
+    int retryNow(@Param("id") Long id, @Param("nextScheduledAt") LocalDateTime nextScheduledAt);
 }

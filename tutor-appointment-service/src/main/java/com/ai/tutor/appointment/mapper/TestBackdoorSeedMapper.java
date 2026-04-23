@@ -20,6 +20,34 @@ public interface TestBackdoorSeedMapper {
 
     int upsertStudentJobPosting(@Param("id") Long id, @Param("parentId") Long parentId);
 
+    int upsertExclusiveStudentJobPosting(@Param("id") Long id, @Param("parentId") Long parentId);
+
+    int deleteRefundRequestsByRoomId(@Param("roomId") Long roomId);
+
+    int deleteApplicationBrokerageOrdersByRoomId(@Param("roomId") Long roomId,
+                                                 @Param("teacherUid") Long teacherUid,
+                                                 @Param("studentUid") Long studentUid);
+
+    int deleteBrokerageOrdersByRoomId(@Param("roomId") Long roomId);
+
+    int deleteTutorAppointmentsByRoomId(@Param("roomId") Long roomId);
+
+    int deleteCourseEnrollmentsByRoomId(@Param("roomId") Long roomId);
+
+    int deleteCollaborationProposalsByRoomId(@Param("roomId") Long roomId);
+
+    int deleteTutorApplicationsByUsers(@Param("roomId") Long roomId,
+                                       @Param("teacherUid") Long teacherUid,
+                                       @Param("studentUid") Long studentUid);
+
+    int deleteChatRealtimeEvents(@Param("roomId") Long roomId,
+                                 @Param("teacherUid") Long teacherUid,
+                                 @Param("studentUid") Long studentUid);
+
+    int deleteRoomReadStatesByRoomId(@Param("roomId") Long roomId);
+
+    int deleteMessagesByRoomId(@Param("roomId") Long roomId);
+
     int upsertRoom(@Param("id") Long id,
                    @Param("teacherProfileId") Long teacherProfileId,
                    @Param("studentProfileId") Long studentProfileId,

@@ -22,3 +22,16 @@ spring:
       - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+
+logging:
+  pattern:
+    level: "%5p [requestId:%X{requestId:-none}]"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true

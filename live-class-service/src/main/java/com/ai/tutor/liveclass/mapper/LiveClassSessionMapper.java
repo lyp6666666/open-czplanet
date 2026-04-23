@@ -30,4 +30,12 @@ public interface LiveClassSessionMapper {
                   @Param("endedAt") LocalDateTime endedAt);
 
     int updateExtraJsonById(@Param("id") Long id, @Param("extraJson") String extraJson);
+
+    int tryMarkAiSessionCreating(@Param("id") Long id);
+
+    int clearAiSessionCreating(@Param("id") Long id);
+
+    int tryMarkAiReportTaskQueued(@Param("id") Long id);
+
+    int clearAiReportTaskQueued(@Param("id") Long id);
 }

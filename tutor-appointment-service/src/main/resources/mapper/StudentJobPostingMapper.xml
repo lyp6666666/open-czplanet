@@ -288,4 +288,15 @@
           AND (biz_status IS NULL OR biz_status = 1)
     </select>
 
+    <select id="selectByIdVisibleForTestTeacher" resultMap="StudentJobPostingMap">
+        SELECT
+            id, parent_id, subject_id, subject_name, subject_is_other, title, description, student_gender, grade_code, available_time, teacher_gender_preference, teacher_requirement_detail, child_age, class_mode, city, address,
+            frequency_per_week, budget_min, budget_max, stage_code, education_requirement, publisher_identity, schedule, biz_status, status, create_time, update_time
+        FROM student_job_posting
+        WHERE id = #{id}
+          AND status = 1
+          AND (biz_status IS NULL OR biz_status = 1)
+        LIMIT 1
+    </select>
+
 </mapper>

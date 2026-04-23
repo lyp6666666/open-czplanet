@@ -1,11 +1,61 @@
+import { createHash } from 'node:crypto'
 import { expect, test, type Browser, type BrowserContext, type ConsoleMessage, type Page, type StorageState } from '@playwright/test'
 
-const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL || process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173'
+const webBaseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173'
+const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL || 'http://127.0.0.1:18080'
 const opsToken = process.env.OPS_VERIFY_TOKEN || 'DevOpsVerifyTokenForE2E'
+const e2eWechatMchId = process.env.E2E_YUNGOUOS_WECHAT_MCH_ID || '1742646563'
+const e2eYungouosAppKey = process.env.E2E_YUNGOUOS_APP_KEY || '7F3DC3EB62914ACBAC7443605AC685F7'
 
 function randPhone(prefix: string) {
   const n = Math.floor(Math.random() * 1e8)
   return `${prefix}${String(n).padStart(8, '0')}`.slice(0, 11)
+}
+
+async function postForm(path: string, form: Record<string, string>) {
+  const body = new URLSearchParams()
+  for (const [key, value] of Object.entries(form)) {
+    body.set(key, value)
+  }
+  const response = await fetch(new URL(path, apiBaseUrl), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(`FORM failed: ${path} ${response.status} ${text}`)
+  }
+  return text
+}
+
+function md5Upper(text: string) {
+  return createHash('md5').update(text).digest('hex').toUpperCase()
+}
+
+function createYungouosSign(params: Record<string, string>, appKey: string) {
+  const payload = Object.entries(params)
+    .filter(([key, value]) => key && key.toLowerCase() !== 'sign' && value != null && String(value).trim() !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join('&')
+  return md5Upper(`${payload}&key=${appKey}`)
+}
+
+async function triggerPaymentSuccess(orderNo: string, amountFen: number) {
+  const form = {
+    code: '1',
+    out_trade_no: orderNo,
+    total_fee: (amountFen / 100).toFixed(2),
+    pay_no: `E2E_PAY_${orderNo}`,
+    order_no: `E2E_ORDER_${orderNo}`,
+    mch_id: e2eWechatMchId,
+  }
+  const sign = createYungouosSign(form, e2eYungouosAppKey)
+  const text = await postForm('/payment/notify/yungouos', { ...form, sign })
+  if (!text.trim().toUpperCase().includes('SUCCESS')) {
+    throw new Error(`payment notify failed: ${text}`)
+  }
 }
 
 async function api(path: string, options: { method?: string; token?: string; body?: unknown; headers?: Record<string, string> } = {}) {
@@ -18,7 +68,8 @@ async function api(path: string, options: { method?: string; token?: string; bod
     },
     body: options.body == null ? undefined : JSON.stringify(options.body),
   })
-  const json = (await response.json()) as { code: number; data: any; message: string }
+  const text = await response.text()
+  const json = (text ? JSON.parse(text) : { code: 0, data: null, message: 'ok' }) as { code: number; data: any; message: string }
   if (!response.ok || json.code !== 0) {
     throw new Error(`API failed: ${path} ${response.status} ${JSON.stringify(json)}`)
   }
@@ -52,30 +103,95 @@ async function createLiveCourse() {
   const teacher = await login('TEACHER', teacherPhone)
   const student = await login('STUDENT', studentPhone)
 
-  const now = Date.now()
-  const startAt = now + 3 * 60_000
-  const endAt = startAt + 60 * 60_000
-
-  const event = await api('/api/v1/schedule/events', {
+  const startChat = await api('/chat/application/start-chat', {
     method: 'POST',
-    token: teacher.token,
+    token: student.token,
     body: {
-      title: 'Playwright 实时课堂',
-      participantUserId: student.id,
-      startAt,
-      endAt,
-      description: 'Playwright 浏览器音视频联调',
+      receiverUid: teacher.id,
+      contextType: 'TUTOR',
+      contextId: teacher.id,
+      content: 'Playwright 实时课堂音视频联调',
+      teachingMode: 'ONLINE',
+      clientRequestId: `pw-live-${Date.now()}`,
     },
   })
 
-  await api(`/api/v1/schedule/events/${event.id}/response`, {
+  const applicationId = startChat?.message?.body?.applicationId as number | undefined
+  const roomId = startChat?.message?.roomId as number | undefined
+  if (!applicationId || !roomId) {
+    throw new Error(`missing application/room after start chat: ${JSON.stringify(startChat)}`)
+  }
+
+  await api(`/chat/application/${applicationId}/decision-message`, {
+    method: 'POST',
+    token: teacher.token,
+    body: { action: 'ACCEPT' },
+  })
+
+  const enterChat = await api(`/chat/application/${applicationId}/enter-chat`, {
+    method: 'POST',
+    token: student.token,
+    body: {},
+  })
+  const brokerageOrderId = enterChat?.orderId as number | undefined
+  if (!brokerageOrderId) {
+    throw new Error(`missing brokerage order for application ${applicationId}`)
+  }
+
+  const prepay = await api('/payment/prepay', {
+    method: 'POST',
+    token: teacher.token,
+    body: {
+      contextType: 'BROKERAGE_ORDER',
+      contextId: brokerageOrderId,
+      channel: 'WECHAT',
+    },
+  })
+  const orderNo = prepay?.orderNo as string | undefined
+  const amountFen = Number(prepay?.amountFen || 0)
+  if (!orderNo || amountFen <= 0) {
+    throw new Error(`missing payment prepay info for brokerage order ${brokerageOrderId}: ${JSON.stringify(prepay)}`)
+  }
+  await triggerPaymentSuccess(orderNo, amountFen)
+
+  const now = Date.now()
+  const startAt = now + 2 * 60_000
+  const endAt = startAt + 30 * 60_000
+
+  const collab = await api('/chat/collaboration/proposal', {
+    method: 'POST',
+    token: teacher.token,
+    body: {
+      roomId,
+      pricePerHour: '200',
+      trialStartAt: startAt,
+      trialEndAt: endAt,
+      remark: 'Playwright 浏览器音视频联调',
+      clientRequestId: `pw-live-collab-${Date.now()}`,
+    },
+  })
+
+  const proposalId = collab?.message?.body?.proposalId as number | undefined
+  if (!proposalId) {
+    throw new Error(`missing proposalId in collaboration response: ${JSON.stringify(collab)}`)
+  }
+
+  await api(`/chat/collaboration/proposal/${proposalId}/response`, {
     method: 'POST',
     token: student.token,
     body: { action: 'ACCEPT' },
   })
 
+  const courseList = await api('/courses/my?role=TEACHER&page=1&size=20', {
+    token: teacher.token,
+  })
+  const course = Array.isArray(courseList) ? courseList.find((item) => item?.applicationId === applicationId) : null
+  if (!course?.courseId) {
+    throw new Error(`missing course for application ${applicationId}: ${JSON.stringify(courseList)}`)
+  }
+
   return {
-    courseId: event.id as number,
+    courseId: course.courseId as number,
     teacher,
     student,
   }
@@ -93,6 +209,11 @@ type MediaProbeResult = {
   videoTracks: number
   error?: string
 }
+type AuthedMediaPage = {
+  context: BrowserContext
+  page: Page
+  consoleMessages: string[]
+}
 
 function originOf(rawUrl: string) {
   return new URL(rawUrl).origin
@@ -106,6 +227,33 @@ function buildAuthStorageState(user: E2EUser, mediaOptions: MediaPreferenceOptio
     origins: [
       {
         origin: originOf(apiBaseUrl),
+        localStorage: [
+          { name: 'ai_tutor_token', value: user.token },
+          {
+            name: 'ai_tutor_user',
+            value: JSON.stringify({
+              id: user.id,
+              name: user.name,
+              phone: user.phone,
+              userType: user.userType,
+              token: user.token,
+            }),
+          },
+          {
+            name: 'ai_tutor_live_media_preferences',
+            value: JSON.stringify({
+              cameraEnabled,
+              micEnabled,
+              speakerChecked: true,
+              cameraDeviceId: null,
+              micDeviceId: null,
+              speakerDeviceId: null,
+            }),
+          },
+        ],
+      },
+      {
+        origin: originOf(webBaseUrl),
         localStorage: [
           { name: 'ai_tutor_token', value: user.token },
           {
@@ -158,24 +306,28 @@ async function newAuthedMediaPage(
   browserName: string,
   user: E2EUser,
   mediaOptions: MediaPreferenceOptions = {},
-) {
+): Promise<AuthedMediaPage> {
   const context = await browser.newContext({
     baseURL: apiBaseUrl,
     permissions: browserName === 'chromium' ? ['camera', 'microphone'] : undefined,
     storageState: buildAuthStorageState(user, mediaOptions),
   })
   const page = await context.newPage()
+  const consoleMessages: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error' || message.text().includes('[livekit-classroom]')) {
       void formatConsoleMessage(message).then((text) => {
+        consoleMessages.push(text)
         console.log(`[browser:${user.userType}:${user.id}] ${text}`)
       })
     }
   })
   page.on('pageerror', (error) => {
-    console.log(`[pageerror:${user.userType}:${user.id}] ${error.message}`)
+    const text = error.message
+    consoleMessages.push(text)
+    console.log(`[pageerror:${user.userType}:${user.id}] ${text}`)
   })
-  return { context, page }
+  return { context, page, consoleMessages }
 }
 
 async function closeAll(contexts: BrowserContext[]) {
@@ -281,6 +433,13 @@ async function expectRemoteMediaReceived(page: Page) {
   await expect(page.getByTestId('remote-audio-state')).toHaveAttribute('data-connected', 'true')
 }
 
+function expectNoMixedContentOrUnsafeLivekitUrls(...pages: AuthedMediaPage[]) {
+  const unsafeMessages = pages
+    .flatMap((item) => item.consoleMessages)
+    .filter((text) => /Mixed Content|localhost:18080\/livekit|http:\/\/111\.228\.20\.88\/livekit/i.test(text))
+  expect(unsafeMessages, `unsafe browser console messages:\n${unsafeMessages.join('\n')}`).toEqual([])
+}
+
 async function expectClassroomShellReady(page: Page) {
   await expect(page.getByTestId('local-stage')).toBeVisible({ timeout: 45_000 })
   await expect(page.getByTestId('classroom-connection-state')).toBeVisible()
@@ -289,8 +448,10 @@ async function expectClassroomShellReady(page: Page) {
 test.describe('live classroom real media', () => {
   test('teacher and student can join same livekit room with media permissions', async ({ browser, browserName }) => {
     const data = await createLiveCourse()
-    const { context: teacherContext, page: teacherPage } = await newAuthedMediaPage(browser, browserName, data.teacher)
-    const { context: studentContext, page: studentPage } = await newAuthedMediaPage(browser, browserName, data.student)
+    const teacherSession = await newAuthedMediaPage(browser, browserName, data.teacher)
+    const studentSession = await newAuthedMediaPage(browser, browserName, data.student)
+    const { context: teacherContext, page: teacherPage } = teacherSession
+    const { context: studentContext, page: studentPage } = studentSession
 
     try {
       await teacherPage.goto(`/#/live/prepare/${data.courseId}`)
@@ -322,6 +483,7 @@ test.describe('live classroom real media', () => {
 
       await expect(teacherPage.getByTestId('classroom-toggle-mic')).toContainText('打开麦克风')
       await expect(studentPage.getByTestId('classroom-toggle-camera')).toContainText('打开摄像头')
+      expectNoMixedContentOrUnsafeLivekitUrls(teacherSession, studentSession)
     } finally {
       await closeAll([teacherContext, studentContext])
     }
@@ -330,8 +492,10 @@ test.describe('live classroom real media', () => {
   test('in-class chat syncs across teacher and student', async ({ browser, browserName }) => {
     const data = await createLiveCourse()
     const chatOnlyMedia = { cameraEnabled: false, micEnabled: false }
-    const { context: teacherContext, page: teacherPage } = await newAuthedMediaPage(browser, browserName, data.teacher, chatOnlyMedia)
-    const { context: studentContext, page: studentPage } = await newAuthedMediaPage(browser, browserName, data.student, chatOnlyMedia)
+    const teacherSession = await newAuthedMediaPage(browser, browserName, data.teacher, chatOnlyMedia)
+    const studentSession = await newAuthedMediaPage(browser, browserName, data.student, chatOnlyMedia)
+    const { context: teacherContext, page: teacherPage } = teacherSession
+    const { context: studentContext, page: studentPage } = studentSession
 
     try {
       await teacherPage.goto(`/#/live/prepare/${data.courseId}`)
@@ -359,6 +523,7 @@ test.describe('live classroom real media', () => {
 
       await expect(teacherPage.getByTestId('live-chat-list')).toContainText(text, { timeout: 20_000 })
       await expect(studentPage.getByTestId('live-chat-list')).toContainText(text, { timeout: 20_000 })
+      expectNoMixedContentOrUnsafeLivekitUrls(teacherSession, studentSession)
     } finally {
       await closeAll([teacherContext, studentContext])
     }

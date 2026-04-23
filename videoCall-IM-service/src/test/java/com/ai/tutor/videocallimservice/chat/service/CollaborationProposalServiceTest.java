@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
 import com.ai.tutor.videocallimservice.chat.domain.entity.Room;
@@ -26,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -133,6 +135,7 @@ class CollaborationProposalServiceTest {
         StudentProfileLiteMapper studentProfileLiteMapper = mock(StudentProfileLiteMapper.class);
         TutorApplicationService tutorApplicationService = mock(TutorApplicationService.class);
         ChatService chatService = mock(ChatService.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
 
         CollaborationProposalService svc = new CollaborationProposalService();
         ReflectionTestUtils.setField(svc, "collaborationProposalMapper", collaborationProposalMapper);
@@ -146,6 +149,7 @@ class CollaborationProposalServiceTest {
         ReflectionTestUtils.setField(svc, "courseEnrollmentService", mock(CourseEnrollmentService.class));
         ReflectionTestUtils.setField(svc, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
         ReflectionTestUtils.setField(svc, "studentJobPostingLiteMapper", mock(StudentJobPostingLiteMapper.class));
+        ReflectionTestUtils.setField(svc, "bizKpiMetrics", bizKpiMetrics);
 
         when(roomMapper.selectById(100L)).thenReturn(Room.builder().id(100L).status(1).teacherProfileId(11L).studentProfileId(22L).build());
         when(teacherProfileLiteMapper.selectUserIdById(11L)).thenReturn(1001L);
@@ -185,6 +189,7 @@ class CollaborationProposalServiceTest {
         assertThat(captor.getValue().getRemark()).isEqualTo("试课备注");
         assertThat(captor.getValue().getExpireAt()).isNotNull();
         assertThat(captor.getValue().getClientRequestId()).isEqualTo("client-1");
+        verify(bizKpiMetrics).incTrialProposalCreated("teacher");
     }
 
     @Test
@@ -307,5 +312,26 @@ class CollaborationProposalServiceTest {
 
         assertThat(msgId).isEqualTo(9002L);
         verify(chatService).sendMsg(any(ChatMessageReq.class), eq(2L));
+    }
+
+    @Test
+    void processExpiredProposalsShouldCountOnlySuccessfulTransitions() {
+        CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
+
+        CollaborationProposalService svc = new CollaborationProposalService();
+        ReflectionTestUtils.setField(svc, "collaborationProposalMapper", collaborationProposalMapper);
+        ReflectionTestUtils.setField(svc, "bizKpiMetrics", bizKpiMetrics);
+
+        when(collaborationProposalMapper.selectExpiredPendingIds(any(LocalDateTime.class), eq(100)))
+                .thenReturn(java.util.List.of(11L, 12L));
+        when(collaborationProposalMapper.updateStatus(eq(11L), eq("EXPIRED"), eq(0L), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(collaborationProposalMapper.updateStatus(eq(12L), eq("EXPIRED"), eq(0L), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        svc.processExpiredProposals();
+
+        verify(bizKpiMetrics, times(1)).incTrialProposalExpired();
     }
 }

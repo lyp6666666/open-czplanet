@@ -2,4 +2,4 @@
 set -e
 
 cd "$(dirname "$0")/.."
-exec python -m app.worker
+exec .venv/bin/python -m app.worker

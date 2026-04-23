@@ -236,7 +236,7 @@ async function mountChatRoomPage() {
   })
   mountedWrappers.push(wrapper)
   await flushPromises()
-  return { pinia, wrapper }
+  return { pinia, wrapper, router }
 }
 
 async function mountChatRoomPageAt(path: string) {
@@ -301,7 +301,7 @@ async function mountChatRoomPageAt(path: string) {
   })
   mountedWrappers.push(wrapper)
   await flushPromises()
-  return { pinia, wrapper }
+  return { pinia, wrapper, router }
 }
 
 describe('ChatRoomPage realtime read receipt', () => {
@@ -815,6 +815,7 @@ describe('ChatRoomPage realtime read receipt', () => {
     expect(router.currentRoute.value.name).toBe('cashierPay')
     expect(router.currentRoute.value.query.contextId).toBe('9001')
     expect(router.currentRoute.value.query.applicationId).toBe('9527')
+    expect(router.currentRoute.value.query.otherUid).toBe('3001')
   })
 
   it('reuses teachingMode when sending tutor application again', async () => {
@@ -1017,6 +1018,60 @@ describe('ChatRoomPage realtime read receipt', () => {
     await flushPromises()
 
     expect(mocks.unlockContact).toHaveBeenCalledWith(10, 3001)
+  })
+
+  it('does not reload messages in a loop when otherUid is inferred from loaded messages', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: { type: 'text', content: '支付后回来看看消息' },
+          },
+        },
+      ],
+    })
+
+    const { wrapper } = await mountChatRoomPageAt('/chat/10')
+    await flushPromises()
+
+    expect(mocks.listMessages).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('支付后回来看看消息')
+  })
+
+  it('does not reinitialize the room when only otherUid query changes', async () => {
+    mocks.listMessages.mockResolvedValue({
+      cursor: null,
+      isLast: true,
+      list: [
+        {
+          fromUser: { uid: 3001 },
+          message: {
+            id: 800,
+            roomId: 10,
+            sendTime: '2026-04-18T10:05:00',
+            body: { type: 'text', content: '支付成功后进入会话' },
+          },
+        },
+      ],
+    })
+
+    const { router } = await mountChatRoomPageAt('/chat/10')
+    await flushPromises()
+
+    expect(mocks.listMessages).toHaveBeenCalledTimes(1)
+    expect(mocks.courseByRoom).toHaveBeenCalledTimes(1)
+
+    await router.replace('/chat/10?otherUid=3001')
+    await flushPromises()
+
+    expect(mocks.listMessages).toHaveBeenCalledTimes(1)
+    expect(mocks.courseByRoom).toHaveBeenCalledTimes(1)
   })
 
   it('loads unlocked contact into the peer avatar card after contact access is opened', async () => {

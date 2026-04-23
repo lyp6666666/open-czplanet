@@ -15,6 +15,21 @@
 
 ## 2026-04-20
 
+## 2026-04-23
+
+- 请求：
+  收口线上 DEV 实时课堂音视频问题，定位“双方都进入课堂但仍互相看不到/听不到”，并把排查与验证流程沉淀进项目 skill
+- 涉及区域：
+  `skills/`、`ai-tutor-web/e2e/`、共享远程双服务器拓扑、LiveKit 运行链路
+- 已检查背景：
+  双服务器 nginx 转发、LiveKit 配置、浏览器 E2E、线上抓包、共享 DEV 云端口放通情况
+- 验证：
+  执行了 `nc -vz -w 4 111.228.20.88 7881`
+  执行了线上抓包 `tcpdump "(udp portrange 50000-50100) or tcp port 7881"`
+  执行了 `cd ai-tutor-web && PLAYWRIGHT_BASE_URL=https://huoyue.online PLAYWRIGHT_API_BASE_URL=https://huoyue.online OPS_VERIFY_TOKEN=DevOpsVerifyTokenForE2E npx playwright test e2e/live-classroom.spec.ts --project=chromium`
+- 新增说明：
+  当前共享 DEV 实时课堂的根因和验证方法已经固定：`111.229.64.41` 只承担 `80/443` 与 `/livekit` 信令转发，真实音视频必须直达 `111.228.20.88` 的 `TCP 7881` 与 `UDP 50000-50100`
+
 - 请求：
   新增第一版 `ai-agent-service` 内部 AI 微服务，并同步数据库 bootstrap schema、网关内部路由、Nacos 模板和服务专属 skill
 - 涉及区域：

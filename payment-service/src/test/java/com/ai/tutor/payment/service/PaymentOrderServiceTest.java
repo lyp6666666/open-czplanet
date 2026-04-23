@@ -1,5 +1,6 @@
 package com.ai.tutor.payment.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.payment.enums.PaymentStatus;
 import com.ai.tutor.payment.mapper.PaymentOrderMapper;
 import com.ai.tutor.payment.model.entity.PaymentOrder;
@@ -30,6 +31,9 @@ public class PaymentOrderServiceTest {
     @Mock
     private RocketMQTemplate rocketMQTemplate;
 
+    @Mock
+    private BizKpiMetrics bizKpiMetrics;
+
     private PaymentOrderServiceImpl paymentOrderService;
 
     private PaymentOrder pendingOrder;
@@ -39,6 +43,7 @@ public class PaymentOrderServiceTest {
         paymentOrderService = new PaymentOrderServiceImpl();
         ReflectionTestUtils.setField(paymentOrderService, "baseMapper", paymentOrderMapper);
         ReflectionTestUtils.setField(paymentOrderService, "rocketMQTemplate", rocketMQTemplate);
+        ReflectionTestUtils.setField(paymentOrderService, "bizKpiMetrics", bizKpiMetrics);
 
         pendingOrder = new PaymentOrder();
         pendingOrder.setId(1L);
@@ -62,6 +67,8 @@ public class PaymentOrderServiceTest {
         assertTrue(result);
         verify(paymentOrderMapper, atLeastOnce()).update(any(), any());
         verify(rocketMQTemplate).convertAndSend(eq("payment-success-topic"), any(Object.class));
+        verify(bizKpiMetrics).incPaymentSuccess(eq("info_fee"), anyString());
+        verify(bizKpiMetrics).addPaymentInfoFeeAmountFen(100L);
     }
 
     @Test
@@ -95,5 +102,6 @@ public class PaymentOrderServiceTest {
         assertTrue(created != null && created.getId() != null && !"OLD_ORDER".equals(created.getOrderNo()));
         verify(paymentOrderMapper).update(any(), any());
         verify(paymentOrderMapper).insert(any(PaymentOrder.class));
+        verify(bizKpiMetrics).incPaymentOrderCreated(eq("info_fee"), eq("wechat"));
     }
 }

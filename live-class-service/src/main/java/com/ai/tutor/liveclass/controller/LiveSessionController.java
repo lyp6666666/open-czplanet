@@ -5,6 +5,7 @@ import com.ai.tutor.utils.RequestHolder;
 import com.ai.tutor.utils.ResultUtils;
 import com.ai.tutor.liveclass.domain.vo.request.EndLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.IssueJoinTokenRequest;
+import com.ai.tutor.liveclass.domain.vo.request.JoinLiveSessionAckRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
@@ -16,8 +17,10 @@ import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
+import com.ai.tutor.liveclass.service.LiveKitUrlResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +34,8 @@ public class LiveSessionController {
 
     @Resource
     private LiveClassService liveClassService;
+    @Resource
+    private LiveKitUrlResolver liveKitUrlResolver;
 
     @GetMapping("/sessions/by-course/{courseId}")
     @Operation(summary = "按课程查询课堂信息")
@@ -57,9 +62,19 @@ public class LiveSessionController {
     @PostMapping("/sessions/{sessionId}/join-token")
     @Operation(summary = "签发实时课堂入会 token")
     public BaseResponse<IssueJoinTokenResp> joinToken(@PathVariable("sessionId") Long sessionId,
-                                                      @Valid @RequestBody IssueJoinTokenRequest request) {
+                                                      @Valid @RequestBody IssueJoinTokenRequest request,
+                                                      HttpServletRequest httpServletRequest) {
         Long uid = RequestHolder.get().getUid();
-        return ResultUtils.success(liveClassService.issueJoinToken(sessionId, uid, request));
+        String publicWsUrl = liveKitUrlResolver.resolvePublicWsUrl(httpServletRequest);
+        return ResultUtils.success(liveClassService.issueJoinToken(sessionId, uid, request, publicWsUrl));
+    }
+
+    @PostMapping("/sessions/{sessionId}/join-ack")
+    @Operation(summary = "客户端完成入会后的确认上报")
+    public BaseResponse<LiveSessionResp> joinAck(@PathVariable("sessionId") Long sessionId,
+                                                 @RequestBody(required = false) JoinLiveSessionAckRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.joinAck(sessionId, uid, request == null ? new JoinLiveSessionAckRequest() : request));
     }
 
     @GetMapping("/sessions/{sessionId}/status")

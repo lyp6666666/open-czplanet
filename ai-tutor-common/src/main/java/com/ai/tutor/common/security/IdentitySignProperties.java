@@ -12,7 +12,7 @@ public class IdentitySignProperties {
 
     private long clockSkewMs = 60_000L;
 
-    private List<String> whitelistPaths = new ArrayList<>();
+    private List<String> whitelistPaths = defaultWhitelistPaths();
 
     public String getSecret() {
         return secret;
@@ -35,10 +35,22 @@ public class IdentitySignProperties {
     }
 
     public void setWhitelistPaths(List<String> whitelistPaths) {
+        ArrayList<String> merged = defaultWhitelistPaths();
         if (whitelistPaths == null) {
-            this.whitelistPaths = new ArrayList<>();
-        } else {
-            this.whitelistPaths = whitelistPaths;
+            this.whitelistPaths = merged;
+            return;
         }
+        for (String path : whitelistPaths) {
+            if (path != null && !merged.contains(path)) {
+                merged.add(path);
+            }
+        }
+        this.whitelistPaths = merged;
+    }
+
+    private static ArrayList<String> defaultWhitelistPaths() {
+        return new ArrayList<>(List.of(
+                "/internal/live/**"
+        ));
     }
 }

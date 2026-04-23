@@ -1,0 +1,62 @@
+{
+  "uid": "ai-tutor-infra-dependency",
+  "title": "AI Tutor - Infra & Dependency",
+  "timezone": "Asia/Shanghai",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "宿主机 CPU 使用率",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "宿主机内存使用率",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "容器 CPU 使用率",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name!=\"\",image!=\"\"}[5m]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis 已用内存",
+      "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "redis_memory_used_bytes" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "MySQL 当前连接数",
+      "gridPos": { "x": 8, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "mysql_global_status_threads_connected" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "RabbitMQ 队列消息数",
+      "gridPos": { "x": 16, "y": 8, "w": 8, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum(rabbitmq_queue_messages)" }
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ const session = ref<LiveSessionResp | null>(null)
 const sidebar = ref<'ai' | 'chat' | 'info' | 'tech'>('ai')
 const connectionState = ref<'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('idle')
 const remoteParticipantName = ref('对方')
+const remoteParticipantJoined = ref(false)
 const remoteAudioConnected = ref(false)
 const remoteVideoConnected = ref(false)
 const roomId = computed(() => session.value?.roomId ?? null)
@@ -43,6 +44,7 @@ let pollTimer: number | null = null
 let roomClient: LiveRoomClient | null = null
 
 function clearRemoteMediaState() {
+  remoteParticipantJoined.value = false
   remoteVideoConnected.value = false
   remoteAudioConnected.value = false
   if (remoteVideoRef.value) remoteVideoRef.value.srcObject = null
@@ -58,6 +60,7 @@ function syncRemoteStateFromRoom(client: LiveRoomClient) {
     return
   }
 
+  remoteParticipantJoined.value = true
   remoteParticipantName.value = participant.name || participant.identity || '对方'
   let hasRemoteAudio = false
   let hasRemoteVideo = false
@@ -77,6 +80,24 @@ function syncRemoteStateFromRoom(client: LiveRoomClient) {
   if (!hasRemoteVideo && remoteVideoRef.value) remoteVideoRef.value.srcObject = null
   if (!hasRemoteAudio && remoteAudioRef.value) remoteAudioRef.value.srcObject = null
 }
+
+async function attachLocalPreview(client: LiveRoomClient, retries = 4) {
+  for (let i = 0; i <= retries; i += 1) {
+    const localCameraPublication = client.localCameraPublication ?? client.room.localParticipant.getTrackPublication(Track.Source.Camera)
+    if (localCameraPublication?.track) {
+      attachTrackToElement(localCameraPublication.track, localVideoRef.value)
+      return
+    }
+    if (i < retries) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 180))
+    }
+  }
+  if (localVideoRef.value) {
+    localVideoRef.value.srcObject = null
+  }
+}
+
+const peerJoinedState = computed(() => !!(session.value?.peerJoined || remoteParticipantJoined.value || remoteAudioConnected.value || remoteVideoConnected.value))
 
 async function load() {
   loading.value = true
@@ -117,6 +138,7 @@ const aiStatusText = computed(() => {
 
 function bindRoomEvents(client: LiveRoomClient) {
   client.onParticipantConnected((participant) => {
+    remoteParticipantJoined.value = true
     remoteParticipantName.value = participant.name || participant.identity || '对方'
     syncRemoteStateFromRoom(client)
   })
@@ -181,11 +203,21 @@ async function connectRoom() {
       cameraDeviceId: selectedCameraId.value || null,
       micDeviceId: selectedMicId.value || null,
     })
-    const localCameraPublication = client.localCameraPublication ?? client.room.localParticipant.getTrackPublication(Track.Source.Camera)
-    if (localCameraPublication?.track) {
-      attachTrackToElement(localCameraPublication.track, localVideoRef.value)
-    }
+    await attachLocalPreview(client)
     syncRemoteStateFromRoom(client)
+    try {
+      session.value = await liveApi.joinAck(session.value.sessionId, {
+        clientType: 'WEB',
+        joinMode: 'CLASSROOM',
+        connectionState: 'CONNECTED',
+        cameraEnabled: camOn.value,
+        micEnabled: micOn.value,
+        cameraDeviceId: selectedCameraId.value || null,
+        micDeviceId: selectedMicId.value || null,
+      })
+    } catch {
+      // webhook 未及时回流时，前端至少依靠房间内远端参与者状态保持课堂可用。
+    }
     connectionState.value = 'connected'
     await refreshStatus()
   } catch (e) {
@@ -279,9 +311,9 @@ onUnmounted(async () => {
       <section class="stage card">
         <div class="stage-screen" data-testid="remote-stage">
           <div v-if="!remoteVideoConnected" class="waiting">
-            <div class="waiting-title">{{ session?.peerJoined || remoteAudioConnected ? `${remoteParticipantName} 已加入，等待视频画面` : '已进入课堂，正在等待对方加入' }}</div>
+            <div class="waiting-title">{{ peerJoinedState ? `${remoteParticipantName} 已加入，等待视频画面` : '已进入课堂，正在等待对方加入' }}</div>
             <div class="waiting-desc">
-              {{ session?.peerJoined || remoteAudioConnected ? '对方语音/网络已经建立，你可以先开场沟通。' : '你可以先确认本地设备已开启，或回到聊天提醒对方入会。' }}
+              {{ peerJoinedState ? '对方已经进入同一课堂，当前正在等待远端视频轨道或画面恢复。' : '你可以先确认本地设备已开启，或回到聊天提醒对方入会。' }}
             </div>
           </div>
           <video
@@ -356,7 +388,7 @@ onUnmounted(async () => {
         <div v-else-if="sidebar === 'info'" class="side-section">
           <div class="row"><span>课堂状态</span><strong>{{ session?.status || '—' }}</strong></div>
           <div class="row"><span>房间</span><strong>{{ session?.providerRoomName || '—' }}</strong></div>
-          <div class="row"><span>对方状态</span><strong>{{ session?.peerJoined || remoteAudioConnected ? '已入会' : '等待中' }}</strong></div>
+          <div class="row"><span>对方状态</span><strong>{{ peerJoinedState ? '已入会' : '等待中' }}</strong></div>
           <div class="row"><span>AI 观察</span><strong>{{ session?.aiPolicy || 'OFF' }}</strong></div>
         </div>
 

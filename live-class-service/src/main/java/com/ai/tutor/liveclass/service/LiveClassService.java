@@ -13,6 +13,7 @@ import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.entity.LiveClassWebhookEvent;
 import com.ai.tutor.liveclass.domain.vo.request.EndLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.IssueJoinTokenRequest;
+import com.ai.tutor.liveclass.domain.vo.request.JoinLiveSessionAckRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveKitWebhookRequest;
@@ -124,7 +125,7 @@ public class LiveClassService {
         boolean joinableNow = joinableNow(session);
         LessonPaymentAccessCheckInfo accessCheck = loadLessonJoinAccess(courseId);
         boolean paymentBlocked = accessCheck != null && Boolean.TRUE.equals(accessCheck.getBlocked());
-        boolean canJoin = canJoin(session, viewerUid) && !paymentBlocked;
+        boolean canJoin = canJoin(session, viewerUid) && joinableNow && !paymentBlocked;
         return PrepareLiveSessionResp.builder()
                 .sessionId(session.getId())
                 .status(session.getStatus())
@@ -172,15 +173,14 @@ public class LiveClassService {
     }
 
     @Transactional
-    public IssueJoinTokenResp issueJoinToken(Long sessionId, Long uid, IssueJoinTokenRequest request) {
+    public IssueJoinTokenResp issueJoinToken(Long sessionId, Long uid, IssueJoinTokenRequest request, String serverUrl) {
         LiveClassSession session = requireById(sessionId);
         ThrowUtils.throwIf(!canJoin(session, uid), ErrorCode.NO_AUTH_ERROR);
         ThrowUtils.throwIf(!joinableNow(session), ErrorCode.OPERATION_ERROR, "未到可入会时间");
 
         String participantName = resolveDisplayName(uid);
-        IssueJoinTokenResp resp = liveKitTokenService.issueToken(uid, participantName, session.getProviderRoomName());
-        liveClassSessionMapper.markParticipantJoined(sessionId, uid, LocalDateTime.now());
-        upsertParticipantJoin(sessionId, uid, session.getTeacherUid(), request);
+        IssueJoinTokenResp resp = liveKitTokenService.issueToken(uid, participantName, session.getProviderRoomName(), serverUrl);
+        upsertParticipantTokenIssued(sessionId, uid, session.getTeacherUid(), request);
         appendEvent(sessionId, "JOIN_TOKEN_ISSUED", "APP", uid, Map.of("clientType", request.getClientType(), "joinMode", request.getJoinMode()));
         return resp;
     }
@@ -193,6 +193,23 @@ public class LiveClassService {
             // AI 初始化失败不影响课堂主流程
         }
         return toResp(session, viewerUid);
+    }
+
+    @Transactional
+    public LiveSessionResp joinAck(Long sessionId, Long uid, JoinLiveSessionAckRequest request) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        LocalDateTime now = LocalDateTime.now();
+        liveClassSessionMapper.markParticipantJoined(sessionId, uid, now);
+        upsertParticipantJoined(
+                session,
+                uid,
+                now,
+                Boolean.TRUE.equals(request.getCameraEnabled()),
+                Boolean.TRUE.equals(request.getMicEnabled()),
+                buildDeviceInfoPayload(request)
+        );
+        appendEvent(sessionId, "PARTICIPANT_JOINED", "CLIENT", uid, request);
+        return toResp(requireById(sessionId), uid);
     }
 
     @Transactional
@@ -333,7 +350,7 @@ public class LiveClassService {
                 .build());
     }
 
-    private void upsertParticipantJoin(Long sessionId, Long uid, Long teacherUid, IssueJoinTokenRequest request) {
+    private void upsertParticipantTokenIssued(Long sessionId, Long uid, Long teacherUid, IssueJoinTokenRequest request) {
         LiveClassParticipant participant = liveClassParticipantMapper.selectBySessionIdAndUid(sessionId, uid);
         LocalDateTime now = LocalDateTime.now();
         if (participant == null) {
@@ -342,30 +359,34 @@ public class LiveClassService {
                     .uid(uid)
                     .role(Objects.equals(uid, teacherUid) ? "TEACHER" : "STUDENT")
                     .identityType("HUMAN")
-                    .joinCount(1)
-                    .firstJoinAt(now)
-                    .lastJoinAt(now)
-                    .onlineStatus("JOINED")
-                    .cameraEnabled(Boolean.TRUE)
-                    .micEnabled(Boolean.TRUE)
+                    .joinCount(0)
+                    .onlineStatus("TOKEN_ISSUED")
+                    .cameraEnabled(Boolean.FALSE)
+                    .micEnabled(Boolean.FALSE)
                     .deviceInfoJson(JSONUtil.toJsonStr(Map.of("joinMode", defaulted(request.getJoinMode(), "AUDIO_VIDEO"), "clientType", request.getClientType())))
                     .build();
             liveClassParticipantMapper.insert(participant);
             return;
         }
-        participant.setJoinCount((participant.getJoinCount() == null ? 0 : participant.getJoinCount()) + 1);
-        participant.setFirstJoinAt(participant.getFirstJoinAt() == null ? now : participant.getFirstJoinAt());
-        participant.setLastJoinAt(now);
-        participant.setOnlineStatus("JOINED");
-        participant.setCameraEnabled(Boolean.TRUE);
-        participant.setMicEnabled(Boolean.TRUE);
+        participant.setOnlineStatus("TOKEN_ISSUED");
         participant.setDeviceInfoJson(JSONUtil.toJsonStr(Map.of("joinMode", defaulted(request.getJoinMode(), "AUDIO_VIDEO"), "clientType", request.getClientType())));
         liveClassParticipantMapper.updateJoinState(participant);
     }
 
     private void upsertWebhookParticipantJoin(LiveClassSession session, Long uid, LiveKitWebhookRequest request) {
+        upsertParticipantJoined(
+                session,
+                uid,
+                LocalDateTime.now(),
+                Boolean.TRUE.equals(request.getCameraEnabled()),
+                Boolean.TRUE.equals(request.getMicEnabled()),
+                request
+        );
+    }
+
+    private void upsertParticipantJoined(LiveClassSession session, Long uid, LocalDateTime joinedAt,
+                                         boolean cameraEnabled, boolean micEnabled, Object deviceInfo) {
         LiveClassParticipant participant = liveClassParticipantMapper.selectBySessionIdAndUid(session.getId(), uid);
-        LocalDateTime now = LocalDateTime.now();
         if (participant == null) {
             participant = LiveClassParticipant.builder()
                     .sessionId(session.getId())
@@ -373,22 +394,34 @@ public class LiveClassService {
                     .role(Objects.equals(uid, session.getTeacherUid()) ? "TEACHER" : "STUDENT")
                     .identityType("HUMAN")
                     .joinCount(1)
-                    .firstJoinAt(now)
-                    .lastJoinAt(now)
+                    .firstJoinAt(joinedAt)
+                    .lastJoinAt(joinedAt)
                     .onlineStatus("JOINED")
-                    .cameraEnabled(Boolean.TRUE.equals(request.getCameraEnabled()))
-                    .micEnabled(Boolean.TRUE.equals(request.getMicEnabled()))
+                    .cameraEnabled(cameraEnabled)
+                    .micEnabled(micEnabled)
+                    .deviceInfoJson(JSONUtil.toJsonStr(deviceInfo))
                     .build();
             liveClassParticipantMapper.insert(participant);
             return;
         }
         participant.setJoinCount((participant.getJoinCount() == null ? 0 : participant.getJoinCount()) + 1);
-        participant.setFirstJoinAt(participant.getFirstJoinAt() == null ? now : participant.getFirstJoinAt());
-        participant.setLastJoinAt(now);
+        participant.setFirstJoinAt(participant.getFirstJoinAt() == null ? joinedAt : participant.getFirstJoinAt());
+        participant.setLastJoinAt(joinedAt);
         participant.setOnlineStatus("JOINED");
-        participant.setCameraEnabled(Boolean.TRUE.equals(request.getCameraEnabled()));
-        participant.setMicEnabled(Boolean.TRUE.equals(request.getMicEnabled()));
+        participant.setCameraEnabled(cameraEnabled);
+        participant.setMicEnabled(micEnabled);
+        participant.setDeviceInfoJson(JSONUtil.toJsonStr(deviceInfo));
         liveClassParticipantMapper.updateJoinState(participant);
+    }
+
+    private Map<String, Object> buildDeviceInfoPayload(JoinLiveSessionAckRequest request) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("clientType", defaulted(request.getClientType(), "WEB"));
+        payload.put("joinMode", defaulted(request.getJoinMode(), "CLASSROOM"));
+        payload.put("connectionState", defaulted(request.getConnectionState(), "CONNECTED"));
+        payload.put("cameraDeviceId", request.getCameraDeviceId());
+        payload.put("micDeviceId", request.getMicDeviceId());
+        return payload;
     }
 
     private LiveClassSession requireByCourseId(Long courseId) {

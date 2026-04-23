@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface CollaborationProposalMapper {
@@ -25,4 +26,6 @@ public interface CollaborationProposalMapper {
                       @Param("trialEndAt") LocalDateTime trialEndAt,
                       @Param("remark") String remark,
                       @Param("expireAt") LocalDateTime expireAt);
+    List<Long> selectExpiredPendingIds(@Param("expireBefore") LocalDateTime expireBefore,
+                                       @Param("limit") int limit);
 }

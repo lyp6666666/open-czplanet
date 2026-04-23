@@ -23,6 +23,11 @@ const applicationId = computed(() => {
   const v = typeof raw === 'string' ? Number(raw) : NaN
   return Number.isFinite(v) ? v : null
 })
+const otherUid = computed(() => {
+  const raw = route.query.otherUid
+  const v = typeof raw === 'string' ? Number(raw) : NaN
+  return Number.isFinite(v) ? v : null
+})
 
 const channel = ref<PayChannel>('WECHAT')
 const state = ref<UiState>('loading')
@@ -83,7 +88,11 @@ async function redirectAfterPaid() {
     try {
       const res = await applicationApi.enterChat(applicationId.value)
       if (res.roomId) {
-        await router.replace({ name: 'chatRoom', params: { roomId: String(res.roomId) } })
+        await router.replace({
+          name: 'chatRoom',
+          params: { roomId: String(res.roomId) },
+          query: { otherUid: otherUid.value ? String(otherUid.value) : undefined },
+        })
         return
       }
     } catch {

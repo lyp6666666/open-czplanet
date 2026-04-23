@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const getByCourseMock = vi.fn()
 const statusMock = vi.fn()
 const joinTokenMock = vi.fn()
+const joinAckMock = vi.fn()
 const leaveMock = vi.fn()
 const endMock = vi.fn()
 const listMessagesMock = vi.fn()
@@ -17,13 +18,14 @@ const setCameraEnabledMock = vi.fn()
 const getTrackPublicationMock = vi.fn()
 const attachTrackToElementMock = vi.fn()
 
-const remoteParticipantsMap = new Map<string, any>()
+const remoteParticipantsMap = new Map<string, { identity: string; name: string; trackPublications: Map<string, { track?: unknown }> }>()
 
 vi.mock('@/api/live', () => ({
   liveApi: {
     getByCourse: (...args: unknown[]) => getByCourseMock(...args),
     status: (...args: unknown[]) => statusMock(...args),
     joinToken: (...args: unknown[]) => joinTokenMock(...args),
+    joinAck: (...args: unknown[]) => joinAckMock(...args),
     leave: (...args: unknown[]) => leaveMock(...args),
     end: (...args: unknown[]) => endMock(...args),
   },
@@ -93,6 +95,7 @@ describe('LiveClassroomPage', () => {
     getByCourseMock.mockReset()
     statusMock.mockReset()
     joinTokenMock.mockReset()
+    joinAckMock.mockReset()
     leaveMock.mockReset()
     endMock.mockReset()
     listMessagesMock.mockReset()
@@ -105,6 +108,17 @@ describe('LiveClassroomPage', () => {
     attachTrackToElementMock.mockReset()
     remoteParticipantsMap.clear()
     listMessagesMock.mockResolvedValue({ list: [], cursor: null, isLast: true })
+    joinAckMock.mockImplementation(async (_sessionId: number, _payload: unknown) => ({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    }))
   })
 
   it('shows waiting state when peer not joined', async () => {
@@ -150,6 +164,7 @@ describe('LiveClassroomPage', () => {
 
     expect(wrapper.text()).toContain('正在等待对方加入')
     expect(joinTokenMock).toHaveBeenCalledTimes(1)
+    expect(joinAckMock).toHaveBeenCalledTimes(1)
     expect(connectMock).toHaveBeenCalledTimes(1)
   })
 
@@ -338,5 +353,56 @@ describe('LiveClassroomPage', () => {
     expect(wrapper.text()).not.toContain('已进入课堂，正在等待对方加入')
     expect(wrapper.get('[data-testid="remote-video-state"]').attributes('data-connected')).toBe('true')
     expect(attachTrackToElementMock).toHaveBeenCalled()
+  })
+
+  it('shows peer joined copy when remote participant is connected even before backend status catches up', async () => {
+    remoteParticipantsMap.set('remote-user', {
+      identity: '1002',
+      name: '王同学',
+      trackPublications: new Map(),
+    })
+
+    getByCourseMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'CREATED',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    statusMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'CREATED',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    joinTokenMock.mockResolvedValue({
+      serverUrl: 'ws://127.0.0.1:7880',
+      accessToken: 'token',
+    })
+    connectMock.mockResolvedValue(undefined)
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: [{ path: '/live/classroom/:courseId', component: LiveClassroomPage }],
+    })
+    router.push('/live/classroom/66')
+    await router.isReady()
+
+    const wrapper = mount(LiveClassroomPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('王同学 已加入，等待视频画面')
+    expect(wrapper.text()).not.toContain('已进入课堂，正在等待对方加入')
   })
 })

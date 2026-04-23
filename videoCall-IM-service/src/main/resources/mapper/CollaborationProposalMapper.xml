@@ -117,4 +117,14 @@
           AND from_uid = #{fromUid}
           AND status = 'PENDING'
     </update>
+
+    <select id="selectExpiredPendingIds" resultType="java.lang.Long">
+        SELECT id
+        FROM collaboration_proposal
+        WHERE status = 'PENDING'
+          AND expire_at IS NOT NULL
+          AND expire_at &lt;= #{expireBefore}
+        ORDER BY id ASC
+        LIMIT #{limit}
+    </select>
 </mapper>

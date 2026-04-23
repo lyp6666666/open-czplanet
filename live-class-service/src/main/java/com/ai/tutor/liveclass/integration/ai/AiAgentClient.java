@@ -78,6 +78,17 @@ public class AiAgentClient {
         );
     }
 
+    public LessonReportTaskView createLessonReportTask(Long lessonId, CreateLessonReportTaskRequest request) {
+        return exchange(
+                "/internal/ai/lessons/" + lessonId + "/report-tasks",
+                HttpMethod.POST,
+                request,
+                new ParameterizedTypeReference<BaseResponse<LessonReportTaskView>>() {
+                },
+                "createLessonReportTask"
+        );
+    }
+
     private <T> T exchange(String path,
                            HttpMethod method,
                            Object body,
@@ -165,5 +176,26 @@ public class AiAgentClient {
         private String taskId;
         private String status;
         private Map<String, Object> report;
+    }
+
+    @Data
+    public static class CreateLessonReportTaskRequest {
+        private Long teacherId;
+        private Long studentId;
+        private String subject;
+        private String grade;
+        private String lessonTopic;
+        private String teacherNotes;
+        private String studentPerformance;
+        private String homework;
+        private String nextPlan;
+        private Map<String, Object> extraContext;
+        private Boolean forceRegenerate;
+    }
+
+    @Data
+    public static class LessonReportTaskView {
+        private String taskId;
+        private String status;
     }
 }

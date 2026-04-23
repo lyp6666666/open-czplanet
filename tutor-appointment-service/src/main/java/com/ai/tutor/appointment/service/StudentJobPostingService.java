@@ -20,22 +20,23 @@ public interface StudentJobPostingService {
     /**
      * 教师端需求详情视图（额外带发布者信息）。
      */
-    DemandViewVO getViewById(Long id);
+    DemandViewVO getViewById(Long id, Long viewerUid);
 
     CursorPageResponse<StudentJobPosting> listMine(CursorPageRequest request, Long uid);
 
     CursorPageResponse<StudentJobPosting> listPublished(Long subjectId,
-                                                       String subjectName,
-                                                       Boolean subjectOther,
-                                                       String city,
-                                                       String classMode,
+                                                        String subjectName,
+                                                        Boolean subjectOther,
+                                                        String city,
+                                                        String classMode,
                                                        String stageCode,
                                                        Integer frequencyPerWeek,
                                                        String educationRequirement,
                                                        String teacherGenderPreference,
                                                        BigDecimal budgetMin,
-                                                       BigDecimal budgetMax,
-                                                       String keyword,
-                                                       String sort,
-                                                       CursorPageRequest request);
+                                                        BigDecimal budgetMax,
+                                                        String keyword,
+                                                        String sort,
+                                                        Long viewerUid,
+                                                        CursorPageRequest request);
 }

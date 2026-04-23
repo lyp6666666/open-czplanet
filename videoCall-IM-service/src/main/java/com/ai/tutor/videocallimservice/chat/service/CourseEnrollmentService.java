@@ -1,6 +1,7 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
 import cn.hutool.json.JSONUtil;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.utils.ThrowUtils;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
@@ -29,6 +30,7 @@ import com.ai.tutor.videocallimservice.chat.mapper.TutorApplicationMapper;
 import com.ai.tutor.videocallimservice.integration.AppointmentInternalClient;
 import com.ai.tutor.videocallimservice.integration.feign.AppointmentInternalFeignClient;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,6 +43,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@Slf4j
 public class CourseEnrollmentService {
 
     @Resource
@@ -57,6 +60,8 @@ public class CourseEnrollmentService {
     private RoomMapper roomMapper;
     @Resource
     private ChatService chatService;
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
     @Autowired(required = false)
     private AppointmentInternalClient appointmentInternalClient;
 
@@ -119,7 +124,14 @@ public class CourseEnrollmentService {
         if (enrollment == null || enrollment.getId() == null) {
             return;
         }
-        courseEnrollmentMapper.updateStatus(enrollment.getId(), enrollment.getStatus(), CourseEnrollmentStatus.COMMUNICATING.name(), null, null, null);
+        int updated = courseEnrollmentMapper.updateStatus(enrollment.getId(), enrollment.getStatus(), CourseEnrollmentStatus.COMMUNICATING.name(), null, null, null);
+        if (updated <= 0 && bizKpiMetrics != null) {
+            /*
+             * 中文注释：支付成功但课程状态未能顺利切到 COMMUNICATING 时记一次失败指标，
+             * 用来尽快发现“付费成功但业务状态没跟上”的异常。
+             */
+            bizKpiMetrics.incChatUnlockFailed("course_status_not_updated");
+        }
     }
 
     public void onCollaborationAccepted(Long roomId, Long proposalId) {
@@ -152,8 +164,15 @@ public class CourseEnrollmentService {
                 end
         );
         if (updated > 0) {
+            if (bizKpiMetrics != null) {
+                /*
+                 * 中文注释：试课安排成功只在课程首次成功进入试课阶段时累计，
+                 * 避免补偿执行或重复点击把同一门课重复算成多次安排。
+                 */
+                bizKpiMetrics.incTrialScheduled();
+            }
             CourseEnrollment latest = courseEnrollmentMapper.selectById(enrollment.getId());
-            createAcceptedTrialSchedule(latest == null ? enrollment : latest, proposal);
+            ensureAcceptedTrialSchedule(latest == null ? enrollment : latest, proposal);
         }
     }
 
@@ -174,6 +193,7 @@ public class CourseEnrollmentService {
             return out;
         }
         for (CourseEnrollment e : rows) {
+            ensureAcceptedTrialScheduleIfNeeded(e, false);
             out.add(CourseItemVO.builder()
                     .courseId(e.getId())
                     .applicationId(e.getApplicationId())
@@ -198,6 +218,7 @@ public class CourseEnrollmentService {
         CourseEnrollment course = courseEnrollmentMapper.selectById(courseId);
         ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "课程不存在");
         assertParticipant(course, uid);
+        ensureAcceptedTrialScheduleIfNeeded(course);
         return toCourseDetail(course);
     }
 
@@ -206,6 +227,7 @@ public class CourseEnrollmentService {
         CourseEnrollment course = courseEnrollmentMapper.selectLatestByRoomId(roomId);
         ThrowUtils.throwIf(course == null, ErrorCode.NOT_FOUND_ERROR, "当前会话暂无长期课程");
         assertParticipant(course, uid);
+        ensureAcceptedTrialScheduleIfNeeded(course);
         return toCourseDetail(course);
     }
 
@@ -219,7 +241,7 @@ public class CourseEnrollmentService {
             if (course == null || course.getId() == null) {
                 continue;
             }
-            courseEnrollmentMapper.updateStatus(
+            int updated = courseEnrollmentMapper.updateStatus(
                     course.getId(),
                     CourseEnrollmentStatus.TRIALING.name(),
                     CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name(),
@@ -227,6 +249,13 @@ public class CourseEnrollmentService {
                     null,
                     null
             );
+            if (updated > 0 && bizKpiMetrics != null) {
+                /*
+                 * 中文注释：试课结束指标只在系统首次把课程推进到“待学生决策”时累计，
+                 * 用于衡量真正进入后续转化池的试课数量。
+                 */
+                bizKpiMetrics.incTrialFinished();
+            }
         }
     }
 
@@ -275,6 +304,13 @@ public class CourseEnrollmentService {
                 formatLessonPriceFen(lessonPriceFen)
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "正式课表提交状态更新失败，请稍后重试");
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：正式课表提交指标只在学生首次成功提交并完成状态更新后累计，
+             * 避免重复提交前后的多次请求把长期转化虚高。
+             */
+            bizKpiMetrics.incWeeklyScheduleSubmitted();
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -299,6 +335,13 @@ public class CourseEnrollmentService {
                 null
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课取消状态更新失败，请稍后重试");
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：试课取消指标只在试课成功回退到沟通阶段后累计，
+             * 这样能真实反映履约前取消发生量。
+             */
+            bizKpiMetrics.incTrialCancel(uid.equals(course.getTeacherUid()) ? "teacher" : "student");
+        }
         reopenCourseCommunication(course);
     }
 
@@ -359,6 +402,12 @@ public class CourseEnrollmentService {
                 .build();
         refundRequestMapper.insert(request);
         ThrowUtils.throwIf(request.getId() == null, ErrorCode.OPERATION_ERROR);
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：退款申请指标只在退款申请记录真正写入后计数，便于和最终退款成功拆开看。
+             */
+            bizKpiMetrics.incRefundRequest("trial_info_fee");
+        }
 
         courseEnrollmentMapper.updateStatus(course.getId(), course.getStatus(), CourseEnrollmentStatus.TRIAL_REFUND_REVIEW.name(), null, null, null);
         closeCourseCommunication(course);
@@ -379,6 +428,12 @@ public class CourseEnrollmentService {
                 resolveWeeklyScheduleDeadline(course)
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：试课通过指标只在学生确认通过且状态成功切换后累计，避免重复点击导致双计数。
+             */
+            bizKpiMetrics.incTrialDecision("passed");
+        }
         CourseEnrollment latest = courseEnrollmentMapper.selectById(course.getId());
         sendWeeklyScheduleReminderMessage(latest == null ? course : latest, "试课已通过，请在试课结束后 24 小时内确认正式每周课表。");
     }
@@ -398,10 +453,50 @@ public class CourseEnrollmentService {
                 null
         );
         ThrowUtils.throwIf(updated <= 0, ErrorCode.OPERATION_ERROR, "试课结果提交失败，请稍后重试");
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：试课失败指标只在课程首次成功进入 TRIAL_FAILED 后累计，
+             * 便于稳定观察试课转长期课阶段的损耗。
+             */
+            bizKpiMetrics.incTrialDecision("failed");
+        }
         closeCourseCommunication(course);
     }
 
-    private void createAcceptedTrialSchedule(CourseEnrollment course, CollaborationProposal proposal) {
+    private void ensureAcceptedTrialScheduleIfNeeded(CourseEnrollment course) {
+        ensureAcceptedTrialScheduleIfNeeded(course, true);
+    }
+
+    private void ensureAcceptedTrialScheduleIfNeeded(CourseEnrollment course, boolean failFast) {
+        if (!shouldEnsureAcceptedTrialSchedule(course)) {
+            return;
+        }
+        CollaborationProposal proposal = course.getProposalId() == null ? null : collaborationProposalMapper.selectById(course.getProposalId());
+        try {
+            ensureAcceptedTrialSchedule(course, proposal);
+        } catch (Exception ex) {
+            if (failFast) {
+                throw ex;
+            }
+            log.warn("best effort ensure accepted trial schedule failed, courseId={}, proposalId={}",
+                    course.getId(),
+                    course.getProposalId(),
+                    ex);
+        }
+    }
+
+    private boolean shouldEnsureAcceptedTrialSchedule(CourseEnrollment course) {
+        if (course == null || course.getId() == null || course.getStatus() == null) {
+            return false;
+        }
+        String status = course.getStatus().trim().toUpperCase();
+        return CourseEnrollmentStatus.TRIALING.name().equals(status)
+                || CourseEnrollmentStatus.TRIAL_WAIT_STUDENT_DECISION.name().equals(status)
+                || CourseEnrollmentStatus.TRIAL_WAIT_WEEKLY_SCHEDULE.name().equals(status)
+                || CourseEnrollmentStatus.TEACHING.name().equals(status);
+    }
+
+    private void ensureAcceptedTrialSchedule(CourseEnrollment course, CollaborationProposal proposal) {
         if (appointmentInternalClient == null
                 || course == null
                 || course.getId() == null
@@ -421,7 +516,20 @@ public class CourseEnrollmentService {
         request.setEndAt(toEpochMillis(course.getTrialEndAt()));
         request.setRemark(proposal == null ? null : proposal.getRemark());
         request.setClientRequestId(proposal == null || proposal.getId() == null ? null : "COLLAB_TRIAL:" + proposal.getId());
-        appointmentInternalClient.createAcceptedTrialEvent(request);
+        try {
+            Long appointmentId = appointmentInternalClient.createAcceptedTrialEvent(request);
+            log.info("ensure accepted trial schedule success, courseId={}, proposalId={}, appointmentId={}",
+                    course.getId(),
+                    proposal == null ? null : proposal.getId(),
+                    appointmentId);
+        } catch (Exception ex) {
+            log.error("ensure accepted trial schedule failed, courseId={}, proposalId={}, roomId={}",
+                    course.getId(),
+                    proposal == null ? null : proposal.getId(),
+                    course.getRoomId(),
+                    ex);
+            throw ex;
+        }
     }
 
     private void closeCourseCommunication(CourseEnrollment course) {
@@ -466,6 +574,13 @@ public class CourseEnrollmentService {
                     null
             );
             if (updated > 0) {
+                if (bizKpiMetrics != null) {
+                    /*
+                     * 中文注释：正式课表超时指标只在系统首次判定超时失败时累计，
+                     * 用于定位“试课通过后迟迟不提交正式课表”的流失。
+                     */
+                    bizKpiMetrics.incWeeklyScheduleTimeout();
+                }
                 CourseEnrollment latest = courseEnrollmentMapper.selectById(course.getId());
                 sendWeeklyScheduleReminderMessage(latest == null ? course : latest, "正式课表确认已超时，系统已判定试课失败。");
                 closeCourseCommunication(course);

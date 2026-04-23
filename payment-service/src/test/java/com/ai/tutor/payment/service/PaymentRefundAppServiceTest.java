@@ -1,5 +1,6 @@
 package com.ai.tutor.payment.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.payment.client.YungouosClient;
 import com.ai.tutor.payment.config.PaymentProperties;
@@ -32,6 +33,8 @@ class PaymentRefundAppServiceTest {
     private PaymentRefundService paymentRefundService;
     @Mock
     private YungouosClient yungouosClient;
+    @Mock
+    private BizKpiMetrics bizKpiMetrics;
 
     @InjectMocks
     private PaymentRefundAppService appService;
@@ -98,6 +101,9 @@ class PaymentRefundAppServiceTest {
 
         assertThat(resp.getStatus()).isEqualTo("SUCCESS");
         verify(yungouosClient).wechatRefund(eq("ORDER_NO_1"), eq("MOCK_MCH"), eq("60.00"), anyString(), eq("试课不通过"), isNull(), eq("TEST_KEY"));
+        verify(bizKpiMetrics).incRefundRequest("brokerage_order");
+        verify(bizKpiMetrics).incRefund();
+        verify(bizKpiMetrics).addRefundAmountFen(6000L);
 
         PaymentRefund created = refundCaptor.getValue();
         assertThat(created.getPaymentOrderNo()).isEqualTo("ORDER_NO_1");

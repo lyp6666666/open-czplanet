@@ -8,9 +8,9 @@ rtc:
   port_range_start: 50000
   port_range_end: 50100
   tcp_port: 7881
-  use_external_ip: false
-  node_ip: 127.0.0.1
-  force_tcp: true
+  # 公网/跨设备访问时，LiveKit 必须向浏览器宣告外部可达的 ICE 候选地址。
+  # 这里启用外网 IP 探测，并避免把 127.0.0.1 这类仅本机可达地址广播给客户端。
+  use_external_ip: true
 
 keys:
   dev-api-key: CHANGE_ME_LIVEKIT_API_SECRET

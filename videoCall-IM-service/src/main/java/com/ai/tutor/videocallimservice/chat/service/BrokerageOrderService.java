@@ -407,18 +407,13 @@ public class BrokerageOrderService {
 
         if (transitionedToPaid && bizKpiMetrics != null) {
             /*
-             * Grafana 业务 KPI 指标打点（信息费支付金额 & 达成合作次数）。
-             * - metric(金额): ai_tutor_biz_payment_info_fee_amount_cents_total（单位：分）
+             * Grafana 业务 KPI 指标打点（达成合作次数）。
              * - metric(合作): ai_tutor_biz_collaboration_success_total（按发起方 initiator）
-             * - PromQL（按天，金额元）：sum(increase(ai_tutor_biz_payment_info_fee_amount_cents_total[1d])) / 100
              * - PromQL（按天，合作数）：sum(increase(ai_tutor_biz_collaboration_success_total[1d]))
              *
-             * 说明：仅在订单首次从非 PAID -> PAID 的状态迁移成功时计入（transitionedToPaid=true），避免 MQ 重放重复计数。
+             * 说明：支付金额类指标已统一交给 payment-service 负责，这里只保留“合作达成”口径，
+             * 并且仅在订单首次从非 PAID -> PAID 的状态迁移成功时计入，避免 MQ 重放重复计数。
              */
-            Long amountFen = order.getAmountFen();
-            if (amountFen != null && amountFen > 0) {
-                bizKpiMetrics.addPaymentInfoFeeAmountFen(amountFen);
-            }
             bizKpiMetrics.incCollaborationSuccess(resolveInitiatorLower(order));
         }
 

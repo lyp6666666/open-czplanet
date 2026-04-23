@@ -1,6 +1,9 @@
 package com.ai.tutor.appointment.service.impl;
 
 import com.ai.tutor.appointment.config.EmailNotificationProperties;
+import com.ai.tutor.appointment.integration.email.EmailSender;
+import com.ai.tutor.appointment.integration.email.dto.EmailSendRequest;
+import com.ai.tutor.appointment.integration.email.dto.EmailSendResponse;
 import com.ai.tutor.appointment.mapper.EmailNotificationTaskMapper;
 import com.ai.tutor.appointment.mapper.EmailSendLogMapper;
 import com.ai.tutor.appointment.mapper.LessonSummaryMapper;
@@ -48,6 +51,8 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     private LessonSummaryMapper lessonSummaryMapper;
     @Resource
     private EmailNotificationProperties properties;
+    @Resource
+    private EmailSender emailSender;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -102,10 +107,14 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
         Map<String, Object> payload = new HashMap<>();
         payload.put("lessonId", lesson.getId());
         payload.put("courseId", lesson.getCourseId());
-        payload.put("lessonTitle", safeTitle(lesson));
+        payload.put("courseName", safeTitle(lesson));
         payload.put("startTime", lesson.getStartTime().toString());
+        payload.put("lessonDate", lesson.getStartTime().toLocalDate().toString());
+        payload.put("lessonTime", lesson.getStartTime().toLocalTime().toString());
         payload.put("reminderMinutes", minutes);
-        payload.put("link", "/#/courses/" + lesson.getCourseId());
+        payload.put("receiverName", "TEACHER".equals(role) ? "老师" : "同学");
+        payload.put("counterpartName", "TEACHER".equals(role) ? "学生/家长" : "授课老师");
+        payload.put("prepareTips", "请提前 5 分钟登录创智星球，检查网络和设备。");
         createTask("LESSON_START:" + lesson.getId() + ":" + uid + ":" + minutes,
                 "LESSON_START_REMINDER",
                 "LESSON_START",
@@ -144,10 +153,20 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
         Map<String, Object> payload = new HashMap<>();
         payload.put("lessonId", summary.getLessonId());
         payload.put("courseId", summary.getCourseId());
+        payload.put("courseName", summary.getTitle());
         payload.put("title", summary.getTitle());
+        payload.put("summaryHighlight", summary.getSummaryBrief());
         payload.put("brief", summary.getSummaryBrief());
+        payload.put("homeworkAdvice", summary.getHomework());
         payload.put("homework", summary.getHomework());
-        payload.put("link", "/#/courses/" + summary.getCourseId());
+        payload.put("receiverName", "TEACHER".equals(role) ? "老师" : "PARENT_SUMMARY".equals(role) ? "家长" : "同学");
+        TutorAppointment lesson = tutorAppointmentMapper.selectById(summary.getLessonId());
+        if (lesson != null && lesson.getStartTime() != null) {
+            payload.put("lessonStartTime", lesson.getStartTime().toString());
+            payload.put("lessonDate", lesson.getStartTime().toLocalDate().toString());
+            payload.put("lessonTime", lesson.getStartTime().toLocalTime().toString());
+            payload.putIfAbsent("courseName", safeTitle(lesson));
+        }
         String biz = "LESSON_SUMMARY_BACKFILL".equals(templateCode) ? "LESSON_SUMMARY_BACKFILL" : "LESSON_SUMMARY";
         createTask(templateCode + ":" + summary.getLessonId() + ":" + uid + ":" + emailType,
                 templateCode,
@@ -176,9 +195,19 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
         payload.put("lessonId", summary.getLessonId());
         payload.put("courseId", summary.getCourseId());
         payload.put("title", summary.getTitle());
+        payload.put("courseName", summary.getTitle());
+        payload.put("summaryHighlight", summary.getSummaryBrief());
         payload.put("brief", summary.getSummaryBrief());
+        payload.put("homeworkAdvice", summary.getHomework());
         payload.put("homework", summary.getHomework());
-        payload.put("link", "/#/courses/" + summary.getCourseId());
+        payload.put("receiverName", "TEACHER".equals(role) ? "老师" : SUMMARY_ONLY.equals(emailType) ? "家长" : "同学");
+        TutorAppointment lesson = tutorAppointmentMapper.selectById(summary.getLessonId());
+        if (lesson != null && lesson.getStartTime() != null) {
+            payload.put("lessonStartTime", lesson.getStartTime().toString());
+            payload.put("lessonDate", lesson.getStartTime().toLocalDate().toString());
+            payload.put("lessonTime", lesson.getStartTime().toLocalTime().toString());
+            payload.putIfAbsent("courseName", safeTitle(lesson));
+        }
         createTask("LESSON_SUMMARY_BACKFILL:" + summary.getLessonId() + ":" + userId + ":" + emailType,
                 "LESSON_SUMMARY_BACKFILL",
                 "LESSON_SUMMARY_BACKFILL",
@@ -235,14 +264,27 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
                 return;
             }
             String subject = renderSubject(task);
-            // Mock provider: persist a successful send log. Real provider can replace this call later.
+            Map<String, Object> payload = parsePayload(task.getPayloadJson());
+            EmailSendResponse sendResponse = emailSender.send(EmailSendRequest.builder()
+                    .templateCode(task.getTemplateCode())
+                    .toEmail(task.getEmail())
+                    .subject(subject)
+                    .requestId(UUID.randomUUID().toString())
+                    .fromEmail(properties.getSender().getFromEmail())
+                    .fromName(properties.getSender().getFromName())
+                    .replyToEmail(properties.getSender().getReplyToEmail())
+                    .templateData(payload)
+                    .build());
+            if (!sendResponse.isSuccess()) {
+                throw new IllegalStateException(sendResponse.getErrorCode() + ":" + sendResponse.getErrorMessage());
+            }
             sendLogMapper.insert(EmailSendLog.builder()
                     .taskId(task.getId())
-                    .provider("MOCK")
-                    .providerMessageId("mock-" + task.getId())
+                    .provider(sendResponse.getProvider())
+                    .providerMessageId(sendResponse.getProviderMessageId())
                     .email(task.getEmail())
                     .sendStatus("SUCCESS")
-                    .requestId(UUID.randomUUID().toString())
+                    .requestId(sendResponse.getRequestId())
                     .build());
             taskMapper.markSent(task.getId(), LocalDateTime.now(), subject);
             UserEmail email = task.getReceiverUid() == null ? null : userEmailMapper.selectActiveByUserAndType(task.getReceiverUid(), task.getEmailType());
@@ -256,7 +298,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
             taskMapper.markFailedOrRetry(task.getId(), retry ? "PENDING" : "FAILED", e.getMessage(), next, nextRetry);
             sendLogMapper.insert(EmailSendLog.builder()
                     .taskId(task.getId())
-                    .provider("MOCK")
+                    .provider(properties.getSender().getProvider() == null ? "MOCK" : properties.getSender().getProvider().trim().toUpperCase())
                     .email(task.getEmail())
                     .sendStatus("FAIL")
                     .errorMessage(e.getMessage())
@@ -301,19 +343,19 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
 
     private String renderSubject(EmailNotificationTask task) {
         if ("EMAIL_VERIFY_CODE".equals(task.getTemplateCode())) {
-            return "邮箱验证码";
+            return "邮箱验证通知";
         }
         if ("UNREAD_MESSAGE_REMINDER".equals(task.getTemplateCode())) {
-            return "你有一条未读消息";
+            return "未读消息待查看";
         }
         if ("LESSON_START_REMINDER".equals(task.getTemplateCode())) {
-            return "课程即将开始";
+            return "课程即将开始提醒";
         }
         if ("LESSON_SUMMARY_BACKFILL".equals(task.getTemplateCode())) {
             return "你有一份可查看的最新课后总结";
         }
         if ("LESSON_SUMMARY".equals(task.getTemplateCode())) {
-            return "本节课课后总结已生成";
+            return "课后总结已生成";
         }
         return "平台通知";
     }

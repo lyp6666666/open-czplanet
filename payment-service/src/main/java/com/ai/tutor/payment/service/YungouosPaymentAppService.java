@@ -606,7 +606,40 @@ public class YungouosPaymentAppService {
         return StringUtils.hasText(s) ? s : "中介费支付";
     }
 
-    private record PayableInfo(String contextType, Long orderId, Long amountFen, String subject, String body) {
+    private static final class PayableInfo {
+        private final String contextType;
+        private final Long orderId;
+        private final Long amountFen;
+        private final String subject;
+        private final String body;
+
+        private PayableInfo(String contextType, Long orderId, Long amountFen, String subject, String body) {
+            this.contextType = contextType;
+            this.orderId = orderId;
+            this.amountFen = amountFen;
+            this.subject = subject;
+            this.body = body;
+        }
+
+        private String contextType() {
+            return contextType;
+        }
+
+        private Long orderId() {
+            return orderId;
+        }
+
+        private Long amountFen() {
+            return amountFen;
+        }
+
+        private String subject() {
+            return subject;
+        }
+
+        private String body() {
+            return body;
+        }
     }
 
     private static String buildAttach(PaymentOrder order) {

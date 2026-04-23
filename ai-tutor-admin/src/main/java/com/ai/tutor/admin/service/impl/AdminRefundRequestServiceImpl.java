@@ -17,6 +17,7 @@ import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
 import com.ai.tutor.admin.service.AdminRefundRequestService;
 import com.ai.tutor.admin.storage.MinioProperties;
 import com.ai.tutor.common.BaseResponse;
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.utils.ThrowUtils;
@@ -51,6 +52,8 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
     private MinioClient minioClient;
     @Resource
     private MinioProperties minioProperties;
+    @Resource
+    private BizKpiMetrics bizKpiMetrics;
 
     @Override
     public PageResult<RefundRequestRecord> list(int page, int size, String type, String status) {
@@ -126,6 +129,13 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
         if (updated <= 0) {
             return;
         }
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：管理端退款审批指标只统计“审核动作”本身，最终退款成功仍以后端支付域的成功回执为准，
+             * 避免同一笔退款在审批成功和支付成功两个节点被重复记成最终退款成功。
+             */
+            bizKpiMetrics.incRefundReview("approved");
+        }
         adminRefundRequestMapper.markOrderRefunded(request.getBrokerageOrderId(), request.getRefundAmountFen());
         deleteEvidenceVideoIfNeeded(request, now);
         if (request.getCourseId() != null) {
@@ -149,6 +159,12 @@ public class AdminRefundRequestServiceImpl implements AdminRefundRequestService 
         int updated = adminRefundRequestMapper.reject(requestId, adminUid, trimTo1024(reason), now);
         if (updated <= 0) {
             return;
+        }
+        if (bizKpiMetrics != null) {
+            /*
+             * 中文注释：退款拒绝也需要单独统计，用来观察争议申请里被运营或风控驳回的比例变化。
+             */
+            bizKpiMetrics.incRefundReview("rejected");
         }
         adminRefundRequestMapper.markEvidenceVideoKeep(requestId);
         if (request.getBrokerageOrderId() != null) {

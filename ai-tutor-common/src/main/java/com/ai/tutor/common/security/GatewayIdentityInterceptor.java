@@ -28,14 +28,40 @@ public class GatewayIdentityInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String path = request.getRequestURI();
         if (isWhitelisted(path)) {
+            populateIdentityIfSigned(request);
             return true;
         }
 
+        SignedIdentity identity = parseAndVerifySignedIdentity(request, true);
+        applyIdentity(request, identity);
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+        RequestHolder.remove();
+    }
+
+    private void populateIdentityIfSigned(HttpServletRequest request) {
+        SignedIdentity identity = parseAndVerifySignedIdentity(request, false);
+        if (identity != null) {
+            applyIdentity(request, identity);
+        }
+    }
+
+    private SignedIdentity parseAndVerifySignedIdentity(HttpServletRequest request, boolean failWhenMissing) {
         String uidHeader = request.getHeader("X-Uid");
         String roleHeader = request.getHeader("X-Role");
         String tsHeader = request.getHeader("X-Ts");
         String signHeader = request.getHeader("X-Auth-Sign");
 
+        boolean hasAnyHeader = StringUtils.hasText(uidHeader)
+                || StringUtils.hasText(roleHeader)
+                || StringUtils.hasText(tsHeader)
+                || StringUtils.hasText(signHeader);
+        if (!hasAnyHeader && !failWhenMissing) {
+            return null;
+        }
         if (!StringUtils.hasText(uidHeader) || !StringUtils.hasText(roleHeader)
                 || !StringUtils.hasText(tsHeader) || !StringUtils.hasText(signHeader)) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
@@ -70,20 +96,18 @@ public class GatewayIdentityInterceptor implements HandlerInterceptor {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
         }
 
+        return new SignedIdentity(uid, role);
+    }
+
+    private void applyIdentity(HttpServletRequest request, SignedIdentity identity) {
         RequestInfo info = new RequestInfo();
-        info.setUid(uid);
-        info.setRole(role);
+        info.setUid(identity.uid());
+        info.setRole(identity.role());
         info.setIp(resolveIp(request));
         RequestHolder.set(info);
 
-        request.setAttribute(RequestHolder.ATTRIBUTE_UID, String.valueOf(uid));
-        request.setAttribute(RequestHolder.ATTRIBUTE_ROLE, role);
-        return true;
-    }
-
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        RequestHolder.remove();
+        request.setAttribute(RequestHolder.ATTRIBUTE_UID, String.valueOf(identity.uid()));
+        request.setAttribute(RequestHolder.ATTRIBUTE_ROLE, identity.role());
     }
 
     private boolean isWhitelisted(String path) {
@@ -130,5 +154,8 @@ public class GatewayIdentityInterceptor implements HandlerInterceptor {
             return realIp.trim();
         }
         return request.getRemoteAddr();
+    }
+
+    private record SignedIdentity(long uid, int role) {
     }
 }

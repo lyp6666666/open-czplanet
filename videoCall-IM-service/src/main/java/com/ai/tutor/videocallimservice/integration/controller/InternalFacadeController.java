@@ -129,8 +129,11 @@ public class InternalFacadeController {
     @GetMapping("/brokerage/orders/{orderId}/payable")
     public BaseResponse<BrokerageOrderPayInfo> getPayableOrder(@PathVariable("orderId") Long orderId,
                                                                 @RequestParam("uid") Long uid) {
-        Long requesterUid = requireUid();
-        ThrowUtils.throwIf(!requesterUid.equals(uid), ErrorCode.NO_AUTH_ERROR);
+        ThrowUtils.throwIf(uid == null, ErrorCode.PARAMS_ERROR);
+        RequestInfo requester = RequestHolder.get();
+        if (requester != null && requester.getUid() != null) {
+            ThrowUtils.throwIf(!requester.getUid().equals(uid), ErrorCode.NO_AUTH_ERROR);
+        }
         return ResultUtils.success(brokerageOrderService.getPayableOrder(orderId, uid));
     }
 

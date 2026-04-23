@@ -1,0 +1,83 @@
+{
+  "uid": "ai-tutor-service-overview",
+  "title": "AI Tutor - Service Overview",
+  "timezone": "Asia/Shanghai",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(up, service)",
+        "includeAll": true,
+        "multi": true,
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "服务可用实例数",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+      "targets": [
+        { "refId": "A", "expr": "sum(up{service=~\"$service\"})" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP QPS",
+      "gridPos": { "x": 6, "y": 0, "w": 9, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (rate(http_server_requests_seconds_count{service=~\"$service\"}[5m]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP 5xx",
+      "gridPos": { "x": 15, "y": 0, "w": 9, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (rate(http_server_requests_seconds_count{service=~\"$service\",status=~\"5..\"}[5m]))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "P95 延迟（秒）",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, service) (rate(http_server_requests_seconds_bucket{service=~\"$service\"}[5m])))" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM 堆使用率",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (jvm_memory_used_bytes{area=\"heap\",service=~\"$service\"}) / sum by (service) (jvm_memory_max_bytes{area=\"heap\",service=~\"$service\"})" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tomcat 线程繁忙数",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (tomcat_threads_busy{service=~\"$service\"})" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Hikari 活跃连接数",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "refId": "A", "expr": "sum by (service) (hikaricp_connections_active{service=~\"$service\"})" }
+      ]
+    }
+  ]
+}

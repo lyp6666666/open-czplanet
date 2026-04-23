@@ -140,7 +140,9 @@ const permissionSummary = computed(() => {
   return '点击“一键检测设备权限”后，页面会主动向浏览器请求摄像头和麦克风权限。'
 })
 
-const canEnterClassroom = computed(() => !!prepareData.value?.canJoin && !loading.value && !joining.value)
+const canEnterClassroom = computed(
+  () => !!prepareData.value?.canJoin && !!prepareData.value?.joinableNow && !loading.value && !joining.value,
+)
 const paymentBlocked = computed(() => !!prepareData.value?.blockingPaymentOrderId)
 
 function setPermissionModal(reason: DevicePermissionIssueCode, message: string) {
@@ -421,7 +423,11 @@ onUnmounted(() => {
           >{{ permissionHeadline }}</span>
           <span class="status-chip subtle">{{ permissionSummary }}</span>
         </div>
-        <div v-if="prepareData?.joinBlockedReason && (!prepareData.canJoin || paymentBlocked)" class="blocking-tip" data-testid="prepare-join-blocked">
+        <div
+          v-if="prepareData?.joinBlockedReason && (!prepareData.joinableNow || !prepareData.canJoin || paymentBlocked)"
+          class="blocking-tip"
+          data-testid="prepare-join-blocked"
+        >
           {{ prepareData.joinBlockedReason }}
         </div>
         <div class="hero-actions">

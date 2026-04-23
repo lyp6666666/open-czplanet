@@ -51,6 +51,8 @@ public interface TutorAppointmentMapper {
 
     List<TutorAppointment> listByCourseId(@Param("courseId") Long courseId);
 
+    TutorAppointment selectAcceptedTrialByCourseId(@Param("courseId") Long courseId);
+
     /**
      * 检查指定用户集合在给定时间段内是否存在已确认预约冲突。
      */

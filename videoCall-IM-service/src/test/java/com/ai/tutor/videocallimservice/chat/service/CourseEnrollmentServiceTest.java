@@ -1,5 +1,6 @@
 package com.ai.tutor.videocallimservice.chat.service;
 
+import com.ai.tutor.common.metrics.BizKpiMetrics;
 import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.videocallimservice.chat.domain.entity.BrokerageOrder;
 import com.ai.tutor.videocallimservice.chat.domain.entity.CollaborationProposal;
@@ -27,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class CourseEnrollmentServiceTest {
@@ -140,6 +142,51 @@ class CourseEnrollmentServiceTest {
     }
 
     @Test
+    void getCourseDetailShouldEnsureAcceptedTrialScheduleForTrialingCourse() {
+        CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        RefundRequestMapper refundRequestMapper = mock(RefundRequestMapper.class);
+        BrokerageOrderMapper brokerageOrderMapper = mock(BrokerageOrderMapper.class);
+        CollaborationProposalMapper collaborationProposalMapper = mock(CollaborationProposalMapper.class);
+        TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
+        RoomMapper roomMapper = mock(RoomMapper.class);
+        AppointmentInternalClient appointmentInternalClient = mock(AppointmentInternalClient.class);
+
+        CourseEnrollmentService service = new CourseEnrollmentService();
+        ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
+        ReflectionTestUtils.setField(service, "refundRequestMapper", refundRequestMapper);
+        ReflectionTestUtils.setField(service, "brokerageOrderMapper", brokerageOrderMapper);
+        ReflectionTestUtils.setField(service, "collaborationProposalMapper", collaborationProposalMapper);
+        ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
+        ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(service, "appointmentInternalClient", appointmentInternalClient);
+
+        when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
+                .id(66L)
+                .proposalId(9001L)
+                .roomId(88L)
+                .teacherUid(1001L)
+                .studentUid(2001L)
+                .teachingMode("ONLINE")
+                .courseName("线上长期课程")
+                .lessonPrice("200 元/小时")
+                .status("TRIALING")
+                .trialStartAt(java.time.LocalDateTime.of(2026, 4, 23, 19, 0))
+                .trialEndAt(java.time.LocalDateTime.of(2026, 4, 23, 21, 0))
+                .build());
+        when(collaborationProposalMapper.selectById(9001L)).thenReturn(CollaborationProposal.builder()
+                .id(9001L)
+                .fromUid(1001L)
+                .remark("试课备注")
+                .build());
+
+        CourseDetailVO detail = service.getCourseDetail(66L, 1001L);
+
+        assertThat(detail.getCourseId()).isEqualTo(66L);
+        verify(appointmentInternalClient).createAcceptedTrialEvent(any(AppointmentInternalFeignClient.InternalTrialEventRequest.class));
+        verifyNoMoreInteractions(refundRequestMapper, brokerageOrderMapper, tutorApplicationMapper, roomMapper);
+    }
+
+    @Test
     void applyTrialRefundShouldUseOfflineVideoAndRefund80Percent() {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
         RefundRequestMapper refundRequestMapper = mock(RefundRequestMapper.class);
@@ -201,6 +248,7 @@ class CourseEnrollmentServiceTest {
     @Test
     void applyTrialRefundShouldRejectOnlineInfoFeeRefund() {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
@@ -229,6 +277,7 @@ class CourseEnrollmentServiceTest {
     @Test
     void submitTrialResultShouldPromoteTeachingWhenPassed() {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
@@ -237,6 +286,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
         ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
         ReflectionTestUtils.setField(service, "chatService", mock(ChatService.class));
+        ReflectionTestUtils.setField(service, "bizKpiMetrics", bizKpiMetrics);
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -272,6 +322,7 @@ class CourseEnrollmentServiceTest {
         service.submitTrialResult(66L, req, 2001L);
 
         verify(courseEnrollmentMapper).markTrialPassedWaitingWeeklySchedule(eq(66L), eq("TRIAL_WAIT_STUDENT_DECISION"), any());
+        verify(bizKpiMetrics).incTrialDecision("passed");
     }
 
     @Test
@@ -279,6 +330,7 @@ class CourseEnrollmentServiceTest {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
         RoomMapper roomMapper = mock(RoomMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
@@ -286,6 +338,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
         ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(service, "bizKpiMetrics", bizKpiMetrics);
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -305,11 +358,13 @@ class CourseEnrollmentServiceTest {
         verify(courseEnrollmentMapper).updateStatus(66L, "TRIAL_WAIT_STUDENT_DECISION", "TRIAL_FAILED", null, null, null);
         verify(tutorApplicationMapper).updateChatAccessStatus(501L, "NONE");
         verify(roomMapper).closeRoom(88L);
+        verify(bizKpiMetrics).incTrialDecision("failed");
     }
 
     @Test
     void confirmWeeklyScheduleSubmittedShouldPromoteTeachingByStudent() {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
@@ -318,6 +373,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", mock(TutorApplicationMapper.class));
         ReflectionTestUtils.setField(service, "roomMapper", mock(RoomMapper.class));
         ReflectionTestUtils.setField(service, "chatService", mock(ChatService.class));
+        ReflectionTestUtils.setField(service, "bizKpiMetrics", bizKpiMetrics);
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -329,6 +385,7 @@ class CourseEnrollmentServiceTest {
         service.confirmWeeklyScheduleSubmitted(66L, 2001L, "周二 19:00-21:00", 1, 20000L);
 
         verify(courseEnrollmentMapper).markWeeklyScheduleSubmitted(66L, "TRIAL_WAIT_WEEKLY_SCHEDULE", "周二 19:00-21:00", 1, "200 元/节");
+        verify(bizKpiMetrics).incWeeklyScheduleSubmitted();
     }
 
     @Test
@@ -359,6 +416,7 @@ class CourseEnrollmentServiceTest {
         CourseEnrollmentMapper courseEnrollmentMapper = mock(CourseEnrollmentMapper.class);
         TutorApplicationMapper tutorApplicationMapper = mock(TutorApplicationMapper.class);
         RoomMapper roomMapper = mock(RoomMapper.class);
+        BizKpiMetrics bizKpiMetrics = mock(BizKpiMetrics.class);
         CourseEnrollmentService service = new CourseEnrollmentService();
         ReflectionTestUtils.setField(service, "courseEnrollmentMapper", courseEnrollmentMapper);
         ReflectionTestUtils.setField(service, "refundRequestMapper", mock(RefundRequestMapper.class));
@@ -366,6 +424,7 @@ class CourseEnrollmentServiceTest {
         ReflectionTestUtils.setField(service, "collaborationProposalMapper", mock(CollaborationProposalMapper.class));
         ReflectionTestUtils.setField(service, "tutorApplicationMapper", tutorApplicationMapper);
         ReflectionTestUtils.setField(service, "roomMapper", roomMapper);
+        ReflectionTestUtils.setField(service, "bizKpiMetrics", bizKpiMetrics);
 
         when(courseEnrollmentMapper.selectById(66L)).thenReturn(CourseEnrollment.builder()
                 .id(66L)
@@ -382,5 +441,6 @@ class CourseEnrollmentServiceTest {
         verify(courseEnrollmentMapper).updateStatus(66L, "TRIALING", "COMMUNICATING", null, null, null);
         verify(tutorApplicationMapper).updateChatAccessStatus(501L, "CHAT_ENABLED");
         verify(roomMapper).reopenRoom(88L);
+        verify(bizKpiMetrics).incTrialCancel("teacher");
     }
 }
