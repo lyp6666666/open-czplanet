@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: docker.m.daocloud.io/library/mysql:8.4
+    image: mysql:8.4
     container_name: mysql
     environment:
       MYSQL_ROOT_PASSWORD: Aa123456
@@ -18,7 +18,7 @@ services:
       - ../sqlDoc/seed_dev_data.sql:/docker-entrypoint-initdb.d/02-seed_dev_data.sql:ro
 
   redis:
-    image: docker.m.daocloud.io/library/redis:7.4
+    image: redis:7.4
     container_name: redis
     ports:
       - "6379:6379"
@@ -27,7 +27,7 @@ services:
       - ./redis-data:/data
 
   rabbitmq:
-    image: docker.m.daocloud.io/library/rabbitmq:3.13-management
+    image: rabbitmq:3.13-management
     container_name: rabbitmq
     ports:
       - "5672:5672"
@@ -60,7 +60,7 @@ services:
     restart: "no"
 
   prometheus:
-    image: docker.m.daocloud.io/prom/prometheus:v2.54.1
+    image: prom/prometheus:v2.54.1
     container_name: prometheus
     depends_on:
       - alertmanager
@@ -79,7 +79,7 @@ services:
       - "--web.route-prefix=/"
 
   alertmanager:
-    image: docker.m.daocloud.io/prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.27.0
     container_name: alertmanager
     ports:
       - "9093:9093"
@@ -89,7 +89,7 @@ services:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
 
   grafana:
-    image: docker.m.daocloud.io/grafana/grafana-oss:11.2.0
+    image: grafana/grafana-oss:11.2.0
     container_name: grafana
     depends_on:
       - prometheus
@@ -109,7 +109,7 @@ services:
       - ./grafana-data:/var/lib/grafana
 
   loki:
-    image: docker.m.daocloud.io/grafana/loki:3.1.1
+    image: grafana/loki:3.1.1
     container_name: loki
     ports:
       - "3100:3100"
@@ -120,7 +120,7 @@ services:
       - ./loki-data:/loki
 
   promtail:
-    image: docker.m.daocloud.io/grafana/promtail:3.1.1
+    image: grafana/promtail:3.1.1
     container_name: promtail
     depends_on:
       - loki
@@ -132,7 +132,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   node-exporter:
-    image: docker.m.daocloud.io/prom/node-exporter:v1.8.2
+    image: prom/node-exporter:v1.8.2
     container_name: node-exporter
     ports:
       - "9100:9100"
@@ -157,7 +157,7 @@ services:
       - /var/lib/docker:/var/lib/docker:ro
 
   mysqld-exporter:
-    image: docker.m.daocloud.io/prom/mysqld-exporter:v0.16.0
+    image: prom/mysqld-exporter:v0.16.0
     container_name: mysqld-exporter
     depends_on:
       - mysql
@@ -167,7 +167,7 @@ services:
       DATA_SOURCE_NAME: root:Aa123456@(mysql:3306)/
 
   redis-exporter:
-    image: docker.m.daocloud.io/oliver006/redis_exporter:v1.62.0
+    image: oliver006/redis_exporter:v1.62.0
     container_name: redis-exporter
     depends_on:
       - redis
@@ -178,7 +178,7 @@ services:
       REDIS_PASSWORD: "123456"
 
   rabbitmq-exporter:
-    image: docker.m.daocloud.io/kbudde/rabbitmq-exporter:v1.0.0-RC19
+    image: kbudde/rabbitmq-exporter:latest
     container_name: rabbitmq-exporter
     depends_on:
       - rabbitmq
@@ -190,7 +190,7 @@ services:
       RABBIT_PASSWORD: guest
 
   livekit:
-    image: docker.m.daocloud.io/livekit/livekit-server:v1.9.12
+    image: livekit/livekit-server:v1.9.12
     container_name: livekit
     networks:
       default:

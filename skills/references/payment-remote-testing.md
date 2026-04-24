@@ -258,7 +258,7 @@ ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/videoCall-IM-servic
 Namespaces：
 
 - `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`
-- `prod=44cf681d-9f93-443e-aa9e-ba6ec8f721d5`
+- `prod=c3476048-10f6-4cc3-b3f1-90135d736a73`
 
 共享 dev 环境主要使用的支付配置 DataId：
 

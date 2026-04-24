@@ -50,7 +50,7 @@ bash scripts/dev_remote_down.sh
 - 远程启动：先在本地打开隧道，再在远程执行 `MANAGE_INFRA=never sh scripts/dev_all_up.sh`
 - 远程停止：先在远程执行 `STOP_INFRA=0 sh scripts/dev_all_down.sh`，再关闭本地隧道
 - 远程默认 profile：`dev` -> namespace `481e4376-4576-4b18-ac19-f61e170ca3ae`
-- 当前已知 prod namespace：`44cf681d-9f93-443e-aa9e-ba6ec8f721d5`
+- 当前已知 prod namespace：`c3476048-10f6-4cc3-b3f1-90135d736a73`
 - 远程默认 Nacos 地址：如果 Nacos 跑在同一台服务器上，使用 `127.0.0.1:8848`
 - 远程默认隧道模式：`REMOTE_USE_TUNNEL=1`
 
@@ -86,7 +86,7 @@ STOP_INFRA=0 sh scripts/dev_local_down.sh
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev NACOS_NAMESPACE=481e4376-4576-4b18-ac19-f61e170ca3ae MANAGE_INFRA=never sh scripts/dev_all_up.sh
-SPRING_PROFILES_ACTIVE=prod NACOS_NAMESPACE=44cf681d-9f93-443e-aa9e-ba6ec8f721d5 MANAGE_INFRA=never sh scripts/dev_all_up.sh
+SPRING_PROFILES_ACTIVE=prod NACOS_NAMESPACE=c3476048-10f6-4cc3-b3f1-90135d736a73 MANAGE_INFRA=never sh scripts/dev_all_up.sh
 ```
 
 ## 仅操作 SSH 隧道
@@ -154,6 +154,13 @@ ss -lntp | grep -E ':8848|:9848|:9849'
 nc -z -w 2 127.0.0.1 8848
 nc -z -w 2 127.0.0.1 9848
 nc -z -w 2 127.0.0.1 9849
+```
+
+如果首次本地启动卡在镜像拉取，先单独补启动基础依赖，等镜像缓存好后再跑总入口：
+
+```bash
+docker compose -f Dockerfile/docker-compose.yml up -d
+bash scripts/dev_local_up.sh
 ```
 
 ## 远程 MinIO 静态资源

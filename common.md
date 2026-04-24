@@ -8,7 +8,7 @@
 
 - Nacos 地址：`111.228.20.88:8848`
 - `dev` namespace：`481e4376-4576-4b18-ac19-f61e170ca3ae`
-- `prod` namespace：`44cf681d-9f93-443e-aa9e-ba6ec8f721d5`
+- `prod` namespace：`c3476048-10f6-4cc3-b3f1-90135d736a73`
 - 日常开发和测试默认使用 `dev`
 
 ## 最常用
@@ -299,7 +299,7 @@ MANAGE_INFRA=auto sh scripts/dev_all_up.sh
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev NACOS_NAMESPACE=481e4376-4576-4b18-ac19-f61e170ca3ae MANAGE_INFRA=never sh scripts/dev_all_up.sh
-SPRING_PROFILES_ACTIVE=prod NACOS_NAMESPACE=44cf681d-9f93-443e-aa9e-ba6ec8f721d5 MANAGE_INFRA=never sh scripts/dev_all_up.sh
+SPRING_PROFILES_ACTIVE=prod NACOS_NAMESPACE=c3476048-10f6-4cc3-b3f1-90135d736a73 MANAGE_INFRA=never sh scripts/dev_all_up.sh
 ```
 
 ## 服务器测试前检查

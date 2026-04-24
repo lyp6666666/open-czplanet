@@ -27,7 +27,7 @@
 - 远程开发默认应该尽量不碰中间件。
   `scripts/dev_remote_up.sh` 现在默认使用 `REMOTE_MANAGE_INFRA=never`。
 - 这个仓库跨环境共用一套 Nacos 服务器。
-  环境隔离靠 namespace，不靠不同主机。当前默认是 `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`、`prod=44cf681d-9f93-443e-aa9e-ba6ec8f721d5`。
+  环境隔离靠 namespace，不靠不同主机。当前默认是 `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`、`prod=c3476048-10f6-4cc3-b3f1-90135d736a73`。
 - 日常测试默认使用 `dev` namespace，除非用户明确说要用 `prod`。
 - 当服务和 Nacos 跑在同一台服务器上时，远程启动脚本优先用 `127.0.0.1:8848`，不要优先用公网 IP。
   这样能避免额外依赖公网入口或 hairpin 网络。
@@ -83,6 +83,10 @@
   第一版接口通过网关 `/internal/ai/**` 暴露给内部 Java 微服务使用；如果未来需要纳入统一一键启动脚本，优先增加显式开关，不要直接默认随所有服务一起启动。
 - 实时课堂的 `/livekit` WebSocket 能通，不等于真实音视频也通。
   在当前共享 DEV 拓扑里，`111.229.64.41` 只负责 `80/443` 和 `/livekit` 信令转发；浏览器真正的音视频流会直接访问 `111.228.20.88` 的 `TCP 7881` 和 `UDP 50000-50100`。如果这里没放通，页面会表现为双方都在等待对方，哪怕课堂业务层已经进入同一个房间。
+- `Dockerfile/docker-compose.yml` 里原先部分 `docker.m.daocloud.io/...` 镜像在当前环境下会出现 `403 Forbidden` 或下载 `EOF`。
+  如果本地 `dev_local_up.sh` 卡在镜像拉取，优先改回官方镜像地址再重试，不要先怀疑 Docker daemon 或 compose 脚本本身。
+- `rabbitmq-exporter` 的 `v1.0.0-RC19` 在当前环境下不可用。
+  这个仓库本地 compose 现改为 `kbudde/rabbitmq-exporter:latest`；如果以后又看到 `manifest not found`，先检查 tag 漂移而不是 RabbitMQ 配置。
 
 ## 维护规则
 

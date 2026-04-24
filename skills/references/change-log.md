@@ -484,3 +484,8 @@
   将 `skills/scripts/changed-area-check.sh` 和 `skills/scripts/project-snapshot.sh` 的输出提示改为中文
 - 新增说明：
   技能名、文件路径、脚本命令和 skill ID 保持不变，只对面向 AI 的说明文本进行了中文化
+# 2026-04-25
+
+- 新增 `scripts/nacos_clone_profile.py`，支持把共享 Nacos 某个 profile suffix（如 `-dev`）整批复制到另一个 suffix（如 `-prod`），并已用于把 `dev` namespace 的 12 个 DataId 发布到 `prod`
+- 调整本地 `Dockerfile/docker-compose.yml` 的镜像来源：将不稳定的 `docker.m.daocloud.io` 地址切回官方镜像，并把不可用的 `rabbitmq-exporter` tag 改为 `kbudde/rabbitmq-exporter:latest`
+- 将仓库里过期的 `prod` namespace ID 从 `44cf681d-9f93-443e-aa9e-ba6ec8f721d5` 统一更新为线上实际值 `c3476048-10f6-4cc3-b3f1-90135d736a73`
