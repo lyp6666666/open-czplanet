@@ -469,12 +469,12 @@ function goSchedule() {
   void router.push({ name: 'schedule' })
 }
 
-function goLivePrepare(lessonCourseId?: number | null) {
-  if (!lessonCourseId) {
+function goLivePrepare(courseId?: number | null) {
+  if (!courseId) {
     toast.show('当前课程还没有可进入的课节。', 'info')
     return
   }
-  void router.push({ name: 'livePrepare', params: { courseId: String(lessonCourseId) } })
+  void router.push({ name: 'livePrepare', params: { courseId: String(courseId) } })
 }
 
 function goLessonAiSummary(item: CourseViewModel | null) {
@@ -950,7 +950,7 @@ onUnmounted(() => {
       </div>
       <div class="banner-actions">
         <button v-if="reminderBanner.roomId" class="btn" type="button" @click="goChat(reminderBanner.roomId)">进入聊天</button>
-        <button v-if="reminderBanner.canEnterClassroom" class="btn btn-primary" type="button" @click="goLivePrepare(reminderBanner.latestLesson?.id)">进入课堂</button>
+        <button v-if="reminderBanner.canEnterClassroom" class="btn btn-primary" type="button" @click="goLivePrepare(reminderBanner.courseId)">进入课堂</button>
       </div>
     </section>
 
@@ -1058,7 +1058,7 @@ onUnmounted(() => {
             <div v-if="selectedCourse.showAbnormalAttendanceConfirm" class="rule-hint warn">{{ selectedCourse.abnormalAttendanceHint }}</div>
 
             <div class="card-actions">
-              <button class="btn btn-primary" type="button" :disabled="!selectedCourse.canEnterClassroom" @click="goLivePrepare(selectedCourse.latestLesson?.id)">进入课堂</button>
+              <button class="btn btn-primary" type="button" :disabled="!selectedCourse.canEnterClassroom" @click="goLivePrepare(selectedCourse.courseId)">进入课堂</button>
               <button class="btn" type="button" @click="goCourseDetail(selectedCourse.courseId)">查看课程详情</button>
               <button class="btn" type="button" :disabled="!selectedCourse.canEndClassroom" @click="openEndModal(selectedCourse)">结束课程</button>
               <span v-if="!selectedCourse.canEndClassroom" class="inline-hint">{{ selectedCourse.endBlockedReason }}</span>

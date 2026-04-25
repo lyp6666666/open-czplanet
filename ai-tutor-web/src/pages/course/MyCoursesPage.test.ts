@@ -262,4 +262,67 @@ describe('MyCoursesPage', () => {
     expect(wrapper.text()).toContain('本节未正常开始')
     expect(wrapper.text()).toContain('未走正常课后流程')
   })
+
+  it('routes to live prepare with courseId instead of latest lesson id', async () => {
+    server.use(
+      ...mockBaseCourseApis('TRIALING', {}, [
+        {
+          id: 701,
+          courseId: 66,
+          lessonType: 'TRIAL',
+          title: '试课｜线上一对一',
+          description: null,
+          startAt: Date.now() + 30 * 60 * 1000,
+          endAt: Date.now() + 90 * 60 * 1000,
+          status: 'ACCEPTED',
+          creatorUserId: 1001,
+          participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+          chatRoomId: 88,
+        },
+      ]),
+      http.get('http://localhost/live/sessions/by-course/66', () =>
+        ok({
+          sessionId: 9001,
+          courseId: 66,
+          status: 'CREATED',
+          scheduledStartAt: null,
+          scheduledEndAt: null,
+          joinableNow: true,
+          canJoin: true,
+        }),
+      ),
+      http.get('http://localhost/live/sessions/by-course/701', () =>
+        ok({
+          sessionId: null,
+          courseId: 701,
+          status: 'CREATED',
+          scheduledStartAt: null,
+          scheduledEndAt: null,
+          joinableNow: false,
+          canJoin: false,
+        }),
+      ),
+      http.get('http://localhost/live/sessions/9001/ai/result', () =>
+        ok({
+          sessionId: 9001,
+          courseId: 66,
+          resultStatus: 'PENDING',
+          preview: null,
+        }),
+      ),
+    )
+
+    const wrapper = mount(MyCoursesPage, { global: { plugins: [createPinia()] } })
+    seedStudentAuth()
+    await flushPromises()
+
+    const enterBtn = wrapper.findAll('button').find((btn) => btn.text() === '进入课堂')
+    expect(enterBtn).toBeTruthy()
+    await enterBtn!.trigger('click')
+
+    expect(push).toHaveBeenCalledWith({
+      name: 'livePrepare',
+      params: { courseId: '66' },
+    })
+  })
 })
