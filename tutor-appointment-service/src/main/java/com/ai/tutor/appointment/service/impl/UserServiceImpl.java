@@ -196,7 +196,13 @@ public class UserServiceImpl implements UserService {
         boolean studentBackdoor = role == UserRoleEnum.STUDENT
                 && phone.equals(testBackdoorTeacherProperties.studentPhoneValue())
                 && code.equals(testBackdoorTeacherProperties.studentCodeValue());
-        if (!teacherBackdoor && !studentBackdoor) {
+        boolean localTeacherBackdoor = role == UserRoleEnum.TEACHER
+                && phone.equals(testBackdoorTeacherProperties.localTeacherPhoneValue())
+                && code.equals(testBackdoorTeacherProperties.localTeacherCodeValue());
+        boolean localStudentBackdoor = role == UserRoleEnum.STUDENT
+                && phone.equals(testBackdoorTeacherProperties.localStudentPhoneValue())
+                && code.equals(testBackdoorTeacherProperties.localStudentCodeValue());
+        if (!teacherBackdoor && !studentBackdoor && !localTeacherBackdoor && !localStudentBackdoor) {
             return null;
         }
         testBackdoorSeedService.ensureSeed();

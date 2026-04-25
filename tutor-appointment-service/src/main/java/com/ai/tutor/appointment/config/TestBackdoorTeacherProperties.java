@@ -14,6 +14,10 @@ public class TestBackdoorTeacherProperties {
     public static final String DEFAULT_TEACHER_CODE = "1888";
     public static final String DEFAULT_STUDENT_PHONE = "26666666666";
     public static final String DEFAULT_STUDENT_CODE = "1666";
+    public static final String DEFAULT_LOCAL_TEACHER_PHONE = "29999999999";
+    public static final String DEFAULT_LOCAL_TEACHER_CODE = "1886";
+    public static final String DEFAULT_LOCAL_STUDENT_PHONE = "19999999999";
+    public static final String DEFAULT_LOCAL_STUDENT_CODE = "1668";
 
     private boolean enabled = true;
     /**
@@ -28,6 +32,14 @@ public class TestBackdoorTeacherProperties {
     private Long studentUserId = 666777L;
     private Long redirectRoomId = 666001L;
     private Long redirectOtherUid = 666777L;
+    private String localTeacherPhone = DEFAULT_LOCAL_TEACHER_PHONE;
+    private String localTeacherCode = DEFAULT_LOCAL_TEACHER_CODE;
+    private Long localTeacherUserId = 667888L;
+    private String localStudentPhone = DEFAULT_LOCAL_STUDENT_PHONE;
+    private String localStudentCode = DEFAULT_LOCAL_STUDENT_CODE;
+    private Long localStudentUserId = 667777L;
+    private Long localRedirectRoomId = 667001L;
+    private Long localRedirectOtherUid = 667777L;
 
     public String teacherPhone() {
         return DEFAULT_TEACHER_PHONE;
@@ -43,5 +55,21 @@ public class TestBackdoorTeacherProperties {
 
     public String studentCodeValue() {
         return DEFAULT_STUDENT_CODE;
+    }
+
+    public String localTeacherPhoneValue() {
+        return DEFAULT_LOCAL_TEACHER_PHONE;
+    }
+
+    public String localTeacherCodeValue() {
+        return DEFAULT_LOCAL_TEACHER_CODE;
+    }
+
+    public String localStudentPhoneValue() {
+        return DEFAULT_LOCAL_STUDENT_PHONE;
+    }
+
+    public String localStudentCodeValue() {
+        return DEFAULT_LOCAL_STUDENT_CODE;
     }
 }

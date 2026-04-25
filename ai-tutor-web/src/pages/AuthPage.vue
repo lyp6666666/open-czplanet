@@ -38,7 +38,7 @@ const tutorAuthPath = '/auth/tutor'
 const leftActionLabel = '我要找家教'
 const rightActionLabel = '我要当家教'
 const currentActionLabel = computed(() => (isTutor.value ? rightActionLabel : leftActionLabel))
-const BACKDOOR_PHONES = new Set(['26666666666', '28888888888'])
+const BACKDOOR_PHONES = new Set(['16666666666', '19999999999', '26666666666', '28888888888', '29999999999'])
 
 const needSwitchRole = computed(() => auth.isLoggedIn && auth.role != null && auth.role !== props.role)
 const switchModalOpen = ref(false)
@@ -82,6 +82,7 @@ function validatePhone(v: string): string | null {
 function validateCode(v: string): string | null {
   const c = v.replace(/\s+/g, '')
   if (c.length === 0) return '请输入验证码'
+  if (BACKDOOR_PHONES.has(normalizePhone(phone.value)) && /^\d{3,4}$/.test(c)) return null
   if (!/^\d{4}$/.test(c)) return '请输入 4 位验证码'
   return null
 }

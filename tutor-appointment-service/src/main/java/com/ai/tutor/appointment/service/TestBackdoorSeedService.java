@@ -8,6 +8,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class TestBackdoorSeedService {
 
+    private static final String DEFAULT_AVATAR = "/api/v1/public/assets/avatars/default.svg";
+    private static final long PRIMARY_DEMAND_ID = 666600L;
+    private static final long PRIMARY_EXCLUSIVE_DEMAND_ID = 666601L;
+    private static final long LOCAL_DEMAND_ID = 667600L;
+    private static final long LOCAL_EXCLUSIVE_DEMAND_ID = 667601L;
+
     @Resource
     private TestBackdoorSeedMapper testBackdoorSeedMapper;
 
@@ -15,34 +21,19 @@ public class TestBackdoorSeedService {
     private TestBackdoorTeacherProperties props;
 
     public void ensureSeed() {
-        Long teacherUid = props.getUserId();
-        Long studentUid = props.getStudentUserId();
-        Long teacherProfileId = props.getUserId();
-        Long studentProfileId = props.getStudentUserId();
-        Long roomId = props.getRedirectRoomId();
-        long demandId = 666600L;
-        long exclusiveDemandId = 666601L;
-        String defaultAvatar = "/api/v1/public/assets/avatars/default.svg";
-
-        testBackdoorSeedMapper.upsertUser(teacherUid, "后门教师", props.teacherPhone(),
-                defaultAvatar, 1, 1, teacherProfileId);
-        testBackdoorSeedMapper.upsertUser(studentUid, "测试学生", props.studentPhoneValue(),
-                defaultAvatar, 0, 2, studentProfileId);
-
-        testBackdoorSeedMapper.upsertTeacherProfile(teacherProfileId, teacherUid);
-        testBackdoorSeedMapper.upsertStudentProfile(studentProfileId, studentUid);
-
-        testBackdoorSeedMapper.upsertStudentJobPosting(demandId, studentUid);
-        testBackdoorSeedMapper.upsertExclusiveStudentJobPosting(exclusiveDemandId, studentUid);
-        testBackdoorSeedMapper.upsertRoom(roomId, teacherProfileId, studentProfileId, null);
+        ensureSeedPair(primaryPair());
+        ensureSeedPair(localPair());
     }
 
     public void resetDemoProgress() {
-        Long teacherUid = props.getUserId();
-        Long studentUid = props.getStudentUserId();
-        Long teacherProfileId = props.getUserId();
-        Long studentProfileId = props.getStudentUserId();
-        Long roomId = props.getRedirectRoomId();
+        resetDemoProgress(primaryPair());
+        resetDemoProgress(localPair());
+    }
+
+    private void resetDemoProgress(TestAccountPair pair) {
+        Long teacherUid = pair.teacherUid;
+        Long studentUid = pair.studentUid;
+        Long roomId = pair.roomId;
 
         testBackdoorSeedMapper.deleteRefundRequestsByRoomId(roomId);
         testBackdoorSeedMapper.deleteApplicationBrokerageOrdersByRoomId(roomId, teacherUid, studentUid);
@@ -55,7 +46,95 @@ public class TestBackdoorSeedService {
         testBackdoorSeedMapper.deleteRoomReadStatesByRoomId(roomId);
         testBackdoorSeedMapper.deleteMessagesByRoomId(roomId);
 
-        ensureSeed();
-        testBackdoorSeedMapper.upsertRoom(roomId, teacherProfileId, studentProfileId, null);
+        ensureSeedPair(pair);
+        testBackdoorSeedMapper.upsertRoom(roomId, pair.teacherProfileId, pair.studentProfileId, null);
+    }
+
+    private void ensureSeedPair(TestAccountPair pair) {
+        testBackdoorSeedMapper.upsertUser(pair.teacherUid, pair.teacherName, pair.teacherPhone,
+                DEFAULT_AVATAR, 1, 1, pair.teacherProfileId);
+        testBackdoorSeedMapper.upsertUser(pair.studentUid, pair.studentName, pair.studentPhone,
+                DEFAULT_AVATAR, 0, 2, pair.studentProfileId);
+
+        testBackdoorSeedMapper.upsertTeacherProfile(
+                pair.teacherProfileId,
+                pair.teacherUid,
+                pair.teacherName,
+                "用于联调支付权限的测试教师账号。"
+        );
+        testBackdoorSeedMapper.upsertStudentProfile(
+                pair.studentProfileId,
+                pair.studentUid,
+                pair.studentName,
+                "用于联调支付权限的测试学生账号。"
+        );
+
+        testBackdoorSeedMapper.upsertStudentJobPosting(pair.demandId, pair.studentUid);
+        testBackdoorSeedMapper.upsertExclusiveStudentJobPosting(pair.exclusiveDemandId, pair.studentUid);
+        testBackdoorSeedMapper.upsertRoom(pair.roomId, pair.teacherProfileId, pair.studentProfileId, null);
+    }
+
+    private TestAccountPair primaryPair() {
+        Long teacherUid = props.getUserId();
+        Long studentUid = props.getStudentUserId();
+        return new TestAccountPair(
+                teacherUid,
+                studentUid,
+                teacherUid,
+                studentUid,
+                props.getRedirectRoomId(),
+                PRIMARY_DEMAND_ID,
+                PRIMARY_EXCLUSIVE_DEMAND_ID,
+                props.teacherPhone(),
+                props.studentPhoneValue(),
+                "后门教师",
+                "测试学生"
+        );
+    }
+
+    private TestAccountPair localPair() {
+        return new TestAccountPair(
+                props.getLocalTeacherUserId(),
+                props.getLocalStudentUserId(),
+                props.getLocalTeacherUserId(),
+                props.getLocalStudentUserId(),
+                props.getLocalRedirectRoomId(),
+                LOCAL_DEMAND_ID,
+                LOCAL_EXCLUSIVE_DEMAND_ID,
+                props.localTeacherPhoneValue(),
+                props.localStudentPhoneValue(),
+                "本地测试教师",
+                "本地测试学生"
+        );
+    }
+
+    private static class TestAccountPair {
+        private final Long teacherUid;
+        private final Long studentUid;
+        private final Long teacherProfileId;
+        private final Long studentProfileId;
+        private final Long roomId;
+        private final Long demandId;
+        private final Long exclusiveDemandId;
+        private final String teacherPhone;
+        private final String studentPhone;
+        private final String teacherName;
+        private final String studentName;
+
+        private TestAccountPair(Long teacherUid, Long studentUid, Long teacherProfileId, Long studentProfileId,
+                                Long roomId, Long demandId, Long exclusiveDemandId, String teacherPhone,
+                                String studentPhone, String teacherName, String studentName) {
+            this.teacherUid = teacherUid;
+            this.studentUid = studentUid;
+            this.teacherProfileId = teacherProfileId;
+            this.studentProfileId = studentProfileId;
+            this.roomId = roomId;
+            this.demandId = demandId;
+            this.exclusiveDemandId = exclusiveDemandId;
+            this.teacherPhone = teacherPhone;
+            this.studentPhone = studentPhone;
+            this.teacherName = teacherName;
+            this.studentName = studentName;
+        }
     }
 }
