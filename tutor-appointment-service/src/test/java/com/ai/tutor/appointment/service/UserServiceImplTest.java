@@ -303,6 +303,42 @@ class UserServiceImplTest {
     }
 
     @Test
+    void shouldLoginLocalTeacherBackdoorWithShortCode() {
+        User teacher = new User();
+        teacher.setId(667888L);
+        teacher.setPhone("29999999999");
+        teacher.setName("本地测试教师");
+        teacher.setUserType(UserRoleEnum.TEACHER.getValue());
+        when(userMapper.selectByPhone("29999999999")).thenReturn(teacher);
+        when(jwtUtil.generateToken(667888L, "29999999999", UserRoleEnum.TEACHER)).thenReturn("local-teacher-token");
+
+        LoginUserVO vo = userService.userLoginOrRegister("29999999999", "1886", UserRoleEnum.TEACHER, null);
+
+        assertThat(vo.getId()).isEqualTo(667888L);
+        assertThat(vo.getToken()).isEqualTo("local-teacher-token");
+        verify(testBackdoorSeedService).ensureSeed();
+        verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldLoginLocalStudentBackdoorWithShortCode() {
+        User student = new User();
+        student.setId(667777L);
+        student.setPhone("19999999999");
+        student.setName("本地测试学生");
+        student.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectByPhone("19999999999")).thenReturn(student);
+        when(jwtUtil.generateToken(667777L, "19999999999", UserRoleEnum.STUDENT)).thenReturn("local-student-token");
+
+        LoginUserVO vo = userService.userLoginOrRegister("19999999999", "1668", UserRoleEnum.STUDENT, null);
+
+        assertThat(vo.getId()).isEqualTo(667777L);
+        assertThat(vo.getToken()).isEqualTo("local-student-token");
+        verify(testBackdoorSeedService).ensureSeed();
+        verify(smsService, never()).verifyCode(anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldStillUseCanonicalBackdoorCredentialsWhenPropertiesCarryLegacyValues() {
         TestBackdoorTeacherProperties staleProps = new TestBackdoorTeacherProperties();
         staleProps.setPhone("188");

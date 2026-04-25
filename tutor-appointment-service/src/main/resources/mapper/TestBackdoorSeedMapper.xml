@@ -23,20 +23,24 @@
             city, highest_edu_school, teaching_mode, resume_completed, certificate_urls, status, create_time, update_time
         )
         VALUES (
-            #{id}, #{userId}, '后门教师', '测试 本科', '初中数学', 3, 199.00, '用于联调支付权限的测试教师账号。',
+            #{id}, #{userId}, #{realName}, '测试 本科', '初中数学', 3, 199.00, #{introduction},
             '北京', '测试大学', 'ONLINE', 1, '[]', 1, NOW(3), NOW(3)
         )
         ON DUPLICATE KEY UPDATE
             user_id = VALUES(user_id),
+            real_name = VALUES(real_name),
+            introduction = VALUES(introduction),
             status = VALUES(status),
             update_time = VALUES(update_time)
     </insert>
 
     <insert id="upsertStudentProfile">
         INSERT INTO student_profile (id, user_id, real_name, age, address, demand_description, budget, status, create_time, update_time)
-        VALUES (#{id}, #{userId}, '测试学生', 13, '北京市海淀区', '用于联调支付权限的测试学生账号。', 120.00, 1, NOW(3), NOW(3))
+        VALUES (#{id}, #{userId}, #{realName}, 13, '北京市海淀区', #{description}, 120.00, 1, NOW(3), NOW(3))
         ON DUPLICATE KEY UPDATE
             user_id = VALUES(user_id),
+            real_name = VALUES(real_name),
+            demand_description = VALUES(demand_description),
             status = VALUES(status),
             update_time = VALUES(update_time)
     </insert>

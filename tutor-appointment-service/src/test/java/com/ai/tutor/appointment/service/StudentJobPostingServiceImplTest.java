@@ -254,15 +254,42 @@ class StudentJobPostingServiceImplTest {
     }
 
     @Test
+    void listPublishedShouldPrependLocalExclusiveDemandForLocalTestTeacherOnFirstPage() {
+        CursorPageRequest page = new CursorPageRequest();
+        page.setCursor(null);
+        page.setPageSize(3);
+
+        StudentJobPosting regular = StudentJobPosting.builder().id(3001L).title("普通需求").status(1).build();
+        StudentJobPosting exclusive = StudentJobPosting.builder().id(667601L).title("本地测试学生新发布需求（支付验证专用）").status(1).build();
+
+        when(studentJobPostingMapper.listPublishedFiltered(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(java.util.List.of(regular));
+        when(studentJobPostingMapper.selectByIdVisibleForTestTeacher(667601L)).thenReturn(exclusive);
+
+        com.ai.tutor.appointment.model.vo.CursorPageResponse<StudentJobPosting> resp = service.listPublished(
+                null, null, null, null, null, null, null,
+                null, null, null, null, null, "latest",
+                667888L, page
+        );
+
+        assertThat(resp.getList()).hasSize(2);
+        assertThat(resp.getList().get(0).getId()).isEqualTo(667601L);
+        assertThat(resp.getList().get(1).getId()).isEqualTo(3001L);
+        verify(testBackdoorSeedService).ensureSeed();
+    }
+
+    @Test
     void listPublishedShouldNotExposeExclusiveDemandToNormalTeacher() {
         CursorPageRequest page = new CursorPageRequest();
         page.setCursor(null);
         page.setPageSize(3);
 
         StudentJobPosting regular = StudentJobPosting.builder().id(3001L).title("普通需求").status(1).build();
+        StudentJobPosting exclusive = StudentJobPosting.builder().id(667601L).title("本地测试学生新发布需求（支付验证专用）").status(1).build();
         when(studentJobPostingMapper.listPublishedFiltered(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
-        )).thenReturn(java.util.List.of(regular));
+        )).thenReturn(java.util.List.of(exclusive, regular));
 
         com.ai.tutor.appointment.model.vo.CursorPageResponse<StudentJobPosting> resp = service.listPublished(
                 null, null, null, null, null, null, null,

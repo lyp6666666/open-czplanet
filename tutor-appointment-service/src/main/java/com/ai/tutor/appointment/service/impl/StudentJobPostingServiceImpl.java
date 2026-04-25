@@ -50,7 +50,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     @Resource
     private BizKpiMetrics bizKpiMetrics;
 
-    private static final long TEST_EXCLUSIVE_DEMAND_ID = 666601L;
+    private static final long PRIMARY_TEST_EXCLUSIVE_DEMAND_ID = 666601L;
+    private static final long LOCAL_TEST_EXCLUSIVE_DEMAND_ID = 667601L;
 
     @Override
     public Long create(CreateStudentJobPostingRequest request, Long uid) {
@@ -217,6 +218,8 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
     @Override
     public DemandViewVO getViewById(Long id, Long viewerUid) {
         StudentJobPosting posting = getById(id);
+        ThrowUtils.throwIf(isExclusiveTestDemand(id) && !canViewExclusiveTestDemand(id, viewerUid, posting.getParentId()),
+                ErrorCode.NO_AUTH_ERROR);
         User user = userMapper.selectById(posting.getParentId());
         OrganizationProfile orgProfile = null;
         if (PublisherIdentityEnum.ORGANIZATION == PublisherIdentityEnum.fromCode(posting.getPublisherIdentity())) {
@@ -316,18 +319,20 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
                 request.getCursor(),
                 pageSize
         );
+        list = removeExclusiveTestDemands(list);
         list = mergeExclusiveTestDemandForViewer(list, viewerUid, request);
         return buildCursorResponse(list, pageSize);
     }
 
     private List<StudentJobPosting> mergeExclusiveTestDemandForViewer(List<StudentJobPosting> list, Long viewerUid, CursorPageRequest request) {
-        if (!shouldShowExclusiveTestDemand(viewerUid, request)) {
+        Long exclusiveDemandId = exclusiveDemandIdForViewer(viewerUid, request);
+        if (exclusiveDemandId == null) {
             return list;
         }
         if (testBackdoorSeedService != null) {
             testBackdoorSeedService.ensureSeed();
         }
-        StudentJobPosting exclusive = studentJobPostingMapper.selectByIdVisibleForTestTeacher(TEST_EXCLUSIVE_DEMAND_ID);
+        StudentJobPosting exclusive = studentJobPostingMapper.selectByIdVisibleForTestTeacher(exclusiveDemandId);
         if (exclusive == null) {
             return list;
         }
@@ -335,7 +340,7 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         merged.add(exclusive);
         if (list != null) {
             for (StudentJobPosting item : list) {
-                if (item == null || TEST_EXCLUSIVE_DEMAND_ID == (item.getId() == null ? -1L : item.getId())) {
+                if (item == null || exclusiveDemandId.equals(item.getId())) {
                     continue;
                 }
                 merged.add(item);
@@ -348,14 +353,56 @@ public class StudentJobPostingServiceImpl implements StudentJobPostingService {
         return merged;
     }
 
-    private boolean shouldShowExclusiveTestDemand(Long viewerUid, CursorPageRequest request) {
+    private Long exclusiveDemandIdForViewer(Long viewerUid, CursorPageRequest request) {
+        if (testBackdoorTeacherProperties == null || !testBackdoorTeacherProperties.isEnabled()) {
+            return null;
+        }
+        if (request != null && request.getCursor() != null) {
+            return null;
+        }
+        if (viewerUid != null && viewerUid.equals(testBackdoorTeacherProperties.getUserId())) {
+            return PRIMARY_TEST_EXCLUSIVE_DEMAND_ID;
+        }
+        if (viewerUid != null && viewerUid.equals(testBackdoorTeacherProperties.getLocalTeacherUserId())) {
+            return LOCAL_TEST_EXCLUSIVE_DEMAND_ID;
+        }
+        return null;
+    }
+
+    private List<StudentJobPosting> removeExclusiveTestDemands(List<StudentJobPosting> list) {
+        if (list == null || list.isEmpty()) {
+            return list;
+        }
+        java.util.List<StudentJobPosting> filtered = new java.util.ArrayList<>(list.size());
+        for (StudentJobPosting item : list) {
+            if (item == null || !isExclusiveTestDemand(item.getId())) {
+                filtered.add(item);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean isExclusiveTestDemand(Long id) {
+        return id != null && (id == PRIMARY_TEST_EXCLUSIVE_DEMAND_ID || id == LOCAL_TEST_EXCLUSIVE_DEMAND_ID);
+    }
+
+    private boolean canViewExclusiveTestDemand(Long demandId, Long viewerUid, Long parentId) {
+        if (viewerUid == null) {
+            return false;
+        }
+        if (viewerUid.equals(parentId)) {
+            return true;
+        }
         if (testBackdoorTeacherProperties == null || !testBackdoorTeacherProperties.isEnabled()) {
             return false;
         }
-        if (viewerUid == null || !viewerUid.equals(testBackdoorTeacherProperties.getUserId())) {
-            return false;
+        if (demandId == PRIMARY_TEST_EXCLUSIVE_DEMAND_ID) {
+            return viewerUid.equals(testBackdoorTeacherProperties.getUserId());
         }
-        return request == null || request.getCursor() == null;
+        if (demandId == LOCAL_TEST_EXCLUSIVE_DEMAND_ID) {
+            return viewerUid.equals(testBackdoorTeacherProperties.getLocalTeacherUserId());
+        }
+        return false;
     }
 
     private static final Set<String> CLASS_MODES = Set.of("online", "offline");

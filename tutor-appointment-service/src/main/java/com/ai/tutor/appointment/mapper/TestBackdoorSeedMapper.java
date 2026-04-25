@@ -14,9 +14,15 @@ public interface TestBackdoorSeedMapper {
                    @Param("userType") Integer userType,
                    @Param("refId") Long refId);
 
-    int upsertTeacherProfile(@Param("id") Long id, @Param("userId") Long userId);
+    int upsertTeacherProfile(@Param("id") Long id,
+                             @Param("userId") Long userId,
+                             @Param("realName") String realName,
+                             @Param("introduction") String introduction);
 
-    int upsertStudentProfile(@Param("id") Long id, @Param("userId") Long userId);
+    int upsertStudentProfile(@Param("id") Long id,
+                             @Param("userId") Long userId,
+                             @Param("realName") String realName,
+                             @Param("description") String description);
 
     int upsertStudentJobPosting(@Param("id") Long id, @Param("parentId") Long parentId);
 
