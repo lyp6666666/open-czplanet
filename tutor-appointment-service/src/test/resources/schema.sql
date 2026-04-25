@@ -148,6 +148,7 @@ CREATE TABLE teacher_profile (
   edu_verify_reject_reason VARCHAR(255),
   edu_verify_submit_time TIMESTAMP NULL,
   edu_verify_time TIMESTAMP NULL,
+  home_star_teacher TINYINT DEFAULT 0,
   status INT,
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -587,6 +587,9 @@ public class HomeGuestServiceImpl implements HomeGuestService {
 
             List<String> subjectTags = buildTutorSubjectTags(profile);
             List<String> highlights = new ArrayList<>();
+            if (isHomeStarTeacher(profile)) {
+                highlights.add("星级教师");
+            }
             if (profile != null
                     && profile.getRealnameVerifyStatus() != null
                     && profile.getEduVerifyStatus() != null
@@ -822,6 +825,10 @@ public class HomeGuestServiceImpl implements HomeGuestService {
             return Map.of();
         }
         return list.stream().collect(Collectors.toMap(TeacherProfile::getUserId, Function.identity(), (a, b) -> a));
+    }
+
+    private boolean isHomeStarTeacher(TeacherProfile profile) {
+        return profile != null && profile.getHomeStarTeacher() != null && profile.getHomeStarTeacher() == 1;
     }
 
     private String buildTutorDisplayName(TeacherProfile profile, User user) {

@@ -18,6 +18,8 @@ spring:
     import:
       - optional:nacos:ai-tutor-common.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:ai-tutor-common-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-email.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-email-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:ai-tutor-home.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:ai-tutor-home-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
       - optional:nacos:ai-tutor-sms.yaml?group=DEFAULT_GROUP&refreshEnabled=true

@@ -17,5 +17,6 @@ public class TeacherExtInfo {
     private String teachingMode;
     private String defaultGreeting;
     private String certificateUrls;
+    private Integer homeStarTeacher;
     private Integer status;
 }

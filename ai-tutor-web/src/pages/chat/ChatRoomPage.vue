@@ -711,15 +711,23 @@ async function respondLesson(eventId: number, action: 'ACCEPT' | 'REJECT', msgId
   }
 }
 
-function openLiveFromLesson(eventId: number) {
-  void router.push({ name: 'livePrepare', params: { courseId: String(eventId) } })
+function openLiveFromLesson(courseId?: number | null) {
+  if (!(courseId && courseId > 0)) {
+    error.value = '当前课节还未关联课程，暂时无法进入课堂'
+    return
+  }
+  void router.push({ name: 'livePrepare', params: { courseId: String(courseId) } })
 }
 
-async function openLiveByStatus(eventId: number) {
+async function openLiveByStatus(courseId?: number | null) {
+  if (!(courseId && courseId > 0)) {
+    error.value = '当前课节还未关联课程，课堂暂不可进入'
+    return
+  }
   try {
-    const live = await liveApi.getByCourse(eventId)
+    const live = await liveApi.getByCourse(courseId)
     if (!live.sessionId) return
-    openLiveFromLesson(eventId)
+    openLiveFromLesson(courseId)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '课堂暂不可进入'
   }
@@ -1958,7 +1966,7 @@ watch(
               <template v-else-if="isLessonStatusBody(it.m.body)">
                 <div class="sys sys-with-action">
                   <span>课程状态：{{ it.m.body.status }}（{{ it.m.body.title }}）</span>
-                  <button v-if="it.m.body.status === 'ACCEPTED'" class="btn btn-text join-lesson-btn" type="button" @click="openLiveByStatus(it.m.body.eventId)">
+                  <button v-if="it.m.body.status === 'ACCEPTED'" class="btn btn-text join-lesson-btn" type="button" @click="openLiveByStatus(currentCourse?.courseId ?? null)">
                     进入课堂
                   </button>
                 </div>

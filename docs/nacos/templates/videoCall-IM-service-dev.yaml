@@ -26,18 +26,5 @@ rocketmq:
   # RocketMQ NameServer（如果你们有共享的 mq 配置，也可以放到 ai-tutor-common-dev.yaml）
   name-server: 127.0.0.1:9876
 
-email:
-  sender:
-    provider: "MOCK"
-    enabled: true
-    endpoint: "ses.tencentcloudapi.com"
-    region: "ap-guangzhou"
-    secret-id: "<TODO:TENCENT_SES_SECRET_ID>"
-    secret-key: "<TODO:TENCENT_SES_SECRET_KEY>"
-    from-email: "<TODO:no-reply@your-domain.com>"
-    from-name: "创智星球"
-    reply-to-email: "<TODO:support@your-domain.com>"
-    connect-timeout-ms: 3000
-    read-timeout-ms: 5000
-    template-ids:
-      UNREAD_MESSAGE_REMINDER: 173983
+# 邮件配置已统一迁移到 ai-tutor-email-dev.yaml。
+# 请不要在本服务 DataId 中重复配置 email.*，避免覆盖统一邮件配置。

@@ -22,9 +22,15 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const auth = useAuthStore()
+
 const userMenuOpen = ref(false)
 const cityModalOpen = ref(false)
 const avatarLoadFailed = ref(false)
+const keyword = ref('')
+const suggestOpen = ref(false)
+const suggestLoading = ref(false)
+const suggestError = ref<string | null>(null)
+const suggestList = ref<SearchSuggestVO['list']>([])
 
 const cities = computed(() => {
   const base = [props.city, '北京', '上海', '广州', '深圳', '杭州']
@@ -33,49 +39,75 @@ const cities = computed(() => {
 
 const cityModel = computed({
   get: () => props.city,
-  set: (v: string) => {
-    const next = String(v || '').trim()
+  set: (value: string) => {
+    const next = String(value || '').trim()
     if (!next) return
     emit('city-change', next)
   },
 })
 
-const keyword = ref('')
-const suggestOpen = ref(false)
-const suggestLoading = ref(false)
-const suggestError = ref<string | null>(null)
-const suggestList = ref<SearchSuggestVO['list']>([])
+const placeholder = computed(() => props.config?.search?.placeholder || '搜索科目 / 年级 / 老师，例如：初中数学')
 
-const placeholder = computed(() => props.config?.search?.placeholder || '搜索科目/老师/需求，例如：初中数学')
+const navItems = computed(() => {
+  return [
+    { key: 'home', name: '首页', link: '/' },
+    { key: 'student', name: '找老师', link: '/student/tutors' },
+    { key: 'demand', name: '找需求', link: '/student/post' },
+    { key: 'ai', name: 'AI学习', link: '/guide/student' },
+    { key: 'tutor', name: '师资中心', link: '/tutor/jobs' },
+    { key: 'about', name: '关于我们', link: '/about' },
+  ]
+})
 
-const runSuggest = debounce(async () => {
+const userInitial = computed(() => {
+  const name = auth.user?.name?.trim()
+  return name?.slice(0, 1) || 'U'
+})
+
+const isTeacher = computed(() => auth.user?.userType === 1)
+
+async function runSearch() {
+  const q = keyword.value.trim()
+  if (!q) return
+
+  if (!auth.isLoggedIn) {
+    window.alert('请先登录后再使用搜索功能')
+    return
+  }
+
+  if (isTeacher.value) {
+    await router.push({ name: 'tutorJobs', query: { q } })
+    return
+  }
+
+  await router.push({ name: 'studentTutors', query: { q } })
+}
+
+const fetchSuggest = debounce(async () => {
   const q = keyword.value.trim()
   suggestError.value = null
+
   if (!q) {
     suggestList.value = []
     suggestOpen.value = false
     return
   }
+
   suggestLoading.value = true
   suggestOpen.value = true
   try {
-    const res = await homeGuestApi.suggest({ q, city: props.city, limit: 10 })
-    suggestList.value = res.list || []
-  } catch (e) {
-    suggestError.value = e instanceof Error ? e.message : '搜索联想失败'
+    const result = await homeGuestApi.suggest({ q, city: props.city, limit: 8 })
+    suggestList.value = result.list || []
+  } catch (error) {
+    suggestError.value = error instanceof Error ? error.message : '搜索联想失败'
     suggestList.value = []
   } finally {
     suggestLoading.value = false
   }
-}, 250)
+}, 220)
 
 function onKeywordInput() {
-  runSuggest()
-}
-
-function useHotWord(word: string) {
-  keyword.value = word
-  runSuggest()
+  void fetchSuggest()
 }
 
 function closeSuggest() {
@@ -84,30 +116,14 @@ function closeSuggest() {
   }, 150)
 }
 
-function onSearchClick() {
-  const q = keyword.value.trim()
-  if (!q) return
-  if (!auth.isLoggedIn) {
-    window.alert('请登录之后再使用搜索功能')
-    return
-  }
-}
-
-function hasToken() {
-  // 这里仅做“是否存在 token”判断，后续可扩展为调用后端接口校验/刷新登录态
-  return auth.isLoggedIn
+function useHotWord(word: string) {
+  keyword.value = word
+  void runSearch()
 }
 
 async function goAuth(role: 'TEACHER' | 'STUDENT') {
-  // 入口按钮统一先检查 token；已登录则不再进入登录页
-  if (hasToken()) return
+  if (auth.isLoggedIn) return
   await router.push({ name: role === 'TEACHER' ? 'authTutor' : 'authStudent' })
-}
-
-async function logout() {
-  auth.logout()
-  userMenuOpen.value = false
-  await router.replace({ name: 'home' })
 }
 
 async function goMenu(path: string) {
@@ -115,12 +131,11 @@ async function goMenu(path: string) {
   await router.push(path)
 }
 
-const isTeacher = computed(() => auth.user?.userType === 1)
-
-const userInitial = computed(() => {
-  const n = auth.user?.name?.trim()
-  return n && n.length > 0 ? n.slice(0, 1) : 'U'
-})
+async function logout() {
+  auth.logout()
+  userMenuOpen.value = false
+  await router.replace({ name: 'home' })
+}
 
 watch(
   () => auth.user?.avatar,
@@ -131,30 +146,34 @@ watch(
 </script>
 
 <template>
-  <header class="header">
-    <div class="container bar">
-      <div class="left">
-        <div class="brand-lockup" aria-label="创智星球">
-          <BrandLogoMark class="logo-mark" />
-          <div class="logo">{{ BRAND_NAME }}</div>
+  <header class="header-shell">
+    <div class="container header">
+      <RouterLink class="brand" to="/">
+        <BrandLogoMark class="brand-mark" />
+        <div class="brand-copy">
+          <div class="brand-name">{{ BRAND_NAME }}</div>
+          <div class="brand-tag">用数据联动孩子成长</div>
         </div>
+      </RouterLink>
 
-        <div class="city">
-          <button class="city-trigger" type="button" @click="cityModalOpen = true">
-            <svg class="city-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M12 2c3.9 0 7 3.1 7 7 0 5-7 13-7 13S5 14 5 9c0-3.9 3.1-7 7-7Zm0 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"
-              />
-            </svg>
-            <span class="city-name">{{ city }}</span>
-            <span class="city-switch">[切换]</span>
-          </button>
-          <CitySelectModal :open="cityModalOpen" v-model="cityModel" :hot-cities="cities" @close="cityModalOpen = false" />
-        </div>
-      </div>
+      <button class="city-trigger" type="button" @click="cityModalOpen = true">
+        <span class="city-dot"></span>
+        <span>{{ city }}</span>
+        <span class="city-switch">切换</span>
+      </button>
 
-      <div class="search">
+      <nav class="nav">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.key"
+          class="nav-link"
+          :to="item.link"
+        >
+          {{ item.name }}
+        </RouterLink>
+      </nav>
+
+      <div class="search-area">
         <div class="search-box">
           <input
             v-model="keyword"
@@ -163,35 +182,52 @@ watch(
             :placeholder="placeholder"
             @input="onKeywordInput"
             @focus="onKeywordInput"
-            @keydown.enter.prevent="onSearchClick"
             @blur="closeSuggest"
+            @keydown.enter.prevent="runSearch"
           />
-          <button class="btn btn-primary search-btn" type="button" @click="onSearchClick">搜索</button>
+          <button class="search-btn" type="button" @click="runSearch">搜索</button>
         </div>
 
-        <div class="hot-words" v-if="hotWords?.list?.length">
-          <span class="label">热搜</span>
-          <button v-for="w in hotWords.list" :key="w.word" class="chip" type="button" @click="useHotWord(w.word)">
-            {{ w.word }}
+        <div v-if="hotWords?.list?.length" class="hot-words">
+          <span class="hot-label">热搜</span>
+          <button
+            v-for="item in hotWords.list.slice(0, 3)"
+            :key="item.word"
+            class="hot-chip"
+            type="button"
+            @click="useHotWord(item.word)"
+          >
+            {{ item.word }}
           </button>
         </div>
 
-        <div v-if="suggestOpen" class="suggest card">
-          <div v-if="suggestLoading" class="suggest-row muted">加载中...</div>
-          <div v-else-if="suggestError" class="suggest-row muted">{{ suggestError }}</div>
+        <div v-if="suggestOpen" class="suggest-panel">
+          <div v-if="suggestLoading" class="suggest-empty">加载中...</div>
+          <div v-else-if="suggestError" class="suggest-empty">{{ suggestError }}</div>
           <template v-else>
-            <div v-if="!suggestList.length" class="suggest-row muted">暂无建议</div>
-            <button v-for="(it, idx) in suggestList" :key="idx" class="suggest-row" type="button">
-              <div class="title">{{ it.title }}</div>
-              <div class="sub" v-if="it.subtitle">{{ it.subtitle }}</div>
-              <div class="tag">{{ it.type }}</div>
+            <div v-if="!suggestList.length" class="suggest-empty">暂无建议</div>
+            <button
+              v-for="(item, index) in suggestList"
+              :key="`${item.type}-${index}`"
+              class="suggest-item"
+              type="button"
+              @mousedown.prevent="keyword = item.title"
+              @click="runSearch"
+            >
+              <div class="suggest-main">{{ item.title }}</div>
+              <div v-if="item.subtitle" class="suggest-sub">{{ item.subtitle }}</div>
+              <div class="suggest-tag">{{ item.type }}</div>
             </button>
           </template>
         </div>
       </div>
 
-      <div class="right">
+      <div class="actions">
         <template v-if="auth.isLoggedIn && auth.user">
+          <button class="ghost-btn" type="button" @click="goMenu(isTeacher ? '/me' : '/student/jobs/mine')">
+            {{ isTeacher ? '我的简历' : '我的学习' }}
+          </button>
+
           <div class="user" @mouseenter="userMenuOpen = true" @mouseleave="userMenuOpen = false">
             <img
               v-if="auth.user.avatar && !avatarLoadFailed"
@@ -200,328 +236,401 @@ watch(
               alt="avatar"
               @error="avatarLoadFailed = true"
             />
-            <div v-else class="avatar fallback">{{ userInitial }}</div>
+            <div v-else class="avatar avatar-fallback">{{ userInitial }}</div>
 
-            <div v-if="userMenuOpen" class="menu card">
-              <button class="menu-item" type="button" @click="goMenu('/me')">{{ isTeacher ? '简历' : '我的' }}</button>
-              <button class="menu-item" type="button" @click="goMenu(isTeacher ? '/tutor/favorites' : '/student/favorites')">收藏</button>
-              <button class="menu-item invite-entry" type="button" @click="goMenu('/invite')">
-                <span class="invite-text">邀请有礼</span>
-              </button>
+            <div v-if="userMenuOpen" class="user-menu">
+              <button class="menu-item" type="button" @click="goMenu('/me')">个人中心</button>
+              <button class="menu-item" type="button" @click="goMenu(isTeacher ? '/tutor/favorites' : '/student/favorites')">我的收藏</button>
+              <button class="menu-item" type="button" @click="goMenu('/invite')">邀请有礼</button>
               <button class="menu-item danger" type="button" @click="logout">退出登录</button>
             </div>
           </div>
         </template>
 
         <template v-else>
-          <button class="btn" type="button" @click="goAuth('TEACHER')">我要当家教</button>
-          <button class="btn btn-primary" type="button" @click="goAuth('STUDENT')">我要找家教</button>
+          <button class="ghost-btn" type="button" @click="goAuth('TEACHER')">我要当老师</button>
+          <button class="primary-btn" type="button" @click="goAuth('STUDENT')">我找学生家教</button>
         </template>
       </div>
     </div>
+
+    <CitySelectModal :open="cityModalOpen" v-model="cityModel" :hot-cities="cities" @close="cityModalOpen = false" />
   </header>
 </template>
 
 <style scoped>
-.header {
+.header-shell {
   position: sticky;
   top: 0;
-  z-index: 20;
-  background: rgba(246, 247, 251, 0.88);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  z-index: 30;
+  background: rgba(248, 250, 255, 0.92);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(42, 75, 155, 0.08);
 }
 
-.bar {
+.header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(320px, 460px) auto;
+  align-items: center;
   gap: 14px;
-  align-items: start;
-  padding: 14px 0;
+  min-height: 86px;
 }
 
-.left {
-  display: flex;
+.brand {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
 
-.brand-lockup {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 0 1 auto;
+.brand-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
 }
 
-.logo-mark {
-  width: 74px;
-  height: 36px;
-  flex: 0 0 74px;
-  display: block;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(58, 106, 255, 0.18));
+.brand-copy {
+  display: grid;
+  gap: 2px;
 }
 
-.logo {
+.brand-name {
+  font-size: 24px;
   font-weight: 800;
-  font-size: 18px;
-  line-height: 1;
-  letter-spacing: 0.5px;
-  color: var(--text);
-  white-space: nowrap;
+  letter-spacing: -0.03em;
+  color: #0d1b48;
 }
 
-.city {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  flex: 0 0 auto;
+.brand-tag {
+  font-size: 12px;
+  color: #7585ab;
 }
 
 .city-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 8px;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(69, 108, 198, 0.12);
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.88);
+  color: #30437d;
   cursor: pointer;
-  font-weight: 900;
-  color: var(--text);
-  white-space: nowrap;
 }
 
-.city-trigger:hover {
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.city-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--primary);
-}
-
-.city-name {
-  white-space: nowrap;
+.city-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #16c7b5, #2f6dff);
 }
 
 .city-switch {
-  color: var(--muted);
-  font-weight: 900;
-  white-space: nowrap;
+  color: #90a0c7;
+  font-size: 12px;
 }
 
-.search {
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-link {
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: #31406e;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.nav-link:hover,
+.router-link-active.nav-link {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.09);
+  transform: translateY(-1px);
+}
+
+.search-area {
   position: relative;
 }
 
 .search-box {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(92, 124, 200, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 32px rgba(52, 78, 141, 0.08);
 }
 
 .search-input {
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+  width: 100%;
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
   outline: none;
-  background: #fff;
+  background: transparent;
+  color: #16275d;
+  font-size: 14px;
 }
 
-.search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-weak);
+.search-btn,
+.primary-btn,
+.ghost-btn {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
-.search-btn {
-  height: 36px;
+.search-btn,
+.primary-btn {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #19c2bf, #2d62f2);
+  box-shadow: 0 14px 28px rgba(43, 98, 234, 0.24);
+}
+
+.ghost-btn {
+  border: 1px solid rgba(81, 112, 198, 0.16);
+  color: #28407e;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.search-btn:hover,
+.primary-btn:hover,
+.ghost-btn:hover {
+  transform: translateY(-1px);
 }
 
 .hot-words {
-  margin-top: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-}
-
-.label {
+  padding: 8px 10px 0;
+  color: #7f8fb3;
   font-size: 12px;
-  color: var(--muted);
+  overflow: hidden;
 }
 
-.chip {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: #fff;
+.hot-label {
+  flex: none;
+}
+
+.hot-chip {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4f649f;
+  font-size: 12px;
   cursor: pointer;
-  font-size: 12px;
-  color: var(--muted);
 }
 
-.suggest {
+.suggest-panel {
   position: absolute;
   left: 0;
   right: 0;
-  top: 78px;
-  padding: 6px;
+  top: calc(100% + 8px);
   display: grid;
   gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(92, 124, 200, 0.16);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 28px 48px rgba(40, 64, 126, 0.16);
 }
 
-.suggest-row {
-  width: 100%;
-  text-align: left;
-  padding: 10px 10px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
+.suggest-item,
+.suggest-empty {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
 }
 
-.suggest-row:hover {
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.6);
+.suggest-item {
+  border: 0;
+  text-align: left;
+  background: rgba(245, 248, 255, 0.92);
+  cursor: pointer;
 }
 
-.title {
-  font-size: 13px;
-  font-weight: 600;
+.suggest-main {
+  color: #17285b;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.sub {
-  grid-column: 1 / -1;
+.suggest-sub,
+.suggest-empty {
+  color: #7f8fb3;
   font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
 }
 
-.tag {
-  font-size: 11px;
-  color: var(--primary);
-  background: rgba(0, 190, 189, 0.14);
-  padding: 2px 8px;
-  border-radius: 999px;
+.suggest-tag {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.muted {
-  color: var(--muted);
-  cursor: default;
-}
-
-.right {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 2px;
-  gap: 10px;
+.actions {
+  display: inline-flex;
   align-items: center;
+  gap: 10px;
 }
 
 .user {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
 }
 
 .avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
   object-fit: cover;
-  border: 1px solid var(--border);
-  background: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 22px rgba(41, 70, 143, 0.14);
 }
 
-.avatar.fallback {
+.avatar-fallback {
   display: grid;
   place-items: center;
-  font-weight: 800;
-  color: var(--primary);
-  background: rgba(0, 190, 189, 0.12);
+  background: linear-gradient(135deg, #2d62f2, #19c2bf);
+  color: #fff;
+  font-weight: 700;
 }
 
-.menu {
+.user-menu {
   position: absolute;
   right: 0;
-  top: 44px;
-  width: 180px;
-  padding: 6px;
+  top: calc(100% + 12px);
   display: grid;
   gap: 4px;
-  z-index: 30;
+  width: 180px;
+  padding: 10px;
+  border: 1px solid rgba(92, 124, 200, 0.14);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 48px rgba(34, 56, 116, 0.14);
 }
 
 .menu-item {
-  width: 100%;
-  height: 36px;
-  padding: 0 10px;
-  text-align: left;
-  border-radius: 10px;
-  border: 1px solid transparent;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 14px;
   background: transparent;
+  color: #24396f;
+  text-align: left;
+  font-size: 14px;
   cursor: pointer;
-  font-size: 13px;
 }
 
 .menu-item:hover {
-  border-color: var(--border);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-.invite-entry {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(135deg, rgba(255, 156, 86, 0.18), rgba(255, 219, 111, 0.1));
-  border-color: rgba(255, 156, 86, 0.22);
-}
-
-.invite-entry::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 18%, rgba(255, 255, 255, 0.72) 50%, transparent 82%);
-  transform: translateX(-140%);
-  transition: transform 420ms ease;
-}
-
-.invite-entry:hover {
-  border-color: rgba(255, 156, 86, 0.4);
-  background: linear-gradient(135deg, rgba(255, 156, 86, 0.24), rgba(255, 219, 111, 0.16));
-}
-
-.invite-entry:hover::after {
-  transform: translateX(140%);
-}
-
-.invite-text {
-  position: relative;
-  z-index: 1;
-  font-weight: 900;
-  letter-spacing: 0.2px;
-  background: linear-gradient(135deg, #ff7a00, #ff4d4f 52%, #f59e0b);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.26);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .menu-item.danger {
-  color: #d83a34;
+  color: #d14343;
+}
+
+@media (max-width: 1280px) {
+  .header {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'brand city actions'
+      'nav nav nav'
+      'search search search';
+    padding: 14px 0 18px;
+  }
+
+  .brand {
+    grid-area: brand;
+  }
+
+  .city-trigger {
+    grid-area: city;
+    justify-self: start;
+  }
+
+  .nav {
+    grid-area: nav;
+    justify-content: flex-start;
+  }
+
+  .search-area {
+    grid-area: search;
+  }
+
+  .actions {
+    grid-area: actions;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'brand actions'
+      'city city'
+      'nav nav'
+      'search search';
+    gap: 12px;
+    min-height: auto;
+    padding: 12px 0 16px;
+  }
+
+  .brand-name {
+    font-size: 20px;
+  }
+
+  .brand-tag {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+  }
+
+  .actions {
+    gap: 8px;
+  }
+
+  .ghost-btn,
+  .primary-btn {
+    height: 38px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .hot-words {
+    padding-left: 4px;
+  }
 }
 </style>

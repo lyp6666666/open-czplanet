@@ -28,6 +28,7 @@ public interface AdminUserManageMapper {
             + "tp.rate_per_hour AS teacherRatePerHour, "
             + "tp.realname_verify_status AS teacherRealnameVerifyStatus, "
             + "tp.edu_verify_status AS teacherEduVerifyStatus, "
+            + "tp.home_star_teacher AS teacherHomeStarTeacher, "
             + "tp.status AS teacherProfileStatus "
             + "FROM user u "
             + "LEFT JOIN teacher_profile tp ON tp.user_id = u.id "

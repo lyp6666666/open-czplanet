@@ -435,9 +435,10 @@ async function loadLiveQuickJoin() {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(80, 112, 195, 0.08);
+  box-shadow: 0 10px 30px rgba(45, 98, 242, 0.04);
 }
 
 .link-msg {
@@ -470,47 +471,49 @@ async function loadLiveQuickJoin() {
 }
 
 .inner {
+  width: min(1520px, calc(100% - 56px));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  gap: 16px;
+  height: 72px;
+  gap: 20px;
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
 .brand-lockup {
   border: none;
   background: transparent;
-  padding: 0;
+  padding: 8px 0;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
   min-width: 0;
 }
 
 .logo-mark {
-  width: 88px;
-  height: 40px;
-  flex: 0 0 88px;
+  width: 74px;
+  height: 34px;
+  flex: 0 0 74px;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(58, 106, 255, 0.18));
+  filter: drop-shadow(0 6px 14px rgba(58, 106, 255, 0.14));
 }
 
 .logo {
   border: none;
   background: transparent;
   font-weight: 900;
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1;
   color: var(--text);
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
@@ -651,7 +654,33 @@ async function loadLiveQuickJoin() {
 
 .guest {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(80, 112, 195, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 28px rgba(45, 98, 242, 0.08);
+}
+
+.guest :deep(.btn) {
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  border-color: transparent;
+}
+
+.guest :deep(.btn:not(.btn-primary)) {
+  background: transparent;
+  color: #28468d;
+}
+
+.guest :deep(.btn:not(.btn-primary):hover) {
+  background: rgba(45, 98, 242, 0.08);
+}
+
+.guest :deep(.btn-primary) {
+  box-shadow: 0 12px 22px rgba(43, 98, 234, 0.16);
 }
 
 .user {
@@ -833,5 +862,33 @@ async function loadLiveQuickJoin() {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .inner {
+    width: min(100%, calc(100% - 24px));
+    height: 64px;
+    gap: 12px;
+  }
+
+  .logo-mark {
+    width: 64px;
+    height: 30px;
+    flex-basis: 64px;
+  }
+
+  .logo {
+    font-size: 15px;
+  }
+
+  .guest {
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .guest :deep(.btn) {
+    height: 40px;
+    padding: 0 16px;
+  }
 }
 </style>

@@ -43,6 +43,11 @@ export type LiveRoomConnectPayload = {
   micDeviceId?: string | null
 }
 
+export type LiveRoomConnectResult = {
+  cameraError?: Error | null
+  micError?: Error | null
+}
+
 export class BrowserMediaError extends Error {
   code: 'UNSUPPORTED' | 'INSECURE_CONTEXT' | 'PERMISSION_DENIED' | 'DEVICE_NOT_FOUND' | 'DEVICE_BUSY' | 'UNKNOWN'
 
@@ -264,7 +269,7 @@ export class LiveRoomClient {
     })
   }
 
-  async connect(payload: LiveRoomConnectPayload) {
+  async connect(payload: LiveRoomConnectPayload): Promise<LiveRoomConnectResult> {
     const serverUrl = normalizeLiveKitServerUrl(payload.serverUrl)
     logLiveKit('connect:start', {
       serverUrl: redactLiveKitUrl(serverUrl),
@@ -287,19 +292,35 @@ export class LiveRoomClient {
       remoteParticipants: this.room.remoteParticipants.size,
       state: this.room.state,
     })
-    this.localCameraPublication = await this.room.localParticipant.setCameraEnabled(
-      payload.cameraEnabled,
-      payload.cameraDeviceId ? { deviceId: payload.cameraDeviceId } : undefined,
-    )
-    this.localMicrophonePublication = await this.room.localParticipant.setMicrophoneEnabled(
-      payload.micEnabled,
-      payload.micDeviceId ? { deviceId: payload.micDeviceId } : undefined,
-    )
+    let cameraError: Error | null = null
+    let micError: Error | null = null
+    try {
+      this.localCameraPublication = await this.room.localParticipant.setCameraEnabled(
+        payload.cameraEnabled,
+        payload.cameraDeviceId ? { deviceId: payload.cameraDeviceId } : undefined,
+      )
+    } catch (error) {
+      cameraError = error instanceof Error ? error : new Error('摄像头发布失败')
+      logLiveKit('connect:camera-publish-failed', { message: cameraError.message })
+    }
+    try {
+      this.localMicrophonePublication = await this.room.localParticipant.setMicrophoneEnabled(
+        payload.micEnabled,
+        payload.micDeviceId ? { deviceId: payload.micDeviceId } : undefined,
+      )
+    } catch (error) {
+      micError = error instanceof Error ? error : new Error('麦克风发布失败')
+      logLiveKit('connect:microphone-publish-failed', { message: micError.message })
+    }
     logLiveKit('connect:local-published', {
       cameraPublished: !!this.localCameraPublication,
       microphonePublished: !!this.localMicrophonePublication,
       state: this.room.state,
     })
+    return {
+      cameraError,
+      micError,
+    }
   }
 
   async setCameraEnabled(enabled: boolean, deviceId?: string | null) {
@@ -322,6 +343,16 @@ export class LiveRoomClient {
         participant: participant.identity,
       })
       listener(track, publication, participant)
+    })
+  }
+
+  onLocalTrackPublished(listener: (publication: LocalTrackPublication) => void) {
+    this.room.on(RoomEvent.LocalTrackPublished, (publication) => {
+      logLiveKit('track:local-published', {
+        kind: publication.track?.kind,
+        source: publication.source,
+      })
+      listener(publication)
     })
   }
 

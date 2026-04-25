@@ -34,6 +34,7 @@ public class TeacherProfile {
     private String eduVerifyRejectReason;
     private LocalDateTime eduVerifySubmitTime;
     private LocalDateTime eduVerifyTime;
+    private Integer homeStarTeacher;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

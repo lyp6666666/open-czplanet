@@ -252,6 +252,7 @@ export interface AdminUserRow {
   teacherRealnameVerifyStatus?: number | null
   teacherEduVerifyStatus?: number | null
   teacherProfileStatus?: number | null
+  teacherHomeStarTeacher?: number | null
 
   studentRealName?: string | null
   studentAge?: number | null

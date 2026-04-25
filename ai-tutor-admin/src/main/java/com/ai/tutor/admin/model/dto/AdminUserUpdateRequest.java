@@ -31,6 +31,8 @@ public class AdminUserUpdateRequest {
 
     private Integer teacherProfileStatus;
 
+    private Integer teacherHomeStarTeacher;
+
     private String studentRealName;
 
     private Integer studentAge;
@@ -43,4 +45,3 @@ public class AdminUserUpdateRequest {
 
     private Integer studentProfileStatus;
 }
-

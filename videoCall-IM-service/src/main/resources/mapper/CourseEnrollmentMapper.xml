@@ -45,9 +45,6 @@
             trial_end_at,
             weekly_schedule_deadline_at,
             weekly_schedule_submitted_at,
-            weekly_reminder_12h_sent_at,
-            weekly_reminder_6h_sent_at,
-            weekly_reminder_1h_sent_at,
             create_time,
             update_time
         )
@@ -68,36 +65,27 @@
             #{trialEndAt},
             #{weeklyScheduleDeadlineAt},
             #{weeklyScheduleSubmittedAt},
-            #{weeklyReminder12hSentAt},
-            #{weeklyReminder6hSentAt},
-            #{weeklyReminder1hSentAt},
             #{createTime},
             #{updateTime}
         )
     </insert>
 
     <select id="selectByApplicationId" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE application_id = #{applicationId}
         LIMIT 1
     </select>
 
     <select id="selectById" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE id = #{id}
         LIMIT 1
     </select>
 
     <select id="selectLatestByRoomId" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE room_id = #{roomId}
         ORDER BY id DESC
@@ -105,9 +93,7 @@
     </select>
 
     <select id="listTrialingEnded" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE status = 'TRIALING'
           AND trial_end_at IS NOT NULL
@@ -117,9 +103,7 @@
     </select>
 
     <select id="listWeeklyScheduleDeadlineReached" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE status = 'TRIAL_WAIT_WEEKLY_SCHEDULE'
           AND weekly_schedule_submitted_at IS NULL
@@ -171,9 +155,7 @@
     </select>
 
     <select id="listByTeacher" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE teacher_uid = #{teacherUid}
         ORDER BY update_time DESC, id DESC
@@ -181,9 +163,7 @@
     </select>
 
     <select id="listByStudent" resultMap="baseMap">
-        SELECT
-            id, application_id, room_id, proposal_id, teacher_uid, student_uid, teaching_mode, course_name, class_time, frequency_per_week, lesson_price, status,
-            trial_start_at, trial_end_at, weekly_schedule_deadline_at, weekly_schedule_submitted_at, weekly_reminder_12h_sent_at, weekly_reminder_6h_sent_at, weekly_reminder_1h_sent_at, create_time, update_time
+        SELECT *
         FROM course_enrollment
         WHERE student_uid = #{studentUid}
         ORDER BY update_time DESC, id DESC
@@ -241,9 +221,6 @@
             status = 'TRIAL_WAIT_WEEKLY_SCHEDULE',
             weekly_schedule_deadline_at = #{deadlineAt},
             weekly_schedule_submitted_at = NULL,
-            weekly_reminder_12h_sent_at = NULL,
-            weekly_reminder_6h_sent_at = NULL,
-            weekly_reminder_1h_sent_at = NULL,
             update_time = NOW()
         WHERE id = #{id}
           AND status = #{expectedStatus}

@@ -27,6 +27,7 @@ public class DefaultEmailSender implements EmailSender {
     @Override
     public EmailSendResponse send(EmailSendRequest request) {
         String provider = properties.getSender().getProvider() == null ? "MOCK" : properties.getSender().getProvider().trim().toUpperCase();
+        String resolvedTemplateCode = resolveTemplateCode(request.getTemplateCode());
         if (!properties.getSender().isEnabled() || "MOCK".equals(provider)) {
             templateRenderer.render(request.getTemplateCode(), request.getTemplateData());
             return EmailSendResponse.builder()
@@ -45,14 +46,14 @@ public class DefaultEmailSender implements EmailSender {
                     .errorMessage("unsupported email provider: " + provider)
                     .build();
         }
-        Long templateId = properties.getSender().getTemplateIds().get(request.getTemplateCode());
+        Long templateId = properties.getSender().getTemplateIds().get(resolvedTemplateCode);
         if (templateId == null || templateId <= 0) {
             return EmailSendResponse.builder()
                     .success(false)
                     .provider("TENCENT")
                     .requestId(request.getRequestId())
                     .errorCode("TEMPLATE_ID_MISSING")
-                    .errorMessage("missing tencent template id for " + request.getTemplateCode())
+                    .errorMessage("missing tencent template id for " + resolvedTemplateCode)
                     .build();
         }
         try {
@@ -89,5 +90,13 @@ public class DefaultEmailSender implements EmailSender {
                     .errorMessage(e.getMessage())
                     .build();
         }
+    }
+
+    private String resolveTemplateCode(String templateCode) {
+        if ("LESSON_SUMMARY_BACKFILL".equals(templateCode)
+                && !properties.getSender().getTemplateIds().containsKey("LESSON_SUMMARY_BACKFILL")) {
+            return "LESSON_SUMMARY";
+        }
+        return templateCode;
     }
 }

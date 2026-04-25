@@ -15,117 +15,79 @@ function isExternal(url: string) {
 
 <template>
   <footer class="footer">
-    <div class="inner">
-      <div class="links">
-        <template
-          v-for="l in links?.links || []"
-          :key="l.url"
-        >
-          <a
-            v-if="isExternal(l.url)"
-            :href="l.url"
-            target="_blank"
-            rel="noreferrer"
-          >{{ l.name }}</a>
-          <RouterLink
-            v-else
-            :to="l.url"
-          >
-            {{ l.name }}
-          </RouterLink>
+    <div class="container footer-panel">
+      <div class="footer-brand">
+        <div class="footer-name">{{ BRAND_NAME }}</div>
+        <p>把优质师资、AI学情洞察和家长陪伴整合到一个可信赖的教育平台中。</p>
+      </div>
+
+      <div class="footer-links">
+        <template v-for="item in links?.links || []" :key="item.url">
+          <a v-if="isExternal(item.url)" :href="item.url" target="_blank" rel="noreferrer">{{ item.name }}</a>
+          <RouterLink v-else :to="item.url">{{ item.name }}</RouterLink>
         </template>
       </div>
-      <div class="copy">
-        © {{ new Date().getFullYear() }} {{ BRAND_NAME }}
-      </div>
+
+      <div class="footer-copy">© {{ new Date().getFullYear() }} {{ BRAND_NAME }} · All Rights Reserved.</div>
     </div>
   </footer>
 </template>
 
 <style scoped>
 .footer {
-  margin-top: 40px;
-  padding: 0 32px 28px;
+  padding: 0 0 34px;
 }
 
-.inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  width: min(100%, 1600px);
-  margin: 0 auto;
-  min-height: 96px;
-  padding: 28px 32px;
-  border-top: 1px solid rgba(31, 35, 41, 0.1);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.92)),
-    linear-gradient(90deg, rgba(0, 190, 189, 0.08), rgba(0, 190, 189, 0));
-  box-shadow: 0 -12px 28px rgba(31, 35, 41, 0.04);
-}
-
-.links {
-  display: flex;
-  align-items: center;
+.footer-panel {
+  display: grid;
   gap: 18px;
+  padding: 28px 32px;
+  border-radius: 30px;
+  border: 1px solid rgba(80, 112, 195, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 20px 44px rgba(51, 78, 146, 0.08);
+}
+
+.footer-brand {
+  display: grid;
+  gap: 8px;
+}
+
+.footer-name {
+  color: #12265f;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.footer-brand p,
+.footer-copy {
+  margin: 0;
+  color: #7485aa;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.footer-links {
+  display: flex;
   flex-wrap: wrap;
+  gap: 18px;
 }
 
-.links :deep(a) {
-  position: relative;
-  color: var(--muted);
+.footer-links :deep(a) {
+  color: #29458e;
   font-size: 14px;
-  transition:
-    color 0.2s ease,
-    transform 0.2s ease;
+  font-weight: 700;
 }
 
-.links :deep(a)::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -6px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--primary);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.2s ease;
-}
-
-.links :deep(a:hover) {
-  color: var(--text);
-  transform: translateY(-1px);
-}
-
-.links :deep(a:hover)::after {
-  transform: scaleX(1);
-}
-
-.copy {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-@media (max-width: 768px) {
-  .footer {
-    padding: 0 16px 20px;
+@media (max-width: 720px) {
+  .footer-panel {
+    padding: 22px 18px;
+    border-radius: 24px;
   }
 
-  .inner {
-    min-height: auto;
-    padding: 20px 18px;
-  }
-
-  .links {
-    gap: 14px;
-  }
-
-  .links :deep(a),
-  .copy {
-    font-size: 13px;
+  .footer-name {
+    font-size: 24px;
   }
 }
 </style>

@@ -265,7 +265,7 @@ function submit() {
                 <div class="panel-title">双方当天日程</div>
                 <div class="calendar-hint">左侧点击空白时段可快速生成试课块，灰色表示已占用。</div>
               </div>
-              <div class="date-chip">{{ selectedDate.replaceAll('-', ' / ') }}</div>
+              <div class="date-chip">{{ selectedDate.split('-').join(' / ') }}</div>
             </div>
 
             <div v-if="availabilityLoading" class="hint">读取双方日程中...</div>

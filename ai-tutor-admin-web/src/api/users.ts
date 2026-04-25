@@ -53,6 +53,7 @@ export interface AdminUserUpdatePayload {
   teacherCity?: string | null
   teacherRatePerHour?: number | string | null
   teacherProfileStatus?: number | null
+  teacherHomeStarTeacher?: number | null
 
   studentRealName?: string | null
   studentAge?: number | null
@@ -69,4 +70,3 @@ export function updateUser(id: number, payload: AdminUserUpdatePayload): Promise
 export function disableUser(id: number): Promise<boolean> {
   return http.delete(`/api/admin/users/${id}`)
 }
-

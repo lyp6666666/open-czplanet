@@ -30,5 +30,7 @@ public class TeacherExtInfo {
 
     private String certificateUrls; // 证书链接（JSON）
 
+    private Integer homeStarTeacher; // 首页星级教师 0否 1是
+
     private Integer status; // 状态 1正常 0禁用
 }

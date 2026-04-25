@@ -16,6 +16,7 @@ public class TutorBrowseRow {
     private Integer experienceYears;
     private BigDecimal ratePerHour;
     private String subject;
+    private String teachingMode;
     private String highestEduSchool;
     private Integer realnameVerifyStatus;
     private Integer eduVerifyStatus;

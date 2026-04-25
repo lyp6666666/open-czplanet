@@ -33,6 +33,7 @@
         <result column="edu_verify_reject_reason" property="eduVerifyRejectReason"/>
         <result column="edu_verify_submit_time" property="eduVerifySubmitTime"/>
         <result column="edu_verify_time" property="eduVerifyTime"/>
+        <result column="home_star_teacher" property="homeStarTeacher"/>
         <result column="status" property="status"/>
         <result column="update_time" property="updateTime"/>
         <result column="create_time" property="createTime"/>
@@ -101,6 +102,9 @@
             <if test="teacherExtInfo.certificateUrls != null">
                 certificate_urls = #{teacherExtInfo.certificateUrls},
             </if>
+            <if test="teacherExtInfo.homeStarTeacher != null">
+                home_star_teacher = #{teacherExtInfo.homeStarTeacher},
+            </if>
             <if test="teacherExtInfo.status != null">
                 status = #{teacherExtInfo.status},
             </if>
@@ -149,7 +153,10 @@
             AND tp.id &lt; #{cursor}
         </if>
         <if test="city != null and city != ''">
-            AND tp.city = #{city}
+            AND (
+                tp.city = #{city}
+                OR LOWER(COALESCE(tp.teaching_mode, '')) IN ('online', 'both')
+            )
         </if>
         <if test="subject != null and subject != ''">
             AND (tp.subject LIKE CONCAT('%', #{subject}, '%') OR LOCATE(tp.subject, #{subject}) > 0)

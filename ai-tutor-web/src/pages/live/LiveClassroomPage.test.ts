@@ -55,6 +55,7 @@ vi.mock('@/modules/live/livekit', () => ({
     disconnect: (...args: unknown[]) => disconnectMock(...args),
     setMicrophoneEnabled: (...args: unknown[]) => setMicrophoneEnabledMock(...args),
     setCameraEnabled: (...args: unknown[]) => setCameraEnabledMock(...args),
+    onLocalTrackPublished: vi.fn(),
     onTrackSubscribed: vi.fn(),
     onTrackUnsubscribed: vi.fn(),
     onParticipantConnected: vi.fn(),
@@ -273,7 +274,7 @@ describe('LiveClassroomPage', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.tab').find((button) => button.text() === '课中聊天')?.trigger('click')
+    await wrapper.findAll('.tab').find((button: { text: () => string }) => button.text() === '课中聊天')?.trigger('click')
     await flushPromises()
 
     expect(wrapper.find('[data-testid="live-chat-list"]').exists()).toBe(true)
@@ -404,5 +405,53 @@ describe('LiveClassroomPage', () => {
 
     expect(wrapper.text()).toContain('王同学 已加入，等待视频画面')
     expect(wrapper.text()).not.toContain('已进入课堂，正在等待对方加入')
+  })
+
+  it('still sends join ack when local media publish partially fails', async () => {
+    getByCourseMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    statusMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    joinTokenMock.mockResolvedValue({
+      serverUrl: 'ws://127.0.0.1:7880',
+      accessToken: 'token',
+    })
+    connectMock.mockResolvedValue({
+      cameraError: new Error('camera blocked'),
+      micError: null,
+    })
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: [{ path: '/live/classroom/:courseId', component: LiveClassroomPage }],
+    })
+    router.push('/live/classroom/66')
+    await router.isReady()
+
+    mount(LiveClassroomPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    expect(connectMock).toHaveBeenCalledTimes(1)
+    expect(joinAckMock).toHaveBeenCalledTimes(1)
   })
 })

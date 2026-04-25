@@ -176,6 +176,7 @@ public class AdminUserManageServiceImpl implements com.ai.tutor.admin.service.Ad
             ext.setSubject(trimToNull(request.getTeacherSubject()));
             ext.setCity(trimToNull(request.getTeacherCity()));
             ext.setRatePerHour(request.getTeacherRatePerHour());
+            ext.setHomeStarTeacher(request.getTeacherHomeStarTeacher());
             ext.setStatus(request.getTeacherProfileStatus());
             teacherProfileMapper.updateTeacherProfile(ext, id);
         } else if (user.getUserType() != null && user.getUserType() == 2) {

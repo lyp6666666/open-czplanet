@@ -68,7 +68,8 @@ CREATE TABLE `student_job_posting`  (
   `publisher_identity` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PARENT' COMMENT '发布者身份：PARENT/STUDENT_SELF/ORGANIZATION',
   `schedule` json NULL COMMENT '期望上课时间，例如：[\"Tue 19-21\",\"Sat 10-12\"]',
   `biz_status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '业务状态：1匹配中 2待支付解锁 3沟通中 4合作中 5已结课 6已关闭',
-  `status` tinyint(4) NULL DEFAULT 1 COMMENT '状态：1发布中 0关闭',
+  `reject_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '审核拒绝原因',
+  `status` tinyint(4) NULL DEFAULT 0 COMMENT '状态：0-待审核 1-发布中 2-已拒绝 3-已关闭',
   `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
@@ -197,6 +198,7 @@ CREATE TABLE `teacher_profile`  (
   `edu_verify_reject_reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '学籍/学历认证驳回原因',
   `edu_verify_submit_time` datetime NULL DEFAULT NULL COMMENT '学籍/学历认证提交时间',
   `edu_verify_time` datetime NULL DEFAULT NULL COMMENT '学籍/学历认证通过时间',
+  `home_star_teacher` tinyint(4) NOT NULL DEFAULT 0 COMMENT '首页星级教师标记 0否 1是',
   `status` int(11) NULL DEFAULT 1 COMMENT '状态 1正常 0禁用',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -323,6 +325,22 @@ CREATE TABLE `message` (
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
 
+DROP TABLE IF EXISTS `chat_realtime_event`;
+CREATE TABLE `chat_realtime_event` (
+            `event_id` bigint(20) UNSIGNED NOT NULL COMMENT '统一实时事件id',
+            `target_uid` bigint(20) NOT NULL COMMENT '事件目标用户id',
+            `event_type` varchar(64) NOT NULL COMMENT '统一事件类型',
+            `biz_type` varchar(32) NOT NULL COMMENT '业务域类型',
+            `room_id` bigint(20) DEFAULT NULL COMMENT '关联会话id',
+            `msg_id` bigint(20) DEFAULT NULL COMMENT '关联消息id',
+            `occurred_at` datetime(3) NOT NULL COMMENT '事件发生时间',
+            `payload_json` longtext NOT NULL COMMENT '事件负载json',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`event_id`),
+            KEY `idx_target_uid_event_id` (`target_uid`, `event_id`),
+            KEY `idx_target_uid_occurred_at` (`target_uid`, `occurred_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IM实时事件补偿表';
+
 DROP TABLE IF EXISTS `collaboration_proposal`;
 CREATE TABLE `collaboration_proposal` (
             `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '合作提案id',
@@ -332,6 +350,11 @@ CREATE TABLE `collaboration_proposal` (
             `price_per_hour` varchar(64) NOT NULL COMMENT '收费标准（每小时）',
             `class_time` varchar(255) NOT NULL COMMENT '上课时间（自由文本）',
             `frequency_per_week` int NOT NULL COMMENT '上课频次（每周次数）',
+            `trial_start_at` datetime(3) DEFAULT NULL COMMENT '试课开始时间',
+            `trial_end_at` datetime(3) DEFAULT NULL COMMENT '试课结束时间',
+            `remark` varchar(1024) DEFAULT NULL COMMENT '试课合作备注',
+            `expire_at` datetime(3) DEFAULT NULL COMMENT '提案过期时间',
+            `client_request_id` varchar(128) DEFAULT NULL COMMENT '客户端幂等键',
             `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING/ACCEPTED/REJECTED',
             `actor_uid` bigint(20) DEFAULT NULL COMMENT '操作人 user_id（同意/拒绝）',
             `action_time` datetime(3) DEFAULT NULL COMMENT '操作时间',
@@ -340,6 +363,8 @@ CREATE TABLE `collaboration_proposal` (
             PRIMARY KEY (`id`),
             KEY `idx_room_id` (`room_id`),
             KEY `idx_to_uid_status` (`to_uid`, `status`),
+            KEY `idx_collab_room_status_expire` (`room_id`, `status`, `expire_at`),
+            KEY `idx_collab_from_client_req` (`from_uid`, `client_request_id`),
             KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天合作提案表';
 
@@ -524,6 +549,136 @@ CREATE TABLE `refund_request` (
             KEY `idx_refund_request_room` (`room_id`),
             KEY `idx_refund_request_course` (`course_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款申请表（聊天退款/试课退款）';
+
+DROP TABLE IF EXISTS `user_email`;
+CREATE TABLE `user_email` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '邮箱绑定记录id',
+            `user_id` bigint(20) UNSIGNED NOT NULL COMMENT '用户id',
+            `email_type` varchar(32) NOT NULL COMMENT '邮箱类型 PRIMARY主邮箱 SUMMARY_ONLY课后总结专用邮箱',
+            `email` varchar(255) NOT NULL COMMENT '邮箱地址',
+            `email_masked` varchar(255) DEFAULT NULL COMMENT '脱敏邮箱',
+            `verify_status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '验证状态 PENDING待验证 VERIFIED已验证 INVALID已失效',
+            `verified_at` datetime(3) DEFAULT NULL COMMENT '验证通过时间',
+            `bind_source` varchar(32) DEFAULT NULL COMMENT '绑定来源 MY_PAGE/COURSE_PAGE/CHAT_PAGE/SUMMARY_PAGE',
+            `bounce_status` varchar(32) NOT NULL DEFAULT 'NORMAL' COMMENT '退信状态 NORMAL正常 SOFT_BOUNCE软退信 HARD_BOUNCE硬退信',
+            `last_notify_at` datetime(3) DEFAULT NULL COMMENT '最近一次业务通知发送时间',
+            `status` tinyint(4) NOT NULL DEFAULT 1 COMMENT '状态 1有效 0删除',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_user_email_type_active` (`user_id`, `email_type`, `status`),
+            KEY `idx_email` (`email`),
+            KEY `idx_user_type_status` (`user_id`, `email_type`, `verify_status`),
+            KEY `idx_bounce_status` (`bounce_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户邮箱绑定表';
+
+DROP TABLE IF EXISTS `email_verify_code`;
+CREATE TABLE `email_verify_code` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '邮箱验证码id',
+            `user_id` bigint(20) UNSIGNED NOT NULL COMMENT '用户id',
+            `email` varchar(255) NOT NULL COMMENT '目标邮箱',
+            `email_type` varchar(32) NOT NULL COMMENT '邮箱类型 PRIMARY/SUMMARY_ONLY',
+            `code_hash` varchar(128) NOT NULL COMMENT '验证码hash',
+            `scene` varchar(32) NOT NULL COMMENT '场景 BIND/CHANGE/REBIND',
+            `expire_at` datetime(3) NOT NULL COMMENT '过期时间',
+            `verified_at` datetime(3) DEFAULT NULL COMMENT '验证成功时间',
+            `try_count` int(11) NOT NULL DEFAULT 0 COMMENT '验证尝试次数',
+            `send_ip` varchar(64) DEFAULT NULL COMMENT '发送请求ip',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态 PENDING/VERIFIED/EXPIRED/CANCELED',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_user_email_type_status` (`user_id`, `email`, `email_type`, `status`),
+            KEY `idx_expire_at` (`expire_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮箱验证码表';
+
+DROP TABLE IF EXISTS `email_notification_task`;
+CREATE TABLE `email_notification_task` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '邮件通知任务id',
+            `task_key` varchar(128) NOT NULL COMMENT '业务幂等key',
+            `template_code` varchar(64) NOT NULL COMMENT '模板编码',
+            `biz_type` varchar(64) NOT NULL COMMENT '业务类型 EMAIL_VERIFY/UNREAD_MESSAGE/LESSON_START/LESSON_SUMMARY',
+            `biz_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '业务id，如msgId或lessonId',
+            `receiver_uid` bigint(20) UNSIGNED DEFAULT NULL COMMENT '收件用户id',
+            `receiver_role` varchar(32) DEFAULT NULL COMMENT '收件角色 TEACHER/STUDENT/PARENT_SUMMARY',
+            `email_type` varchar(32) DEFAULT NULL COMMENT '邮箱类型 PRIMARY/SUMMARY_ONLY',
+            `email` varchar(255) NOT NULL COMMENT '收件邮箱',
+            `subject` varchar(255) DEFAULT NULL COMMENT '渲染后标题',
+            `payload_json` json DEFAULT NULL COMMENT '模板变量与业务上下文',
+            `scheduled_at` datetime(3) NOT NULL COMMENT '计划发送时间',
+            `status` varchar(32) NOT NULL DEFAULT 'PENDING' COMMENT '状态 PENDING/VALIDATING/SENDING/SENT/FAILED/CANCELED/EXPIRED',
+            `retry_count` int(11) NOT NULL DEFAULT 0 COMMENT '重试次数',
+            `max_retry_count` int(11) NOT NULL DEFAULT 3 COMMENT '最大重试次数',
+            `last_error` varchar(1024) DEFAULT NULL COMMENT '最近失败原因',
+            `sent_at` datetime(3) DEFAULT NULL COMMENT '发送成功时间',
+            `opened_at` datetime(3) DEFAULT NULL COMMENT '打开时间',
+            `clicked_at` datetime(3) DEFAULT NULL COMMENT '点击时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_task_key` (`task_key`),
+            KEY `idx_status_scheduled` (`status`, `scheduled_at`),
+            KEY `idx_receiver_uid` (`receiver_uid`),
+            KEY `idx_biz` (`biz_type`, `biz_id`),
+            KEY `idx_template_status` (`template_code`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮件通知任务表';
+
+DROP TABLE IF EXISTS `email_send_log`;
+CREATE TABLE `email_send_log` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '发送日志id',
+            `task_id` bigint(20) UNSIGNED NOT NULL COMMENT '任务id',
+            `provider` varchar(64) DEFAULT NULL COMMENT '邮件服务商',
+            `provider_message_id` varchar(128) DEFAULT NULL COMMENT '服务商消息id',
+            `email` varchar(255) NOT NULL COMMENT '收件邮箱',
+            `send_status` varchar(32) NOT NULL COMMENT '发送状态 SUCCESS/FAIL',
+            `error_code` varchar(64) DEFAULT NULL COMMENT '错误码',
+            `error_message` varchar(1024) DEFAULT NULL COMMENT '错误信息',
+            `request_id` varchar(128) DEFAULT NULL COMMENT '请求id',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_task_id` (`task_id`),
+            KEY `idx_provider_message_id` (`provider_message_id`),
+            KEY `idx_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮件发送日志表';
+
+DROP TABLE IF EXISTS `lesson_summary`;
+CREATE TABLE `lesson_summary` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '课后总结id',
+            `lesson_id` bigint(20) UNSIGNED NOT NULL COMMENT '课节id，对应tutor_appointment.id',
+            `course_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '长期课程id',
+            `teacher_uid` bigint(20) UNSIGNED NOT NULL COMMENT '教师uid',
+            `student_uid` bigint(20) UNSIGNED NOT NULL COMMENT '学生uid',
+            `title` varchar(255) DEFAULT NULL COMMENT '总结标题',
+            `summary_status` varchar(32) NOT NULL DEFAULT 'GENERATING' COMMENT '状态 GENERATING/READY/FAILED',
+            `summary_brief` varchar(1000) DEFAULT NULL COMMENT '邮件摘要',
+            `summary_content` mediumtext DEFAULT NULL COMMENT '完整总结内容',
+            `homework` varchar(2000) DEFAULT NULL COMMENT '作业/建议',
+            `ready_at` datetime(3) DEFAULT NULL COMMENT '生成完成时间',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_lesson_summary` (`lesson_id`),
+            KEY `idx_course_id` (`course_id`),
+            KEY `idx_student_ready` (`student_uid`, `summary_status`, `ready_at`),
+            KEY `idx_teacher_ready` (`teacher_uid`, `summary_status`, `ready_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='课后总结表';
+
+DROP TABLE IF EXISTS `home_carousel_config`;
+CREATE TABLE `home_carousel_config` (
+            `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '首页轮播图配置id',
+            `title` varchar(80) NOT NULL COMMENT '主标题',
+            `subtitle` varchar(160) DEFAULT NULL COMMENT '副标题',
+            `image_object_key` varchar(255) NOT NULL COMMENT 'MinIO 对象 key',
+            `link_type` varchar(16) DEFAULT 'NONE' COMMENT '跳转类型 NONE/ROUTE/URL',
+            `link_url` varchar(255) DEFAULT NULL COMMENT '跳转地址',
+            `sort_order` int NOT NULL DEFAULT 0 COMMENT '排序，越小越靠前',
+            `create_admin_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '创建管理员id',
+            `update_admin_id` bigint(20) UNSIGNED DEFAULT NULL COMMENT '更新管理员id',
+            `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+            `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+            PRIMARY KEY (`id`),
+            KEY `idx_home_carousel_sort` (`sort_order`, `id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='首页轮播图配置表';
 
 DROP TABLE IF EXISTS `live_class_session`;
 CREATE TABLE `live_class_session` (

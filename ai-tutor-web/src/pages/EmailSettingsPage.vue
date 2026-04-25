@@ -28,6 +28,16 @@ const summary = ref<FormState>({ email: '', code: '', sending: false, verifying:
 const isStudent = computed(() => auth.user?.userType === 2)
 const primaryBound = computed(() => status.value?.primaryEmail?.verifyStatus === 'VERIFIED')
 const summaryBound = computed(() => status.value?.summaryEmail?.verifyStatus === 'VERIFIED')
+const heroCopy = computed(() =>
+  primaryBound.value
+    ? '主邮箱已开启，未读消息、开课提醒和课后总结会继续通过邮件稳定通知你。'
+    : '短信目前仅用于验证码。绑定邮箱后，消息、开课和课后总结都会通过邮件稳定提醒你。',
+)
+const primaryCardCopy = computed(() =>
+  primaryBound.value
+    ? '当前主邮箱已用于接收未读消息提醒、开课提醒和课后总结；如需更换，可重新获取验证码完成改绑。'
+    : '用于接收未读消息提醒、开课提醒和课后总结。建议填写你常用且能及时查看的邮箱。',
+)
 
 function back() {
   router.back()
@@ -141,7 +151,7 @@ onMounted(() => {
         <div>
           <p class="eyebrow">Email reminders</p>
           <h1>邮箱提醒设置</h1>
-          <p class="hero-copy">短信目前仅用于验证码。绑定邮箱后，消息、开课和课后总结都会通过邮件稳定提醒你。</p>
+          <p class="hero-copy">{{ heroCopy }}</p>
         </div>
       </header>
 
@@ -156,7 +166,7 @@ onMounted(() => {
           </div>
           <span class="state" :class="{ on: primaryBound }">{{ primaryBound ? '已验证' : '未开启' }}</span>
         </div>
-        <p class="card-copy">用于接收未读消息提醒、开课提醒和课后总结。建议填写你常用且能及时查看的邮箱。</p>
+        <p class="card-copy">{{ primaryCardCopy }}</p>
         <div class="form-grid">
           <input v-model="primary.email" class="input" type="email" placeholder="输入主邮箱" />
           <button class="btn" type="button" :disabled="primary.sending || primary.cooldown > 0" @click="sendCode('PRIMARY')">

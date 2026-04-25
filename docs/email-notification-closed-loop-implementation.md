@@ -498,10 +498,9 @@ errorMessage
 | `email.sender.connect-timeout-ms` | 连接超时 | `3000` |
 | `email.sender.read-timeout-ms` | 读取超时 | `5000` |
 
-对应配置样例已补充到：
+对应统一配置样例已补充到：
 
-- [tutor-appointment-service-dev.yaml](/Users/luyipeng/project/ai_platform/ai-platform/docs/nacos/templates/tutor-appointment-service-dev.yaml)
-- [videoCall-IM-service-dev.yaml](/Users/luyipeng/project/ai_platform/ai-platform/docs/nacos/templates/videoCall-IM-service-dev.yaml)
+- [ai-tutor-email-dev.yaml](/Users/luyipeng/project/ai_platform/ai-platform/docs/nacos/templates/ai-tutor-email-dev.yaml)
 
 配置切换建议：
 
@@ -522,9 +521,24 @@ errorMessage
 
 ### Nacos 必配项
 
-#### `tutor-appointment-service`
+邮件配置统一维护在一个 Nacos DataId 中：
 
-必须配置：
+- DataId：`ai-tutor-email-dev.yaml`
+- Group：`DEFAULT_GROUP`
+- Namespace：和当前 DEV 环境一致
+- 使用方：`tutor-appointment-service`、`videoCall-IM-service`
+
+两个服务的 `application.yml` 已导入：
+
+```yaml
+spring:
+  config:
+    import:
+      - optional:nacos:ai-tutor-email.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+      - optional:nacos:ai-tutor-email-${spring.profiles.active}.yaml?group=DEFAULT_GROUP&refreshEnabled=true
+```
+
+真实联调时必须配置：
 
 ```yaml
 email:
@@ -542,35 +556,17 @@ email:
     template-dir: "email-templates/tencent"
     template-ids:
       EMAIL_VERIFY_CODE: 173982
+      UNREAD_MESSAGE_REMINDER: 173983
       LESSON_START_REMINDER: 173984
       LESSON_SUMMARY: 173985
-```
-
-#### `videoCall-IM-service`
-
-必须配置：
-
-```yaml
-email:
-  sender:
-    provider: "TENCENT"
-    enabled: true
-    endpoint: "ses.tencentcloudapi.com"
-    region: "ap-guangzhou"
-    secret-id: "<你的腾讯云 SecretId>"
-    secret-key: "<你的腾讯云 SecretKey>"
-    from-email: "<已完成发信域验证的发件邮箱>"
-    from-name: "创智星球"
-    reply-to-email: "<客服或支持邮箱>"
-    template-ids:
-      UNREAD_MESSAGE_REMINDER: 173983
 ```
 
 注意：
 
 1. `from-email` 必须是腾讯云 SES 已验证的发件地址或域名下地址。
-2. 两个服务都要配 `secret-id/secret-key`，否则会继续走 `MOCK` 或发送失败。
-3. 若当前只想先联调预约服务链路，可先只把 `tutor-appointment-service` 切到 `TENCENT`。
+2. `secret-id/secret-key` 只需要在 `ai-tutor-email-dev.yaml` 中配置一份。
+3. 若当前只想先验证业务闭环，可保持 `provider=MOCK`；真实腾讯云联调必须切到 `provider=TENCENT`。
+4. 不要再在 `tutor-appointment-service-dev.yaml` 或 `videoCall-IM-service-dev.yaml` 中重复配置 `email.*`，避免覆盖统一邮件配置。
 
 ---
 

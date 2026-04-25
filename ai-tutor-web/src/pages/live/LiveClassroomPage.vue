@@ -137,6 +137,11 @@ const aiStatusText = computed(() => {
 })
 
 function bindRoomEvents(client: LiveRoomClient) {
+  client.onLocalTrackPublished((publication) => {
+    if (publication.track?.kind === Track.Kind.Video) {
+      attachTrackToElement(publication.track, localVideoRef.value)
+    }
+  })
   client.onParticipantConnected((participant) => {
     remoteParticipantJoined.value = true
     remoteParticipantName.value = participant.name || participant.identity || '对方'
@@ -181,6 +186,18 @@ function bindRoomEvents(client: LiveRoomClient) {
   })
 }
 
+function buildMediaWarning(result?: { cameraError?: Error | null; micError?: Error | null } | null) {
+  if (!result) return null
+  const messages: string[] = []
+  if (result.cameraError) {
+    messages.push(`摄像头不可用：${result.cameraError.message}`)
+  }
+  if (result.micError) {
+    messages.push(`麦克风不可用：${result.micError.message}`)
+  }
+  return messages.length ? messages.join('；') : null
+}
+
 async function connectRoom() {
   if (!session.value?.sessionId || connecting.value) return
   connecting.value = true
@@ -195,7 +212,7 @@ async function connectRoom() {
     const client = new LiveRoomClient()
     roomClient = client
     bindRoomEvents(client)
-    await client.connect({
+    const connectResult = await client.connect({
       serverUrl: tokenResp.serverUrl,
       token: tokenResp.accessToken,
       cameraEnabled: camOn.value,
@@ -203,6 +220,10 @@ async function connectRoom() {
       cameraDeviceId: selectedCameraId.value || null,
       micDeviceId: selectedMicId.value || null,
     })
+    const mediaWarning = buildMediaWarning(connectResult)
+    if (mediaWarning) {
+      error.value = mediaWarning
+    }
     await attachLocalPreview(client)
     syncRemoteStateFromRoom(client)
     try {

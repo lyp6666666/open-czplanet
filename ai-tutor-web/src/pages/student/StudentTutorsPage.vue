@@ -31,7 +31,6 @@ const isOrg = computed(() => auth.user?.userType === 3)
 
 const q = ref('')
 const subject = ref<string>('')
-
 const city = computed(() => cityStore.city)
 
 const rateMin = ref<number | null>(null)

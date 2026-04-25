@@ -3,10 +3,10 @@
 set -eu
 
 PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-}"
-UPSTREAM_HOST="${UPSTREAM_HOST:-111.228.20.88}"
+UPSTREAM_HOST="${UPSTREAM_HOST:-}"
 USER_WEB_PORT="${USER_WEB_PORT:-5173}"
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
-ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-5174}"
+ADMIN_WEB_PORT="${ADMIN_WEB_PORT:-${ADMIN_PORT:-5174}}"
 ADMIN_API_PORT="${ADMIN_API_PORT:-18084}"
 ADMIN_BASE_PATH="${ADMIN_BASE_PATH:-/admin/}"
 NGINX_CONF="${NGINX_CONF:-/etc/nginx/sites-available/ai-tutor-public-domain.conf}"
@@ -22,12 +22,20 @@ if [ -z "$PUBLIC_DOMAIN" ]; then
   echo "[setup_public_domain_proxy] 缺少 PUBLIC_DOMAIN，例如：PUBLIC_DOMAIN=huoyue.online"
   exit 1
 fi
+TARGET_HOST="${UPSTREAM_HOST:-127.0.0.1}"
+TARGET_ENTRY_PORT="${TARGET_ENTRY_PORT:-$USER_WEB_PORT}"
 
 if [ -z "$TLS_CERT_PATH" ] && [ -f "/etc/letsencrypt/live/$PUBLIC_DOMAIN/fullchain.pem" ]; then
   TLS_CERT_PATH="/etc/letsencrypt/live/$PUBLIC_DOMAIN/fullchain.pem"
 fi
 if [ -z "$TLS_KEY_PATH" ] && [ -f "/etc/letsencrypt/live/$PUBLIC_DOMAIN/privkey.pem" ]; then
   TLS_KEY_PATH="/etc/letsencrypt/live/$PUBLIC_DOMAIN/privkey.pem"
+fi
+if [ -z "$TLS_CERT_PATH" ] && [ -f "/etc/nginx/ssl/$PUBLIC_DOMAIN/fullchain.pem" ]; then
+  TLS_CERT_PATH="/etc/nginx/ssl/$PUBLIC_DOMAIN/fullchain.pem"
+fi
+if [ -z "$TLS_KEY_PATH" ] && [ -f "/etc/nginx/ssl/$PUBLIC_DOMAIN/privkey.pem" ]; then
+  TLS_KEY_PATH="/etc/nginx/ssl/$PUBLIC_DOMAIN/privkey.pem"
 fi
 
 if [ -n "$TLS_CERT_PATH" ] && [ -n "$TLS_KEY_PATH" ] && [ -f "$TLS_CERT_PATH" ] && [ -f "$TLS_KEY_PATH" ]; then
@@ -44,6 +52,7 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN;
+    client_max_body_size 25m;
 
     ssl_certificate $TLS_CERT_PATH;
     ssl_certificate_key $TLS_KEY_PATH;
@@ -64,20 +73,20 @@ server {
     }
 
     location ^~ $ADMIN_BASE_PATH {
-        proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
     location ^~ /api/admin/ {
-        proxy_pass http://127.0.0.1:$ADMIN_API_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /api/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -85,25 +94,25 @@ server {
     }
 
     location ^~ /org/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /user/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /invite/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /chat/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -112,7 +121,7 @@ server {
     }
 
     location ^~ /payment/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
@@ -155,16 +164,16 @@ server {
     }
 
     location / {
-        proxy_pass http://127.0.0.1:$USER_WEB_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
     location = /livekit {
-        proxy_pass http://127.0.0.1:7880/;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host $PUBLIC_DOMAIN;
+        proxy_set_header Host $TARGET_HOST;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -174,9 +183,9 @@ server {
     }
 
     location ^~ /livekit/ {
-        proxy_pass http://127.0.0.1:7880/;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host $TARGET_HOST;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -192,6 +201,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name $PUBLIC_DOMAIN www.$PUBLIC_DOMAIN;
+    client_max_body_size 25m;
 
     access_log /var/log/nginx/ai-tutor-public-domain.access.log;
     error_log /var/log/nginx/ai-tutor-public-domain.error.log warn;
@@ -209,20 +219,20 @@ server {
     }
 
     location ^~ $ADMIN_BASE_PATH {
-        proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
     location ^~ /api/admin/ {
-        proxy_pass http://127.0.0.1:$ADMIN_API_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /api/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -230,25 +240,25 @@ server {
     }
 
     location ^~ /org/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /user/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /invite/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
 
     location ^~ /chat/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -257,7 +267,7 @@ server {
     }
 
     location ^~ /payment/ {
-        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Authorization \$http_authorization;
         proxy_read_timeout 60s;
     }
@@ -300,16 +310,16 @@ server {
     }
 
     location / {
-        proxy_pass http://127.0.0.1:$USER_WEB_PORT;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
     }
 
     location = /livekit {
-        proxy_pass http://127.0.0.1:7880/;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host $TARGET_HOST;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -319,9 +329,9 @@ server {
     }
 
     location ^~ /livekit/ {
-        proxy_pass http://127.0.0.1:7880/;
+        proxy_pass http://$TARGET_HOST:$TARGET_ENTRY_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
+        proxy_set_header Host $TARGET_HOST;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
@@ -338,7 +348,7 @@ rm -f /etc/nginx/sites-enabled/ai-tutor-payment-domain.conf
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/ai-tutor-public-domain.conf
 nginx -t
 systemctl enable nginx >/dev/null 2>&1 || true
-systemctl restart nginx
+systemctl reload nginx || systemctl restart nginx
 
 echo "[setup_public_domain_proxy] 完成"
 echo "用户端入口: http://$PUBLIC_DOMAIN/"

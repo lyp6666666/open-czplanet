@@ -3,7 +3,7 @@
     <section class="card hero">
       <div>
         <div class="title">首页轮播图</div>
-        <div class="sub">中间大图从 MinIO 读取，最多保留 5 张；若仅配置 1 张，前台不会自动轮播。</div>
+        <div class="sub">中间大图从 MinIO 读取，最多保留 5 张；单张图不自动轮播，单文件上限 20MB。</div>
       </div>
       <div class="count">{{ rows.length }}/5</div>
     </section>
@@ -78,6 +78,7 @@ const busyId = ref<number | null>(null)
 const errorText = ref<string | null>(null)
 const hint = ref<string | null>(null)
 const pickedFile = ref<File | null>(null)
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 const form = reactive({
   title: '',
@@ -102,6 +103,8 @@ function resetForm() {
 function onPickFile(e: Event) {
   const input = e.target as HTMLInputElement | null
   pickedFile.value = input?.files?.[0] || null
+  hint.value = null
+  errorText.value = null
 }
 
 function validateUploadForm() {
@@ -111,7 +114,36 @@ function validateUploadForm() {
   if (!pickedFile.value) {
     return '请先选择图片文件'
   }
+  if (pickedFile.value.size > MAX_UPLOAD_BYTES) {
+    return '图片不能超过 20MB，请压缩后重新上传'
+  }
   return null
+}
+
+function resolveRequestErrorMessage(e: unknown) {
+  if (!e || typeof e !== 'object') {
+    return '上传失败'
+  }
+  const error = e as {
+    message?: unknown
+    response?: {
+      status?: number
+      data?: {
+        message?: unknown
+      }
+    }
+  }
+  const apiMessage = error.response?.data?.message
+  if (typeof apiMessage === 'string' && apiMessage.trim()) {
+    return apiMessage.trim()
+  }
+  if (error.response?.status === 413) {
+    return '上传图片过大，代理层已拒绝请求。请先部署最新 Nginx 配置，再重新上传。'
+  }
+  if (typeof error.message === 'string' && error.message.trim()) {
+    return error.message.trim()
+  }
+  return '上传失败'
 }
 
 async function load() {
@@ -148,7 +180,7 @@ async function submit() {
     hint.value = '轮播图已上传并加入首页轮播'
     resetForm()
   } catch (e) {
-    errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '上传失败'
+    errorText.value = resolveRequestErrorMessage(e)
   } finally {
     uploading.value = false
   }

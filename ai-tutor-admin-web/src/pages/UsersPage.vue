@@ -28,7 +28,7 @@
             <th style="width: 150px">手机号</th>
             <th style="width: 120px">状态</th>
             <th>资料</th>
-            <th style="width: 220px">操作</th>
+            <th style="width: 320px">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -45,6 +45,7 @@
             <td>
               <div v-if="row.userType === 1" class="cell-sub">
                 {{ [row.teacherRealName, row.teacherEducation, row.teacherSubject, row.teacherCity].filter(Boolean).join(' · ') || '-' }}
+                <span v-if="row.teacherHomeStarTeacher === 1" class="star-badge">星级教师</span>
               </div>
               <div v-else class="cell-sub">
                 {{ [row.studentRealName, row.studentAge ? `${row.studentAge}岁` : null, row.studentAddress].filter(Boolean).join(' · ') || '-' }}
@@ -52,6 +53,16 @@
             </td>
             <td>
               <div class="actions">
+                <button
+                  v-if="row.userType === 1"
+                  class="btn"
+                  :class="{ active: row.teacherHomeStarTeacher === 1 }"
+                  type="button"
+                  :disabled="busyId === row.id"
+                  @click="toggleTeacherStar(row)"
+                >
+                  {{ busyId === row.id ? '处理中...' : row.teacherHomeStarTeacher === 1 ? '取消星级' : '设为星级' }}
+                </button>
                 <button class="btn" type="button" :disabled="busyId === row.id" @click="openEdit(row.id)">修改</button>
                 <button class="btn btn-danger" type="button" :disabled="busyId === row.id" @click="onDisable(row.id)">删除</button>
               </div>
@@ -227,6 +238,22 @@ async function load() {
     errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '加载失败'
   } finally {
     loading.value = false
+  }
+}
+
+async function toggleTeacherStar(row: AdminUserRow) {
+  if (row.userType !== 1 || busyId.value != null) return
+  busyId.value = row.id
+  errorText.value = null
+  try {
+    await updateUser(row.id, {
+      teacherHomeStarTeacher: row.teacherHomeStarTeacher === 1 ? 0 : 1,
+    })
+    await load()
+  } catch (e) {
+    errorText.value = e && typeof e === 'object' && 'message' in e ? String((e as { message?: unknown }).message) : '操作失败'
+  } finally {
+    busyId.value = null
   }
 }
 
@@ -483,6 +510,17 @@ async function onDisable(id: number) {
   font-size: 12px;
 }
 
+.star-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  font-weight: 700;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -551,4 +589,3 @@ async function onDisable(id: number) {
   resize: vertical;
 }
 </style>
-

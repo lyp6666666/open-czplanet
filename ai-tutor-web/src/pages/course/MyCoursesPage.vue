@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { applicationApi } from '@/api/application'
@@ -14,65 +14,63 @@ import { useToastStore } from '@/stores/toast'
 import { normalizeAvatarUrl } from '@/utils/avatar'
 
 type CourseStageKey =
-  | 'APPLYING'
-  | 'APPLY_REJECTED'
   | 'WAIT_PAY'
-  | 'PAY_FAILED'
-  | 'PAY_EXPIRED'
   | 'COMMUNICATING'
-  | 'COMMUNICATION_CLOSED'
-  | 'COLLABORATING'
-  | 'COLLAB_REJECTED'
   | 'TRIALING'
   | 'TRIAL_CONFIRMING'
   | 'TRIAL_WAIT_WEEKLY_SCHEDULE'
   | 'TRIAL_FAILED'
   | 'TEACHING'
-  | 'PAUSED'
-  | 'TERMINATING'
   | 'FINISHED'
   | 'REFUND_REVIEW'
   | 'REFUNDED'
   | 'TRIAL_REFUND_REVIEW'
   | 'UNKNOWN'
 
+type StageMeta = {
+  key: CourseStageKey
+  label: string
+  tone: 'slate' | 'amber' | 'sky' | 'violet' | 'emerald' | 'rose'
+  description: string
+  actionLabel: string
+}
+
 type CourseViewModel = {
   raw: CourseItemVO
   courseId: number
   applicationId: number
-  application: TutorApplicationVO | null
   roomId: number | null
   teacherUid: number
   studentUid: number
-  stage: ReturnType<typeof resolveCourseStage>
   participantUid: number
-  participant: UserSimpleVO | null
-  participantCard: UserCardVO | null
   participantName: string
   participantRoleLabel: string
   participantSubtitle: string
   avatar: string
+  stage: StageMeta
   headline: string
   summary: string
-  stageHint: string
-  progressStep: number
-  progressText: string
-  nextActionLabel: string
-  nextActionTone: 'primary' | 'neutral'
-  lessonCourseId: number | null
   latestLesson: ScheduleEventVO | null
-  lessonState: ReturnType<typeof resolveLessonState>
-  lessonStatusText: string
+  lessonList: ScheduleEventVO[]
   lessonTimeText: string
-  lessonSubtitle: string
+  lessonStatusText: string
+  lessonStateTone: 'slate' | 'amber' | 'sky' | 'violet' | 'emerald' | 'rose'
+  currentStateNote: string
+  currentActionHint: string
+  trialCountdown: string
+  countdownText: string
   live: LiveSessionResp | null
+  reminder: LiveReminderItemResp | null
   aiResultStatus: string | null
   aiPreview: string | null
-  reminder: LiveReminderItemResp | null
-  isOnlineCourse: boolean
-  liveBadge: string
-  liveHint: string
-  trialCountdown: string
+  canEnterClassroom: boolean
+  canEndClassroom: boolean
+  endBlockedReason: string
+  showAbnormalAttendanceConfirm: boolean
+  abnormalAttendanceHint: string
+  afterClassStatusLabel: string
+  afterClassStatusTone: string
+  afterClassHint: string
 }
 
 const router = useRouter()
@@ -81,23 +79,25 @@ const toast = useToastStore()
 
 const isTeacher = computed(() => auth.user?.userType === 1)
 const role = computed<'TEACHER' | 'STUDENT'>(() => (isTeacher.value ? 'TEACHER' : 'STUDENT'))
+
 const loading = ref(false)
 const error = ref<string | null>(null)
 const emailHint = ref<{ show: boolean; title?: string; description?: string; actionText?: string } | null>(null)
 const list = ref<CourseItemVO[]>([])
-const liveMap = ref<Record<number, LiveSessionResp>>({})
-const aiResultMap = ref<Record<number, { resultStatus?: string | null; preview?: string | null; sessionId?: number | null }>>({})
-const lessonMap = ref<Record<number, ScheduleEventVO | null>>({})
-const reminderMap = ref<Record<number, LiveReminderItemResp>>({})
-const applicationMap = ref<Record<number, TutorApplicationVO | null>>({})
 const userMap = ref<Record<number, UserSimpleVO>>({})
 const userCardMap = ref<Record<number, UserCardVO | null>>({})
+const applicationMap = ref<Record<number, TutorApplicationVO | null>>({})
+const lessonListMap = ref<Record<number, ScheduleEventVO[]>>({})
+const lessonMap = ref<Record<number, ScheduleEventVO | null>>({})
+const liveMap = ref<Record<number, LiveSessionResp | null>>({})
+const reminderMap = ref<Record<number, LiveReminderItemResp | null>>({})
+const aiResultMap = ref<Record<number, { resultStatus?: string | null; preview?: string | null; sessionId?: number | null }>>({})
 const avatarBroken = ref<Record<number, boolean>>({})
-const actionBusyCourseId = ref<number | null>(null)
 
 const stageFilter = ref<'ALL' | 'ACTIVE' | CourseStageKey>('ALL')
 const search = ref('')
 const selectedCourseId = ref<number | null>(null)
+const actionBusyCourseId = ref<number | null>(null)
 
 const scheduleOpen = ref(false)
 const scheduleBusy = ref(false)
@@ -105,9 +105,9 @@ const scheduleError = ref<string | null>(null)
 const scheduleCourseId = ref<number | null>(null)
 const scheduleTitle = ref('')
 const scheduleDescription = ref('')
-const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now()))
-const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
-const scheduleReminderMinutes = ref<number>(30)
+const scheduleStartAt = ref(roundToNextHalfHour(Date.now()))
+const scheduleEndAt = ref(scheduleStartAt.value + 60 * 60 * 1000)
+const scheduleReminderMinutes = ref(30)
 
 const modalOpen = ref(false)
 const modalCourseId = ref<number | null>(null)
@@ -124,7 +124,12 @@ const liveTimelineError = ref<string | null>(null)
 const liveTimelineItems = ref<Array<{ eventType: string; eventSource: string; occurredAt: string }>>([])
 const liveTimelineCourseId = ref<number | null>(null)
 
-const progressSteps = ['申请', '信息费', '沟通', '合作', '试课', '正式上课', '结课']
+const endModalOpen = ref(false)
+const endModalBusy = ref(false)
+const endModalCountdown = ref(3)
+const endModalErr = ref<string | null>(null)
+const endModalCourseId = ref<number | null>(null)
+let endModalTimer: number | null = null
 
 function roundToNextHalfHour(nowMs: number) {
   const d = new Date(nowMs)
@@ -149,10 +154,6 @@ function fmtDateTime(value: string | number | Date | null | undefined, opts?: In
   }).format(d)
 }
 
-function fmtDateOnly(value: string | number | Date | null | undefined) {
-  return fmtDateTime(value, { year: 'numeric', month: 'numeric', day: 'numeric' })
-}
-
 function formatDuration(startAt: number, endAt: number) {
   const minutes = Math.max(0, Math.round((endAt - startAt) / 60000))
   if (!minutes) return '未设置时长'
@@ -161,348 +162,14 @@ function formatDuration(startAt: number, endAt: number) {
   return `${minutes} 分钟`
 }
 
-function trialExpired(trialEndAt?: string | null): boolean {
-  if (!trialEndAt) return false
-  const t = Date.parse(trialEndAt)
-  return Number.isFinite(t) ? Date.now() > t : false
-}
-
-function resolveCourseStage(rawStatus: string, trialEndAt?: string | null) {
-  const status = String(rawStatus || '').trim().toUpperCase()
-  if (status === 'APPLYING') {
-    return {
-      key: 'APPLYING' as const,
-      label: '发起申请中',
-      tone: 'slate',
-      description: '已提交申请，等待老师或平台处理。',
-      actionLabel: '查看申请',
-      phaseIndex: 1,
-      sectionLabel: '申请阶段',
-    }
-  }
-  if (status === 'WAIT_PAY') {
-    return {
-      key: 'WAIT_PAY' as const,
-      label: '待支付信息费',
-      tone: 'amber',
-      description: '支付信息费后才会进入正式沟通。',
-      actionLabel: '去支付',
-      phaseIndex: 2,
-      sectionLabel: '支付阶段',
-    }
-  }
-  if (status === 'COMMUNICATING') {
-    return {
-      key: 'COMMUNICATING' as const,
-      label: '沟通中',
-      tone: 'sky',
-      description: '双方已进入聊天沟通，可继续了解需求或发起合作。',
-      actionLabel: '进入聊天',
-      phaseIndex: 3,
-      sectionLabel: '沟通阶段',
-    }
-  }
-  if (status === 'TRIALING') {
-    if (trialExpired(trialEndAt)) {
-      return {
-        key: 'TRIAL_CONFIRMING' as const,
-        label: '试课待确认',
-        tone: 'violet',
-        description: '试课周期已到，等待双方确认是否进入正式上课。',
-        actionLabel: '查看试课',
-        phaseIndex: 5,
-        sectionLabel: '试课阶段',
-      }
-    }
-    return {
-      key: 'TRIALING' as const,
-      label: '试课中',
-      tone: 'violet',
-      description: '合作已建立，试课日程会直接展示在双方课表与课程页中。',
-      actionLabel: '查看试课',
-      phaseIndex: 5,
-      sectionLabel: '试课阶段',
-    }
-  }
-  if (status === 'TRIAL_WAIT_STUDENT_DECISION') {
-    return {
-      key: 'TRIAL_CONFIRMING' as const,
-      label: '待学生确认试课结果',
-      tone: 'violet',
-      description: '试课已结束，需要学生确认是否继续合作。',
-      actionLabel: '查看试课',
-      phaseIndex: 5,
-      sectionLabel: '试课阶段',
-    }
-  }
-  if (status === 'TRIAL_WAIT_WEEKLY_SCHEDULE') {
-    return {
-      key: 'TRIAL_WAIT_WEEKLY_SCHEDULE' as const,
-      label: '待学生提交正式课表',
-      tone: 'violet',
-      description: '试课已通过，学生需要在试课结束后 24 小时内确认后续固定上课时间。',
-      actionLabel: '确认课表',
-      phaseIndex: 5,
-      sectionLabel: '试课转正式阶段',
-    }
-  }
-  if (status === 'TRIAL_FAILED') {
-    return {
-      key: 'TRIAL_FAILED' as const,
-      label: '试课未通过',
-      tone: 'rose',
-      description: '本次试课未继续，线上场景将结束合作沟通。',
-      actionLabel: '查看详情',
-      phaseIndex: 5,
-      sectionLabel: '试课阶段',
-    }
-  }
-  if (status === 'TEACHING') {
-    return {
-      key: 'TEACHING' as const,
-      label: '正式上课中',
-      tone: 'emerald',
-      description: '试课通过，已进入长期正式上课阶段。',
-      actionLabel: '安排上课',
-      phaseIndex: 6,
-      sectionLabel: '上课阶段',
-    }
-  }
-  if (status === 'FINISHED') {
-    return {
-      key: 'FINISHED' as const,
-      label: '已结课',
-      tone: 'slate',
-      description: '课程合作已结束，支持回看历史记录。',
-      actionLabel: '查看记录',
-      phaseIndex: 7,
-      sectionLabel: '结课阶段',
-    }
-  }
-  if (status === 'REFUND_REVIEW') {
-    return {
-      key: 'REFUND_REVIEW' as const,
-      label: '信息费退费审批中',
-      tone: 'rose',
-      description: '信息费退费申请已提交，等待平台审核。',
-      actionLabel: '查看详情',
-      phaseIndex: 3,
-      sectionLabel: '售后阶段',
-    }
-  }
-  if (status === 'REFUNDED') {
-    return {
-      key: 'REFUNDED' as const,
-      label: '已退费',
-      tone: 'slate',
-      description: '信息费退费完成，本次合作已结束。',
-      actionLabel: '查看详情',
-      phaseIndex: 3,
-      sectionLabel: '售后阶段',
-    }
-  }
-  if (status === 'TRIAL_REFUND_REVIEW') {
-    return {
-      key: 'TRIAL_REFUND_REVIEW' as const,
-      label: '试课不通过处理中',
-      tone: 'rose',
-      description: '试课不通过申请已提交，等待平台审核处理。',
-      actionLabel: '查看申请',
-      phaseIndex: 5,
-      sectionLabel: '试课阶段',
-    }
-  }
-  return {
-    key: 'UNKNOWN' as const,
-    label: status || '未知状态',
-    tone: 'slate',
-    description: '当前课程状态尚未完成映射，可继续查看课程详情。',
-    actionLabel: '查看详情',
-    phaseIndex: 1,
-    sectionLabel: '课程状态',
-  }
-}
-
-function lessonStatusText(status: ScheduleEventStatus) {
-  if (status === 'PENDING') return '约课待确认'
-  if (status === 'ACCEPTED') return '已预约'
-  if (status === 'REJECTED') return '老师已拒绝'
-  if (status === 'CANCELED') return '已取消'
-  return '状态未知'
-}
-
-function resolveLessonState(lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
-  if (!lesson) {
-    return {
-      key: 'NOT_STARTED' as const,
-      label: '待生成课节',
-      tone: 'slate',
-      description: '当前还没有同步出具体课节。',
-    }
-  }
-  const now = Date.now()
-  const startAt = Number(lesson.startAt || 0)
-  const endAt = Number(lesson.endAt || 0)
-
-  if (live?.status === 'IN_PROGRESS') {
-    return { key: 'IN_PROGRESS' as const, label: '上课中', tone: 'emerald', description: '课堂已开始。' }
-  }
-  if (live?.joinableNow) {
-    return { key: 'JOINABLE' as const, label: '即将开始', tone: 'amber', description: '课堂入口已开放，可进入课前准备。' }
-  }
-  if (lesson.status === 'PENDING') {
-    return { key: 'PENDING' as const, label: '约课待确认', tone: 'amber', description: '等待对方确认这一节课。' }
-  }
-  if (lesson.status === 'REJECTED') {
-    return { key: 'REJECTED' as const, label: '老师已拒绝', tone: 'rose', description: '本次课节未确认，需要重新约课。' }
-  }
-  if (lesson.status === 'CANCELED') {
-    return { key: 'CANCELED' as const, label: '已取消', tone: 'rose', description: '本次课节已被取消。' }
-  }
-  if (lesson.status === 'ACCEPTED' && endAt < now) {
-    return { key: 'FINISHED' as const, label: '已完成', tone: 'slate', description: '最近一节课已经结束。' }
-  }
-  if (lesson.status === 'ACCEPTED' && startAt > now) {
-    const delta = startAt - now
-    if (delta <= 30 * 60 * 1000) {
-      return { key: 'UPCOMING' as const, label: '即将开始', tone: 'amber', description: '距离开课时间较近。' }
-    }
-    return { key: 'ACCEPTED' as const, label: '已预约', tone: 'sky', description: '课节已确认，等待上课。' }
-  }
-  return { key: 'ACCEPTED' as const, label: lessonStatusText(lesson.status), tone: 'sky', description: '已安排具体课节。' }
-}
-
-function buildCourseTitle(item: CourseItemVO, participantName: string, stage: ReturnType<typeof resolveCourseStage>) {
-  if (stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return `与${participantName}的试课安排`
-  if (stage.key === 'TEACHING') return `与${participantName}的正式课程`
-  if (stage.key === 'COMMUNICATING') return `与${participantName}的课程沟通`
-  if (stage.key === 'WAIT_PAY') return `与${participantName}的课程申请`
-  if (stage.key === 'FINISHED') return `与${participantName}的课程记录`
-  return `课程 #${item.courseId}`
-}
-
-function buildParticipantSubtitle(card: UserCardVO | null, isTeacherParticipant: boolean) {
-  if (isTeacherParticipant) {
-    const profile = card?.teacherProfile
-    const parts = [profile?.subject, profile?.education, profile?.experienceYears != null ? `${profile.experienceYears} 年经验` : ''].filter(Boolean)
-    return parts.length > 0 ? parts.join(' · ') : '老师信息待完善'
-  }
-  const student = card?.studentProfile
-  const job = card?.jobPosting
-  const parts = [
-    student?.childAge != null ? `${student.childAge} 岁` : '',
-    job?.subjectName || '',
-    job?.city || '',
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : '学生信息待完善'
-}
-
-function buildCourseSummary(stage: ReturnType<typeof resolveCourseStage>, participantName: string, lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
-  if (lesson) {
-    return `${stage.label} · 下一节 ${fmtDateTime(lesson.startAt)} · ${lessonStatusText(lesson.status)}`
-  }
-  if (live?.scheduledStartAt) {
-    return `${stage.label} · 课堂计划 ${fmtDateTime(live.scheduledStartAt)}`
-  }
-  return `${participantName} · ${stage.description}`
-}
-
-function buildStageHint(stage: ReturnType<typeof resolveCourseStage>, lessonState: ReturnType<typeof resolveLessonState>, trialEndAt?: string | null) {
-  if (stage.key === 'TRIALING' && lessonState.key === 'NOT_STARTED') return '试课时间已确认，正在同步到双方日程'
-  if ((stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') && trialEndAt) {
-    return `试课结束：${fmtDateOnly(trialEndAt)}`
-  }
-  if (stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return '请在试课结束后一日内确认固定课表'
-  if (stage.key === 'WAIT_PAY') return '支付信息费后即可进入沟通'
-  if (stage.key === 'COMMUNICATING') return '可以继续聊天，也可以发起合作'
-  if (stage.key === 'TEACHING' && lessonState.key === 'NOT_STARTED') return '建议尽快安排下一节课'
-  return lessonState.description
-}
-
-function buildTrialCountdown(trialEndAt?: string | null) {
-  if (!trialEndAt) return ''
-  const endMs = Date.parse(trialEndAt)
-  if (!Number.isFinite(endMs)) return ''
-  const diff = endMs - Date.now()
-  if (diff <= 0) return '试课周期已结束，等待双方确认'
-  const days = Math.ceil(diff / (24 * 60 * 60 * 1000))
-  return `试课期剩余 ${days} 天`
-}
-
-function buildLessonSubtitle(lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
-  if (!lesson && !live) return '合作同意后会自动生成试课课节，并展示在双方日程中。'
-  if (live?.joinableNow) return '课堂已开放，双方可进入课前准备。'
-  if (lesson) return `${formatDuration(lesson.startAt, lesson.endAt)} · ${lessonStatusText(lesson.status)}`
-  return '课堂信息已生成'
-}
-
-function buildLiveBadge(live: LiveSessionResp | null, reminder: LiveReminderItemResp | null) {
-  if (live?.status === 'IN_PROGRESS') return '课堂进行中'
-  if (live?.joinableNow) return '课堂已开放'
-  if (reminder?.joinableNow) return '可进入课堂'
-  if (live?.scheduledStartAt) return '线上课堂'
-  return ''
-}
-
-function buildLiveHint(live: LiveSessionResp | null, reminder: LiveReminderItemResp | null) {
-  if (live?.status === 'IN_PROGRESS') return '当前可以直接进入课堂'
-  if (live?.scheduledStartAt) return `预计开始：${fmtDateTime(live.scheduledStartAt)}`
-  if (reminder?.scheduledStartAt) return `最近提醒：${fmtDateTime(reminder.scheduledStartAt)}`
-  return '未生成课堂'
-}
-
-function buildCourseView(item: CourseItemVO): CourseViewModel {
-  const participantUid = isTeacher.value ? item.studentUid : item.teacherUid
-  const participant = userMap.value[participantUid] || null
-  const participantCard = userCardMap.value[participantUid] || null
-  const application = applicationMap.value[item.applicationId] || null
-  const participantName = displayNameOf(participant, participantUid)
-  const stage = resolveCourseStage(item.status, item.trialEndAt)
-  const live = liveMap.value[item.courseId] || null
-  const aiResult = aiResultMap.value[item.courseId] || null
-  const lesson = lessonMap.value[item.courseId] || null
-  const reminder = reminderMap.value[item.courseId] || null
-  const lessonState = resolveLessonState(lesson, live)
-  const isTeacherParticipant = participant?.userType === 1
-
-  return {
-    raw: item,
-    courseId: item.courseId,
-    applicationId: item.applicationId,
-    application,
-    roomId: application?.roomId ?? item.roomId ?? null,
-    teacherUid: item.teacherUid,
-    studentUid: item.studentUid,
-    stage,
-    participantUid,
-    participant,
-    participantCard,
-    participantName,
-    participantRoleLabel: isTeacherParticipant ? '授课老师' : '学生',
-    participantSubtitle: buildParticipantSubtitle(participantCard, isTeacherParticipant),
-    avatar: avatarOf(participantUid, participant?.avatar),
-    headline: buildCourseTitle(item, participantName, stage),
-    summary: buildCourseSummary(stage, participantName, lesson, live),
-    stageHint: buildStageHint(stage, lessonState, item.trialEndAt),
-    progressStep: stage.phaseIndex,
-    progressText: `${stage.sectionLabel} · 第 ${Math.min(stage.phaseIndex, progressSteps.length)} / ${progressSteps.length} 步`,
-    nextActionLabel: stage.actionLabel,
-    nextActionTone: stage.key === 'WAIT_PAY' || stage.key === 'TRIALING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' || stage.key === 'TEACHING' ? 'primary' : 'neutral',
-    lessonCourseId: lesson?.id ?? null,
-    latestLesson: lesson,
-    lessonState,
-    lessonStatusText: lessonState.label,
-    lessonTimeText: lesson ? `${fmtDateTime(lesson.startAt)} - ${fmtDateTime(lesson.endAt, { hour: '2-digit', minute: '2-digit' })}` : '还没有安排具体课节',
-    lessonSubtitle: buildLessonSubtitle(lesson, live),
-    live,
-    aiResultStatus: aiResult?.resultStatus || item.aiResultStatus || null,
-    aiPreview: aiResult?.preview || item.aiPreview || null,
-    reminder,
-    isOnlineCourse: !!live || !!lesson,
-    liveBadge: buildLiveBadge(live, reminder),
-    liveHint: buildLiveHint(live, reminder),
-    trialCountdown: buildTrialCountdown(item.trialEndAt),
-  }
+function formatCountdown(deltaMs: number) {
+  if (deltaMs <= 0) return '已到预约开始时间'
+  const totalMinutes = Math.ceil(deltaMs / 60000)
+  if (totalMinutes < 60) return `距开课 ${totalMinutes} 分钟`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (!minutes) return `距开课 ${hours} 小时`
+  return `距开课 ${hours} 小时 ${minutes} 分钟`
 }
 
 function displayNameOf(user: UserSimpleVO | null | undefined, uid: number) {
@@ -522,101 +189,271 @@ function markAvatarBroken(uid: number) {
   avatarBroken.value = { ...avatarBroken.value, [uid]: true }
 }
 
-function activeStageFilterKeys() {
-  return new Set<CourseStageKey>(['COMMUNICATING', 'COLLABORATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TEACHING', 'PAUSED'])
+function trialExpired(trialEndAt?: string | null) {
+  if (!trialEndAt) return false
+  const t = Date.parse(trialEndAt)
+  return Number.isFinite(t) ? Date.now() > t : false
+}
+
+function resolveCourseStage(rawStatus: string, trialEndAt?: string | null): StageMeta {
+  const status = String(rawStatus || '').trim().toUpperCase()
+  if (status === 'WAIT_PAY') return { key: 'WAIT_PAY', label: '待支付信息费', tone: 'amber', description: '支付信息费后才会进入正式沟通。', actionLabel: '去支付' }
+  if (status === 'COMMUNICATING') return { key: 'COMMUNICATING', label: '沟通中', tone: 'sky', description: '双方已进入聊天沟通，可继续了解需求或发起合作。', actionLabel: '进入聊天' }
+  if (status === 'TRIALING' && trialExpired(trialEndAt)) return { key: 'TRIAL_CONFIRMING', label: '试课待确认', tone: 'violet', description: '试课已到结束时间，等待学生确认结果。', actionLabel: '查看试课' }
+  if (status === 'TRIALING') return { key: 'TRIALING', label: '试课阶段', tone: 'violet', description: '合作已建立，试课日程会直接展示在双方课表与课程页中。', actionLabel: '查看试课' }
+  if (status === 'TRIAL_WAIT_STUDENT_DECISION') return { key: 'TRIAL_CONFIRMING', label: '待学生确认试课结果', tone: 'violet', description: '试课已结束，需要学生确认是否继续合作。', actionLabel: '查看试课' }
+  if (status === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return { key: 'TRIAL_WAIT_WEEKLY_SCHEDULE', label: '待确认正式课时间', tone: 'violet', description: '试课已通过，等待学生支付并确认后续上课时间。', actionLabel: '确认课表' }
+  if (status === 'TRIAL_FAILED') return { key: 'TRIAL_FAILED', label: '试课未通过', tone: 'rose', description: '本次试课未继续，课程合作将在售后处理后结束。', actionLabel: '查看详情' }
+  if (status === 'TEACHING') return { key: 'TEACHING', label: '正式上课中', tone: 'emerald', description: '试课通过，已进入长期正式上课阶段。', actionLabel: '安排正式课' }
+  if (status === 'FINISHED') return { key: 'FINISHED', label: '已结课', tone: 'slate', description: '课程合作已结束，可回看历史记录。', actionLabel: '查看记录' }
+  if (status === 'REFUND_REVIEW') return { key: 'REFUND_REVIEW', label: '信息费退费审批中', tone: 'rose', description: '信息费退费申请已提交，等待平台审核。', actionLabel: '查看详情' }
+  if (status === 'REFUNDED') return { key: 'REFUNDED', label: '已退费', tone: 'slate', description: '信息费退费完成，本次合作已结束。', actionLabel: '查看详情' }
+  if (status === 'TRIAL_REFUND_REVIEW') return { key: 'TRIAL_REFUND_REVIEW', label: '试课不通过处理中', tone: 'rose', description: '试课不通过申请已提交，等待平台审核处理。', actionLabel: '查看申请' }
+  return { key: 'UNKNOWN', label: status || '未知状态', tone: 'slate', description: '当前课程状态尚未完成映射，可继续查看详情。', actionLabel: '查看详情' }
+}
+
+function lessonStatusText(status: ScheduleEventStatus) {
+  if (status === 'PENDING') return '约课待确认'
+  if (status === 'ACCEPTED') return '已预约'
+  if (status === 'RESCHEDULE_PENDING') return '待确认改期'
+  if (status === 'REJECTED') return '老师已拒绝'
+  if (status === 'CANCELED') return '已取消'
+  if (status === 'COMPLETED') return '已结束'
+  return '状态未知'
+}
+
+function hasLiveStarted(live: LiveSessionResp | null) {
+  if (!live) return false
+  const status = String(live.status || '').trim().toUpperCase()
+  return status === 'IN_PROGRESS' || !!live.actualStartAt
+}
+
+function isLessonEnterable(lesson: ScheduleEventVO | null) {
+  if (!lesson?.id) return false
+  if (lesson.status !== 'ACCEPTED' && lesson.status !== 'COMPLETED') return false
+  return Date.now() < Number(lesson.endAt || 0)
+}
+
+function isAbnormalPendingConfirm(lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
+  if (!lesson || lesson.status !== 'ACCEPTED') return false
+  return Number(lesson.endAt || 0) <= Date.now() && !hasLiveStarted(live)
+}
+
+function lessonTone(lesson: ScheduleEventVO | null, live: LiveSessionResp | null): CourseViewModel['lessonStateTone'] {
+  if (!lesson) return 'slate'
+  if (isAbnormalPendingConfirm(lesson, live)) return 'amber'
+  if (hasLiveStarted(live)) return 'emerald'
+  if (lesson.status === 'PENDING' || lesson.status === 'RESCHEDULE_PENDING') return 'amber'
+  if (lesson.status === 'REJECTED' || lesson.status === 'CANCELED') return 'rose'
+  if (lesson.status === 'COMPLETED') return 'slate'
+  if (lesson.status === 'ACCEPTED') return 'sky'
+  return 'slate'
+}
+
+function buildParticipantSubtitle(card: UserCardVO | null, isTeacherParticipant: boolean) {
+  if (isTeacherParticipant) {
+    const profile = card?.teacherProfile
+    const parts = [profile?.subject, profile?.education, profile?.experienceYears != null ? `${profile.experienceYears} 年经验` : ''].filter(Boolean)
+    return parts.length > 0 ? parts.join(' · ') : '老师信息待完善'
+  }
+  const student = card?.studentProfile
+  const job = card?.jobPosting
+  const parts = [student?.childAge != null ? `${student.childAge} 岁` : '', job?.subjectName || '', job?.city || ''].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : '学生信息待完善'
+}
+
+function sortLessons(events: ScheduleEventVO[]) {
+  return events.slice().sort((a, b) => {
+    const aScore = a.status === 'ACCEPTED' && a.endAt >= Date.now() ? 0 : a.status === 'PENDING' || a.status === 'RESCHEDULE_PENDING' ? 1 : 2
+    const bScore = b.status === 'ACCEPTED' && b.endAt >= Date.now() ? 0 : b.status === 'PENDING' || b.status === 'RESCHEDULE_PENDING' ? 1 : 2
+    if (aScore !== bScore) return aScore - bScore
+    return a.startAt - b.startAt
+  })
+}
+
+function afterClassMeta(aiResultStatus: string | null | undefined, lesson: ScheduleEventVO | null, live: LiveSessionResp | null) {
+  const normalized = String(aiResultStatus || '').trim().toUpperCase()
+  if (isAbnormalPendingConfirm(lesson, live)) {
+    return {
+      label: '未走正常课后流程',
+      tone: 'tone-amber',
+      hint: '本节课尚未确认是否属于未正常开课，暂不进入课后总结生成流程。',
+    }
+  }
+  if (normalized === 'READY') {
+    return {
+      label: '课后总结已生成',
+      tone: 'tone-emerald',
+      hint: '课程结束后生成完成，可直接查看课后总结。',
+    }
+  }
+  if (normalized === 'FAILED') {
+    return {
+      label: '课后总结生成失败',
+      tone: 'tone-rose',
+      hint: '生成失败时前端需明确提示，并提供重试生成入口。',
+    }
+  }
+  if (lesson && (lesson.status === 'COMPLETED' || String(live?.status || '').trim().toUpperCase() === 'ENDED')) {
+    return {
+      label: '课后总结生成中',
+      tone: 'tone-sky',
+      hint: '课程结束后自动开始生成，生成完成后通过站内消息或聊天系统消息提醒。',
+    }
+  }
+  return {
+    label: '等待课程结束',
+    tone: 'tone-slate',
+    hint: '课程结束后，系统才会开始生成课后总结。',
+  }
+}
+
+function buildTrialCountdown(trialEndAt?: string | null) {
+  if (!trialEndAt) return ''
+  const endMs = Date.parse(trialEndAt)
+  if (!Number.isFinite(endMs)) return ''
+  const diff = endMs - Date.now()
+  if (diff <= 0) return '试课周期已结束，等待双方确认'
+  const days = Math.ceil(diff / (24 * 60 * 60 * 1000))
+  return `试课期剩余 ${days} 天`
+}
+
+function buildCourseView(item: CourseItemVO): CourseViewModel {
+  const participantUid = isTeacher.value ? item.studentUid : item.teacherUid
+  const participant = userMap.value[participantUid] || null
+  const participantCard = userCardMap.value[participantUid] || null
+  const participantName = displayNameOf(participant, participantUid)
+  const stage = resolveCourseStage(item.status, item.trialEndAt)
+  const lessonList = sortLessons(lessonListMap.value[item.courseId] || [])
+  const latestLesson = lessonList[0] || null
+  const live = liveMap.value[item.courseId] || null
+  const reminder = reminderMap.value[item.courseId] || null
+  const aiResult = aiResultMap.value[item.courseId] || null
+  const countdownText = latestLesson?.startAt ? formatCountdown(Number(latestLesson.startAt) - Date.now()) : ''
+  const canEnterClassroom = isLessonEnterable(latestLesson)
+  const canEndClassroom = !!live?.sessionId && hasLiveStarted(live) && String(live.status || '').trim().toUpperCase() !== 'ENDED'
+  const showAbnormalAttendanceConfirm = isAbnormalPendingConfirm(latestLesson, live)
+  const abnormalAttendanceHint = showAbnormalAttendanceConfirm
+    ? '到预约结束时间前课程保持未开始；结束后若整节课从未建立双人实时视频，则进入“待确认未上课/异常待处理”，不直接进入课后总结。'
+    : ''
+  const afterClass = afterClassMeta(aiResult?.resultStatus || item.aiResultStatus, latestLesson, live)
+
+  let currentStateNote = stage.description
+  let currentActionHint = latestLesson
+    ? `${lessonStatusText(latestLesson.status)} · ${fmtDateTime(latestLesson.startAt)} - ${fmtDateTime(latestLesson.endAt, { hour: '2-digit', minute: '2-digit' })}`
+    : stage.description
+
+  if (canEnterClassroom) {
+    currentStateNote = latestLesson && Number(latestLesson.startAt) > Date.now() ? '当前状态：未开始，但现在可以进入课堂' : '当前状态：课程可进入'
+    currentActionHint = `课程在预约结束前都可以进入；${countdownText || '当前'}也能进入课堂等待对方。`
+  } else if (showAbnormalAttendanceConfirm) {
+    currentStateNote = '当前状态：待确认未上课'
+    currentActionHint = '对方未到场 / 本节未正常开始，等待双方或客服确认。'
+  } else if (canEndClassroom) {
+    currentStateNote = '当前状态：课程进行中，可结束课程'
+    currentActionHint = '本节课曾成功建立过双人实时视频，已满足结束课程条件。'
+  }
+
+  return {
+    raw: item,
+    courseId: item.courseId,
+    applicationId: item.applicationId,
+    roomId: item.roomId ?? applicationMap.value[item.applicationId]?.roomId ?? null,
+    teacherUid: item.teacherUid,
+    studentUid: item.studentUid,
+    participantUid,
+    participantName,
+    participantRoleLabel: participant?.userType === 1 ? '授课老师' : '学生',
+    participantSubtitle: buildParticipantSubtitle(participantCard, participant?.userType === 1),
+    avatar: avatarOf(participantUid, participant?.avatar),
+    stage,
+    headline:
+      stage.key === 'TRIALING' || stage.key === 'TRIAL_CONFIRMING' || stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE'
+        ? `与${participantName}的试课合作`
+        : stage.key === 'TEACHING'
+          ? `与${participantName}的正式课程合作`
+          : `与${participantName}的课程合作`,
+    summary: `${stage.label}${latestLesson ? ` · 下一节 ${fmtDateTime(latestLesson.startAt)}` : ''}`,
+    latestLesson,
+    lessonList,
+    lessonTimeText: latestLesson ? `${fmtDateTime(latestLesson.startAt)} - ${fmtDateTime(latestLesson.endAt, { hour: '2-digit', minute: '2-digit' })}` : '当前还没有安排具体课节',
+    lessonStatusText: showAbnormalAttendanceConfirm ? '待确认未上课' : latestLesson ? lessonStatusText(latestLesson.status) : '待生成课节',
+    lessonStateTone: lessonTone(latestLesson, live),
+    currentStateNote,
+    currentActionHint,
+    trialCountdown: buildTrialCountdown(item.trialEndAt),
+    countdownText,
+    live,
+    reminder,
+    aiResultStatus: aiResult?.resultStatus || item.aiResultStatus || null,
+    aiPreview: aiResult?.preview || item.aiPreview || null,
+    canEnterClassroom,
+    canEndClassroom,
+    endBlockedReason: canEndClassroom ? '' : '未检测到双方成功建立实时视频，暂不可结束课程',
+    showAbnormalAttendanceConfirm,
+    abnormalAttendanceHint,
+    afterClassStatusLabel: afterClass.label,
+    afterClassStatusTone: afterClass.tone,
+    afterClassHint: afterClass.hint,
+  }
 }
 
 const courseViews = computed(() => list.value.map((item) => buildCourseView(item)))
 
 const filteredCourses = computed(() => {
   const kw = search.value.trim().toLowerCase()
-  const activeKeys = activeStageFilterKeys()
+  const activeKeys = new Set<CourseStageKey>(['COMMUNICATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TEACHING'])
   return courseViews.value.filter((item) => {
     if (stageFilter.value === 'ACTIVE' && !activeKeys.has(item.stage.key)) return false
     if (stageFilter.value !== 'ALL' && stageFilter.value !== 'ACTIVE' && item.stage.key !== stageFilter.value) return false
     if (!kw) return true
-    const text = [item.headline, item.participantName, item.participantSubtitle, item.summary, item.lessonSubtitle].join(' ').toLowerCase()
+    const text = [item.headline, item.participantName, item.participantSubtitle, item.currentStateNote, item.afterClassStatusLabel].join(' ').toLowerCase()
     return text.includes(kw)
   })
 })
 
 const selectedCourse = computed(() => {
   const pool = filteredCourses.value.length > 0 ? filteredCourses.value : courseViews.value
-  if (pool.length === 0) return null
-  const picked = pool.find((item) => item.courseId === selectedCourseId.value)
-  return picked || pool[0]
+  if (!pool.length) return null
+  return pool.find((item) => item.courseId === selectedCourseId.value) || pool[0]
 })
 
 const overview = computed(() => {
   const all = courseViews.value
-  const active = all.filter((item) => ['COMMUNICATING', 'TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE', 'TEACHING'].includes(item.stage.key)).length
-  const waitingPay = all.filter((item) => item.stage.key === 'WAIT_PAY').length
-  const trialing = all.filter((item) => item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE').length
-  const upcoming = all.filter((item) => ['ACCEPTED', 'UPCOMING', 'JOINABLE', 'IN_PROGRESS'].includes(item.lessonState.key)).length
-  return { total: all.length, active, waitingPay, trialing, upcoming }
+  return {
+    total: all.length,
+    trialing: all.filter((item) => ['TRIALING', 'TRIAL_CONFIRMING', 'TRIAL_WAIT_WEEKLY_SCHEDULE'].includes(item.stage.key)).length,
+    upcoming: all.filter((item) => !!item.latestLesson && item.latestLesson.status === 'ACCEPTED').length,
+  }
 })
 
-const upcomingLessons = computed(() =>
-  courseViews.value
-    .filter((item) => item.latestLesson || item.live?.scheduledStartAt || item.reminder?.scheduledStartAt)
-    .slice()
-    .sort((a, b) => {
-      const aTime = a.latestLesson?.startAt || Date.parse(a.live?.scheduledStartAt || a.reminder?.scheduledStartAt || '') || Number.MAX_SAFE_INTEGER
-      const bTime = b.latestLesson?.startAt || Date.parse(b.live?.scheduledStartAt || b.reminder?.scheduledStartAt || '') || Number.MAX_SAFE_INTEGER
-      return aTime - bTime
-    })
-    .slice(0, 5),
-)
-
 const reminderBanner = computed(() => {
-  const joinable = courseViews.value.find((item) => item.live?.joinableNow || item.reminder?.joinableNow)
+  const joinable = courseViews.value.find((item) => item.canEnterClassroom)
   if (joinable) return joinable
-  return upcomingLessons.value.find((item) => {
-    const startAt = item.latestLesson?.startAt || Date.parse(item.live?.scheduledStartAt || item.reminder?.scheduledStartAt || '')
-    return Number.isFinite(startAt) && startAt - Date.now() <= 30 * 60 * 1000
-  }) || null
+  return courseViews.value.find((item) => item.countdownText.includes('距开课')) || null
 })
 
 function statusToneClass(tone: string) {
   return `tone-${tone}`
 }
 
-function canOpenSchedule(item: CourseViewModel | null) {
-  if (!item) return false
-  return item.stage.key === 'TEACHING'
+function selectCourse(courseId: number) {
+  selectedCourseId.value = courseId
 }
 
-function canViewTrialSchedule(item: CourseViewModel | null) {
-  if (!item) return false
-  return item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE'
+function canOpenSchedule(item: CourseViewModel | null) {
+  return !!item && item.stage.key === 'TEACHING'
 }
 
 function canConfirmTrialPass(it: CourseItemVO) {
   if (isTeacher.value) return false
-  const s = String(it.status || '').trim().toUpperCase()
-  if (s !== 'TRIAL_WAIT_STUDENT_DECISION') return false
-  return true
+  return String(it.status || '').trim().toUpperCase() === 'TRIAL_WAIT_STUDENT_DECISION'
 }
 
 function canSubmitTrialFail(it: CourseItemVO) {
   if (isTeacher.value) return false
   const s = String(it.status || '').trim().toUpperCase()
-  if (s !== 'TRIAL_WAIT_STUDENT_DECISION' && s !== 'TRIAL_WAIT_WEEKLY_SCHEDULE') return false
-  return true
-}
-
-async function submitTrialPass(courseId: number) {
-  if (actionBusyCourseId.value != null) return
-  actionBusyCourseId.value = courseId
-  try {
-    await courseApi.submitTrialResult(courseId, { result: 'PASS' })
-    toast.show('已确认试课合适，请继续提交正式每周课表。', 'success')
-    await load()
-  } catch (e) {
-    toast.show(e instanceof Error ? e.message : '提交失败', 'error')
-  } finally {
-    actionBusyCourseId.value = null
-  }
+  return s === 'TRIAL_WAIT_STUDENT_DECISION' || s === 'TRIAL_WAIT_WEEKLY_SCHEDULE'
 }
 
 function goChat(roomId?: number | null) {
@@ -624,28 +461,26 @@ function goChat(roomId?: number | null) {
   void router.push({ name: 'chatRoom', params: { roomId: String(roomId) } })
 }
 
-function goLivePrepare(lessonCourseId?: number | null) {
-  if (!lessonCourseId) {
-    toast.show('当前课程还没有可进入的已确认课节。', 'info')
-    return
-  }
-  void router.push({ name: 'livePrepare', params: { courseId: String(lessonCourseId) } })
+function goCourseDetail(courseId: number) {
+  void router.push({ name: 'courseDetail', params: { courseId: String(courseId) } })
 }
 
 function goSchedule() {
   void router.push({ name: 'schedule' })
 }
 
-function goCourseDetail(courseId: number) {
-  void router.push({ name: 'courseDetail', params: { courseId: String(courseId) } })
+function goLivePrepare(lessonCourseId?: number | null) {
+  if (!lessonCourseId) {
+    toast.show('当前课程还没有可进入的课节。', 'info')
+    return
+  }
+  void router.push({ name: 'livePrepare', params: { courseId: String(lessonCourseId) } })
 }
 
 function goLessonAiSummary(item: CourseViewModel | null) {
   if (!item) return
   const query: Record<string, string> = {}
-  if (item.live?.sessionId) {
-    query.sessionId = String(item.live.sessionId)
-  }
+  if (item.live?.sessionId) query.sessionId = String(item.live.sessionId)
   void router.push({ name: 'lessonAiSummary', params: { courseId: String(item.courseId) }, query })
 }
 
@@ -684,34 +519,6 @@ async function openApplicationFlow(item: CourseViewModel) {
   }
 }
 
-function onPrimaryAction(item: CourseViewModel) {
-  if (item.stage.key === 'WAIT_PAY' || item.stage.key === 'COMMUNICATING') {
-    void openApplicationFlow(item)
-    return
-  }
-  if (item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE') {
-    if (item.live) {
-      goLivePrepare(item.lessonCourseId)
-      return
-    }
-    goSchedule()
-    return
-  }
-  if (item.stage.key === 'TEACHING') {
-    openSchedule(item)
-    return
-  }
-  if (item.roomId) {
-    goChat(item.roomId)
-    return
-  }
-  toast.show('当前课程暂未生成沟通会话。', 'info')
-}
-
-function selectCourse(courseId: number) {
-  selectedCourseId.value = courseId
-}
-
 function openSchedule(item: CourseViewModel) {
   if (!canOpenSchedule(item)) {
     toast.show('当前阶段暂不支持直接约课。', 'info')
@@ -722,10 +529,9 @@ function openSchedule(item: CourseViewModel) {
   scheduleError.value = null
   scheduleCourseId.value = item.courseId
   scheduleTitle.value = `${item.headline}｜线上课`
-  scheduleDescription.value = item.stage.key === 'TRIALING' || item.stage.key === 'TRIAL_CONFIRMING' || item.stage.key === 'TRIAL_WAIT_WEEKLY_SCHEDULE' ? '试课安排' : '正式课程安排'
+  scheduleDescription.value = '正式课程安排'
   scheduleStartAt.value = roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000)
   scheduleEndAt.value = scheduleStartAt.value + 60 * 60 * 1000
-  scheduleReminderMinutes.value = 30
 }
 
 function closeSchedule() {
@@ -769,33 +575,27 @@ async function submitScheduleCreate() {
     scheduleError.value = '课程信息不存在'
     return
   }
-  const titleText = scheduleTitle.value.trim()
-  if (!titleText) {
-    scheduleError.value = '请输入课程名称'
-    return
-  }
   if (!(scheduleEndAt.value > scheduleStartAt.value)) {
     scheduleError.value = '结束时间必须晚于开始时间'
     return
   }
-  if (scheduleStartAt.value < Date.now() - 60_000) {
-    scheduleError.value = '请选择当前时间之后的课程'
-    return
-  }
-
   scheduleBusy.value = true
   try {
     const created = await scheduleApi.createEvent({
       courseId: item.courseId,
-      title: titleText,
+      title: scheduleTitle.value.trim() || `${item.headline}｜线上课`,
       participantUserId: item.participantUid,
       startAt: scheduleStartAt.value,
       endAt: scheduleEndAt.value,
-      description: `${scheduleDescription.value.trim() || '课程安排'}\n提醒：提前 ${scheduleReminderMinutes.value} 分钟`,
+      description: `${scheduleDescription.value.trim() || '正式课程安排'}\n提醒：提前 ${scheduleReminderMinutes.value} 分钟`,
     })
+    lessonListMap.value = {
+      ...lessonListMap.value,
+      [item.courseId]: sortLessons([created, ...(lessonListMap.value[item.courseId] || [])]),
+    }
     lessonMap.value = { ...lessonMap.value, [item.courseId]: created }
     scheduleOpen.value = false
-    toast.show('约课申请已发送，聊天窗口会同步展示课节信息。', 'success', 3000)
+    toast.show('约课申请已发送，聊天窗口会同步展示课节信息。', 'success')
   } catch (e) {
     scheduleError.value = e instanceof Error ? e.message : '发起约课失败'
   } finally {
@@ -804,11 +604,6 @@ async function submitScheduleCreate() {
 }
 
 function openTrialRefund(courseId: number) {
-  const item = courseViews.value.find((it) => it.courseId === courseId) || null
-  if (!item) {
-    toast.show('课程信息不存在', 'error')
-    return
-  }
   modalCourseId.value = courseId
   modalReason.value = ''
   modalFiles.value = []
@@ -825,13 +620,11 @@ function closeTrialRefund() {
 
 function onPickFiles(e: Event) {
   const input = e.target as HTMLInputElement
-  const files = input.files ? Array.from(input.files) : []
-  modalFiles.value = files
+  modalFiles.value = input.files ? Array.from(input.files) : []
 }
 
 async function submitTrialRefund() {
-  if (modalBusy.value) return
-  if (!modalCourseId.value) return
+  if (modalBusy.value || !modalCourseId.value) return
   const item = courseViews.value.find((it) => it.courseId === modalCourseId.value) || null
   if (!item) {
     modalErr.value = '课程信息不存在'
@@ -842,18 +635,15 @@ async function submitTrialRefund() {
     modalErr.value = '请填写试课不通过说明'
     return
   }
-  const isOffline = String(item.raw.teachingMode || '').trim().toUpperCase() === 'OFFLINE'
-
   modalBusy.value = true
   modalErr.value = null
   try {
-    if (isOffline) {
-      if (modalFiles.value.length < 1) {
+    if (String(item.raw.teachingMode || '').trim().toUpperCase() === 'OFFLINE') {
+      if (!modalFiles.value.length) {
         modalErr.value = '请至少上传 1 张证据图片'
         return
       }
-      const videoUrl = modalVideoUrl.value.trim()
-      if (!videoUrl) {
+      if (!modalVideoUrl.value.trim()) {
         modalErr.value = '请上传并填写微信聊天录屏 URL'
         return
       }
@@ -867,25 +657,17 @@ async function submitTrialRefund() {
         const uploaded = await assetsApi.uploadImage(file, 'trial_refund')
         if (uploaded?.url) urls.push(uploaded.url)
       }
-      if (urls.length < 1) {
-        modalErr.value = '图片上传失败，请稍后重试'
-        return
-      }
       await courseApi.applyTrialRefund(modalCourseId.value, {
         reason,
         evidenceImageUrls: urls,
-        evidenceVideoUrl: videoUrl,
+        evidenceVideoUrl: modalVideoUrl.value.trim(),
         evidenceVideoDurationSeconds: Math.round(duration),
       })
-      toast.show('试课不通过申请已提交，聊天已关闭，等待管理员审核。', 'success')
     } else {
-      await courseApi.submitTrialResult(modalCourseId.value, {
-        result: 'FAIL',
-        reason,
-      })
-      toast.show('已提交试课不合适，课程已结束并关闭聊天。', 'success')
+      await courseApi.submitTrialResult(modalCourseId.value, { result: 'FAIL', reason })
     }
     modalOpen.value = false
+    toast.show('已提交试课不合适处理。', 'success')
     await load()
   } catch (e) {
     modalErr.value = e instanceof Error ? e.message : '提交失败'
@@ -894,28 +676,35 @@ async function submitTrialRefund() {
   }
 }
 
-async function openLiveTimeline(courseId: number) {
-  const lessonCourseId = lessonMap.value[courseId]?.id
-  if (!lessonCourseId) {
-    liveTimelineCourseId.value = courseId
-    liveTimelineOpen.value = true
-    liveTimelineBusy.value = false
-    liveTimelineError.value = '当前课程还没有已确认并同步课堂的课节'
-    liveTimelineItems.value = []
-    return
+async function submitTrialPass(courseId: number) {
+  if (actionBusyCourseId.value != null) return
+  actionBusyCourseId.value = courseId
+  try {
+    await courseApi.submitTrialResult(courseId, { result: 'PASS' })
+    toast.show('已确认试课合适，请继续提交正式每周课表。', 'success')
+    await load()
+  } catch (e) {
+    toast.show(e instanceof Error ? e.message : '提交失败', 'error')
+  } finally {
+    actionBusyCourseId.value = null
   }
+}
+
+async function openLiveTimeline(courseId: number) {
+  const item = courseViews.value.find((it) => it.courseId === courseId) || null
+  const sessionId = item?.live?.sessionId
   liveTimelineCourseId.value = courseId
   liveTimelineOpen.value = true
   liveTimelineBusy.value = true
   liveTimelineError.value = null
   liveTimelineItems.value = []
+  if (!sessionId) {
+    liveTimelineBusy.value = false
+    liveTimelineError.value = '当前课程尚未生成课堂时间线'
+    return
+  }
   try {
-    const live = await liveApi.getByCourse(lessonCourseId)
-    if (!live.sessionId) {
-      liveTimelineError.value = '当前课程尚未生成课堂时间线'
-      return
-    }
-    liveTimelineItems.value = await liveApi.timeline(live.sessionId)
+    liveTimelineItems.value = await liveApi.timeline(sessionId)
   } catch (e) {
     liveTimelineError.value = e instanceof Error ? e.message : '加载课堂详情失败'
   } finally {
@@ -939,13 +728,76 @@ function timelineEventLabel(eventType: string) {
   return normalized || '状态更新'
 }
 
+function openEndModal(item: CourseViewModel | null) {
+  if (!item?.live?.sessionId) return
+  endModalCourseId.value = item.courseId
+  endModalOpen.value = true
+  endModalBusy.value = false
+  endModalErr.value = null
+  endModalCountdown.value = 3
+  if (endModalTimer != null) window.clearInterval(endModalTimer)
+  endModalTimer = window.setInterval(() => {
+    if (endModalCountdown.value <= 1) {
+      endModalCountdown.value = 0
+      if (endModalTimer != null) {
+        window.clearInterval(endModalTimer)
+        endModalTimer = null
+      }
+      return
+    }
+    endModalCountdown.value -= 1
+  }, 1000)
+}
+
+function closeEndModal() {
+  if (endModalBusy.value) return
+  endModalOpen.value = false
+  endModalErr.value = null
+  endModalCourseId.value = null
+  endModalCountdown.value = 3
+  if (endModalTimer != null) {
+    window.clearInterval(endModalTimer)
+    endModalTimer = null
+  }
+}
+
+async function confirmEndLesson() {
+  const item = courseViews.value.find((it) => it.courseId === endModalCourseId.value) || null
+  if (!item?.live?.sessionId || endModalBusy.value || endModalCountdown.value > 0) return
+  endModalBusy.value = true
+  try {
+    await liveApi.end(item.live.sessionId, { reason: 'MANUAL_END', confirm: true })
+    toast.show('课堂已结束，系统开始生成课后总结。', 'success')
+    closeEndModal()
+    await load()
+  } catch (e) {
+    endModalErr.value = e instanceof Error ? e.message : '结束课程失败'
+  } finally {
+    endModalBusy.value = false
+  }
+}
+
+async function retryAiResult(item: CourseViewModel | null) {
+  if (!item?.live?.sessionId) return
+  try {
+    const result = await liveApi.retryAiResult(item.live.sessionId)
+    aiResultMap.value = {
+      ...aiResultMap.value,
+      [item.courseId]: {
+        resultStatus: result.resultStatus,
+        preview: result.preview,
+        sessionId: item.live.sessionId,
+      },
+    }
+    toast.show('已发起课后总结重试，请稍后刷新查看。', 'success')
+  } catch (e) {
+    toast.show(e instanceof Error ? e.message : '重试失败', 'error')
+  }
+}
+
 async function loadUsersAndCards(items: CourseItemVO[]) {
-  const ids = Array.from(
-    new Set(
-      items.flatMap((item) => [item.teacherUid, item.studentUid]).filter((uid) => uid > 0),
-    ),
-  )
-  if (ids.length === 0) return
+  const ids = Array.from(new Set(items.flatMap((item) => [item.teacherUid, item.studentUid]).filter((uid) => uid > 0)))
+  if (!ids.length) return
   try {
     const users = await userApi.batch(ids)
     userMap.value = Object.fromEntries(users.map((item) => [item.id, item]))
@@ -955,8 +807,7 @@ async function loadUsersAndCards(items: CourseItemVO[]) {
   const cards = await Promise.all(
     ids.map(async (uid) => {
       try {
-        const card = await userApi.card(uid)
-        return [uid, card] as const
+        return [uid, await userApi.card(uid)] as const
       } catch {
         return [uid, null] as const
       }
@@ -969,8 +820,7 @@ async function loadApplications(items: CourseItemVO[]) {
   const rows = await Promise.all(
     items.map(async (item) => {
       try {
-        const detail = await applicationApi.detail(item.applicationId)
-        return [item.applicationId, detail] as const
+        return [item.applicationId, await applicationApi.detail(item.applicationId)] as const
       } catch {
         return [item.applicationId, null] as const
       }
@@ -985,66 +835,63 @@ async function loadLessons(items: CourseItemVO[]) {
   try {
     const events = await scheduleApi.listEvents({ startAt, endAt, includePending: true })
     const nextMap: Record<number, ScheduleEventVO | null> = {}
+    const listMap: Record<number, ScheduleEventVO[]> = {}
     items.forEach((item) => {
       const otherUid = isTeacher.value ? item.studentUid : item.teacherUid
-      const candidates = events
-        .filter((event) => {
+      const candidates = sortLessons(
+        events.filter((event) => {
+          if (event.courseId && event.courseId === item.courseId) return true
           const participantId = event.participant?.id
           if (participantId && participantId === otherUid) return true
           if (item.roomId && event.chatRoomId && event.chatRoomId === item.roomId) return true
           return false
-        })
-        .sort((a, b) => {
-          const aScore = a.status === 'ACCEPTED' && a.endAt >= Date.now() ? 0 : a.status === 'PENDING' ? 1 : 2
-          const bScore = b.status === 'ACCEPTED' && b.endAt >= Date.now() ? 0 : b.status === 'PENDING' ? 1 : 2
-          if (aScore !== bScore) return aScore - bScore
-          return a.startAt - b.startAt
-        })
+        }),
+      )
+      listMap[item.courseId] = candidates
       nextMap[item.courseId] = candidates[0] || null
     })
+    lessonListMap.value = listMap
     lessonMap.value = nextMap
   } catch {
+    lessonListMap.value = {}
     lessonMap.value = {}
   }
 }
 
 async function loadLive(items: CourseItemVO[]) {
   const liveEntries = await Promise.all(
-    items.map(async (it) => {
-      const lessonCourseId = lessonMap.value[it.courseId]?.id
-      if (!lessonCourseId) return null
+    items.map(async (item) => {
+      const lessonCourseId = lessonMap.value[item.courseId]?.id
+      if (!lessonCourseId) return [item.courseId, null] as const
       try {
-        const live = await liveApi.getByCourse(lessonCourseId)
-        return [it.courseId, live] as const
+        return [item.courseId, await liveApi.getByCourse(lessonCourseId)] as const
       } catch {
-        return null
+        return [item.courseId, null] as const
       }
     }),
   )
-  liveMap.value = Object.fromEntries(liveEntries.filter(Boolean) as Array<readonly [number, LiveSessionResp]>)
+  liveMap.value = Object.fromEntries(liveEntries)
 
   const aiEntries = await Promise.all(
-    items.map(async (it) => {
-      const live = liveMap.value[it.courseId]
-      if (!live?.sessionId) return null
+    items.map(async (item) => {
+      const live = liveMap.value[item.courseId]
+      if (!live?.sessionId) return [item.courseId, { resultStatus: item.aiResultStatus || null, preview: item.aiPreview || null, sessionId: null }] as const
       try {
         const ai = await liveApi.aiResult(live.sessionId)
-        return [it.courseId, { resultStatus: ai.resultStatus, preview: ai.preview, sessionId: live.sessionId }] as const
+        return [item.courseId, { resultStatus: ai.resultStatus, preview: ai.preview, sessionId: live.sessionId }] as const
       } catch {
-        return [it.courseId, { resultStatus: 'PENDING', preview: null, sessionId: live.sessionId }] as const
+        return [item.courseId, { resultStatus: item.aiResultStatus || null, preview: item.aiPreview || null, sessionId: live.sessionId }] as const
       }
     }),
   )
-  aiResultMap.value = Object.fromEntries(aiEntries.filter(Boolean) as Array<readonly [number, { resultStatus?: string | null; preview?: string | null; sessionId?: number | null }]>)
+  aiResultMap.value = Object.fromEntries(aiEntries)
 
   try {
     const reminders = await liveApi.reminders()
-    const mapped: Record<number, LiveReminderItemResp> = {}
+    const mapped: Record<number, LiveReminderItemResp | null> = {}
     items.forEach((item) => {
       const lessonCourseId = lessonMap.value[item.courseId]?.id
-      if (!lessonCourseId) return
-      const reminder = reminders.find((entry) => entry.courseId === lessonCourseId)
-      if (reminder) mapped[item.courseId] = reminder
+      mapped[item.courseId] = reminders.find((entry) => entry.courseId === lessonCourseId) || null
     })
     reminderMap.value = mapped
   } catch {
@@ -1058,23 +905,16 @@ async function load() {
   try {
     const rows = await courseApi.myCourses({ page: 1, size: 50, role: role.value })
     list.value = rows
-    await Promise.all([loadUsersAndCards(rows), loadApplications(rows), loadLessons(rows)])
+    await Promise.all([loadUsersAndCards(rows), loadApplications(rows)])
+    await loadLessons(rows)
     await loadLive(rows)
-    const firstRow = rows[0]
-    if (!selectedCourseId.value && firstRow) {
-      selectedCourseId.value = firstRow.courseId
-    }
+    if (!selectedCourseId.value && rows[0]) selectedCourseId.value = rows[0].courseId
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
     loading.value = false
   }
 }
-
-onMounted(() => {
-  void load()
-  void loadEmailHint()
-})
 
 async function loadEmailHint() {
   try {
@@ -1087,39 +927,30 @@ async function loadEmailHint() {
 function goEmailSettings() {
   void router.push({ name: 'emailSettings' })
 }
+
+onMounted(() => {
+  void load()
+  void loadEmailHint()
+})
+
+onUnmounted(() => {
+  if (endModalTimer != null) {
+    window.clearInterval(endModalTimer)
+    endModalTimer = null
+  }
+})
 </script>
 
 <template>
   <div class="page-shell">
-    <section class="hero card">
-      <div class="hero-copy">
-        <div class="eyebrow">长期课程工作台</div>
-        <h1 class="hero-title">我的课程</h1>
-        <p class="hero-desc">把长期课程关系、单节课预约、聊天沟通、课堂入口和提醒放在一个页面里处理。</p>
-      </div>
-      <div class="hero-actions">
-        <button class="btn btn-primary" type="button" :disabled="!selectedCourse || !canOpenSchedule(selectedCourse)" @click="selectedCourse && openSchedule(selectedCourse)">
-          安排正式课
-        </button>
-        <button class="btn" type="button" :disabled="loading" @click="load">{{ loading ? '刷新中...' : '刷新列表' }}</button>
-      </div>
-    </section>
-
     <section v-if="reminderBanner" class="banner card">
-      <div class="banner-main">
+      <div>
         <div class="banner-title">{{ reminderBanner.headline }}</div>
-        <div class="banner-desc">
-          <template v-if="reminderBanner.latestLesson">
-            {{ reminderBanner.lessonStatusText }} · {{ reminderBanner.lessonTimeText }}
-          </template>
-          <template v-else>
-            {{ reminderBanner.liveHint }}
-          </template>
-        </div>
+        <div class="banner-desc">{{ reminderBanner.currentActionHint }}</div>
       </div>
       <div class="banner-actions">
         <button v-if="reminderBanner.roomId" class="btn" type="button" @click="goChat(reminderBanner.roomId)">进入聊天</button>
-        <button v-if="reminderBanner.live" class="btn btn-primary" type="button" @click="goLivePrepare(reminderBanner.lessonCourseId)">进入课堂</button>
+        <button v-if="reminderBanner.canEnterClassroom" class="btn btn-primary" type="button" @click="goLivePrepare(reminderBanner.latestLesson?.id)">进入课堂</button>
       </div>
     </section>
 
@@ -1131,261 +962,173 @@ function goEmailSettings() {
       <button class="btn btn-primary" type="button" @click="goEmailSettings">{{ emailHint.actionText || '去绑定邮箱' }}</button>
     </section>
 
-    <section class="metrics">
-      <div class="metric card">
-        <div class="metric-value">{{ overview.total }}</div>
-        <div class="metric-label">全部长期课程</div>
-      </div>
-      <div class="metric card">
-        <div class="metric-value">{{ overview.active }}</div>
-        <div class="metric-label">进行中关系</div>
-      </div>
-      <div class="metric card">
-        <div class="metric-value">{{ overview.waitingPay }}</div>
-        <div class="metric-label">待支付信息费</div>
-      </div>
-      <div class="metric card">
-        <div class="metric-value">{{ overview.trialing }}</div>
-        <div class="metric-label">试课阶段</div>
-      </div>
-      <div class="metric card">
-        <div class="metric-value">{{ overview.upcoming }}</div>
-        <div class="metric-label">已有具体课节</div>
-      </div>
-    </section>
-
-    <div class="toolbar card">
-      <div class="toolbar-left">
-        <button class="chip" :class="{ active: stageFilter === 'ALL' }" type="button" @click="stageFilter = 'ALL'">全部</button>
-        <button class="chip" :class="{ active: stageFilter === 'ACTIVE' }" type="button" @click="stageFilter = 'ACTIVE'">进行中</button>
-        <button class="chip" :class="{ active: stageFilter === 'WAIT_PAY' }" type="button" @click="stageFilter = 'WAIT_PAY'">待支付</button>
-        <button class="chip" :class="{ active: stageFilter === 'COMMUNICATING' }" type="button" @click="stageFilter = 'COMMUNICATING'">沟通中</button>
-        <button class="chip" :class="{ active: stageFilter === 'TRIALING' }" type="button" @click="stageFilter = 'TRIALING'">试课中</button>
-        <button class="chip" :class="{ active: stageFilter === 'TEACHING' }" type="button" @click="stageFilter = 'TEACHING'">正式上课中</button>
-        <button class="chip" :class="{ active: stageFilter === 'FINISHED' }" type="button" @click="stageFilter = 'FINISHED'">已结课</button>
-      </div>
-      <div class="toolbar-right">
-        <input v-model="search" class="search" type="search" placeholder="搜索老师、学生或课程状态" />
-      </div>
-    </div>
-
     <div v-if="error" class="hint error">{{ error }}</div>
 
     <section v-if="!loading && filteredCourses.length === 0" class="empty card">
-      <div class="empty-title">暂无符合条件的课程</div>
-      <div class="empty-desc">长期课程关系建立后，会在这里展示状态进展、沟通入口和后续上课安排。</div>
+      <div class="empty-title">暂无符合条件的合作</div>
+      <div class="empty-desc">合作建立后，会在这里看到对应的课程阶段、当前说明、课程入口与课后结果。</div>
     </section>
 
-    <section v-else class="content-grid">
-      <div class="course-column">
-        <article
-          v-for="item in filteredCourses"
-          :key="item.courseId"
-          class="course-card card"
-          :class="{ active: selectedCourse?.courseId === item.courseId }"
-          @click="selectCourse(item.courseId)"
-        >
-          <div class="course-top">
-            <div class="course-person">
-              <img v-if="item.avatar" class="avatar" :src="item.avatar" alt="" @error="markAvatarBroken(item.participantUid)" />
-              <div v-else class="avatar fallback">{{ item.participantName.slice(0, 1) }}</div>
-              <div class="person-copy">
-                <div class="person-label">{{ item.participantRoleLabel }}</div>
-                <div class="person-name">{{ item.participantName }}</div>
-                <div class="person-subtitle">{{ item.participantSubtitle }}</div>
+    <section v-else class="workspace-grid">
+      <aside class="cooperation-panel card">
+        <div class="side-head">
+          <div class="section-title strong">我的合作</div>
+          <div class="side-desc">先看合作，再点进某个合作查看全部课程。</div>
+        </div>
+        <div class="metric-strip">
+          <div class="metric-mini">
+            <strong>{{ overview.total }}</strong>
+            <span>全部合作</span>
+          </div>
+          <div class="metric-mini">
+            <strong>{{ overview.trialing }}</strong>
+            <span>试课阶段</span>
+          </div>
+          <div class="metric-mini">
+            <strong>{{ overview.upcoming }}</strong>
+            <span>有待上课程</span>
+          </div>
+        </div>
+        <div class="course-column">
+          <article
+            v-for="item in filteredCourses"
+            :key="item.courseId"
+            class="course-card"
+            :class="{ active: selectedCourse?.courseId === item.courseId }"
+            @click="selectCourse(item.courseId)"
+          >
+            <div class="course-top">
+              <div class="course-person">
+                <img v-if="item.avatar" class="avatar" :src="item.avatar" alt="" @error="markAvatarBroken(item.participantUid)" />
+                <div v-else class="avatar fallback">{{ item.participantName.slice(0, 1) }}</div>
+                <div>
+                  <div class="person-label">{{ item.participantRoleLabel }}</div>
+                  <div class="person-name">{{ item.participantName }}</div>
+                </div>
               </div>
+              <span class="status-pill" :class="statusToneClass(item.stage.tone)">{{ item.stage.label }}</span>
             </div>
-            <span class="status-pill" :class="statusToneClass(item.stage.tone)">{{ item.stage.label }}</span>
-          </div>
-
-          <div class="course-headline">{{ item.headline }}</div>
-          <div class="course-summary">{{ item.summary }}</div>
-
-          <div class="progress-row">
-            <div class="progress-meta">{{ item.progressText }}</div>
-            <div class="progress-dots">
-              <span v-for="idx in progressSteps.length" :key="idx" class="progress-dot" :class="{ filled: idx <= item.progressStep }" />
+            <div class="course-headline">{{ item.headline }}</div>
+            <div class="course-summary">{{ item.currentStateNote }}</div>
+            <div class="course-meta">{{ item.currentActionHint }}</div>
+            <div v-if="item.trialCountdown" class="trial-hint">{{ item.trialCountdown }}</div>
+            <div class="cooperation-tags">
+              <span v-if="item.latestLesson" class="mini-chip">{{ item.lessonStatusText }}</span>
+              <span v-if="item.countdownText && item.canEnterClassroom" class="mini-chip primary">{{ item.countdownText }}</span>
+              <span v-if="item.showAbnormalAttendanceConfirm" class="mini-chip warn">待确认未上课</span>
+              <span v-if="item.aiResultStatus === 'FAILED'" class="mini-chip danger">课后生成失败</span>
             </div>
-          </div>
+          </article>
+        </div>
+      </aside>
 
-          <div class="info-grid">
-            <div class="info-block">
-              <div class="info-label">长期状态</div>
-              <div class="info-value">{{ item.stageHint }}</div>
-            </div>
-            <div class="info-block">
-              <div class="info-label">最近课节</div>
-              <div class="info-value">{{ item.lessonStatusText }}</div>
-              <div class="info-sub">{{ item.lessonTimeText }}</div>
-            </div>
-          </div>
-
-          <div v-if="item.trialCountdown" class="trial-hint">{{ item.trialCountdown }}</div>
-
-          <div class="card-actions">
-            <button class="btn" type="button" :disabled="!item.roomId" @click.stop="goChat(item.roomId)">进入聊天</button>
-            <button
-              class="btn"
-              type="button"
-              :disabled="!(canOpenSchedule(item) || canViewTrialSchedule(item))"
-              @click.stop="canOpenSchedule(item) ? openSchedule(item) : goSchedule()"
-            >
-              {{ canViewTrialSchedule(item) ? '查看试课' : '约课' }}
-            </button>
-            <button class="btn" type="button" :disabled="!item.live" @click.stop="goLivePrepare(item.lessonCourseId)">课堂</button>
-            <button class="btn" type="button" @click.stop="goCourseDetail(item.courseId)">详情</button>
-            <button class="btn" type="button" :disabled="actionBusyCourseId === item.courseId" @click.stop="onPrimaryAction(item)">
-              {{ actionBusyCourseId === item.courseId ? '处理中...' : item.nextActionLabel }}
-            </button>
-          </div>
-        </article>
-      </div>
-
-      <aside v-if="selectedCourse" class="detail-panel card">
+      <main v-if="selectedCourse" class="detail-panel card">
         <div class="detail-head">
           <div>
-            <div class="detail-eyebrow">课程详情</div>
             <div class="detail-title">{{ selectedCourse.headline }}</div>
-            <div class="detail-summary">{{ selectedCourse.summary }}</div>
+            <div class="detail-summary">合作说明：试课通过后由学生确认是否通过；确认通过后进入支付与后续上课时间确认。</div>
           </div>
           <span class="status-pill" :class="statusToneClass(selectedCourse.stage.tone)">{{ selectedCourse.stage.label }}</span>
         </div>
 
-        <div class="detail-section">
-          <div class="section-title">对方信息</div>
-          <div class="participant-card">
-            <img
-              v-if="selectedCourse.avatar"
-              class="participant-avatar"
-              :src="selectedCourse.avatar"
-              alt=""
-              @error="markAvatarBroken(selectedCourse.participantUid)"
-            />
-            <div v-else class="participant-avatar fallback">{{ selectedCourse.participantName.slice(0, 1) }}</div>
-            <div class="participant-copy">
-              <div class="participant-name">{{ selectedCourse.participantName }}</div>
-              <div class="participant-role">{{ selectedCourse.participantRoleLabel }}</div>
-              <div class="participant-sub">{{ selectedCourse.participantSubtitle }}</div>
-              <div class="participant-desc">
-                {{
-                  selectedCourse.participantCard?.teacherProfile?.introduction ||
-                  selectedCourse.participantCard?.studentProfile?.demandDescription ||
-                  '资料补充后可在这里展示老师简介或学生需求说明。'
-                }}
+        <div class="summary-callout">
+          <div class="summary-label">当前说明</div>
+          <div class="summary-text">本节课是一个会议事件。进入课堂只代表进入等待态，不立即产生上课数据；只要本节课曾成功建立过一次双人实时视频，就满足“可结束课程”条件。</div>
+        </div>
+
+        <section class="detail-section">
+          <div class="section-title strong">当前课程</div>
+          <div class="section-subtitle">把当前状态、按钮规则和限制原因收在一张卡片里。</div>
+          <div class="current-lesson-card">
+            <div class="lesson-main">
+              <div>
+                <div class="lesson-title-row">
+                  <div class="lesson-time-main">{{ selectedCourse.lessonTimeText }}</div>
+                  <span class="status-pill sm" :class="statusToneClass(selectedCourse.lessonStateTone)">{{ selectedCourse.lessonStatusText }}</span>
+                </div>
+                <div class="lesson-state-line">
+                  <span v-if="selectedCourse.countdownText" class="countdown-text">{{ selectedCourse.countdownText }}</span>
+                  <span>{{ selectedCourse.currentStateNote }}</span>
+                </div>
+              </div>
+              <div class="lesson-type-pill">{{ selectedCourse.latestLesson?.lessonType === 'TRIAL' ? '试课' : '课程' }}</div>
+            </div>
+
+            <div class="rule-hint success">{{ selectedCourse.currentActionHint }}</div>
+            <div v-if="selectedCourse.showAbnormalAttendanceConfirm" class="rule-hint warn">{{ selectedCourse.abnormalAttendanceHint }}</div>
+
+            <div class="card-actions">
+              <button class="btn btn-primary" type="button" :disabled="!selectedCourse.canEnterClassroom" @click="goLivePrepare(selectedCourse.latestLesson?.id)">进入课堂</button>
+              <button class="btn" type="button" @click="goCourseDetail(selectedCourse.courseId)">查看课程详情</button>
+              <button class="btn" type="button" :disabled="!selectedCourse.canEndClassroom" @click="openEndModal(selectedCourse)">结束课程</button>
+              <span v-if="!selectedCourse.canEndClassroom" class="inline-hint">{{ selectedCourse.endBlockedReason }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="section-title strong">合作内全部课程</div>
+          <div class="section-subtitle">同一个合作下展示已预约、上课中、已结束与异常待处理的全部课节。</div>
+          <div class="lesson-list-card">
+            <div v-for="event in selectedCourse.lessonList" :key="event.id" class="lesson-row">
+              <div class="lesson-row-main">
+                <span class="mini-chip" :class="event.lessonType === 'TRIAL' ? 'violet' : 'primary'">{{ event.lessonType === 'TRIAL' ? '试课' : '正式课' }}</span>
+                <strong>{{ fmtDateTime(event.startAt) }} - {{ fmtDateTime(event.endAt, { hour: '2-digit', minute: '2-digit' }) }}</strong>
+                <span class="status-pill sm" :class="isAbnormalPendingConfirm(event, selectedCourse.live) ? 'tone-amber' : statusToneClass(lessonTone(event, selectedCourse.live))">
+                  {{ isAbnormalPendingConfirm(event, selectedCourse.live) ? '待确认未上课' : lessonStatusText(event.status) }}
+                </span>
+              </div>
+              <div class="lesson-row-sub">
+                <span v-if="isLessonEnterable(event)">在预约结束前均可进入课堂</span>
+                <span v-else-if="isAbnormalPendingConfirm(event, selectedCourse.live)">对方未到场 / 本节未正常开始，等待双方或客服确认</span>
+                <span v-else>{{ formatDuration(event.startAt, event.endAt) }}</span>
               </div>
             </div>
+            <div v-if="selectedCourse.lessonList.length === 0" class="mini-empty">当前合作还没有同步出具体课节。</div>
           </div>
-        </div>
+        </section>
 
-        <div class="detail-section">
-          <div class="section-title">长期课程进度</div>
-          <div class="phase-line">
-            <div v-for="(step, idx) in progressSteps" :key="step" class="phase-item">
-              <div class="phase-index" :class="{ active: idx + 1 <= selectedCourse.progressStep }">{{ idx + 1 }}</div>
-              <div class="phase-name">{{ step }}</div>
-            </div>
-          </div>
-          <div class="phase-note">{{ selectedCourse.stage.description }}</div>
-        </div>
-
-        <div class="detail-section">
-          <div class="section-title">单节课安排</div>
-          <div class="lesson-card">
+        <section class="detail-section">
+          <div class="section-title strong">课后结果</div>
+          <div class="result-card">
             <div class="lesson-top">
-              <span class="status-pill sm" :class="statusToneClass(selectedCourse.lessonState.tone)">{{ selectedCourse.lessonStatusText }}</span>
-              <span class="lesson-time">{{ selectedCourse.lessonTimeText }}</span>
+              <span class="status-pill sm" :class="selectedCourse.afterClassStatusTone">{{ selectedCourse.afterClassStatusLabel }}</span>
             </div>
-            <div class="lesson-desc">{{ selectedCourse.lessonSubtitle }}</div>
-            <div v-if="selectedCourse.liveBadge" class="live-box">
-              <div class="live-badge">{{ selectedCourse.liveBadge }}</div>
-              <div class="live-hint">{{ selectedCourse.liveHint }}</div>
-            </div>
+            <div class="lesson-desc">{{ selectedCourse.aiPreview || selectedCourse.afterClassHint }}</div>
             <div class="lesson-actions">
-              <button class="btn btn-primary" type="button" :disabled="!canOpenSchedule(selectedCourse)" @click="openSchedule(selectedCourse)">
-                安排正式课
-              </button>
-              <button class="btn" type="button" :disabled="!selectedCourse.roomId" @click="goChat(selectedCourse.roomId)">聊天联动</button>
-              <button class="btn" type="button" :disabled="!selectedCourse.live" @click="goLivePrepare(selectedCourse.lessonCourseId)">进入课堂</button>
+              <button class="btn" type="button" :disabled="selectedCourse.afterClassStatusLabel !== '课后总结已生成'" @click="goLessonAiSummary(selectedCourse)">查看课后总结</button>
+              <button v-if="selectedCourse.aiResultStatus === 'FAILED'" class="btn" type="button" @click="retryAiResult(selectedCourse)">重试生成</button>
               <button class="btn" type="button" :disabled="!selectedCourse.live" @click="openLiveTimeline(selectedCourse.courseId)">课堂详情</button>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="detail-section">
-          <div class="section-title">课堂 AI 结果</div>
-          <div class="lesson-card">
-            <div class="lesson-top">
-              <span class="status-pill sm" :class="selectedCourse.aiResultStatus === 'READY' ? 'tone-emerald' : 'tone-slate'">
-                {{ selectedCourse.aiResultStatus === 'READY' ? 'AI 总结已生成' : selectedCourse.aiResultStatus === 'FAILED' ? 'AI 生成失败' : selectedCourse.aiResultStatus === 'OFF' ? '未开启 AI' : 'AI 正在整理中' }}
-              </span>
-            </div>
-            <div class="lesson-desc">{{ selectedCourse.aiPreview || '课程结束后，AI 会自动整理课后总结与报告草稿。' }}</div>
-            <div class="lesson-actions">
-              <button class="btn" type="button" :disabled="!selectedCourse.live?.sessionId && !selectedCourse.lessonCourseId" @click="goLessonAiSummary(selectedCourse)">查看课后总结</button>
-              <button class="btn" type="button" :disabled="!selectedCourse.courseId" @click="goCourseDetail(selectedCourse.courseId)">查看课程详情</button>
-            </div>
+        <section class="detail-section">
+          <div class="section-title strong">流程说明</div>
+          <div class="flow-note">
+            当前阶段：{{ selectedCourse.stage.description }}<br />
+            业务规则：课程在预约结束前允许进入；超过结束时间后禁止新进入，但已经在课堂中的用户可继续停留；若整节课未建立双人实时视频，则进入“待确认未上课/异常待处理”。
           </div>
-        </div>
-
-        <div class="detail-section">
-          <div class="section-title">近期安排</div>
-          <div v-if="upcomingLessons.length === 0" class="mini-empty">暂无已确认课节，可先发起约课。</div>
-          <div v-else class="agenda-list">
-            <button
-              v-for="item in upcomingLessons"
-              :key="item.courseId"
-              class="agenda-item"
-              type="button"
-              @click="selectCourse(item.courseId)"
-            >
-              <div class="agenda-time">
-                {{
-                  item.latestLesson
-                    ? fmtDateTime(item.latestLesson.startAt)
-                    : fmtDateTime(item.live?.scheduledStartAt || item.reminder?.scheduledStartAt || '')
-                }}
-              </div>
-              <div class="agenda-title">{{ item.headline }}</div>
-              <div class="agenda-sub">{{ item.lessonStatusText }} · {{ item.participantName }}</div>
-            </button>
-          </div>
-        </div>
+        </section>
 
         <div class="detail-actions">
           <button class="btn" type="button" :disabled="!selectedCourse.roomId" @click="goChat(selectedCourse.roomId)">进入聊天</button>
-          <button class="btn" type="button" @click="goCourseDetail(selectedCourse.courseId)">课程详情</button>
+          <button class="btn" type="button" :disabled="!canOpenSchedule(selectedCourse)" @click="selectedCourse && openSchedule(selectedCourse)">安排正式课</button>
           <button class="btn" type="button" @click="goSchedule">查看日程表</button>
-          <button
-            v-if="canConfirmTrialPass(selectedCourse.raw)"
-            class="btn btn-primary"
-            type="button"
-            :disabled="actionBusyCourseId === selectedCourse.courseId"
-            @click="submitTrialPass(selectedCourse.courseId)"
-          >
-            试课合适
-          </button>
-          <button
-            v-if="canSubmitTrialFail(selectedCourse.raw)"
-            class="btn btn-danger"
-            type="button"
-            @click="openTrialRefund(selectedCourse.courseId)"
-          >
-            试课不合适
+          <button v-if="canConfirmTrialPass(selectedCourse.raw)" class="btn btn-primary" type="button" :disabled="actionBusyCourseId === selectedCourse.courseId" @click="submitTrialPass(selectedCourse.courseId)">试课合适</button>
+          <button v-if="canSubmitTrialFail(selectedCourse.raw)" class="btn btn-danger" type="button" @click="openTrialRefund(selectedCourse.courseId)">试课不合适</button>
+          <button v-if="selectedCourse.stage.key === 'WAIT_PAY'" class="btn" type="button" :disabled="actionBusyCourseId === selectedCourse.courseId" @click="openApplicationFlow(selectedCourse)">
+            {{ actionBusyCourseId === selectedCourse.courseId ? '处理中...' : '去支付' }}
           </button>
         </div>
-      </aside>
+      </main>
     </section>
 
     <div v-if="scheduleOpen" class="mask" @click.self="closeSchedule">
       <div class="modal card schedule-modal">
-        <div class="modal-header">
-          <div>
-            <div class="m-title">预约课程</div>
-            <div class="m-desc">像飞书预约会议一样选择时间，发送后会在聊天中同步课程卡片，并等待对方确认。</div>
-          </div>
-        </div>
+        <div class="m-title">预约课程</div>
+        <div class="m-desc">像预约会议一样选择时间，发送后会在聊天中同步课程卡片，并等待对方确认。</div>
         <div v-if="scheduleError" class="m-error">{{ scheduleError }}</div>
-
         <div class="field-grid">
           <div class="field">
             <div class="lab">课程名称</div>
@@ -1400,46 +1143,29 @@ function goEmailSettings() {
             </select>
           </div>
         </div>
-
         <div class="field-grid">
           <div class="field">
             <div class="lab">开始时间</div>
-            <input
-              class="ipt"
-              type="datetime-local"
-              :value="toLocalDateTimeInputValue(scheduleStartAt)"
-              @change="applyScheduleStartInput(($event.target as HTMLInputElement).value)"
-            />
+            <input class="ipt" type="datetime-local" :value="toLocalDateTimeInputValue(scheduleStartAt)" @change="applyScheduleStartInput(($event.target as HTMLInputElement).value)" />
           </div>
           <div class="field">
             <div class="lab">结束时间</div>
-            <input
-              class="ipt"
-              type="datetime-local"
-              :value="toLocalDateTimeInputValue(scheduleEndAt)"
-              @change="applyScheduleEndInput(($event.target as HTMLInputElement).value)"
-            />
+            <input class="ipt" type="datetime-local" :value="toLocalDateTimeInputValue(scheduleEndAt)" @change="applyScheduleEndInput(($event.target as HTMLInputElement).value)" />
           </div>
         </div>
-
         <div class="field">
           <div class="lab">课程备注</div>
           <textarea v-model="scheduleDescription" class="txt" rows="4" placeholder="填写本节课想讲的内容、教材、作业或会议说明" />
         </div>
-
         <div class="booking-summary">
           <div class="booking-title">预约摘要</div>
           <div class="booking-row"><span>时间</span><span>{{ fmtDateTime(scheduleStartAt) }} - {{ fmtDateTime(scheduleEndAt, { hour: '2-digit', minute: '2-digit' }) }}</span></div>
           <div class="booking-row"><span>时长</span><span>{{ formatDuration(scheduleStartAt, scheduleEndAt) }}</span></div>
           <div class="booking-row"><span>提醒</span><span>上课前 {{ scheduleReminderMinutes }} 分钟</span></div>
-          <div class="booking-row"><span>同步</span><span>发送到聊天窗口，并等待对方确认</span></div>
         </div>
-
         <div class="m-ops">
           <button class="btn" type="button" :disabled="scheduleBusy" @click="closeSchedule">取消</button>
-          <button class="btn btn-primary" type="button" :disabled="scheduleBusy" @click="submitScheduleCreate">
-            {{ scheduleBusy ? '发送中...' : '发送预约' }}
-          </button>
+          <button class="btn btn-primary" type="button" :disabled="scheduleBusy" @click="submitScheduleCreate">{{ scheduleBusy ? '发送中...' : '发送预约' }}</button>
         </div>
       </div>
     </div>
@@ -1447,11 +1173,7 @@ function goEmailSettings() {
     <div v-if="modalOpen" class="mask" @click.self="closeTrialRefund">
       <div class="modal card">
         <div class="m-title">试课不合适</div>
-        <div class="m-desc">
-          {{ selectedCourse?.raw.teachingMode === 'OFFLINE'
-            ? '线下试课不通过需提交微信聊天记录滚动并删除拉黑的录屏，管理员审核通过后退还 80% 信息费并删除录屏。'
-            : '线上试课不合适会直接结束课程并关闭聊天；如符合规则，教师可后续申请退还 80% 信息费。' }}
-        </div>
+        <div class="m-desc">线上试课不合适会结束课程并关闭聊天；如符合规则，教师可后续申请退还 80% 信息费。</div>
         <div class="m-form">
           <textarea v-model="modalReason" class="txt" rows="4" placeholder="请填写试课不通过说明"></textarea>
           <template v-if="selectedCourse?.raw.teachingMode === 'OFFLINE'">
@@ -1464,9 +1186,7 @@ function goEmailSettings() {
         <div v-if="modalErr" class="m-error">{{ modalErr }}</div>
         <div class="m-ops">
           <button class="btn" type="button" :disabled="modalBusy" @click="closeTrialRefund">取消</button>
-          <button class="btn btn-danger" type="button" :disabled="modalBusy" @click="submitTrialRefund">
-            {{ modalBusy ? '提交中...' : '提交申请' }}
-          </button>
+          <button class="btn btn-danger" type="button" :disabled="modalBusy" @click="submitTrialRefund">{{ modalBusy ? '提交中...' : '提交申请' }}</button>
         </div>
       </div>
     </div>
@@ -1492,6 +1212,21 @@ function goEmailSettings() {
         </div>
       </div>
     </div>
+
+    <div v-if="endModalOpen" class="mask" @click.self="closeEndModal">
+      <div class="modal card end-modal">
+        <div class="m-title">结束课堂确认</div>
+        <div class="m-desc">双方都可以结束课堂，但必须满足“本节课曾成功建立过一次双人实时视频”的条件。为避免误触，确认按钮需等待 3 秒后才可点击。</div>
+        <div class="end-callout">请确认本节课已完成。点击确认后将开始生成课后总结。</div>
+        <div v-if="endModalErr" class="m-error">{{ endModalErr }}</div>
+        <div class="m-ops">
+          <button class="btn" type="button" :disabled="endModalBusy" @click="closeEndModal">取消</button>
+          <button class="btn btn-primary" type="button" :disabled="endModalBusy || endModalCountdown > 0" @click="confirmEndLesson">
+            {{ endModalBusy ? '处理中...' : endModalCountdown > 0 ? `确认结束（${endModalCountdown}s）` : '确认结束' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1504,6 +1239,7 @@ function goEmailSettings() {
 .hero {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 16px;
   padding: 24px;
   border-radius: 24px;
@@ -1513,13 +1249,11 @@ function goEmailSettings() {
 }
 
 .eyebrow,
-.detail-eyebrow,
 .person-label,
-.info-label,
 .section-title,
-.metric-label,
 .lab,
-.booking-title {
+.booking-title,
+.summary-label {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1532,83 +1266,65 @@ function goEmailSettings() {
   line-height: 1.05;
 }
 
-.hero-desc {
-  margin: 10px 0 0;
-  max-width: 640px;
+.hero-desc,
+.banner-desc,
+.side-desc,
+.course-summary,
+.course-meta,
+.detail-summary,
+.summary-text,
+.section-subtitle,
+.lesson-row-sub,
+.flow-note,
+.lesson-desc,
+.m-desc,
+.timeline-meta,
+.timeline-empty,
+.empty-desc,
+.hint,
+.inline-hint {
   color: var(--muted);
 }
 
-.hero-actions {
+.hero-actions,
+.banner-actions,
+.toolbar-left,
+.lesson-actions,
+.detail-actions,
+.card-actions,
+.m-ops {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
-.banner {
+.banner,
+.email-course-banner,
+.toolbar {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  padding: 18px 20px;
-  border-radius: 18px;
+  padding: 16px 18px;
+}
+
+.toolbar {
+  align-items: flex-start;
+}
+
+.banner {
   border-color: rgba(0, 190, 189, 0.22);
   background: linear-gradient(120deg, rgba(0, 190, 189, 0.08), rgba(255, 255, 255, 0.95));
+}
+
+.email-course-banner {
+  border-color: rgba(0, 181, 120, 0.2);
+  background: linear-gradient(120deg, rgba(0, 181, 120, 0.1), rgba(255, 248, 232, 0.9));
 }
 
 .banner-title {
   font-size: 18px;
   font-weight: 800;
-}
-
-.banner-desc {
-  margin-top: 6px;
-  color: var(--muted);
-}
-
-.banner-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.email-course-banner {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: center;
-  padding: 18px 20px;
-  border-radius: 18px;
-  border-color: rgba(0, 181, 120, 0.2);
-  background: linear-gradient(120deg, rgba(0, 181, 120, 0.1), rgba(255, 248, 232, 0.9));
-}
-
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.metric {
-  padding: 18px;
-  border-radius: 18px;
-}
-
-.metric-value {
-  font-size: 28px;
-  font-weight: 800;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px;
-}
-
-.toolbar-left {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .chip {
@@ -1627,7 +1343,7 @@ function goEmailSettings() {
 }
 
 .search {
-  width: 280px;
+  width: 320px;
   height: 40px;
   padding: 0 14px;
   border-radius: 999px;
@@ -1636,70 +1352,102 @@ function goEmailSettings() {
   outline: none;
 }
 
-.content-grid {
+.workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
-.course-column {
+.cooperation-panel,
+.detail-panel {
+  padding: 22px;
+  border-radius: 28px;
+}
+
+.side-head,
+.course-column,
+.detail-panel,
+.detail-section,
+.course-card,
+.current-lesson-card,
+.result-card,
+.lesson-list-card {
   display: grid;
   gap: 12px;
 }
 
-.course-card {
+.metric-strip {
   display: grid;
-  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric-mini {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.metric-mini strong {
+  font-size: 24px;
+}
+
+.metric-mini span,
+.trial-hint,
+.summary-label,
+.section-subtitle,
+.person-label,
+.m-hint,
+.lesson-row-sub,
+.inline-hint {
+  font-size: 13px;
+}
+
+.course-card {
   padding: 18px;
-  border-radius: 20px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
   cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .course-card:hover,
 .course-card.active {
+  border-color: rgba(0, 190, 189, 0.28);
+  box-shadow: 0 18px 40px rgba(0, 190, 189, 0.1);
   transform: translateY(-1px);
-  border-color: rgba(0, 190, 189, 0.26);
-  box-shadow: 0 16px 32px rgba(0, 190, 189, 0.1);
 }
 
 .course-top,
-.lesson-top,
+.course-person,
 .detail-head,
-.progress-row,
-.booking-row,
-.m-ops,
-.card-actions,
-.detail-actions {
+.lesson-main,
+.lesson-title-row,
+.lesson-top,
+.lesson-row-main {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
-.course-person,
-.participant-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.course-top,
+.detail-head,
+.lesson-main,
+.lesson-top {
+  justify-content: space-between;
 }
 
-.avatar,
-.participant-avatar {
-  width: 52px;
-  height: 52px;
+.avatar {
+  width: 50px;
+  height: 50px;
   border-radius: 16px;
   object-fit: cover;
   background: linear-gradient(135deg, rgba(0, 190, 189, 0.18), rgba(31, 35, 41, 0.08));
-}
-
-.participant-avatar {
-  width: 64px;
-  height: 64px;
 }
 
 .fallback {
@@ -1709,33 +1457,16 @@ function goEmailSettings() {
   color: #0d7e7d;
 }
 
-.person-name,
-.participant-name {
+.person-name {
   font-size: 16px;
   font-weight: 800;
-}
-
-.person-subtitle,
-.course-summary,
-.detail-summary,
-.participant-sub,
-.participant-desc,
-.phase-note,
-.lesson-desc,
-.live-hint,
-.m-desc,
-.timeline-meta,
-.timeline-empty,
-.empty-desc,
-.hint {
-  color: var(--muted);
 }
 
 .course-headline,
 .detail-title {
   font-size: 22px;
   font-weight: 800;
-  line-height: 1.18;
+  line-height: 1.16;
 }
 
 .status-pill {
@@ -1749,7 +1480,7 @@ function goEmailSettings() {
 }
 
 .status-pill.sm {
-  height: 26px;
+  height: 28px;
 }
 
 .tone-slate {
@@ -1782,137 +1513,117 @@ function goEmailSettings() {
   color: #be123c;
 }
 
-.progress-meta,
-.info-sub,
-.trial-hint,
-.participant-role,
-.agenda-sub,
-.m-hint {
-  font-size: 12px;
-  color: rgba(31, 35, 41, 0.58);
-}
-
-.progress-dots {
-  display: flex;
-  gap: 6px;
-}
-
-.progress-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: rgba(31, 35, 41, 0.12);
-}
-
-.progress-dot.filled {
-  background: var(--primary);
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.info-block {
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(31, 35, 41, 0.03);
-}
-
-.info-value {
-  margin-top: 6px;
-  font-weight: 700;
-}
-
 .trial-hint {
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(124, 58, 237, 0.08);
 }
 
-.card-actions,
-.lesson-actions,
-.detail-actions,
-.banner-actions {
+.cooperation-tags {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
-.detail-panel {
-  position: sticky;
-  top: calc(var(--app-topbar-height) + 18px);
-  display: grid;
-  gap: 18px;
-  padding: 20px;
-  border-radius: 22px;
+.mini-chip,
+.lesson-type-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(31, 35, 41, 0.06);
+  color: rgba(31, 35, 41, 0.82);
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.detail-section {
-  display: grid;
-  gap: 12px;
+.mini-chip.primary,
+.lesson-type-pill {
+  background: rgba(0, 190, 189, 0.12);
+  color: #0d7e7d;
 }
 
-.participant-card,
-.lesson-card,
+.mini-chip.warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.mini-chip.danger {
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
+}
+
+.mini-chip.violet {
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.summary-callout,
+.current-lesson-card,
+.lesson-list-card,
+.result-card,
+.flow-note,
 .booking-summary {
-  padding: 16px;
-  border-radius: 18px;
+  padding: 18px;
+  border-radius: 22px;
   background: rgba(31, 35, 41, 0.035);
 }
 
-.phase-line {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+.summary-callout {
+  border: 1px solid rgba(14, 165, 233, 0.12);
 }
 
-.phase-item {
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  text-align: center;
+.summary-text,
+.flow-note {
+  line-height: 1.7;
 }
 
-.phase-index {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: rgba(31, 35, 41, 0.08);
+.lesson-time-main {
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.lesson-state-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.countdown-text {
+  color: var(--primary);
   font-weight: 700;
 }
 
-.phase-index.active {
-  background: var(--primary);
-  color: #fff;
-}
-
-.phase-name,
-.agenda-time,
-.live-badge {
-  font-weight: 700;
-}
-
-.live-box {
-  margin-top: 12px;
-  padding: 12px;
+.rule-hint {
+  padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(0, 190, 189, 0.1);
+  line-height: 1.6;
 }
 
-.agenda-list {
-  display: grid;
+.rule-hint.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #166534;
+}
+
+.rule-hint.warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a6700;
+}
+
+.lesson-list-card {
   gap: 10px;
 }
 
-.agenda-item {
-  text-align: left;
-  padding: 12px 14px;
+.lesson-row {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .empty,
@@ -1958,149 +1669,99 @@ function goEmailSettings() {
   width: min(760px, 100%);
 }
 
-.m-title {
-  font-size: 18px;
-  font-weight: 800;
+.end-modal {
+  width: min(560px, 100%);
 }
 
 .field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
+  gap: 14px;
 }
 
 .field,
 .m-form {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
 }
 
 .ipt,
-.txt {
+.input,
+.txt,
+.file {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.95);
-  outline: none;
-}
-
-.ipt {
-  height: 44px;
-  padding: 0 14px;
-}
-
-.txt {
   padding: 12px 14px;
-  resize: vertical;
-  min-height: 110px;
+  background: #fff;
 }
 
-.booking-summary {
-  margin-top: 16px;
-  display: grid;
-  gap: 10px;
+.booking-row {
+  justify-content: space-between;
 }
 
-.booking-row span:last-child {
-  color: rgba(31, 35, 41, 0.82);
-  font-weight: 700;
-}
-
-.file {
-  width: 100%;
+.m-title {
+  font-size: 22px;
+  font-weight: 800;
 }
 
 .m-error {
-  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(244, 63, 94, 0.12);
   color: #be123c;
 }
 
 .timeline-list {
-  margin-top: 14px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .timeline-item {
-  display: grid;
-  grid-template-columns: 14px 1fr;
-  gap: 10px;
-  align-items: start;
+  display: flex;
+  gap: 12px;
 }
 
 .timeline-dot {
   width: 10px;
   height: 10px;
+  margin-top: 8px;
   border-radius: 999px;
-  background: #0f766e;
-  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
-  margin-top: 5px;
-}
-
-.timeline-content {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(15, 118, 110, 0.06);
+  background: var(--primary);
 }
 
 .timeline-title {
   font-weight: 700;
 }
 
-@media (max-width: 1100px) {
-  .metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.end-callout {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #9a6700;
+  line-height: 1.6;
+}
 
-  .content-grid {
+@media (max-width: 1100px) {
+  .workspace-grid {
     grid-template-columns: 1fr;
   }
 
-  .detail-panel {
-    position: static;
-  }
-}
-
-@media (max-width: 760px) {
-  .hero,
-  .banner,
   .toolbar {
     flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .hero-actions,
-  .banner-actions,
-  .toolbar-right {
-    width: 100%;
+    align-items: stretch;
   }
 
   .search {
     width: 100%;
   }
 
-  .metrics,
-  .field-grid,
-  .info-grid,
-  .phase-line {
-    grid-template-columns: 1fr;
-  }
-
   .course-top,
-  .lesson-top,
   .detail-head,
-  .progress-row {
+  .lesson-main,
+  .lesson-top {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .modal,
-  .schedule-modal,
-  .timeline-modal {
-    width: 100%;
-    padding: 16px;
   }
 }
 </style>

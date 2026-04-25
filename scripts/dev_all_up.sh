@@ -65,6 +65,15 @@ LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
 mkdir -p "$LOG_DIR" "$PID_DIR"
 
+OS_NAME="$(uname -s 2>/dev/null || echo unknown)"
+case "$OS_NAME" in
+  Darwin)
+    # Docker Desktop on macOS cannot run some Linux host-observability containers reliably.
+    INFRA_CONTAINERS="$(printf '%s\n' "$INFRA_CONTAINERS" | tr ' ' '\n' | grep -Ev '^(cadvisor|node-exporter|promtail)$' | tr '\n' ' ' | xargs)"
+    echo "[dev_all_up] 检测到 macOS，默认跳过 cadvisor/node-exporter/promtail"
+    ;;
+esac
+
 nacos_addr_host() {
   echo "$1" | awk -F: '{print $1}'
 }
@@ -103,22 +112,23 @@ ensure_nacos_server_addr() {
 
   if http_endpoint_reachable "$LOCAL_NACOS_SERVER_ADDR"; then
     NACOS_SERVER_ADDR="$LOCAL_NACOS_SERVER_ADDR"
-    echo "[dev_all_up] 使用本机 Nacos：$NACOS_SERVER_ADDR"
+    echo "[dev_all_up] 本地应用将连接本机 Nacos：$NACOS_SERVER_ADDR"
     return 0
   fi
 
   if http_endpoint_reachable "$TUNNELED_NACOS_SERVER_ADDR"; then
     NACOS_SERVER_ADDR="$TUNNELED_NACOS_SERVER_ADDR"
-    echo "[dev_all_up] 使用现有本地 Nacos 隧道：$NACOS_SERVER_ADDR"
+    echo "[dev_all_up] 本地应用仍运行在本机；仅 Nacos 通过现有本地隧道访问远端 dev：$NACOS_SERVER_ADDR"
     return 0
   fi
 
   case "$AUTO_NACOS_TUNNEL" in
     auto|always)
-      echo "[dev_all_up] 本机未检测到可用 Nacos，尝试建立本地 Nacos 隧道..."
+      echo "[dev_all_up] 本地应用将运行在本机，但本机未检测到可用 Nacos。"
+      echo "[dev_all_up] 尝试建立本地 Nacos 隧道，用于访问远端 dev 配置中心..."
       bash scripts/nacos_tunnel.sh start
       NACOS_SERVER_ADDR="$TUNNELED_NACOS_SERVER_ADDR"
-      echo "[dev_all_up] 使用隧道 Nacos：$NACOS_SERVER_ADDR"
+      echo "[dev_all_up] 本地应用仍运行在本机；仅 Nacos 通过新建隧道访问远端 dev：$NACOS_SERVER_ADDR"
       ;;
     never)
       echo "[dev_all_up] 本机未检测到可用 Nacos，且 AUTO_NACOS_TUNNEL=never"
@@ -133,6 +143,9 @@ ensure_nacos_server_addr() {
 }
 
 ensure_nacos_server_addr
+
+echo "[dev_all_up] 应用进程启动位置：本机"
+echo "[dev_all_up] 配置中心访问地址：$NACOS_SERVER_ADDR"
 
 export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE LIVEKIT_API_KEY LIVEKIT_API_SECRET LIVEKIT_WS_URL OPS_VERIFY_TOKEN DEV_EXPOSE_SMS_CODE
 SPRING_APPLICATION_JSON=$(cat <<EOF

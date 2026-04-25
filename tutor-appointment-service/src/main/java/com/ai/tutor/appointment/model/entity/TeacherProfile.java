@@ -87,6 +87,9 @@ public class TeacherProfile {
 
     private LocalDateTime eduVerifyTime;
 
+    /** 首页星级教师标记 0否 1是 */
+    private Integer homeStarTeacher;
+
     /** 状态 1正常 0禁用 */
     private Integer status;
 

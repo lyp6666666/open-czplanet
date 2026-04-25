@@ -8,7 +8,7 @@ import type { ScheduleEventVO, UserSimpleVO } from '@/api/types'
 
 type ViewMode = 'month' | 'week' | 'day'
 
-const view = ref<ViewMode>('month')
+const view = ref<ViewMode>('week')
 const cursorDate = ref(new Date())
 const router = useRouter()
 
@@ -84,6 +84,14 @@ function formatDate(d: Date) {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
 }
 
+function formatMonthLabel(d: Date) {
+  return `${d.getFullYear()}年${d.getMonth() + 1}月`
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
 function formatHm(ms: number) {
   const d = new Date(ms)
   const hh = String(d.getHours()).padStart(2, '0')
@@ -115,8 +123,10 @@ async function loadEvents() {
     events.value = await scheduleApi.listEvents({ startAt: range.value.startAt, endAt: range.value.endAt, includePending: true })
     const liveEntries = await Promise.all(
       events.value.map(async (it) => {
+        const courseId = Number(it.courseId || 0)
+        if (!(courseId > 0)) return null
         try {
-          const live = await liveApi.getByCourse(it.id)
+          const live = await liveApi.getByCourse(courseId)
           return [it.id, live] as const
         } catch {
           return null
@@ -141,8 +151,9 @@ function liveStatusLabel(eventId: number) {
   return ''
 }
 
-function openLivePrepare(eventId: number) {
-  void router.push({ name: 'livePrepare', params: { courseId: String(eventId) } })
+function openLivePrepare(courseId?: number | null) {
+  if (!(courseId && courseId > 0)) return
+  void router.push({ name: 'livePrepare', params: { courseId: String(courseId) } })
 }
 
 async function openEventDetail(event: ScheduleEventVO) {
@@ -152,7 +163,11 @@ async function openEventDetail(event: ScheduleEventVO) {
   detailTitle.value = event.title
   detailTimeline.value = []
   try {
-    const live = liveMap.value[event.id] || (await liveApi.getByCourse(event.id))
+    if (!(event.courseId && event.courseId > 0)) {
+      detailError.value = '当前课节还未关联课程'
+      return
+    }
+    const live = liveMap.value[event.id] || (await liveApi.getByCourse(event.courseId))
     if (!live.sessionId) {
       detailError.value = '当前课程尚未生成课堂详情'
       return
@@ -312,6 +327,31 @@ const weekDays = computed(() => {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i))
 })
 
+const selectedDayEvents = computed(() => eventsOnDay(cursorDate.value))
+
+const selectedDayAcceptedCount = computed(() => selectedDayEvents.value.filter((it) => it.status === 'ACCEPTED').length)
+
+const selectedDayPendingCount = computed(() => selectedDayEvents.value.filter((it) => it.status === 'PENDING').length)
+
+const selectedDayMinutes = computed(() =>
+  selectedDayEvents.value.reduce((sum, it) => sum + Math.max(0, Math.round((it.endAt - it.startAt) / 60000)), 0),
+)
+
+const selectedDayHoursText = computed(() => {
+  const hours = selectedDayMinutes.value / 60
+  if (!hours) return '暂无安排'
+  if (Number.isInteger(hours)) return `${hours}h`
+  return `${hours.toFixed(1)}h`
+})
+
+const currentRangeLabel = computed(() => {
+  if (view.value === 'month') return formatMonthLabel(cursorDate.value)
+  if (view.value === 'day') return `${formatDate(cursorDate.value)} · 今日安排`
+  const start = weekDays.value[0]!
+  const end = weekDays.value[weekDays.value.length - 1]!
+  return `${formatDate(start)} - ${formatDate(end)}`
+})
+
 type PlacedEvent = {
   event: ScheduleEventVO
   top: number
@@ -385,123 +425,448 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 
 <template>
   <div class="page">
-    <div class="head card">
-      <div class="left">
-        <button class="btn" type="button" @click="onToday">今天</button>
-        <button class="btn" type="button" @click="onPrev">‹</button>
-        <button class="btn" type="button" @click="onNext">›</button>
-        <div class="title">{{ formatDate(cursorDate) }}</div>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">
+          Schedule Studio
+        </p>
+        <h1 class="hero-title">
+          让排课更像在看一张真正可用的日程板
+        </h1>
+        <p class="hero-desc">
+          左侧快速浏览整月节奏，右侧专注当天或本周的详细安排，减少无关信息，让课程排布和课堂状态一眼看清。
+        </p>
       </div>
-      <div class="right">
-        <div class="seg">
-          <button class="seg-btn" :class="{ on: view === 'day' }" type="button" @click="view = 'day'">日</button>
-          <button class="seg-btn" :class="{ on: view === 'week' }" type="button" @click="view = 'week'">周</button>
-          <button class="seg-btn" :class="{ on: view === 'month' }" type="button" @click="view = 'month'">月</button>
-        </div>
-        <button class="btn btn-primary" type="button" @click="openCreate()">创建日程</button>
-      </div>
+      <button
+        class="btn btn-primary hero-action"
+        type="button"
+        @click="openCreate()"
+      >
+        创建日程
+      </button>
+    </section>
+
+    <div
+      v-if="error"
+      class="hint error"
+    >
+      {{ error }}
     </div>
 
-    <div v-if="error" class="hint error">{{ error }}</div>
-
-    <div v-if="view === 'month'" class="card cal">
-      <div class="week-head">
-        <div class="w">一</div>
-        <div class="w">二</div>
-        <div class="w">三</div>
-        <div class="w">四</div>
-        <div class="w">五</div>
-        <div class="w">六</div>
-        <div class="w">日</div>
-      </div>
-      <div class="grid">
-        <div
-          v-for="d in monthDays"
-          :key="d.date.toISOString()"
-          class="cell"
-          :class="{ dim: !d.inMonth }"
-          @click="cursorDate = d.date; view = 'day'"
-        >
-          <div class="day-num">{{ d.date.getDate() }}</div>
-          <div class="items">
-            <div v-for="ev in eventsOnDay(d.date).slice(0, 3)" :key="ev.id" class="item" :title="ev.title">
-              <span class="t">{{ formatHm(ev.startAt) }}</span>
-              <span class="n">{{ ev.title }}</span>
-              <span v-if="liveStatusLabel(ev.id)" class="live-flag">{{ liveStatusLabel(ev.id) }}</span>
-              <button v-if="liveMap[ev.id]" class="mini-link" type="button" @click.stop="openEventDetail(ev)">详情</button>
+    <section class="board">
+      <aside class="sidebar card">
+        <div class="sidebar-head">
+          <div>
+            <div class="panel-kicker">
+              月视图
             </div>
-            <div v-if="eventsOnDay(d.date).length > 3" class="more">+{{ eventsOnDay(d.date).length - 3 }}</div>
+            <div class="panel-title">
+              {{ formatMonthLabel(cursorDate) }}
+            </div>
+          </div>
+          <div class="panel-nav">
+            <button
+              class="icon-btn"
+              type="button"
+              @click="cursorDate = addMonths(cursorDate, -1)"
+            >
+              ‹
+            </button>
+            <button
+              class="icon-btn"
+              type="button"
+              @click="cursorDate = addMonths(cursorDate, 1)"
+            >
+              ›
+            </button>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div v-else class="card cal">
-      <div class="time-head">
-        <div class="time-col" />
-        <div class="days" :style="{ gridTemplateColumns: view === 'week' ? 'repeat(7, 1fr)' : '1fr' }">
-          <div v-for="d in (view === 'week' ? weekDays : [startOfDay(cursorDate)])" :key="d.toISOString()" class="day">
-            <div class="day-title">{{ d.getMonth() + 1 }}/{{ d.getDate() }}</div>
-          </div>
+        <div class="mini-weekdays">
+          <span
+            v-for="label in ['一', '二', '三', '四', '五', '六', '日']"
+            :key="label"
+          >{{ label }}</span>
         </div>
-      </div>
-      <div class="time-body">
-        <div class="time-col">
-          <div v-for="h in DAY_END_HOUR - DAY_START_HOUR" :key="h" class="hour">{{ String(h + DAY_START_HOUR).padStart(2, '0') }}:00</div>
-        </div>
-        <div class="days" :style="{ gridTemplateColumns: view === 'week' ? 'repeat(7, 1fr)' : '1fr' }">
-          <div
-            v-for="d in (view === 'week' ? weekDays : [startOfDay(cursorDate)])"
-            :key="d.toISOString()"
-            class="day-col"
-            @dblclick="openCreate(d)"
+
+        <div class="mini-grid">
+          <button
+            v-for="d in monthDays"
+            :key="d.date.toISOString()"
+            class="mini-day"
+            :class="{
+              out: !d.inMonth,
+              selected: isSameDay(d.date, cursorDate),
+              today: isSameDay(d.date, new Date()),
+              busy: eventsOnDay(d.date).length > 0,
+            }"
+            type="button"
+            @click="
+              cursorDate = d.date;
+              if (view === 'month') view = 'day'
+            "
           >
-            <div class="slots">
-              <div v-for="h in DAY_END_HOUR - DAY_START_HOUR" :key="h" class="slot" />
+            <span>{{ d.date.getDate() }}</span>
+            <i v-if="eventsOnDay(d.date).length > 0" />
+          </button>
+        </div>
+
+        <div class="sidebar-summary">
+          <div class="summary-head">
+            <div>
+              <div class="panel-kicker">
+                当前选中
+              </div>
+              <div class="summary-date">
+                {{ formatDate(cursorDate) }}
+              </div>
             </div>
-            <div class="events">
-              <div
-                v-for="p in layoutDayEvents(events, d)"
-                :key="p.event.id"
-                class="event"
-                :class="p.event.status.toLowerCase()"
-                :style="{ top: `${p.top}px`, height: `${p.height}px`, left: `${p.leftPct}%`, width: `${p.widthPct}%` }"
-                @click.stop="liveMap[p.event.id] ? openLivePrepare(p.event.id) : void 0"
+            <button
+              class="btn btn-muted summary-today"
+              type="button"
+              @click="onToday"
+            >
+              今天
+            </button>
+          </div>
+
+          <div class="stats">
+            <div class="stat-card">
+              <span class="stat-label">总安排</span>
+              <strong>{{ selectedDayEvents.length }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">已确认</span>
+              <strong>{{ selectedDayAcceptedCount }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">待响应</span>
+              <strong>{{ selectedDayPendingCount }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">占用时长</span>
+              <strong>{{ selectedDayHoursText }}</strong>
+            </div>
+          </div>
+
+          <div class="agenda-list">
+            <div
+              v-if="selectedDayEvents.length === 0"
+              class="agenda-empty"
+            >
+              这一天暂时没有课程安排，可以直接在右侧空白区域双击创建。
+            </div>
+            <button
+              v-for="ev in selectedDayEvents.slice(0, 4)"
+              :key="ev.id"
+              class="agenda-item"
+              type="button"
+              @click="liveMap[ev.id] ? openEventDetail(ev) : void 0"
+            >
+              <span class="agenda-time">{{ formatHm(ev.startAt) }}</span>
+              <span class="agenda-main">
+                <strong>{{ ev.title }}</strong>
+                <em>{{ ev.status === 'PENDING' ? '待确认' : '已安排' }}</em>
+              </span>
+              <span
+                v-if="liveStatusLabel(ev.id)"
+                class="agenda-badge"
+              >{{ liveStatusLabel(ev.id) }}</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main card">
+        <div class="main-top">
+          <div class="toolbar-left">
+            <button
+              class="btn btn-muted"
+              type="button"
+              @click="onToday"
+            >
+              今天
+            </button>
+            <div class="panel-nav">
+              <button
+                class="icon-btn"
+                type="button"
+                @click="onPrev"
               >
-                <div class="et">{{ p.event.title }}</div>
-                <div class="es">{{ formatHm(p.event.startAt) }}-{{ formatHm(p.event.endAt) }}</div>
-                <div v-if="liveStatusLabel(p.event.id)" class="elive">{{ liveStatusLabel(p.event.id) }}</div>
-                <button v-if="liveMap[p.event.id]" class="event-link" type="button" @click.stop="openEventDetail(p.event)">课堂详情</button>
+                ‹
+              </button>
+              <button
+                class="icon-btn"
+                type="button"
+                @click="onNext"
+              >
+                ›
+              </button>
+            </div>
+            <div class="range-copy">
+              <div class="panel-kicker">
+                当前视图
+              </div>
+              <div class="range-title">
+                {{ currentRangeLabel }}
+              </div>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <div class="seg">
+              <button
+                class="seg-btn"
+                :class="{ on: view === 'day' }"
+                type="button"
+                @click="view = 'day'"
+              >
+                日
+              </button>
+              <button
+                class="seg-btn"
+                :class="{ on: view === 'week' }"
+                type="button"
+                @click="view = 'week'"
+              >
+                周
+              </button>
+              <button
+                class="seg-btn"
+                :class="{ on: view === 'month' }"
+                type="button"
+                @click="view = 'month'"
+              >
+                月
+              </button>
+            </div>
+            <button
+              class="btn btn-primary desktop-create"
+              type="button"
+              @click="openCreate()"
+            >
+              新建
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="view === 'month'"
+          class="month-shell"
+        >
+          <div class="month-week-head">
+            <div
+              v-for="label in ['周一', '周二', '周三', '周四', '周五', '周六', '周日']"
+              :key="label"
+              class="w"
+            >
+              {{ label }}
+            </div>
+          </div>
+          <div class="month-grid">
+            <div
+              v-for="d in monthDays"
+              :key="d.date.toISOString()"
+              class="month-cell"
+              :class="{ dim: !d.inMonth, active: isSameDay(d.date, cursorDate) }"
+              @click="
+                cursorDate = d.date;
+                view = 'day'
+              "
+            >
+              <div class="month-cell-head">
+                <span class="month-day-num">{{ d.date.getDate() }}</span>
+                <span
+                  v-if="eventsOnDay(d.date).length"
+                  class="month-count"
+                >{{ eventsOnDay(d.date).length }}项</span>
+              </div>
+              <div class="month-items">
+                <div
+                  v-for="ev in eventsOnDay(d.date).slice(0, 3)"
+                  :key="ev.id"
+                  class="month-item"
+                  :title="`${ev.title}｜${formatHm(ev.startAt)} - ${formatHm(ev.endAt)}`"
+                >
+                  <span class="month-item-time">{{ formatHm(ev.startAt) }}</span>
+                  <span class="month-item-name">{{ ev.title }}</span>
+                </div>
+                <div
+                  v-if="eventsOnDay(d.date).length > 3"
+                  class="month-more"
+                >
+                  +{{ eventsOnDay(d.date).length - 3 }} more
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    <div v-if="createOpen" class="mask" @click.self="createOpen = false">
+        <div
+          v-else
+          class="schedule-shell"
+        >
+          <div class="time-head">
+            <div class="time-col axis-label">
+              GMT+8
+            </div>
+            <div
+              class="days"
+              :style="{ gridTemplateColumns: view === 'week' ? 'repeat(7, 1fr)' : '1fr' }"
+            >
+              <div
+                v-for="d in (view === 'week' ? weekDays : [startOfDay(cursorDate)])"
+                :key="d.toISOString()"
+                class="day"
+                :class="{ active: isSameDay(d, cursorDate) }"
+              >
+                <div class="day-week">
+                  {{ ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()] }}
+                </div>
+                <div class="day-title">
+                  {{ d.getMonth() + 1 }}月{{ d.getDate() }}日
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="time-body">
+            <div class="time-col">
+              <div
+                v-for="h in DAY_END_HOUR - DAY_START_HOUR"
+                :key="h"
+                class="hour"
+              >
+                {{ String(h + DAY_START_HOUR).padStart(2, '0') }}:00
+              </div>
+            </div>
+            <div
+              class="days"
+              :style="{ gridTemplateColumns: view === 'week' ? 'repeat(7, 1fr)' : '1fr' }"
+            >
+              <div
+                v-for="d in (view === 'week' ? weekDays : [startOfDay(cursorDate)])"
+                :key="d.toISOString()"
+                class="day-col"
+                :class="{ active: isSameDay(d, cursorDate) }"
+                @dblclick="openCreate(d)"
+              >
+                <div class="slots">
+                  <div
+                    v-for="h in DAY_END_HOUR - DAY_START_HOUR"
+                    :key="h"
+                    class="slot"
+                  />
+                </div>
+                <div class="events">
+                  <div
+                    v-for="p in layoutDayEvents(events, d)"
+                    :key="p.event.id"
+                    class="event"
+                    :class="p.event.status.toLowerCase()"
+                    :style="{ top: `${p.top}px`, height: `${p.height}px`, left: `${p.leftPct}%`, width: `${p.widthPct}%` }"
+                    @click.stop="liveMap[p.event.id] ? openLivePrepare(p.event.courseId) : void 0"
+                  >
+                    <div class="event-accent" />
+                    <div class="et">
+                      {{ p.event.title }}
+                    </div>
+                    <div class="es">
+                      {{ formatHm(p.event.startAt) }} - {{ formatHm(p.event.endAt) }}
+                    </div>
+                    <div
+                      v-if="liveStatusLabel(p.event.id)"
+                      class="elive"
+                    >
+                      {{ liveStatusLabel(p.event.id) }}
+                    </div>
+                    <button
+                      v-if="liveMap[p.event.id]"
+                      class="event-link"
+                      type="button"
+                      @click.stop="openEventDetail(p.event)"
+                    >
+                      课堂详情
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <div
+      v-if="createOpen"
+      class="mask"
+      @click.self="createOpen = false"
+    >
       <div class="modal card">
-        <div class="m-title">创建日程</div>
-        <div v-if="createError" class="m-error">{{ createError }}</div>
-
-        <div class="field">
-          <div class="lab">课程名称</div>
-          <input v-model="title" class="ipt" placeholder="例如：初二数学｜一次函数强化" />
+        <div class="m-title">
+          创建日程
+        </div>
+        <div
+          v-if="createError"
+          class="m-error"
+        >
+          {{ createError }}
         </div>
 
         <div class="field">
-          <div class="lab">授课对象</div>
+          <div class="lab">
+            课程名称
+          </div>
+          <input
+            v-model="title"
+            class="ipt"
+            placeholder="例如：初二数学｜一次函数强化"
+          >
+        </div>
+
+        <div class="field">
+          <div class="lab">
+            授课对象
+          </div>
           <div class="pick">
-            <div v-if="participant" class="picked">
+            <div
+              v-if="participant"
+              class="picked"
+            >
               <span class="pname">{{ participant.name }}</span>
-              <button class="btn small" type="button" @click="participant = null">更换</button>
+              <button
+                class="btn small"
+                type="button"
+                @click="participant = null"
+              >
+                更换
+              </button>
             </div>
-            <div v-else class="picker">
+            <div
+              v-else
+              class="picker"
+            >
               <div class="row">
-                <input v-model="contactSearch" class="ipt" placeholder="搜索昵称/手机号" />
-                <button class="btn small" type="button" :disabled="contactLoading" @click="searchContacts">搜索</button>
+                <input
+                  v-model="contactSearch"
+                  class="ipt"
+                  placeholder="搜索昵称/手机号"
+                >
+                <button
+                  class="btn small"
+                  type="button"
+                  :disabled="contactLoading"
+                  @click="searchContacts"
+                >
+                  搜索
+                </button>
               </div>
-              <div v-if="contactError" class="m-error">{{ contactError }}</div>
+              <div
+                v-if="contactError"
+                class="m-error"
+              >
+                {{ contactError }}
+              </div>
               <div class="list">
                 <button
                   v-for="u in contacts"
@@ -513,64 +878,132 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
                   <span class="cname">{{ u.name }}</span>
                   <span class="ctag">{{ u.userType === 1 ? '教师' : '家长' }}</span>
                 </button>
-                <div v-if="!contactLoading && contacts.length === 0" class="empty">暂无联系人</div>
+                <div
+                  v-if="!contactLoading && contacts.length === 0"
+                  class="empty"
+                >
+                  暂无联系人
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div class="field">
-          <div class="lab">开始时间</div>
+          <div class="lab">
+            开始时间
+          </div>
           <input
             class="ipt"
             type="datetime-local"
             :value="new Date(startAt).toISOString().slice(0, 16)"
             @change="startAt = new Date(($event.target as HTMLInputElement).value).getTime()"
-          />
+          >
         </div>
 
         <div class="field">
-          <div class="lab">结束时间</div>
+          <div class="lab">
+            结束时间
+          </div>
           <input
             class="ipt"
             type="datetime-local"
             :value="new Date(endAt).toISOString().slice(0, 16)"
             @change="endAt = new Date(($event.target as HTMLInputElement).value).getTime()"
-          />
+          >
         </div>
 
         <div class="field">
-          <div class="lab">备注</div>
-          <textarea v-model="description" class="txt" rows="3" placeholder="可选" />
+          <div class="lab">
+            备注
+          </div>
+          <textarea
+            v-model="description"
+            class="txt"
+            rows="3"
+            placeholder="可选"
+          />
         </div>
 
         <div class="m-ops">
-          <button class="btn" type="button" :disabled="createBusy" @click="createOpen = false">取消</button>
-          <button class="btn btn-primary" type="button" :disabled="createBusy" @click="submitCreate">
+          <button
+            class="btn"
+            type="button"
+            :disabled="createBusy"
+            @click="createOpen = false"
+          >
+            取消
+          </button>
+          <button
+            class="btn btn-primary"
+            type="button"
+            :disabled="createBusy"
+            @click="submitCreate"
+          >
             {{ createBusy ? '创建中...' : '创建并发送申请' }}
           </button>
         </div>
       </div>
     </div>
 
-    <div v-if="detailOpen" class="mask" @click.self="closeEventDetail">
+    <div
+      v-if="detailOpen"
+      class="mask"
+      @click.self="closeEventDetail"
+    >
       <div class="modal card detail-modal">
-        <div class="m-title">课堂详情</div>
-        <div class="detail-subtitle">{{ detailTitle }}</div>
-        <div v-if="detailError" class="m-error">{{ detailError }}</div>
-        <div v-else-if="detailBusy" class="detail-empty">加载中...</div>
-        <div v-else-if="detailTimeline.length === 0" class="detail-empty">暂未产生课堂事件</div>
-        <div v-else class="detail-list">
-          <div v-for="item in detailTimeline" :key="`${item.eventType}-${item.occurredAt}`" class="detail-item">
+        <div class="m-title">
+          课堂详情
+        </div>
+        <div class="detail-subtitle">
+          {{ detailTitle }}
+        </div>
+        <div
+          v-if="detailError"
+          class="m-error"
+        >
+          {{ detailError }}
+        </div>
+        <div
+          v-else-if="detailBusy"
+          class="detail-empty"
+        >
+          加载中...
+        </div>
+        <div
+          v-else-if="detailTimeline.length === 0"
+          class="detail-empty"
+        >
+          暂未产生课堂事件
+        </div>
+        <div
+          v-else
+          class="detail-list"
+        >
+          <div
+            v-for="item in detailTimeline"
+            :key="`${item.eventType}-${item.occurredAt}`"
+            class="detail-item"
+          >
             <div class="detail-dot" />
             <div class="detail-content">
-              <div class="detail-title">{{ timelineEventLabel(item.eventType) }}</div>
-              <div class="detail-meta">{{ item.eventSource }} · {{ item.occurredAt }}</div>
+              <div class="detail-title">
+                {{ timelineEventLabel(item.eventType) }}
+              </div>
+              <div class="detail-meta">
+                {{ item.eventSource }} · {{ item.occurredAt }}
+              </div>
             </div>
           </div>
         </div>
         <div class="m-ops">
-          <button class="btn" type="button" @click="closeEventDetail">关闭</button>
+          <button
+            class="btn"
+            type="button"
+            @click="closeEventDetail"
+          >
+            关闭
+          </button>
         </div>
       </div>
     </div>
@@ -581,155 +1014,500 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
+  padding: 12px 4px 24px;
 }
 
-.head {
+.hero {
+  position: relative;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 20px;
+  padding: 22px 30px;
+  border-radius: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(0, 190, 189, 0.18), transparent 34%),
+    radial-gradient(circle at 85% 25%, rgba(20, 97, 255, 0.12), transparent 24%),
+    linear-gradient(135deg, #fefefe 0%, #f6fbff 50%, #f7f8fc 100%);
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  box-shadow: 0 18px 48px rgba(28, 51, 84, 0.08);
 }
 
-.left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -8% -55% auto;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(17, 87, 255, 0.12), transparent 66%);
+  pointer-events: none;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+}
+
+.eyebrow,
+.panel-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6c7381;
+}
+
+.hero-title {
+  margin: 6px 0 4px;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #18202d;
+}
+
+.hero-desc {
+  margin: 0;
+  max-width: 100%;
+  color: #5d6675;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.hero-action {
+  position: relative;
+  z-index: 1;
+  align-self: flex-start;
+  min-width: 128px;
+  height: 44px;
+  border-radius: 14px;
+  box-shadow: 0 16px 30px rgba(0, 190, 189, 0.24);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: minmax(280px, 328px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sidebar,
+.main {
+  border-radius: 26px;
+  box-shadow: 0 16px 40px rgba(21, 35, 54, 0.08);
+}
+
+.sidebar {
+  padding: 22px 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(247, 250, 255, 0.95), rgba(255, 255, 255, 0.98)),
+    #fff;
+}
+
+.main {
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(249, 251, 255, 0.98), rgba(255, 255, 255, 1) 26%),
+    #fff;
   min-width: 0;
 }
 
-.title {
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.right {
+.sidebar-head,
+.summary-head,
+.main-top,
+.toolbar-left,
+.toolbar-right {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel-title,
+.range-title,
+.summary-date {
+  margin-top: 4px;
+  font-weight: 800;
+  color: #1c2431;
+}
+
+.panel-title {
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.summary-date,
+.range-title {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.panel-nav {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(31, 35, 41, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #3e4858;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.icon-btn:hover {
+  background: #fff;
+  border-color: rgba(20, 97, 255, 0.18);
+}
+
+.mini-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin: 18px 0 10px;
+  padding: 0 2px;
+  color: #8a92a1;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.mini-day {
+  position: relative;
+  border: none;
+  min-height: 42px;
+  border-radius: 14px;
+  background: transparent;
+  color: #2c3442;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.mini-day:hover {
+  transform: translateY(-1px);
+  background: rgba(0, 190, 189, 0.08);
+}
+
+.mini-day.out {
+  color: #adb4c0;
+}
+
+.mini-day.today {
+  box-shadow: inset 0 0 0 1px rgba(20, 97, 255, 0.25);
+}
+
+.mini-day.selected {
+  background: linear-gradient(135deg, #1e67ff, #49a1ff);
+  color: #fff;
+  box-shadow: 0 12px 22px rgba(30, 103, 255, 0.26);
+}
+
+.mini-day i {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+  opacity: 0.52;
+}
+
+.mini-day.selected i {
+  opacity: 1;
+}
+
+.sidebar-summary {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(247, 249, 252, 0.95), rgba(255, 255, 255, 0.9));
+  border: 1px solid rgba(31, 35, 41, 0.08);
+}
+
+.summary-today {
+  flex: 0 0 auto;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  margin-top: 16px;
+}
+
+.stat-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  letter-spacing: -0.04em;
+  color: #1c2431;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: #7c8492;
+}
+
+.agenda-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.agenda-item,
+.agenda-empty {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+}
+
+.agenda-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agenda-time {
+  font-weight: 700;
+  color: #1457ff;
+}
+
+.agenda-main {
+  display: grid;
+  gap: 4px;
+}
+
+.agenda-main strong {
+  font-size: 14px;
+  color: #1f2633;
+}
+
+.agenda-main em {
+  font-style: normal;
+  font-size: 12px;
+  color: #7c8492;
+}
+
+.agenda-badge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0, 190, 189, 0.12);
+  color: #008b8b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agenda-empty {
+  color: #7c8492;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.main-top {
+  padding: 4px 4px 18px;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+  margin-bottom: 18px;
+}
+
+.toolbar-left,
+.toolbar-right {
+  gap: 14px;
+}
+
+.range-copy {
+  min-width: 0;
 }
 
 .seg {
   display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+  padding: 4px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: rgba(246, 248, 251, 0.96);
 }
 
 .seg-btn {
   border: none;
-  background: #fff;
-  padding: 8px 10px;
+  min-width: 56px;
+  height: 38px;
+  background: transparent;
+  padding: 0 14px;
+  border-radius: 12px;
   cursor: pointer;
+  color: #657080;
+  font-weight: 700;
 }
 
 .seg-btn.on {
-  background: rgba(0, 190, 189, 0.12);
-  color: var(--primary);
+  background: linear-gradient(135deg, rgba(30, 103, 255, 0.14), rgba(73, 161, 255, 0.18));
+  color: #1457ff;
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
-.cal {
-  padding: 12px;
+.desktop-create {
+  min-width: 88px;
 }
 
-.week-head {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-  color: var(--muted);
-  font-weight: 600;
-  margin-bottom: 8px;
+.schedule-shell {
+  min-width: 0;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-
-.cell {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  min-height: 104px;
-  padding: 8px;
-  cursor: pointer;
-  background: #fff;
-}
-
-.cell.dim {
-  opacity: 0.55;
-}
-
-.day-num {
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.items {
-  margin-top: 6px;
+.month-shell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
 }
 
-.item {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.item .t {
-  color: var(--muted);
-  flex: 0 0 auto;
-}
-
-.item .n {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.more {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.live-flag {
-  margin-left: auto;
-  flex: 0 0 auto;
-  color: #0f766e;
+.month-week-head {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 6px;
+  color: #8891a0;
+  font-size: 13px;
   font-weight: 700;
 }
 
-.mini-link {
-  border: none;
-  background: transparent;
-  color: #1767c4;
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.month-cell {
+  min-width: 0;
+  min-height: 158px;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 252, 0.88));
   cursor: pointer;
-  flex: 0 0 auto;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.month-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 24px rgba(21, 35, 54, 0.08);
+}
+
+.month-cell.dim {
+  opacity: 0.56;
+}
+
+.month-cell.active {
+  border-color: rgba(20, 97, 255, 0.18);
+  box-shadow: 0 18px 30px rgba(20, 97, 255, 0.12);
+}
+
+.month-cell-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-day-num {
+  font-weight: 800;
+  color: #1f2633;
+}
+
+.month-count {
+  color: #7c8492;
   font-size: 12px;
+}
+
+.month-items {
+  min-width: 0;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(20, 97, 255, 0.06);
+  overflow: hidden;
+}
+
+.month-item-time {
+  color: #1457ff;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.month-item-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.month-more {
+  font-size: 12px;
+  color: #7c8492;
+  padding: 0 4px;
 }
 
 .time-head {
   display: grid;
-  grid-template-columns: 60px 1fr;
+  grid-template-columns: 72px 1fr;
   align-items: end;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(31, 35, 41, 0.08);
+  padding-bottom: 12px;
+}
+
+.axis-label {
+  color: #8a92a1;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .time-body {
   display: grid;
-  grid-template-columns: 60px 1fr;
-  margin-top: 8px;
+  grid-template-columns: 72px 1fr;
+  margin-top: 10px;
+  max-height: min(72vh, 980px);
+  overflow: auto;
+  padding-right: 6px;
+  scrollbar-gutter: stable;
 }
 
 .time-col {
@@ -741,27 +1519,50 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .hour {
   height: 72px;
   font-size: 12px;
-  color: var(--muted);
+  color: #8a92a1;
 }
 
 .days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .day {
   text-align: center;
-  font-weight: 700;
+  padding: 10px 10px 6px;
+  border-radius: 18px;
+  transition: background 0.18s ease;
+}
+
+.day.active {
+  background: rgba(20, 97, 255, 0.06);
+}
+
+.day-week {
+  font-size: 12px;
+  color: #8a92a1;
+}
+
+.day-title {
+  margin-top: 6px;
+  font-weight: 800;
+  color: #1c2431;
 }
 
 .day-col {
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  border-radius: 20px;
   overflow: hidden;
-  background: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 253, 0.92));
   height: 1296px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.day-col.active {
+  border-color: rgba(20, 97, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(20, 97, 255, 0.06);
 }
 
 .slots {
@@ -773,7 +1574,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 
 .slot {
   height: 72px;
-  border-top: 1px dashed rgba(0, 0, 0, 0.06);
+  border-top: 1px solid rgba(31, 35, 41, 0.06);
 }
 
 .events {
@@ -783,22 +1584,37 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 
 .event {
   position: absolute;
-  padding: 6px;
-  border-radius: 10px;
+  padding: 10px 10px 8px 14px;
+  border-radius: 16px;
   box-sizing: border-box;
   overflow: hidden;
-  background: rgba(0, 190, 189, 0.15);
-  border: 1px solid rgba(0, 190, 189, 0.35);
+  background: linear-gradient(180deg, rgba(15, 198, 196, 0.18), rgba(15, 198, 196, 0.08));
+  border: 1px solid rgba(15, 198, 196, 0.26);
+  box-shadow: 0 8px 18px rgba(0, 190, 189, 0.16);
 }
 
 .event.pending {
-  background: rgba(255, 153, 0, 0.14);
-  border-color: rgba(255, 153, 0, 0.35);
+  background: linear-gradient(180deg, rgba(255, 171, 51, 0.22), rgba(255, 171, 51, 0.09));
+  border-color: rgba(255, 171, 51, 0.34);
+  box-shadow: 0 8px 18px rgba(255, 171, 51, 0.18);
 }
 
 .event.canceled,
 .event.rejected {
   opacity: 0.5;
+}
+
+.event-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #00a8a6;
+}
+
+.event.pending .event-accent {
+  background: #ff9d1f;
 }
 
 .et {
@@ -811,14 +1627,14 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 
 .es {
   font-size: 12px;
-  color: var(--muted);
+  color: #617085;
 }
 
 .elive {
   margin-top: 4px;
   font-size: 11px;
   font-weight: 700;
-  color: #0f766e;
+  color: #007b79;
 }
 
 .event-link {
@@ -826,7 +1642,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   border: none;
   background: transparent;
   padding: 0;
-  color: #1767c4;
+  color: #1457ff;
   font-size: 11px;
   cursor: pointer;
 }
@@ -845,6 +1661,7 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .modal {
   width: min(520px, 100%);
   padding: 14px;
+  border-radius: 24px;
 }
 
 .detail-modal {
@@ -883,8 +1700,8 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 .ipt,
 .txt {
   width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid rgba(31, 35, 41, 0.12);
+  border-radius: 14px;
   padding: 10px;
   background: #fff;
 }
@@ -948,8 +1765,8 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 }
 
 .contact {
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: 1px solid rgba(31, 35, 41, 0.12);
+  border-radius: 14px;
   padding: 10px;
   background: #fff;
   cursor: pointer;
@@ -969,8 +1786,78 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   padding: 8px 0;
 }
 
+@media (max-width: 1180px) {
+  .board {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    order: 2;
+  }
+
+  .main {
+    order: 1;
+  }
+}
+
 @media (max-width: 900px) {
+  .page {
+    padding-inline: 0;
+  }
+
+  .hero,
+  .sidebar,
+  .main {
+    border-radius: 22px;
+  }
+
+  .hero {
+    padding: 22px 20px;
+    flex-direction: column;
+  }
+
+  .hero-desc {
+    white-space: normal;
+  }
+
+  .main-top,
+  .toolbar-left,
+  .toolbar-right,
+  .summary-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .days {
+    grid-template-columns: 1fr;
+  }
+
+  .time-head,
+  .time-body {
+    grid-template-columns: 56px 1fr;
+  }
+
+  .month-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mini-grid {
+    gap: 6px;
+  }
+
+  .mini-day {
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .agenda-item {
     grid-template-columns: 1fr;
   }
 }

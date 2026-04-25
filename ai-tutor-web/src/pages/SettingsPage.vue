@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
+import type { UserEmailStatusVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { DEFAULT_APPLICATION_GREETING, useSettingsStore } from '@/stores/settings'
 import { normalizeAvatarUrl } from '@/utils/avatar'
@@ -15,6 +16,7 @@ const auth = useAuthStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const saved = ref<string | null>(null)
+const emailStatus = ref<UserEmailStatusVO | null>(null)
 
 const greeting = ref(DEFAULT_APPLICATION_GREETING)
 
@@ -76,14 +78,19 @@ const phoneMasked = computed(() => {
 })
 
 const isTeacher = computed(() => auth.role === 'TEACHER')
+const primaryEmailBound = computed(() => emailStatus.value?.primaryEmail?.verifyStatus === 'VERIFIED')
+const emailReminderText = computed(() =>
+  primaryEmailBound.value ? '已开启邮件提醒，可接收未读消息、开课提醒和课后总结' : '未开启，建议绑定后接收未读消息、开课提醒和课后总结',
+)
 
 async function load() {
   loading.value = true
   error.value = null
   saved.value = null
   try {
-    const v = await settings.load()
+    const [v, email] = await Promise.all([settings.load(), userApi.emailStatus()])
     greeting.value = v
+    emailStatus.value = email
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -191,7 +198,7 @@ onMounted(() => {
           </div>
           <div class="list-item">
             <div class="item-label">邮箱提醒</div>
-            <div class="item-value">接收未读消息、开课提醒和课后总结</div>
+            <div class="item-value">{{ emailReminderText }}</div>
             <button class="btn-text" type="button" @click="goEmailSettings">管理</button>
           </div>
         </section>

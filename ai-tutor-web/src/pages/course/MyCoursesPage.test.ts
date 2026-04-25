@@ -32,6 +32,59 @@ function seedStudentAuth() {
   }
 }
 
+function mockBaseCourseApis(courseStatus: string, extraCourse: Record<string, unknown> = {}, events: unknown[] = []) {
+  return [
+    http.get('http://localhost/user/email/reminder-hints', () => ok({ show: false, title: '', description: '', actionText: '' })),
+    http.get('http://localhost/courses/my', () =>
+      ok([
+        {
+          courseId: 66,
+          applicationId: 501,
+          roomId: 88,
+          teacherUid: 1001,
+          studentUid: 2001,
+          status: courseStatus,
+          trialEndAt: '2026-04-27T10:00:00',
+          ...extraCourse,
+        },
+      ]),
+    ),
+    http.get('http://localhost/chat/application/501', () =>
+      ok({
+        id: 501,
+        senderUid: 2001,
+        receiverUid: 1001,
+        senderRole: 'STUDENT',
+        receiverRole: 'TEACHER',
+        contextType: 'TUTOR',
+        contextId: 11,
+        content: '想约数学课',
+        status: 'ACCEPTED',
+        chatAccessStatus: 'CHAT_ENABLED',
+        paymentPayerRole: 'TEACHER',
+        orderId: 9001,
+        roomId: 88,
+        receiverRead: true,
+        decidedAt: null,
+        createTime: '2026-04-20T10:00:00',
+      }),
+    ),
+    http.get('http://localhost/user/batch', () =>
+      ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
+    ),
+    http.get('http://localhost/user/card', () =>
+      ok({
+        user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+        teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
+        studentProfile: null,
+        jobPosting: null,
+      }),
+    ),
+    http.get('http://localhost/api/v1/schedule/events', () => ok(events)),
+    http.get('http://localhost/live/sessions/reminders', () => ok([])),
+  ]
+}
+
 describe('MyCoursesPage', () => {
   beforeEach(() => {
     Object.keys(storage).forEach((key) => delete storage[key])
@@ -55,64 +108,11 @@ describe('MyCoursesPage', () => {
     push.mockReset()
   })
 
-  it('loads course workspace and opens cashier through application enter-chat when info fee is pending', async () => {
+  it('opens cashier through the detail action when info fee is pending', async () => {
     const enterChat = vi.fn(() => ok({ paymentRequired: true, waitingForTeacherPayment: false, orderId: 9001, roomId: null }))
 
     server.use(
-      http.get('http://localhost/user/email/reminder-hints', () =>
-        ok({
-          show: false,
-          title: '',
-          description: '',
-          actionText: '',
-        }),
-      ),
-      http.get('http://localhost/courses/my', () =>
-        ok([
-          {
-            courseId: 66,
-            applicationId: 501,
-            roomId: 88,
-            teacherUid: 1001,
-            studentUid: 2001,
-            status: 'WAIT_PAY',
-            trialEndAt: null,
-          },
-        ]),
-      ),
-      http.get('http://localhost/chat/application/501', () =>
-        ok({
-          id: 501,
-          senderUid: 2001,
-          receiverUid: 1001,
-          senderRole: 'STUDENT',
-          receiverRole: 'TEACHER',
-          contextType: 'TUTOR',
-          contextId: 11,
-          content: '想约数学课',
-          status: 'ACCEPTED',
-          chatAccessStatus: 'PAYMENT_REQUIRED',
-          paymentPayerRole: 'TEACHER',
-          orderId: 9001,
-          roomId: 88,
-          receiverRead: true,
-          decidedAt: null,
-          createTime: '2026-04-20T10:00:00',
-        }),
-      ),
-      http.get('http://localhost/user/batch', () =>
-        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
-      ),
-      http.get('http://localhost/user/card', () =>
-        ok({
-          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
-          studentProfile: null,
-          jobPosting: null,
-        }),
-      ),
-      http.get('http://localhost/api/v1/schedule/events', () => ok([])),
-      http.get('http://localhost/live/sessions/reminders', () => ok([])),
+      ...mockBaseCourseApis('WAIT_PAY', { trialEndAt: null }, []),
       http.post('http://localhost/chat/application/501/enter-chat', enterChat),
     )
 
@@ -121,7 +121,9 @@ describe('MyCoursesPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('待支付信息费')
-    await wrapper.get('.card-actions .btn:last-child').trigger('click')
+    const payBtn = wrapper.findAll('button').find((btn) => btn.text() === '去支付')
+    expect(payBtn).toBeTruthy()
+    await payBtn!.trigger('click')
     await flushPromises()
 
     expect(enterChat).toHaveBeenCalledTimes(1)
@@ -135,11 +137,13 @@ describe('MyCoursesPage', () => {
     })
   })
 
-  it('creates a formal lesson request from the course page and updates the current lesson state', async () => {
+  it('opens schedule modal and creates a lesson from the cooperation detail', async () => {
     const createEvent = vi.fn(async ({ request }: { request: Request }) => {
       const body = (await request.json()) as { title: string; participantUserId: number; startAt: number; endAt: number }
       return ok({
         id: 701,
+        courseId: 66,
+        lessonType: 'NORMAL',
         title: body.title,
         description: null,
         startAt: body.startAt,
@@ -152,60 +156,7 @@ describe('MyCoursesPage', () => {
     })
 
     server.use(
-      http.get('http://localhost/user/email/reminder-hints', () =>
-        ok({
-          show: false,
-          title: '',
-          description: '',
-          actionText: '',
-        }),
-      ),
-      http.get('http://localhost/courses/my', () =>
-        ok([
-          {
-            courseId: 66,
-            applicationId: 501,
-            roomId: 88,
-            teacherUid: 1001,
-            studentUid: 2001,
-            status: 'TEACHING',
-            trialEndAt: '2026-04-27T10:00:00',
-          },
-        ]),
-      ),
-      http.get('http://localhost/chat/application/501', () =>
-        ok({
-          id: 501,
-          senderUid: 2001,
-          receiverUid: 1001,
-          senderRole: 'STUDENT',
-          receiverRole: 'TEACHER',
-          contextType: 'TUTOR',
-          contextId: 11,
-          content: '想约数学课',
-          status: 'ACCEPTED',
-          chatAccessStatus: 'CHAT_ENABLED',
-          paymentPayerRole: 'TEACHER',
-          orderId: 9001,
-          roomId: 88,
-          receiverRead: true,
-          decidedAt: null,
-          createTime: '2026-04-20T10:00:00',
-        }),
-      ),
-      http.get('http://localhost/user/batch', () =>
-        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
-      ),
-      http.get('http://localhost/user/card', () =>
-        ok({
-          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
-          studentProfile: null,
-          jobPosting: null,
-        }),
-      ),
-      http.get('http://localhost/api/v1/schedule/events', () => ok([])),
-      http.get('http://localhost/live/sessions/reminders', () => ok([])),
+      ...mockBaseCourseApis('TEACHING'),
       http.post('http://localhost/api/v1/schedule/events', createEvent),
     )
 
@@ -213,10 +164,12 @@ describe('MyCoursesPage', () => {
     seedStudentAuth()
     await flushPromises()
 
-    await wrapper.get('.card-actions .btn:nth-child(2)').trigger('click')
+    const scheduleBtn = wrapper.findAll('button').find((btn) => btn.text() === '安排正式课')
+    expect(scheduleBtn).toBeTruthy()
+    await scheduleBtn!.trigger('click')
     await flushPromises()
-    expect(wrapper.text()).toContain('预约课程')
 
+    expect(wrapper.text()).toContain('预约课程')
     await wrapper.get('.m-ops .btn-primary').trigger('click')
     await flushPromises()
 
@@ -224,75 +177,23 @@ describe('MyCoursesPage', () => {
     expect(wrapper.text()).toContain('约课待确认')
   })
 
-  it('shows trial lesson instead of asking to schedule again while course is trialing', async () => {
+  it('shows trial lesson as directly enterable before the scheduled end time', async () => {
     server.use(
-      http.get('http://localhost/user/email/reminder-hints', () =>
-        ok({
-          show: false,
-          title: '',
-          description: '',
-          actionText: '',
-        }),
-      ),
-      http.get('http://localhost/courses/my', () =>
-        ok([
-          {
-            courseId: 66,
-            applicationId: 501,
-            roomId: 88,
-            teacherUid: 1001,
-            studentUid: 2001,
-            status: 'TRIALING',
-            trialEndAt: '2026-04-27T10:00:00',
-          },
-        ]),
-      ),
-      http.get('http://localhost/chat/application/501', () =>
-        ok({
-          id: 501,
-          senderUid: 2001,
-          receiverUid: 1001,
-          senderRole: 'STUDENT',
-          receiverRole: 'TEACHER',
-          contextType: 'TUTOR',
-          contextId: 11,
-          content: '想约数学课',
+      ...mockBaseCourseApis('TRIALING', {}, [
+        {
+          id: 701,
+          courseId: 66,
+          lessonType: 'TRIAL',
+          title: '试课｜线上一对一',
+          description: null,
+          startAt: Date.now() + 22 * 60 * 60 * 1000,
+          endAt: Date.now() + 24 * 60 * 60 * 1000,
           status: 'ACCEPTED',
-          chatAccessStatus: 'CHAT_ENABLED',
-          paymentPayerRole: 'TEACHER',
-          orderId: 9001,
-          roomId: 88,
-          receiverRead: true,
-          decidedAt: null,
-          createTime: '2026-04-20T10:00:00',
-        }),
-      ),
-      http.get('http://localhost/user/batch', () =>
-        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
-      ),
-      http.get('http://localhost/user/card', () =>
-        ok({
-          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
-          studentProfile: null,
-          jobPosting: null,
-        }),
-      ),
-      http.get('http://localhost/api/v1/schedule/events', () =>
-        ok([
-          {
-            id: 701,
-            title: '试课｜线上一对一',
-            description: null,
-            startAt: new Date('2026-04-24T19:00:00+08:00').getTime(),
-            endAt: new Date('2026-04-24T21:00:00+08:00').getTime(),
-            status: 'ACCEPTED',
-            creatorUserId: 1001,
-            participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-            chatRoomId: 88,
-          },
-        ]),
-      ),
+          creatorUserId: 1001,
+          participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+          chatRoomId: 88,
+        },
+      ]),
       http.get('http://localhost/live/sessions/by-course/701', () =>
         ok({
           sessionId: null,
@@ -303,105 +204,62 @@ describe('MyCoursesPage', () => {
           joinableNow: false,
         }),
       ),
-      http.get('http://localhost/live/sessions/reminders', () => ok([])),
     )
 
     const wrapper = mount(MyCoursesPage, { global: { plugins: [createPinia()] } })
     seedStudentAuth()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('查看试课')
-    expect(wrapper.text()).not.toContain('发起试课预约')
-    expect(wrapper.text()).toContain('已预约')
+    expect(wrapper.text()).toContain('试课阶段')
+    expect(wrapper.text()).toContain('现在可以进入课堂')
+    expect(wrapper.text()).toContain('在预约结束前均可进入课堂')
   })
 
-  it('hides offline trial refund action for online trial course', async () => {
+  it('shows abnormal pending confirmation when lesson expired without realtime session', async () => {
     server.use(
-      http.get('http://localhost/user/email/reminder-hints', () =>
-        ok({
-          show: false,
-          title: '',
-          description: '',
-          actionText: '',
-        }),
-      ),
-      http.get('http://localhost/courses/my', () =>
-        ok([
-          {
-            courseId: 66,
-            applicationId: 501,
-            roomId: 88,
-            teacherUid: 1001,
-            studentUid: 2001,
-            status: 'TRIALING',
-            teachingMode: 'ONLINE',
-            trialEndAt: '2026-04-27T10:00:00',
-          },
-        ]),
-      ),
-      http.get('http://localhost/chat/application/501', () =>
-        ok({
-          id: 501,
-          senderUid: 2001,
-          receiverUid: 1001,
-          senderRole: 'STUDENT',
-          receiverRole: 'TEACHER',
-          contextType: 'TUTOR',
-          contextId: 11,
-          content: '想约数学课',
+      ...mockBaseCourseApis('TRIALING', {}, [
+        {
+          id: 701,
+          courseId: 66,
+          lessonType: 'TRIAL',
+          title: '试课｜线上一对一',
+          description: null,
+          startAt: Date.now() - 4 * 60 * 60 * 1000,
+          endAt: Date.now() - 2 * 60 * 60 * 1000,
           status: 'ACCEPTED',
-          chatAccessStatus: 'CHAT_ENABLED',
-          paymentPayerRole: 'TEACHER',
-          orderId: 9001,
-          roomId: 88,
-          receiverRead: true,
-          decidedAt: null,
-          createTime: '2026-04-20T10:00:00',
-        }),
-      ),
-      http.get('http://localhost/user/batch', () =>
-        ok([{ id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 }]),
-      ),
-      http.get('http://localhost/user/card', () =>
-        ok({
-          user: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-          teacherProfile: { subject: '数学', education: '硕士', experienceYears: 5, introduction: '擅长高中数学' },
-          studentProfile: null,
-          jobPosting: null,
-        }),
-      ),
-      http.get('http://localhost/api/v1/schedule/events', () =>
-        ok([
-          {
-            id: 701,
-            title: '试课｜线上一对一',
-            description: null,
-            startAt: new Date('2026-04-24T19:00:00+08:00').getTime(),
-            endAt: new Date('2026-04-24T21:00:00+08:00').getTime(),
-            status: 'ACCEPTED',
-            creatorUserId: 1001,
-            participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
-            chatRoomId: 88,
-          },
-        ]),
-      ),
+          creatorUserId: 1001,
+          participant: { id: 1001, name: '王老师', realName: '王老师', avatar: '', userType: 1 },
+          chatRoomId: 88,
+        },
+      ]),
       http.get('http://localhost/live/sessions/by-course/701', () =>
         ok({
-          sessionId: null,
+          sessionId: 9001,
           courseId: 701,
           status: 'CREATED',
+          actualStartAt: null,
+          actualEndAt: null,
           scheduledStartAt: null,
           scheduledEndAt: null,
           joinableNow: false,
         }),
       ),
-      http.get('http://localhost/live/sessions/reminders', () => ok([])),
+      http.get('http://localhost/live/sessions/9001/ai/result', () =>
+        ok({
+          sessionId: 9001,
+          courseId: 701,
+          resultStatus: 'PENDING',
+          preview: null,
+        }),
+      ),
     )
 
     const wrapper = mount(MyCoursesPage, { global: { plugins: [createPinia()] } })
     seedStudentAuth()
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('试课不通过')
+    expect(wrapper.text()).toContain('待确认未上课')
+    expect(wrapper.text()).toContain('本节未正常开始')
+    expect(wrapper.text()).toContain('未走正常课后流程')
   })
 })

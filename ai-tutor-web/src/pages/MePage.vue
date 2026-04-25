@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { assetsApi } from '@/api/assets'
 import { userApi } from '@/api/user'
+import type { UserEmailStatusVO } from '@/api/types'
 import { teacherVerificationApi } from '@/api/verification'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -17,8 +18,16 @@ const toast = useToastStore()
 
 const loading = ref(false)
 const savedHint = ref<string | null>(null)
+const emailStatus = ref<UserEmailStatusVO | null>(null)
 
 const isTeacher = computed(() => auth.user?.userType === 1)
+const primaryEmailBound = computed(() => emailStatus.value?.primaryEmail?.verifyStatus === 'VERIFIED')
+const emailNudgeDescription = computed(() =>
+  primaryEmailBound.value
+    ? '当前已开启邮箱提醒，可接收未读消息提醒、开课提醒和课后总结。'
+    : '绑定后可接收未读消息提醒、开课提醒和课后总结。',
+)
+const emailActionText = computed(() => (primaryEmailBound.value ? '去管理' : '去设置'))
 
 const name = ref('')
 const sex = ref<number | null>(null)
@@ -158,6 +167,7 @@ async function load() {
   avatarHint.value = null
   try {
     const me = await auth.refreshMe()
+    emailStatus.value = await userApi.emailStatus()
     name.value = me?.name || auth.user?.name || ''
     sex.value = me?.sex ?? auth.user?.sex ?? null
     revokeAvatarPreview()
@@ -501,9 +511,9 @@ onBeforeUnmount(() => {
         <div class="email-nudge">
           <div>
             <strong>邮箱提醒</strong>
-            <span>绑定后可接收未读消息提醒、开课提醒和课后总结。</span>
+            <span>{{ emailNudgeDescription }}</span>
           </div>
-          <button class="btn sm" type="button" @click="openEmailSettings">去设置</button>
+          <button class="btn sm" type="button" @click="openEmailSettings">{{ emailActionText }}</button>
         </div>
         <div class="grid">
           <label class="field span2">

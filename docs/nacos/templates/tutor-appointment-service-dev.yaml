@@ -3,7 +3,8 @@
 # Group: DEFAULT_GROUP
 #
 # 说明：
-# - 微信/短信等第三方配置建议放到对应的“功能域 DataId”（例如 ai-tutor-sms-dev.yaml）
+# - 微信/短信/邮件等第三方配置建议放到对应的“功能域 DataId”
+#   例如 ai-tutor-sms-dev.yaml、ai-tutor-email-dev.yaml
 # - 这里主要放该服务特有的开关与参数
 
 security:
@@ -30,34 +31,5 @@ wechat:
     # 是否开启微信相关 mock（仅 DEV 建议 true）
     mock-enabled: true
 
-email:
-  # 邮件能力总开关
-  enabled: true
-  verify:
-    expire-minutes: 10
-    resend-cooldown-seconds: 60
-    max-try-count: 5
-  notification:
-    max-retry-count: 3
-    scheduler-batch-size: 50
-  lesson:
-    reminder-minutes: [30]
-    summary-backfill-window-hours: 24
-  sender:
-    # MOCK / TENCENT
-    provider: "MOCK"
-    enabled: true
-    endpoint: "ses.tencentcloudapi.com"
-    region: "ap-guangzhou"
-    secret-id: "<TODO:TENCENT_SES_SECRET_ID>"
-    secret-key: "<TODO:TENCENT_SES_SECRET_KEY>"
-    from-email: "<TODO:no-reply@your-domain.com>"
-    from-name: "创智星球"
-    reply-to-email: "<TODO:support@your-domain.com>"
-    connect-timeout-ms: 3000
-    read-timeout-ms: 5000
-    template-dir: "email-templates/tencent"
-    template-ids:
-      EMAIL_VERIFY_CODE: 173982
-      LESSON_START_REMINDER: 173984
-      LESSON_SUMMARY: 173985
+# 邮件配置已统一迁移到 ai-tutor-email-dev.yaml。
+# 请不要在本服务 DataId 中重复配置 email.*，避免覆盖统一邮件配置。

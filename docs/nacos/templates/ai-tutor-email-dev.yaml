@@ -1,0 +1,79 @@
+# 邮件能力统一配置（DEV）
+# DataId: ai-tutor-email-dev.yaml
+# Group: DEFAULT_GROUP
+#
+# 使用方式：
+# - tutor-appointment-service 和 videoCall-IM-service 都会 import 这个 DataId。
+# - 所有 email.* 配置统一维护在本文件，避免多个服务 DataId 中重复配置、互相覆盖。
+# - 修改腾讯云密钥、发件人、模板 ID 后，需要重启相关服务，确保配置和发信客户端都刷新到最新值。
+# - DEV 可先使用 provider=MOCK 验证业务闭环；真实联调和线上发送必须改为 provider=TENCENT。
+
+email:
+  # 邮件能力总开关。
+  # true：允许创建和发送邮件任务。
+  # false：业务侧可保留邮箱绑定等数据，但不实际发送邮件。
+  enabled: true
+
+  verify:
+    # 邮箱验证码有效期，单位：分钟。
+    expire-minutes: 10
+    # 同一邮箱重复发送验证码的冷却时间，单位：秒。
+    resend-cooldown-seconds: 60
+    # 单个验证码允许输错的最大次数，超过后验证码失效。
+    max-try-count: 5
+
+  notification:
+    # 邮件任务最大重试次数。
+    # 达到该次数后任务会进入 FAILED，需要后台手动重试或排查配置/腾讯云返回错误。
+    max-retry-count: 3
+    # 定时任务每批最多扫描并处理的邮件任务数量。
+    scheduler-batch-size: 50
+
+  lesson:
+    # 课前提醒时间，单位：分钟。
+    # 当前配置 [30] 表示开课前 30 分钟发送提醒。
+    reminder-minutes: [30]
+    # 课后总结补偿扫描窗口，单位：小时。
+    # 用于服务重启或消息丢失后补建最近窗口内的课后总结邮件任务。
+    summary-backfill-window-hours: 24
+
+  sender:
+    # 发信渠道。
+    # MOCK：不调用腾讯云，只记录模拟成功，适合本地/开发环境验证流程。
+    # TENCENT：调用腾讯云 SES 真实发送，联调和线上必须使用该值。
+    provider: "MOCK"
+    # 发信器开关。
+    # false：任务仍可创建，但发送器会直接返回未启用，便于临时熔断第三方发信。
+    enabled: true
+    # 腾讯云 SES API 地址，国内站默认使用 ses.tencentcloudapi.com。
+    endpoint: "ses.tencentcloudapi.com"
+    # 腾讯云 SES 地域，需要和腾讯云邮件服务开通地域保持一致。
+    region: "ap-guangzhou"
+    # 腾讯云 SecretId。敏感配置，只在真实 Nacos 中填写，不要提交真实值到代码仓库。
+    secret-id: "<TODO:TENCENT_SES_SECRET_ID>"
+    # 腾讯云 SecretKey。敏感配置，只在真实 Nacos 中填写，不要提交真实值到代码仓库。
+    secret-key: "<TODO:TENCENT_SES_SECRET_KEY>"
+    # 腾讯云 SES 已验证并允许发信的发件邮箱。
+    from-email: "<TODO:no-reply@your-domain.com>"
+    # 收件人看到的发件人名称。
+    from-name: "创智星球"
+    # 回复邮箱，可填写客服邮箱或不接收回复的业务邮箱。
+    reply-to-email: "<TODO:support@your-domain.com>"
+    # 连接腾讯云 API 的连接超时时间，单位：毫秒。
+    connect-timeout-ms: 3000
+    # 等待腾讯云 API 响应的读取超时时间，单位：毫秒。
+    read-timeout-ms: 5000
+    # 本地 HTML 模板目录，仅用于本地渲染/预览/测试。
+    # 腾讯云真实发送以 template-ids 中审核通过的模板为准。
+    template-dir: "email-templates/tencent"
+    # 腾讯云已审核通过的模板 ID。
+    # 注意：模板 Code 是系统内部固定枚举；右侧数字必须填写腾讯云控制台审核通过的真实模板 ID。
+    template-ids:
+      # 邮箱验证通知：用户绑定或换绑邮箱时发送验证码。
+      EMAIL_VERIFY_CODE: 173982
+      # 未读消息待查看：IM 消息 2 小时未读后提醒用户查看。
+      UNREAD_MESSAGE_REMINDER: 173983
+      # 课程即将开始提醒：开课前提醒老师/学生。
+      LESSON_START_REMINDER: 173984
+      # 课后总结已生成：课程总结生成完成后通知用户。
+      LESSON_SUMMARY: 173985

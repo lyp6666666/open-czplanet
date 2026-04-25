@@ -20,6 +20,7 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
+    client_max_body_size 25m;
 
     access_log /var/log/nginx/ai-tutor-app-host.access.log;
     error_log /var/log/nginx/ai-tutor-app-host.error.log warn;
@@ -173,7 +174,7 @@ rm -f /etc/nginx/sites-enabled/ai-tutor-payment-callback.conf
 ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/ai-tutor-app-host.conf
 nginx -t
 systemctl enable nginx >/dev/null 2>&1 || true
-systemctl restart nginx
+systemctl reload nginx || systemctl restart nginx
 
 echo "[setup_app_host_nginx] 完成"
 echo "用户端本机入口: http://127.0.0.1/"

@@ -134,6 +134,7 @@ public class CourseEnrollmentService {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void onCollaborationAccepted(Long roomId, Long proposalId) {
         if (roomId == null) {
             return;
@@ -589,7 +590,13 @@ public class CourseEnrollmentService {
     }
 
     private void processWeeklyScheduleReminders() {
-        List<CourseEnrollment> list = courseEnrollmentMapper.listWeeklyScheduleReminderDue(LocalDateTime.now(), 50);
+        List<CourseEnrollment> list;
+        try {
+            list = courseEnrollmentMapper.listWeeklyScheduleReminderDue(LocalDateTime.now(), 50);
+        } catch (Exception ex) {
+            log.warn("skip weekly schedule reminders because reminder columns may be unavailable", ex);
+            return;
+        }
         if (list == null || list.isEmpty()) {
             return;
         }
@@ -611,7 +618,11 @@ public class CourseEnrollmentService {
                 column = "weekly_reminder_12h_sent_at";
                 label = "12 小时";
             }
-            courseEnrollmentMapper.markWeeklyReminderSent(course.getId(), column, now);
+            try {
+                courseEnrollmentMapper.markWeeklyReminderSent(course.getId(), column, now);
+            } catch (Exception ex) {
+                log.warn("skip markWeeklyReminderSent for courseId={} column={}", course.getId(), column, ex);
+            }
             sendWeeklyScheduleReminderMessage(course, "请尽快确认正式每周课表，距离截止还有 " + label + "。");
         }
     }

@@ -3,7 +3,7 @@
     <view class="hero">
       <text class="eyebrow">Email reminders</text>
       <text class="title">邮箱提醒设置</text>
-      <text class="desc">短信目前仅用于验证码。绑定邮箱后，可接收未读消息提醒、开课提醒和课后总结。</text>
+      <text class="desc">{{ heroDesc }}</text>
     </view>
 
     <view v-if="tip" class="tip">{{ tip }}</view>
@@ -16,7 +16,7 @@
         </view>
         <text class="state">{{ primaryVerified ? '已验证' : '未开启' }}</text>
       </view>
-      <text class="copy">用于接收未读消息提醒、开课提醒和课后总结。</text>
+      <text class="copy">{{ primaryCopy }}</text>
       <input v-model="primaryEmail" class="input" placeholder="输入主邮箱" />
       <view class="row">
         <input v-model="primaryCode" class="input flex" placeholder="输入验证码" />
@@ -63,6 +63,16 @@ const primaryVerified = computed(() => status.value?.primaryEmail?.verifyStatus 
 const summaryVerified = computed(() => status.value?.summaryEmail?.verifyStatus === 'VERIFIED');
 const primaryText = computed(() => status.value?.primaryEmail?.emailMasked || '未绑定');
 const summaryText = computed(() => status.value?.summaryEmail?.emailMasked || '未设置');
+const heroDesc = computed(() =>
+  primaryVerified.value
+    ? '主邮箱已开启，未读消息、开课提醒和课后总结会继续通过邮件提醒你。'
+    : '短信目前仅用于验证码。绑定邮箱后，可接收未读消息提醒、开课提醒和课后总结。',
+);
+const primaryCopy = computed(() =>
+  primaryVerified.value
+    ? '当前主邮箱已用于接收未读消息提醒、开课提醒和课后总结。'
+    : '用于接收未读消息提醒、开课提醒和课后总结。',
+);
 
 async function load() {
   try {

@@ -33,11 +33,21 @@ set -- \
   "--exclude=**/.idea/**" \
   "--exclude=**/.logs/**" \
   "--exclude=**/.pids/**" \
+  "--exclude=Dockerfile/mysql-data/" \
   "--exclude=Dockerfile/mysql-data/**" \
+  "--exclude=Dockerfile/redis-data/" \
   "--exclude=Dockerfile/redis-data/**" \
+  "--exclude=Dockerfile/minio-data/" \
   "--exclude=Dockerfile/minio-data/**" \
+  "--exclude=Dockerfile/prometheus-data/" \
   "--exclude=Dockerfile/prometheus-data/**" \
-  "--exclude=Dockerfile/grafana-data/**"
+  "--exclude=Dockerfile/grafana-data/" \
+  "--exclude=Dockerfile/grafana-data/**" \
+  "--filter=P Dockerfile/mysql-data/" \
+  "--filter=P Dockerfile/redis-data/" \
+  "--filter=P Dockerfile/minio-data/" \
+  "--filter=P Dockerfile/prometheus-data/" \
+  "--filter=P Dockerfile/grafana-data/"
 
 case "$REMOTE_SYNC_DELETE" in
   1|true|yes)

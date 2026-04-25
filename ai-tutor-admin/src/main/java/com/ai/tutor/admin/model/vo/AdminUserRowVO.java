@@ -44,6 +44,8 @@ public class AdminUserRowVO {
 
     private Integer teacherProfileStatus;
 
+    private Integer teacherHomeStarTeacher;
+
     private String studentRealName;
 
     private Integer studentAge;
@@ -56,4 +58,3 @@ public class AdminUserRowVO {
 
     private Integer studentProfileStatus;
 }
-

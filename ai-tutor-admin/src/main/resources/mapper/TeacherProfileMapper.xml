@@ -25,6 +25,7 @@
         <result column="edu_verify_reject_reason" property="eduVerifyRejectReason"/>
         <result column="edu_verify_submit_time" property="eduVerifySubmitTime"/>
         <result column="edu_verify_time" property="eduVerifyTime"/>
+        <result column="home_star_teacher" property="homeStarTeacher"/>
         <result column="status" property="status"/>
         <result column="update_time" property="updateTime"/>
         <result column="create_time" property="createTime"/>
@@ -56,6 +57,9 @@
             </if>
             <if test="teacherExtInfo.city != null">
                 city = #{teacherExtInfo.city},
+            </if>
+            <if test="teacherExtInfo.homeStarTeacher != null">
+                home_star_teacher = #{teacherExtInfo.homeStarTeacher},
             </if>
             <if test="teacherExtInfo.status != null">
                 status = #{teacherExtInfo.status},

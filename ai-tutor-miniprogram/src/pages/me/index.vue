@@ -19,7 +19,7 @@
         <view class="action-item" @click="goToEmailSettings">
           <view>
             <text>邮箱提醒</text>
-            <text class="sub">接收消息、开课提醒和课后总结</text>
+            <text class="sub">{{ emailSubText }}</text>
           </view>
           <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
         </view>
@@ -41,11 +41,18 @@
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import { userApi } from '@/api/user';
 import { useUserStore } from '@/stores/user';
 import LoginCard from '@/components/LoginCard.vue';
 import { resolveImageUrl } from '@/utils/request';
 
 const userStore = useUserStore();
+const emailStatus = ref<any>(null);
+const emailPrimaryVerified = computed(() => emailStatus.value?.primaryEmail?.verifyStatus === 'VERIFIED');
+const emailSubText = computed(() =>
+  emailPrimaryVerified.value ? '已开启邮件提醒，可接收消息、开课提醒和课后总结' : '绑定后可接收消息、开课提醒和课后总结',
+);
 
 const handleSendCode = async (phone: string) => {
   try {
@@ -93,6 +100,22 @@ const goToMyJobs = () => {
 const goToEmailSettings = () => {
   uni.navigateTo({ url: '/pages/account/email' });
 };
+
+async function loadEmailStatus() {
+  if (!userStore.isLoggedIn) {
+    emailStatus.value = null;
+    return;
+  }
+  try {
+    emailStatus.value = await userApi.emailStatus();
+  } catch {
+    emailStatus.value = null;
+  }
+}
+
+onMounted(() => {
+  void loadEmailStatus();
+});
 </script>
 
 <style lang="scss" scoped>

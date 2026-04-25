@@ -94,6 +94,7 @@ server {
     listen 80;
     listen [::]:80;
     server_name $PUBLIC_DOMAIN;
+    client_max_body_size 25m;
 
     access_log /var/log/nginx/ai-tutor-test.access.log;
     error_log /var/log/nginx/ai-tutor-test.error.log warn;
@@ -178,6 +179,7 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name $PUBLIC_DOMAIN;
+    client_max_body_size 25m;
 
     ssl_certificate $TLS_CERT_PATH;
     ssl_certificate_key $TLS_KEY_PATH;
@@ -266,9 +268,30 @@ server {
     listen 80;
     listen [::]:80;
     server_name $ADMIN_DOMAIN;
+    client_max_body_size 25m;
 
     access_log /var/log/nginx/ai-tutor-admin-test.access.log;
     error_log /var/log/nginx/ai-tutor-admin-test.error.log warn;
+
+    location /api/admin/ {
+        proxy_pass http://127.0.0.1:18084;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
 
     location / {
         proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
@@ -290,12 +313,33 @@ server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
     server_name $ADMIN_DOMAIN;
+    client_max_body_size 25m;
 
     ssl_certificate $TLS_CERT_PATH;
     ssl_certificate_key $TLS_KEY_PATH;
 
     access_log /var/log/nginx/ai-tutor-admin-test-ssl.access.log;
     error_log /var/log/nginx/ai-tutor-admin-test-ssl.error.log warn;
+
+    location /api/admin/ {
+        proxy_pass http://127.0.0.1:18084;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:$GATEWAY_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
 
     location / {
         proxy_pass http://127.0.0.1:$ADMIN_WEB_PORT;
