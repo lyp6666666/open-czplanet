@@ -16,22 +16,20 @@ jobs:
     steps:
       - name: Prepare SSH key
         env:
-          PROD_SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
-          PROD_HOST: ${{ secrets.PROD_HOST }}
-          PROD_PORT: ${{ secrets.PROD_PORT }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$PROD_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$SERVER_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "$PROD_PORT" "$PROD_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p 22 "$SERVER_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy to production server
         env:
-          PROD_HOST: ${{ secrets.PROD_HOST }}
-          PROD_PORT: ${{ secrets.PROD_PORT }}
-          PROD_USER: ${{ secrets.PROD_USER }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh -i ~/.ssh/id_ed25519 -p "$PROD_PORT" \
+          ssh -i ~/.ssh/id_ed25519 -p 22 \
             -o StrictHostKeyChecking=yes \
-            "$PROD_USER@$PROD_HOST" \
+            "$SERVER_USER@$SERVER_HOST" \
             '/usr/local/bin/ai-platform-prod-deploy.sh'
