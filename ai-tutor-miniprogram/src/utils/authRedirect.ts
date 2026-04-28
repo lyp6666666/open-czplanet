@@ -1,7 +1,6 @@
 import type { UserRole } from '@/types/domain';
 
 const PENDING_REDIRECT_KEY = 'ai_tutor_pending_redirect';
-const RESUME_INTENT_KEY = 'ai_tutor_resume_intent';
 const TAB_PAGES = new Set([
   '/pages/home/index',
   '/pages/chat/list',
@@ -11,11 +10,6 @@ const TAB_PAGES = new Set([
 export interface PendingRedirect {
   url: string;
   role?: UserRole;
-  intent?: string;
-}
-
-interface ResumeIntent {
-  url: string;
   intent?: string;
 }
 
@@ -50,6 +44,7 @@ export function getPendingRedirect(): PendingRedirect | null {
   return {
     url,
     role: (raw as PendingRedirect).role,
+    intent: String((raw as PendingRedirect).intent || '').trim() || undefined,
   };
 }
 
@@ -57,20 +52,11 @@ export function clearPendingRedirect() {
   uni.removeStorageSync(PENDING_REDIRECT_KEY);
 }
 
-export function setResumeIntent(url: string, intent?: string) {
-  if (!intent) return;
-  uni.setStorageSync(RESUME_INTENT_KEY, { url: normalizeUrl(url), intent });
-}
-
-export function consumeResumeIntent(url: string) {
-  const raw = uni.getStorageSync(RESUME_INTENT_KEY);
-  if (!raw || typeof raw !== 'object') return '';
-  const data = raw as ResumeIntent;
-  const current = normalizeUrl(url);
-  const target = normalizeUrl(data.url);
-  if (!current || !target || current !== target) return '';
-  uni.removeStorageSync(RESUME_INTENT_KEY);
-  return String(data.intent || '').trim();
+export function withRedirectIntent(url: string, intent?: string) {
+  const next = normalizeUrl(url);
+  const action = String(intent || '').trim();
+  if (!next || !action) return next;
+  return next.includes('?') ? `${next}&__intent=${encodeURIComponent(action)}` : `${next}?__intent=${encodeURIComponent(action)}`;
 }
 
 export function goLoginWithRedirect(url = currentPageUrl(), role?: UserRole, intent?: string) {
@@ -81,13 +67,18 @@ export function goLoginWithRedirect(url = currentPageUrl(), role?: UserRole, int
 export function resumePendingRedirect() {
   const pending = getPendingRedirect();
   if (!pending) return false;
+  if (pending.role) {
+    const currentRole = (uni.getStorageSync('currentRole') || '') as UserRole | '';
+    if (currentRole && currentRole !== pending.role) return false;
+  }
 
   clearPendingRedirect();
+  const targetUrl = withRedirectIntent(pending.url, pending.intent);
 
   if (TAB_PAGES.has(pending.url)) {
-    uni.switchTab({ url: pending.url });
+    uni.switchTab({ url: targetUrl });
   } else {
-    uni.navigateTo({ url: pending.url });
+    uni.navigateTo({ url: targetUrl });
   }
   return true;
 }

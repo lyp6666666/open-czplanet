@@ -141,7 +141,6 @@ import { chatApi } from '@/api/chat';
 import { favoritesApi } from '@/api/favorites';
 import { useUserStore } from '@/stores/user';
 import { ensureStudentMode } from '@/utils/studentGuard';
-import { consumeResumeIntent } from '@/utils/authRedirect';
 
 const userStore = useUserStore();
 const tutor = ref<any>(null);
@@ -155,8 +154,6 @@ const applyContent = ref('您好老师，我这边有一个家教需求，方便
 const applyBusy = ref(false);
 const favorited = ref(false);
 const favoriteBusy = ref(false);
-const pendingIntent = ref('');
-
 const subjectTags = computed(() => {
   const raw = String(tutor.value?.teacherProfile?.subject || '').trim();
   if (!raw) return [];
@@ -192,9 +189,11 @@ const badges = computed(() => {
 });
 
 onLoad(async (options: any) => {
-  pendingIntent.value = String(options?.__intent || '');
   if (options.id) {
     await fetchDetail(options.id);
+    if (String(options?.__intent || '') === 'open-tutor-apply' && userStore.isLoggedIn && userStore.currentRole === 'student') {
+      showApplyModal.value = true;
+    }
   }
 });
 
@@ -206,12 +205,6 @@ const fetchDetail = async (id: string) => {
     });
     tutor.value = res;
     await loadFavoriteState();
-    const resumeIntent = consumeResumeIntent(`/pages/tutor/detail?id=${id}`);
-    const nextIntent = resumeIntent || pendingIntent.value;
-    if (nextIntent === 'open-tutor-apply' && userStore.isLoggedIn && userStore.currentRole === 'student') {
-      showApplyModal.value = true;
-      pendingIntent.value = '';
-    }
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '加载失败', icon: 'none' });

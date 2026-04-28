@@ -63,7 +63,7 @@ import { userApi } from '@/api/user';
 import { useUserStore } from '@/stores/user';
 import LoginCard from '@/components/LoginCard.vue';
 import { resolveImageUrl } from '@/utils/request';
-import { consumePendingRedirect, setResumeIntent } from '@/utils/authRedirect';
+import { resumePendingRedirect } from '@/utils/authRedirect';
 
 const userStore = useUserStore();
 const emailStatus = ref<any>(null);
@@ -72,23 +72,8 @@ const emailSubText = computed(() =>
   emailPrimaryVerified.value ? '已开启邮件提醒，可接收消息、开课提醒和课后总结' : '绑定后可接收消息、开课提醒和课后总结',
 );
 
-const TAB_PAGES = new Set(['/pages/home/index', '/pages/chat/list', '/pages/me/index']);
-
-function withIntent(url: string, intent?: string) {
-  if (!intent) return url;
-  return url.includes('?') ? `${url}&__intent=${encodeURIComponent(intent)}` : `${url}?__intent=${encodeURIComponent(intent)}`;
-}
-
 function continueAfterLogin() {
-  const pending = consumePendingRedirect();
-  if (pending?.role && userStore.currentRole !== pending.role) {
-    userStore.setCurrentRole(pending.role);
-  }
-  if (pending) {
-    setResumeIntent(pending.url, pending.intent);
-    const targetUrl = withIntent(pending.url, pending.intent);
-    if (TAB_PAGES.has(pending.url)) uni.switchTab({ url: targetUrl });
-    else uni.navigateTo({ url: targetUrl });
+  if (resumePendingRedirect()) {
     return;
   }
   void loadEmailStatus();
