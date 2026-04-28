@@ -24,7 +24,7 @@ public class CreateScheduleEventRequest {
     @Schema(description = "单节标准课价（分）；创建首节课时建议明确传入", example = "30000")
     private Long lessonPriceFen;
 
-    @Schema(description = "试课收费比例，默认 50 表示半节课", example = "50")
+    @Schema(description = "兼容旧字段：平台暂不代收课时费，试课统一按 1 小时课时费线下结算", example = "100")
     private Integer trialPricePercent;
 
     @NotBlank

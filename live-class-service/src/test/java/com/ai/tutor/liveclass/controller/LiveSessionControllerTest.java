@@ -6,6 +6,7 @@ import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveWhiteboardSnapshotResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
 import com.ai.tutor.liveclass.service.LiveKitUrlResolver;
@@ -28,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,6 +37,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -176,6 +179,62 @@ class LiveSessionControllerTest {
     }
 
     @Test
+    void shouldReturnWhiteboardSnapshot() throws Exception {
+        when(liveClassService.whiteboard(8L, 1001L)).thenReturn(LiveWhiteboardSnapshotResp.builder()
+                .whiteboardId(99L)
+                .sessionId(8L)
+                .courseId(66L)
+                .sceneVersion(3L)
+                .scene(Map.of("elements", List.of(), "appState", Map.of("viewBackgroundColor", "#fffaf0"), "files", Map.of()))
+                .finalized(false)
+                .build());
+
+        mockMvc.perform(get("/live/sessions/8/whiteboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.whiteboardId").value(99))
+                .andExpect(jsonPath("$.data.sceneVersion").value(3))
+                .andExpect(jsonPath("$.data.scene.appState.viewBackgroundColor").value("#fffaf0"));
+    }
+
+    @Test
+    void shouldSaveWhiteboardSnapshot() throws Exception {
+        when(liveClassService.saveWhiteboard(eq(8L), eq(1001L), any(), eq(false))).thenReturn(LiveWhiteboardSnapshotResp.builder()
+                .whiteboardId(99L)
+                .sessionId(8L)
+                .courseId(66L)
+                .sceneVersion(4L)
+                .scene(Map.of("elements", List.of(), "appState", Map.of("viewBackgroundColor", "#fffaf0"), "files", Map.of()))
+                .finalized(false)
+                .build());
+
+        mockMvc.perform(put("/live/sessions/8/whiteboard/snapshot")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"sceneVersion\":3,\"scene\":{\"elements\":[],\"appState\":{\"viewBackgroundColor\":\"#fffaf0\"},\"files\":{}}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sceneVersion").value(4))
+                .andExpect(jsonPath("$.data.finalized").value(false));
+    }
+
+    @Test
+    void shouldFinalizeWhiteboardSnapshot() throws Exception {
+        when(liveClassService.saveWhiteboard(eq(8L), eq(1001L), any(), eq(true))).thenReturn(LiveWhiteboardSnapshotResp.builder()
+                .whiteboardId(99L)
+                .sessionId(8L)
+                .courseId(66L)
+                .sceneVersion(5L)
+                .scene(Map.of("elements", List.of(), "appState", Map.of("viewBackgroundColor", "#fffaf0"), "files", Map.of()))
+                .finalized(true)
+                .build());
+
+        mockMvc.perform(post("/live/sessions/8/whiteboard/finalize")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"sceneVersion\":4,\"scene\":{\"elements\":[],\"appState\":{\"viewBackgroundColor\":\"#fffaf0\"},\"files\":{}}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sceneVersion").value(5))
+                .andExpect(jsonPath("$.data.finalized").value(true));
+    }
+
+    @Test
     void shouldReturnAiState() throws Exception {
         when(liveClassService.aiState(8L, 1001L)).thenReturn(LiveAiStateResp.builder()
                 .sessionId(8L)
@@ -183,6 +242,9 @@ class LiveSessionControllerTest {
                 .aiStatus("ACTIVE")
                 .realtimeEnabled(true)
                 .summaryStatus("ACTIVE")
+                .asrEnabled(true)
+                .llmEnabled(true)
+                .segmentCount(12)
                 .currentTopic("一次函数图像")
                 .latestStageSummary("本阶段重点讲解了一次函数图像。")
                 .studentQuestions(List.of("为什么 k 越大越陡"))
@@ -191,6 +253,9 @@ class LiveSessionControllerTest {
         mockMvc.perform(get("/live/sessions/8/ai/state"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aiStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.asrEnabled").value(true))
+                .andExpect(jsonPath("$.data.llmEnabled").value(true))
+                .andExpect(jsonPath("$.data.segmentCount").value(12))
                 .andExpect(jsonPath("$.data.currentTopic").value("一次函数图像"));
     }
 

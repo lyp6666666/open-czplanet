@@ -288,11 +288,6 @@ public class ScheduleServiceImpl implements ScheduleService {
             subjectId = positionPostMapper.selectFirstEnabledLeafId();
             ThrowUtils.throwIf(subjectId == null, ErrorCode.OPERATION_ERROR, "未找到可用科目，请先初始化科目数据");
         }
-        if (request.getCourseId() != null) {
-            LessonPaymentOrder unpaid = lessonPaymentOrderService.findUnpaidByCourseId(request.getCourseId());
-            ThrowUtils.throwIf(unpaid != null, ErrorCode.OPERATION_ERROR, "上一节课尚未支付，支付后才能预约下一节课");
-        }
-
         // 关联聊天会话，用于在聊天中投递授课申请卡片
         Long roomId = imFacade.getOrCreateRoomWithUser(uid, target.getId());
         imFacade.assertRoomReadyForScheduling(uid, roomId);
@@ -652,7 +647,7 @@ public class ScheduleServiceImpl implements ScheduleService {
                         .lessonType("NORMAL")
                         .lessonPriceFen(request.getLessonPriceFen())
                         .trialPricePercent(100)
-                        .payableAmountFen(request.getLessonPriceFen())
+                        .payableAmountFen(0L)
                         .subjectId(subjectId)
                         .startTime(start)
                         .durationMinutes(duration)
@@ -750,14 +745,8 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     private static Long computePayableAmountFen(Long lessonPriceFen, String lessonType, Integer trialPricePercent) {
-        if (lessonPriceFen == null || lessonPriceFen <= 0) {
-            return null;
-        }
-        if ("TRIAL".equalsIgnoreCase(lessonType)) {
-            // 中文注释：线上试课默认按半节课收费，可由发起试课时的 trialPricePercent 调整。
-            return lessonPriceFen * clampPercent(trialPricePercent, 50) / 100;
-        }
-        return lessonPriceFen;
+        // 当前不代收试课或正式课课时费；价格字段只作为双方线下结算参考。
+        return 0L;
     }
 
     private static Long computePlatformFee(Long amountFen) {

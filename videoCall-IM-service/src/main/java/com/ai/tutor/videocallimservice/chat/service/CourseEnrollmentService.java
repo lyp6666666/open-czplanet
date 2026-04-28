@@ -194,6 +194,9 @@ public class CourseEnrollmentService {
             return out;
         }
         for (CourseEnrollment e : rows) {
+            if (CourseEnrollmentStatus.APPLYING.name().equals(e.getStatus())) {
+                continue;
+            }
             ensureAcceptedTrialScheduleIfNeeded(e, false);
             out.add(CourseItemVO.builder()
                     .courseId(e.getId())
@@ -209,6 +212,11 @@ public class CourseEnrollmentService {
                     .status(e.getStatus())
                     .trialStartAt(e.getTrialStartAt())
                     .trialEndAt(e.getTrialEndAt())
+                    .payDeadlineAt(resolvePayDeadlineAt(e))
+                    .payExpired(isPayExpired(e))
+                    .archiveReason(isPayExpired(e) ? "教师超时未支付信息费" : null)
+                    .latestRefund(toRefundInfo(refundRequestMapper.selectLatestByCourseIdOrRoomId(e.getId(), e.getRoomId())))
+                    .latestProposal(toProposalInfo(resolveLatestProposal(e)))
                     .build());
         }
         return out;
@@ -730,6 +738,66 @@ public class CourseEnrollmentService {
                 .trialEndAt(course.getTrialEndAt())
                 .weeklyScheduleDeadlineAt(course.getWeeklyScheduleDeadlineAt())
                 .weeklyScheduleSubmittedAt(course.getWeeklyScheduleSubmittedAt())
+                .build();
+    }
+
+    private CollaborationProposal resolveLatestProposal(CourseEnrollment course) {
+        if (course == null || course.getRoomId() == null) {
+            return null;
+        }
+        CollaborationProposal pending = collaborationProposalMapper.selectLatestPendingByRoomId(course.getRoomId());
+        if (pending != null) {
+            return pending;
+        }
+        return collaborationProposalMapper.selectLatestByRoomId(course.getRoomId());
+    }
+
+    private static LocalDateTime resolvePayDeadlineAt(CourseEnrollment course) {
+        if (course == null || !CourseEnrollmentStatus.WAIT_PAY.name().equals(course.getStatus())) {
+            return null;
+        }
+        LocalDateTime base = course.getUpdateTime() == null ? course.getCreateTime() : course.getUpdateTime();
+        return base == null ? null : base.plusHours(48);
+    }
+
+    private static boolean isPayExpired(CourseEnrollment course) {
+        LocalDateTime deadline = resolvePayDeadlineAt(course);
+        return deadline != null && !deadline.isAfter(LocalDateTime.now());
+    }
+
+    private static CourseItemVO.RefundInfo toRefundInfo(RefundRequest request) {
+        if (request == null) {
+            return null;
+        }
+        return CourseItemVO.RefundInfo.builder()
+                .id(request.getId())
+                .type(request.getType())
+                .status(request.getStatus())
+                .reason(request.getReason())
+                .adminNote(request.getAdminNote())
+                .refundPercent(request.getRefundPercent())
+                .refundAmountFen(request.getRefundAmountFen())
+                .createTime(request.getCreateTime())
+                .decidedAt(request.getDecidedAt())
+                .build();
+    }
+
+    private static CourseItemVO.ProposalInfo toProposalInfo(CollaborationProposal proposal) {
+        if (proposal == null) {
+            return null;
+        }
+        return CourseItemVO.ProposalInfo.builder()
+                .id(proposal.getId())
+                .fromUid(proposal.getFromUid())
+                .toUid(proposal.getToUid())
+                .status(proposal.getStatus())
+                .pricePerHour(proposal.getPricePerHour())
+                .classTime(proposal.getClassTime())
+                .frequencyPerWeek(proposal.getFrequencyPerWeek())
+                .trialStartAt(proposal.getTrialStartAt())
+                .trialEndAt(proposal.getTrialEndAt())
+                .remark(proposal.getRemark())
+                .expireAt(proposal.getExpireAt())
                 .build();
     }
 

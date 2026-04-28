@@ -510,6 +510,11 @@ CREATE TABLE `course_enrollment` (
             `status` varchar(32) NOT NULL COMMENT '课程状态 APPLYING/WAIT_PAY/COMMUNICATING/REFUND_REVIEW/REFUNDED/TRIALING/TRIAL_REFUND_REVIEW/TEACHING/FINISHED',
             `trial_start_at` datetime(3) DEFAULT NULL COMMENT '试课开始时间',
             `trial_end_at` datetime(3) DEFAULT NULL COMMENT '试课结束时间（开始+7天）',
+            `weekly_schedule_deadline_at` datetime(3) DEFAULT NULL COMMENT '试课通过后正式课表提交截止时间',
+            `weekly_schedule_submitted_at` datetime(3) DEFAULT NULL COMMENT '正式课表提交时间',
+            `weekly_reminder_12h_sent_at` datetime(3) DEFAULT NULL COMMENT '正式课表 12h 提醒发送时间',
+            `weekly_reminder_6h_sent_at` datetime(3) DEFAULT NULL COMMENT '正式课表 6h 提醒发送时间',
+            `weekly_reminder_1h_sent_at` datetime(3) DEFAULT NULL COMMENT '正式课表 1h 提醒发送时间',
             `create_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
             `update_time` datetime(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
             PRIMARY KEY (`id`),
@@ -517,7 +522,8 @@ CREATE TABLE `course_enrollment` (
             KEY `idx_course_teacher_status` (`teacher_uid`, `status`),
             KEY `idx_course_student_status` (`student_uid`, `status`),
             KEY `idx_course_room` (`room_id`),
-            KEY `idx_course_proposal` (`proposal_id`)
+            KEY `idx_course_proposal` (`proposal_id`),
+            KEY `idx_course_weekly_schedule_deadline` (`status`, `weekly_schedule_deadline_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='我的课程视图表（聚合申请/支付/合作/退款/试课状态）';
 
 DROP TABLE IF EXISTS `refund_request`;

@@ -68,6 +68,8 @@ const permissionModalActions = ref<string[]>([])
 const securityHelpOpen = ref(false)
 
 const speakerTestMessage = ref('')
+const aiRealtimeSummaryEnabled = ref(true)
+const aiPostClassSummaryEnabled = ref(true)
 
 const deviceCheckItems = computed(() => {
   const cameraStatus: DeviceCheckState =
@@ -202,6 +204,8 @@ async function load() {
   error.value = null
   try {
     prepareData.value = await liveApi.prepare(courseId.value, { clientType: 'WEB', sourcePage: 'LIVE_PREPARE' })
+    aiRealtimeSummaryEnabled.value = prepareData.value.realtimeSummaryEnabled ?? true
+    aiPostClassSummaryEnabled.value = prepareData.value.postClassSummaryEnabled ?? true
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载课堂失败'
   } finally {
@@ -357,6 +361,10 @@ async function enterClassroom() {
         secureContext: browserSupport.value.secureContext,
         permissionState: permissionState.value,
       },
+    })
+    await liveApi.updateAiOptions(prepareData.value.sessionId, {
+      realtimeSummaryEnabled: aiRealtimeSummaryEnabled.value,
+      postClassSummaryEnabled: aiPostClassSummaryEnabled.value,
     })
     saveLiveMediaPreferences({
       cameraEnabled: cameraEnabled.value,
@@ -601,6 +609,26 @@ onUnmounted(() => {
         <div class="summary-row">
           <span>浏览器环境</span>
           <strong>{{ browserSupport.secureContext ? '安全连接' : '非安全连接' }}</strong>
+        </div>
+        <div class="ai-options">
+          <div class="ai-options-head">
+            <strong>AI 课堂助手</strong>
+            <span>进入课堂前可选择，本节课内生效</span>
+          </div>
+          <label class="ai-option-row">
+            <span>
+              <strong>AI 实时总结</strong>
+              <small>开启后会采集本地麦克风音频旁路送入 ASR，静音时自动暂停上传。</small>
+            </span>
+            <input v-model="aiRealtimeSummaryEnabled" type="checkbox" data-testid="prepare-ai-realtime" />
+          </label>
+          <label class="ai-option-row">
+            <span>
+              <strong>AI 课后总结</strong>
+              <small>课堂结束后基于转写与阶段总结生成课后反馈。</small>
+            </span>
+            <input v-model="aiPostClassSummaryEnabled" type="checkbox" data-testid="prepare-ai-postclass" />
+          </label>
         </div>
         <div v-if="error" class="hint error">{{ error }}</div>
         <div class="actions">
@@ -949,6 +977,51 @@ p {
 
 .summary-row strong {
   color: var(--ink);
+}
+
+.ai-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.16), transparent 30%),
+    rgba(240, 253, 250, 0.66);
+}
+
+.ai-options-head {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-options-head strong {
+  color: var(--ink);
+}
+
+.ai-options-head span,
+.ai-option-row small {
+  color: var(--muted);
+}
+
+.ai-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ai-option-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.ai-option-row small {
+  line-height: 1.5;
 }
 
 .actions {

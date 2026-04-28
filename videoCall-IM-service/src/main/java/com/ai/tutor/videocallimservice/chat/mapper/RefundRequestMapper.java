@@ -12,5 +12,6 @@ public interface RefundRequestMapper {
     RefundRequest selectById(@Param("id") Long id);
 
     RefundRequest selectPendingByBrokerageOrderId(@Param("brokerageOrderId") Long brokerageOrderId);
-}
 
+    RefundRequest selectLatestByCourseIdOrRoomId(@Param("courseId") Long courseId, @Param("roomId") Long roomId);
+}

@@ -36,8 +36,7 @@ const avatarBroken = ref(false)
 const scheduleOpen = ref(false)
 const scheduleTitle = ref('')
 const scheduleDescription = ref('')
-const scheduleLessonPriceYuan = ref('200')
-const scheduleTrialPricePercent = ref(50)
+const scheduleLessonPriceYuan = ref('')
 const scheduleStartAt = ref<number>(roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000))
 const scheduleEndAt = ref<number>(scheduleStartAt.value + 60 * 60 * 1000)
 const scheduleError = ref<string | null>(null)
@@ -57,7 +56,7 @@ const trialDecisionResult = ref<'PASS' | 'FAIL'>('PASS')
 const trialDecisionReason = ref('')
 const weeklyScheduleOpen = ref(false)
 const weeklyScheduleError = ref<string | null>(null)
-const weeklyLessonPriceYuan = ref('200')
+const weeklyLessonPriceYuan = ref('')
 const weeklyWeeks = ref(16)
 const weeklyTitle = ref('正式每周课')
 const weeklyDescription = ref('试课通过后确认的固定课表')
@@ -136,15 +135,6 @@ function lessonStatusText(status: string) {
   return normalized || '未知状态'
 }
 
-function paymentStatusText(status?: string | null) {
-  const normalized = String(status || '').trim().toUpperCase()
-  if (normalized === 'PENDING') return '待支付'
-  if (normalized === 'PAYING') return '支付中'
-  if (normalized === 'PAID') return '已支付'
-  if (normalized === 'CANCELED') return '已取消'
-  return '未出账'
-}
-
 function courseStatusText(status?: string | null) {
   const normalized = String(status || '').trim().toUpperCase()
   if (normalized === 'TRIAL_WAIT_STUDENT_DECISION') return '待学生确认是否继续'
@@ -156,6 +146,15 @@ function courseStatusText(status?: string | null) {
 function formatMoneyFen(value?: number | null) {
   if (value == null || !Number.isFinite(value)) return '--'
   return `¥${(value / 100).toFixed(2)}`
+}
+
+function offlineSettlementText(item: ScheduleEventVO, index: number) {
+  if (isTrialLesson(index)) {
+    const reference = item.lessonPriceFen ? `（参考 ${formatMoneyFen(item.lessonPriceFen)}）` : ''
+    return `试课费用按 1 小时课时费${reference}，请双方私下转账`
+  }
+  if (item.lessonPriceFen) return `参考课时费 ${formatMoneyFen(item.lessonPriceFen)}，平台不代收，请私下结算`
+  return '平台不代收正式课费用，请双方私下约定并结算'
 }
 
 const participantUid = computed(() => {
@@ -278,7 +277,6 @@ function openScheduleCreate() {
   scheduleTitle.value = detail.value.courseName?.trim() || `与${participantName.value}的线上课程`
   scheduleDescription.value = latestLesson.value ? '补充新增课节' : '第一节试课'
   scheduleLessonPriceYuan.value = ''
-  scheduleTrialPricePercent.value = 50
   scheduleStartAt.value = roundToNextHalfHour(Date.now() + 2 * 60 * 60 * 1000)
   scheduleEndAt.value = scheduleStartAt.value + 60 * 60 * 1000
   scheduleOpen.value = true
@@ -318,6 +316,22 @@ function minutesToTimeText(minutes: number) {
   const h = String(Math.floor(minutes / 60)).padStart(2, '0')
   const m = String(minutes % 60).padStart(2, '0')
   return `${h}:${m}`
+}
+
+function parseTimeInputMinutes(value: string) {
+  const parts = value.split(':').map((part) => Number(part))
+  const h = parts[0]
+  const m = parts[1]
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0
+  return Math.min(24 * 60, Math.max(0, Number(h) * 60 + Number(m)))
+}
+
+function applyWeeklySlotTime(index: number, key: 'startMinute' | 'endMinute', value: string) {
+  const slot = weeklySlots.value[index]
+  if (!slot) return
+  const next = weeklySlots.value.slice()
+  next[index] = { ...slot, [key]: parseTimeInputMinutes(value) }
+  weeklySlots.value = next
 }
 
 function parseWeeklyPriceFen() {
@@ -382,7 +396,7 @@ async function submitScheduleCreate() {
       courseId: detail.value.courseId,
       lessonType,
       lessonPriceFen: priceFen,
-      trialPricePercent: lessonType === 'TRIAL' ? scheduleTrialPricePercent.value : undefined,
+      trialPricePercent: lessonType === 'TRIAL' ? 100 : undefined,
       title: titleText,
       participantUserId: participantUid.value,
       startAt: scheduleStartAt.value,
@@ -401,7 +415,7 @@ async function submitScheduleCreate() {
 
 async function completeLesson(item: ScheduleEventVO) {
   if (saving.value || item.status !== 'ACCEPTED') return
-  const confirmed = window.confirm(`确认「${item.title}」已完成授课吗？结课后会生成学生待支付课时费账单。`)
+  const confirmed = window.confirm(`确认「${item.title}」已完成授课吗？平台不会生成课时费账单，请双方按约定私下结算。`)
   if (!confirmed) return
   saving.value = true
   lessonActionError.value = null
@@ -409,24 +423,13 @@ async function completeLesson(item: ScheduleEventVO) {
   try {
     await appointmentApi.complete(item.id)
     await load()
-    toast.show('已结课，待学生支付本节课费用。', 'success')
+    toast.show('已结课。平台不代收课时费，请双方按约定私下结算。', 'success')
   } catch (e) {
     lessonActionError.value = e instanceof Error ? e.message : '结课失败'
   } finally {
     setLessonActionBusy(item.id, null)
     saving.value = false
   }
-}
-
-function payLesson(item: ScheduleEventVO) {
-  if (!item.lessonPaymentOrderId) return
-  void router.push({
-    name: 'cashierPay',
-    query: {
-      contextType: 'LESSON_PAYMENT_ORDER',
-      contextId: String(item.lessonPaymentOrderId),
-    },
-  })
 }
 
 async function cancelLesson(item: ScheduleEventVO) {
@@ -517,7 +520,7 @@ async function submitTrialDecision() {
     if (trialDecisionResult.value === 'PASS') {
       await load()
       weeklyScheduleOpen.value = true
-      toast.show('试课结果已提交，请继续确认正式每周课表。', 'success')
+      toast.show('试课结果已提交，请继续选择后续正式上课时间。', 'success')
     } else {
       await load()
       toast.show('已提交试课不继续结果。', 'success')
@@ -537,7 +540,7 @@ async function submitWeeklySchedule() {
   }
   const lessonPriceFen = parseWeeklyPriceFen()
   if (lessonPriceFen === null) {
-    weeklyScheduleError.value = '请输入有效课时费'
+    weeklyScheduleError.value = '请输入有效课时费，或留空后在线下自行约定'
     return
   }
   saving.value = true
@@ -556,7 +559,7 @@ async function submitWeeklySchedule() {
     lessons.value = [...lessons.value, ...created]
     weeklyScheduleOpen.value = false
     await load()
-    toast.show('正式每周课表已提交。', 'success')
+    toast.show('正式上课时间已确认。平台不代收课时费，请双方按约定私下结算。', 'success')
   } catch (e) {
     weeklyScheduleError.value = e instanceof Error ? e.message : '提交正式课表失败'
   } finally {
@@ -645,6 +648,14 @@ async function load() {
       } catch {
         // 课程未生成课堂会话时，页面继续按基础课程信息展示。
       }
+    }
+    if (
+      route.query.weeklySchedule === '1'
+      && !isTeacher.value
+      && String(detail.value?.status || '').trim().toUpperCase() === 'TRIAL_WAIT_WEEKLY_SCHEDULE'
+    ) {
+      openWeeklySchedule()
+      void router.replace({ name: 'courseDetail', params: { courseId: String(courseId.value) } })
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载课程详情失败'
@@ -771,9 +782,8 @@ onMounted(() => {
                 <div class="lesson-sub">{{ item.description || '暂无备注' }}</div>
                 <div v-if="lessonMetaText(item, index)" class="lesson-meta">{{ lessonMetaText(item, index) }}</div>
                 <div class="lesson-pay-meta">
-                  <span>{{ paymentStatusText(item.paymentStatus) }}</span>
-                  <span>应付 {{ formatMoneyFen(item.payableAmountFen) }}</span>
-                  <span v-if="isTeacher">平台服务费 {{ item.platformFeeRate ?? 10 }}%，预计到账 {{ formatMoneyFen(item.teacherIncomeAmountFen) }}</span>
+                  <span>线下结算</span>
+                  <span>{{ offlineSettlementText(item, index) }}</span>
                 </div>
               </div>
               <div class="lesson-side">
@@ -793,9 +803,7 @@ onMounted(() => {
                   <button v-if="isTeacher" class="btn" type="button" :disabled="isLessonActionBusy(item.id) || item.status !== 'ACCEPTED'" @click="completeLesson(item)">
                     {{ getLessonActionBusyText(item.id) || '结课' }}
                   </button>
-                  <button v-else class="btn btn-primary" type="button" :disabled="item.paymentStatus !== 'PENDING' && item.paymentStatus !== 'PAYING'" @click="payLesson(item)">
-                    去支付
-                  </button>
+                  <button v-else class="btn" type="button" disabled>费用线下结算</button>
                   <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click="cancelLesson(item)">
                     {{ getLessonActionBusyText(item.id) || '删课' }}
                   </button>
@@ -821,7 +829,7 @@ onMounted(() => {
     <div v-if="scheduleOpen" class="mask" @click.self="closeScheduleCreate">
       <div class="modal card">
         <div class="modal-title">新增课节</div>
-        <div class="modal-desc">为这门长期课程补充一节新的短期课。当前实现会自动把新课节挂到课程 #{{ detail?.courseId }} 下。</div>
+        <div class="modal-desc">为这门合作补充一节课。平台暂不代收课时费；若是首节试课，费用统一按 1 小时课时费由双方私下转账。</div>
         <div v-if="scheduleError" class="hint error">{{ scheduleError }}</div>
         <div class="field">
           <div class="label">课节名称</div>
@@ -843,14 +851,11 @@ onMounted(() => {
         </div>
         <div class="time-grid">
           <div class="field">
-            <div class="label">单节标准课价（元）</div>
-            <input v-model="scheduleLessonPriceYuan" class="input" inputmode="decimal" placeholder="例如：200" />
+            <div class="label">参考课时费（元，可选）</div>
+            <input v-model="scheduleLessonPriceYuan" class="input" inputmode="decimal" placeholder="仅用于双方参考，平台不收取" />
+            <div class="field-hint">试课费用固定按 1 小时课时费计算；正式课费用也由双方私下结算。</div>
           </div>
-          <div class="field">
-            <div class="label">试课收费比例</div>
-            <input v-model.number="scheduleTrialPricePercent" class="input" type="number" min="1" max="100" />
-            <div class="field-hint">第一节试课默认 50%，即半节课费用；正式课按 100% 计费。</div>
-          </div>
+          <div class="settlement-note">实时视频课堂和 AI 课后总结暂免费提供，本页面只记录课节安排，不生成平台课时费账单。</div>
         </div>
         <div class="modal-actions">
           <button class="btn" type="button" :disabled="saving" @click="closeScheduleCreate">取消</button>
@@ -892,7 +897,7 @@ onMounted(() => {
     <div v-if="trialDecisionOpen" class="mask" @click.self="closeTrialDecision">
       <div class="modal card">
         <div class="modal-title">提交试课结果</div>
-        <div class="modal-desc">试课结束后，是否继续只能由学生确认。</div>
+        <div class="modal-desc">试课结束后，是否继续只能由学生确认。无论是否继续，试课费用均按 1 小时课时费由双方私下结算。</div>
         <div class="field">
           <div class="label">结果</div>
           <select v-model="trialDecisionResult" class="input">
@@ -914,7 +919,7 @@ onMounted(() => {
     <div v-if="weeklyScheduleOpen" class="mask" @click.self="closeWeeklySchedule">
       <div class="modal card">
         <div class="modal-title">确认正式每周课表</div>
-        <div class="modal-desc">当前版本先要求所有固定课节时长一致，默认向后生成 {{ weeklyWeeks }} 周课程；正式课表提交后不可重复提交。</div>
+        <div class="modal-desc">请选择后续正式上课时间。平台暂不代收正式课费用，实时视频课堂和 AI 课后总结暂免费提供。</div>
         <div v-if="weeklyScheduleError" class="hint error">{{ weeklyScheduleError }}</div>
         <div class="field">
           <div class="label">课表标题</div>
@@ -922,8 +927,8 @@ onMounted(() => {
         </div>
         <div class="time-grid">
           <div class="field">
-            <div class="label">课时费（元）</div>
-            <input v-model="weeklyLessonPriceYuan" class="input" inputmode="decimal" placeholder="例如：200" />
+            <div class="label">参考课时费（元，可选）</div>
+            <input v-model="weeklyLessonPriceYuan" class="input" inputmode="decimal" placeholder="仅用于记录，费用私下结算" />
           </div>
           <div class="field">
             <div class="label">生成周数</div>
@@ -947,12 +952,13 @@ onMounted(() => {
                 <option :value="6">周六</option>
                 <option :value="7">周日</option>
               </select>
-              <input v-model.number="slot.startMinute" class="input" type="number" min="0" max="1439" />
-              <input v-model.number="slot.endMinute" class="input" type="number" min="1" max="1440" />
+              <input class="input" type="text" inputmode="numeric" placeholder="19:00" :value="minutesToTimeText(slot.startMinute)" @change="applyWeeklySlotTime(index, 'startMinute', ($event.target as HTMLInputElement).value)" />
+              <input class="input" type="text" inputmode="numeric" placeholder="21:00" :value="minutesToTimeText(slot.endMinute)" @change="applyWeeklySlotTime(index, 'endMinute', ($event.target as HTMLInputElement).value)" />
               <button class="btn" type="button" @click="removeWeeklySlot(index)">删除</button>
             </div>
           </div>
-          <div class="field-hint">分钟值示例：19:00 = 1140，21:00 = 1260。当前时段：{{ weeklySlots.map((slot) => `${slot.dayOfWeek}-${minutesToTimeText(slot.startMinute)}~${minutesToTimeText(slot.endMinute)}`).join('；') }}</div>
+          <div class="field-hint">当前时段：{{ weeklySlots.map((slot) => `${slot.dayOfWeek}-${minutesToTimeText(slot.startMinute)}~${minutesToTimeText(slot.endMinute)}`).join('；') }}</div>
+          <div class="field-hint">提交后会生成正式课节，费用由双方按约定私下结算，平台不生成课时费支付单。</div>
           <button class="btn" type="button" @click="addWeeklySlot">新增时段</button>
         </div>
         <div class="modal-actions">
@@ -1176,6 +1182,17 @@ onMounted(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.settlement-note {
+  align-self: end;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 190, 189, 0.18);
+  border-radius: 14px;
+  background: rgba(0, 190, 189, 0.08);
+  color: #0d7e7d;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .lesson-side {

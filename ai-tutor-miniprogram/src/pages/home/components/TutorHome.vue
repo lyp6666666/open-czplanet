@@ -4,6 +4,13 @@
       <text class="tip">登录后查看需求</text>
       <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin">去登录</u-button>
     </view>
+    <view v-else-if="userStore.tutorStatus !== 'APPROVED'" class="guard-card">
+      <view class="guard-icon">{{ guardIcon }}</view>
+      <text class="guard-title">{{ guardTitle }}</text>
+      <text class="guard-desc">{{ guardDesc }}</text>
+      <button class="guard-btn primary" @click="handleGuardAction">{{ guardActionText }}</button>
+      <button class="guard-btn secondary" @click="switchStudent">先看老师</button>
+    </view>
     <view v-else>
       <view class="search-bar">
         <u-icon name="search" color="#646a73" size="20"></u-icon>
@@ -50,9 +57,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { jobsApi } from '@/api/jobs';
 import { useUserStore } from '@/stores/user';
+import { tutorStatusUrl } from '@/utils/tutorGuard';
 
 const userStore = useUserStore();
 const keyword = ref('');
@@ -112,10 +120,51 @@ const goLogin = () => {
 };
 
 onMounted(() => {
-  if (userStore.isLoggedIn) {
+  if (userStore.isLoggedIn && userStore.tutorStatus === 'APPROVED') {
     fetchJobs();
   }
 });
+
+const guardIcon = computed(() => {
+  if (userStore.tutorStatus === 'PENDING') return '…';
+  if (userStore.tutorStatus === 'REJECTED') return '!';
+  return '+';
+});
+
+const guardTitle = computed(() => {
+  if (userStore.tutorStatus === 'PENDING') return '资料审核中';
+  if (userStore.tutorStatus === 'REJECTED') return '审核未通过';
+  return '先完成家教入驻';
+});
+
+const guardDesc = computed(() => {
+  if (userStore.tutorStatus === 'PENDING') return '审核通过后即可浏览需求广场、收藏需求并发起沟通。';
+  if (userStore.tutorStatus === 'REJECTED') return userStore.tutorRejectReason;
+  return '补齐基础资料、授课信息和认证材料后，平台会开放教师接单能力。';
+});
+
+const guardActionText = computed(() => {
+  if (userStore.tutorStatus === 'PENDING') return '查看审核状态';
+  if (userStore.tutorStatus === 'REJECTED') return '重新完善资料';
+  return '去入驻';
+});
+
+function handleGuardAction() {
+  if (userStore.tutorStatus === 'PENDING') {
+    uni.navigateTo({ url: tutorStatusUrl('PENDING') });
+    return;
+  }
+  if (userStore.tutorStatus === 'REJECTED') {
+    uni.navigateTo({ url: tutorStatusUrl('REJECTED', userStore.tutorRejectReason) });
+    return;
+  }
+  uni.navigateTo({ url: '/pages/tutor/onboarding/index' });
+}
+
+function switchStudent() {
+  userStore.setCurrentRole('student');
+  uni.reLaunch({ url: '/pages/home/index' });
+}
 
 const normalizeLower = (v: unknown) => String(v || '').trim().toLowerCase();
 
@@ -210,6 +259,73 @@ const formatEducation = (v: unknown) => {
     font-size: 16px;
     color: var(--muted);
     margin-bottom: 24px;
+  }
+}
+
+.guard-card {
+  min-height: calc(100vh - 32px);
+  padding: 34px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+
+.guard-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 4px;
+  border-radius: 24px;
+  background: rgba(0, 190, 189, 0.12);
+  color: #00a7a6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.guard-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.guard-desc {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.guard-btn {
+  height: 48px;
+  border-radius: 999px;
+  border: 0;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &::after {
+    border: 0;
+  }
+  &.primary {
+    background: #00bebd;
+    color: #fff;
+    box-shadow: 0 10px 20px rgba(0, 190, 189, 0.20);
+  }
+  &.secondary {
+    background: #f6f7fb;
+    color: var(--text);
+    border: 1px solid rgba(31, 35, 41, 0.10);
   }
 }
 

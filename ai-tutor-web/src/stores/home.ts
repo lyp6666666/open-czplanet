@@ -63,6 +63,35 @@ function pickRandomNonOverlapping<T>(pool: T[], excludedIds: Set<number>, limit:
   return shuffled.slice(0, Math.max(0, limit))
 }
 
+function normalizeLegacyStaticAssetUrl(raw: string): string {
+  const value = raw.trim()
+  const prefix = '/api/v1/public/assets/'
+  if (!value.startsWith(prefix)) return value
+
+  const assetPath = value.slice(prefix.length)
+  const parts = assetPath.split('/').filter(Boolean)
+  if (parts.length !== 2) return value
+
+  const [folder, fileName] = parts as [string, string]
+  if (!['avatars', 'banners', 'brand', 'guides'].includes(folder)) return value
+  if (!/\.svg$/i.test(fileName)) return value
+
+  return `/${folder}/${fileName}`
+}
+
+function normalizeBanners(banners: BannersVO): BannersVO {
+  const normalizeItem = <T extends { imageUrl: string }>(item: T): T => ({
+    ...item,
+    imageUrl: normalizeLegacyStaticAssetUrl(item.imageUrl),
+  })
+
+  return {
+    ...banners,
+    carousel: (banners.carousel || []).map(normalizeItem),
+    cards: (banners.cards || []).map(normalizeItem),
+  }
+}
+
 export const useHomeStore = defineStore('home', {
   state: () => ({
     city: '全国',
@@ -139,7 +168,7 @@ export const useHomeStore = defineStore('home', {
 
         this.hotWords = hotWords
         this.subjectTree = subjectTree
-        this.banners = banners
+        this.banners = normalizeBanners(banners)
         this.hotTabsService = hotTabsService
         this.hotTabsDemand = hotTabsDemand
         this.footerLinks = footerLinks
@@ -166,7 +195,7 @@ export const useHomeStore = defineStore('home', {
       ])
 
       this.hotWords = hotWords
-      this.banners = banners
+      this.banners = normalizeBanners(banners)
       this.hotTabsService = hotTabsService
       this.hotTabsDemand = hotTabsDemand
 

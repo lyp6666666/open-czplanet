@@ -53,17 +53,19 @@ FRONTEND_STARTUP_WAIT_LOOPS="${FRONTEND_STARTUP_WAIT_LOOPS:-150}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
 INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana loki alertmanager promtail node-exporter cadvisor mysqld-exporter redis-exporter rabbitmq-exporter livekit}"
 AUTO_BOOTSTRAP_DEV_DB="${AUTO_BOOTSTRAP_DEV_DB:-1}"
+AUTO_VERIFY_DB_SCHEMA="${AUTO_VERIFY_DB_SCHEMA:-1}"
 LIVEKIT_API_KEY="${LIVEKIT_API_KEY:-dev-api-key}"
 LIVEKIT_API_SECRET="${LIVEKIT_API_SECRET:-CHANGE_ME_LIVEKIT_API_SECRET}"
 LIVEKIT_WS_URL="${LIVEKIT_WS_URL:-ws://127.0.0.1:${LIVEKIT_PORT}}"
 OPS_VERIFY_TOKEN="${OPS_VERIFY_TOKEN:-DevOpsVerifyTokenForE2E}"
 DEV_EXPOSE_SMS_CODE="${DEV_EXPOSE_SMS_CODE:-true}"
-ENABLE_AI_AGENT="${ENABLE_AI_AGENT:-0}"
+ENABLE_AI_AGENT="${ENABLE_AI_AGENT:-1}"
 AI_AGENT_HOST="${AI_AGENT_HOST:-127.0.0.1}"
 
 LOG_DIR="$ROOT_DIR/.logs"
 PID_DIR="$ROOT_DIR/.pids"
-mkdir -p "$LOG_DIR" "$PID_DIR"
+LAUNCHD_DIR="$ROOT_DIR/.launchd"
+mkdir -p "$LOG_DIR" "$PID_DIR" "$LAUNCHD_DIR"
 
 OS_NAME="$(uname -s 2>/dev/null || echo unknown)"
 case "$OS_NAME" in
@@ -293,8 +295,131 @@ case "$AUTO_BOOTSTRAP_DEV_DB" in
     ;;
 esac
 
+case "$AUTO_VERIFY_DB_SCHEMA" in
+  1|true|yes)
+    echo "[dev_all_up] 校验本地数据库结构是否与 sqlDoc/huoyue.sql 对齐..."
+    sh scripts/verify_db_schema_against_huoyue.sh
+    ;;
+  0|false|no)
+    echo "[dev_all_up] 跳过数据库结构校验（AUTO_VERIFY_DB_SCHEMA=$AUTO_VERIFY_DB_SCHEMA）"
+    ;;
+  *)
+    echo "[dev_all_up] 不支持的 AUTO_VERIFY_DB_SCHEMA=$AUTO_VERIFY_DB_SCHEMA，可选值：1/0 true/false yes/no"
+    exit 1
+    ;;
+esac
+
 echo "[dev_all_up] 构建本地依赖模块（ai-tutor-common/ai-tutor-mq，跳过测试与测试编译）..."
 ./mvnw -q -Dmaven.test.skip=true install -pl ai-tutor-common,ai-tutor-mq -am
+
+start_detached_process() {
+  service_label="$1"
+  runtime_pid_file="$2"
+  log_file="$3"
+  work_dir="$4"
+  shift 4
+
+  rm -f "$runtime_pid_file"
+
+  if [ "$OS_NAME" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
+    wrapper_script="$LAUNCHD_DIR/$service_label.sh"
+    plist_file="$LAUNCHD_DIR/$service_label.plist"
+    launchd_service="gui/$(id -u)/$service_label"
+    quoted_cmd=""
+    for arg in "$@"; do
+      escaped_arg="$(printf "%s" "$arg" | sed "s/'/'\\\\''/g")"
+      quoted_cmd="$quoted_cmd '$escaped_arg'"
+    done
+    cat >"$wrapper_script" <<EOF
+#!/bin/sh
+export PATH='$PATH'
+cd '$work_dir'
+echo \$\$ > '$runtime_pid_file'
+exec$quoted_cmd
+EOF
+    chmod +x "$wrapper_script"
+    cat >"$plist_file" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$service_label</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$wrapper_script</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>WorkingDirectory</key>
+  <string>$work_dir</string>
+  <key>StandardOutPath</key>
+  <string>$log_file</string>
+  <key>StandardErrorPath</key>
+  <string>$log_file</string>
+</dict>
+</plist>
+EOF
+    launchctl bootout "$launchd_service" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$plist_file" >/dev/null
+    launchctl kickstart -k "$launchd_service" >/dev/null
+
+    wait_loops=0
+    while [ ! -s "$runtime_pid_file" ]; do
+      wait_loops=$((wait_loops + 1))
+      if [ "$wait_loops" -ge 50 ]; then
+        break
+      fi
+      sleep 0.1
+    done
+
+    if [ -s "$runtime_pid_file" ]; then
+      cat "$runtime_pid_file"
+      return 0
+    fi
+  fi
+
+  if command -v setsid >/dev/null 2>&1; then
+    setsid sh -c '
+      pid_file="$1"
+      log_file="$2"
+      shift 2
+      echo "$$" >"$pid_file"
+      exec "$@" >>"$log_file" 2>&1
+    ' sh "$runtime_pid_file" "$log_file" "$@" </dev/null >/dev/null 2>&1 &
+  else
+    nohup sh -c '
+      pid_file="$1"
+      log_file="$2"
+      shift 2
+      echo "$$" >"$pid_file"
+      exec "$@" >>"$log_file" 2>&1
+    ' sh "$runtime_pid_file" "$log_file" "$@" </dev/null >/dev/null 2>&1 &
+  fi
+
+  launcher_pid=$!
+  wait_loops=0
+  while [ ! -s "$runtime_pid_file" ]; do
+    if ! kill -0 "$launcher_pid" >/dev/null 2>&1; then
+      break
+    fi
+    wait_loops=$((wait_loops + 1))
+    if [ "$wait_loops" -ge 50 ]; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  if [ -s "$runtime_pid_file" ]; then
+    cat "$runtime_pid_file"
+    return 0
+  fi
+
+  echo "$launcher_pid"
+  return 0
+}
 
 start_service() {
   svc_dir="$1"
@@ -310,14 +435,6 @@ start_service() {
       return 0
     fi
     rm -f "$pid_file"
-  fi
-  if [ -f "$worker_pid_file" ]; then
-    old_worker_pid="$(cat "$worker_pid_file" 2>/dev/null || true)"
-    if [ -n "$old_worker_pid" ] && kill -0 "$old_worker_pid" >/dev/null 2>&1; then
-      echo "[dev_all_up] $worker_name 已在运行 pid=$old_worker_pid"
-    else
-      rm -f "$worker_pid_file"
-    fi
   fi
 
   existing_listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)"
@@ -340,16 +457,42 @@ start_service() {
     cd "$ROOT_DIR"
     # 远程同步通常会保留源码时间戳；先 clean 再 compile，避免 resources 插件因 target 更新时间更晚而继续复用旧配置。
     ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" clean compile >/dev/null
-    SERVER_PORT="$port" SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" NACOS_NAMESPACE="$NACOS_NAMESPACE" \
-      nohup ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run >"$log_file" 2>&1 &
-    launcher_pid=$!
-    echo "$launcher_pid" >"$pid_file"
+    runtime_pid="$(start_detached_process "com.ai.tutor.dev.$svc_name" "$pid_file" "$log_file" "$ROOT_DIR" env \
+      SERVER_PORT="$port" \
+      SPRING_PROFILES_ACTIVE="$SPRING_PROFILES_ACTIVE" \
+      NACOS_NAMESPACE="$NACOS_NAMESPACE" \
+      NACOS_SERVER_ADDR="$NACOS_SERVER_ADDR" \
+      NACOS_CONFIG_NAMESPACE="$NACOS_CONFIG_NAMESPACE" \
+      NACOS_DISCOVERY_NAMESPACE="$NACOS_DISCOVERY_NAMESPACE" \
+      SPRING_APPLICATION_JSON="$SPRING_APPLICATION_JSON" \
+      ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run)"
+    echo "$runtime_pid" >"$pid_file"
   )
 
   i=0
   while true; do
+    launcher_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$launcher_pid" ] && ! kill -0 "$launcher_pid" >/dev/null 2>&1; then
+      echo "[dev_all_up] $svc_name 启动进程已退出"
+      [ -f "$log_file" ] && tail -n 120 "$log_file" || true
+      return 1
+    fi
     listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | sed -n '1p' || true)"
     if [ -n "$listen_pid" ]; then
+      if command -v curl >/dev/null 2>&1; then
+        health_url="http://127.0.0.1:$port/actuator/health"
+        health_code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$health_url" || true)"
+        if [ "$health_code" != "200" ]; then
+          i=$((i + 1))
+          if [ "$i" -ge "$SERVICE_STARTUP_WAIT_LOOPS" ]; then
+            echo "[dev_all_up] $svc_name 健康检查失败：$health_url code=$health_code"
+            [ -f "$log_file" ] && tail -n 120 "$log_file" || true
+            return 1
+          fi
+          sleep 0.2
+          continue
+        fi
+      fi
       echo "$listen_pid" >"$pid_file"
       return 0
     fi
@@ -415,17 +558,28 @@ start_ai_agent_service() {
   echo "[dev_all_up] 启动 $svc_name host=$AI_AGENT_HOST port=$port"
   (
     cd "$ROOT_DIR/ai-agent-service"
-    AI_AGENT_HOST="$AI_AGENT_HOST" AI_AGENT_PORT="$port" sh scripts/bootstrap_env.sh >/dev/null
-    eval "$(.venv/bin/python scripts/export_nacos_env.py)"
+    AI_AGENT_HOST="$AI_AGENT_HOST" AI_AGENT_PORT="$port" sh scripts/bootstrap_env.sh
+    UV_BIN_DIR="${UV_INSTALL_DIR:-$HOME/.local/bin}"
+    PATH="$UV_BIN_DIR:$PATH"
+    export PATH
+    ai_agent_env_file="$LAUNCHD_DIR/$svc_name.env"
+    {
+      printf "export NACOS_SERVER_ADDR='%s'\n" "$(printf "%s" "$NACOS_SERVER_ADDR" | sed "s/'/'\\\\''/g")"
+      printf "export NACOS_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_NAMESPACE" | sed "s/'/'\\\\''/g")"
+      printf "export NACOS_CONFIG_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_CONFIG_NAMESPACE" | sed "s/'/'\\\\''/g")"
+      printf "export NACOS_DISCOVERY_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_DISCOVERY_NAMESPACE" | sed "s/'/'\\\\''/g")"
+      printf "export SPRING_PROFILES_ACTIVE='%s'\n" "$(printf "%s" "$SPRING_PROFILES_ACTIVE" | sed "s/'/'\\\\''/g")"
+      uv run --active --python .venv/bin/python python scripts/export_nacos_env.py
+    } >"$ai_agent_env_file"
+    chmod 600 "$ai_agent_env_file"
+    . "$ai_agent_env_file"
     export AI_AGENT_HOST="$AI_AGENT_HOST"
     export AI_AGENT_PORT="$port"
-    nohup sh scripts/run_prod.sh >"$log_file" 2>&1 &
-    launcher_pid=$!
-    echo "$launcher_pid" >"$pid_file"
+    runtime_pid="$(start_detached_process "com.ai.tutor.dev.$svc_name" "$pid_file" "$log_file" "$ROOT_DIR/ai-agent-service" env AI_AGENT_ENV_FILE="$ai_agent_env_file" sh scripts/run_prod.sh)"
+    echo "$runtime_pid" >"$pid_file"
     case "${AI_AGENT_USE_ASYNC_WORKER:-true}" in
       1|true|yes)
-        nohup sh scripts/run_worker.sh >"$worker_log_file" 2>&1 &
-        worker_pid=$!
+        worker_pid="$(start_detached_process "com.ai.tutor.dev.$worker_name" "$worker_pid_file" "$worker_log_file" "$ROOT_DIR/ai-agent-service" env AI_AGENT_ENV_FILE="$ai_agent_env_file" sh scripts/run_worker.sh)"
         echo "$worker_pid" >"$worker_pid_file"
         ;;
     esac
@@ -433,8 +587,36 @@ start_ai_agent_service() {
 
   i=0
   while true; do
+    launcher_pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$launcher_pid" ] && ! kill -0 "$launcher_pid" >/dev/null 2>&1; then
+      echo "[dev_all_up] $svc_name 启动进程已退出"
+      [ -f "$log_file" ] && tail -n 120 "$log_file" || true
+      return 1
+    fi
     listen_pid="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null | sed -n '1p' || true)"
     if [ -n "$listen_pid" ]; then
+      if command -v curl >/dev/null 2>&1; then
+        health_url="http://$AI_AGENT_HOST:$port/health"
+        health_code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "$health_url" || true)"
+        if [ "$health_code" != "200" ]; then
+          i=$((i + 1))
+          if [ "$i" -ge "$SERVICE_STARTUP_WAIT_LOOPS" ]; then
+            echo "[dev_all_up] $svc_name 健康检查失败：$health_url code=$health_code"
+            [ -f "$log_file" ] && tail -n 120 "$log_file" || true
+            return 1
+          fi
+          sleep 0.2
+          continue
+        fi
+      fi
+      if [ -f "$worker_pid_file" ]; then
+        worker_pid="$(cat "$worker_pid_file" 2>/dev/null || true)"
+        if [ -n "$worker_pid" ] && ! kill -0 "$worker_pid" >/dev/null 2>&1; then
+          echo "[dev_all_up] $worker_name 未存活"
+          [ -f "$worker_log_file" ] && tail -n 120 "$worker_log_file" || true
+          return 1
+        fi
+      fi
       echo "$listen_pid" >"$pid_file"
       return 0
     fi
@@ -507,9 +689,10 @@ start_frontend() {
   echo "[dev_all_up] 启动 $app_name host=$FRONTEND_HOST port=$port base=$base_path"
   (
     cd "$ROOT_DIR/$app_dir"
-    VITE_BASE_PATH="$base_path" nohup npm run dev -- --host "$FRONTEND_HOST" --port "$port" --strictPort >"$log_file" 2>&1 &
-    launcher_pid=$!
-    echo "$launcher_pid" >"$pid_file"
+    runtime_pid="$(start_detached_process "com.ai.tutor.dev.$app_name" "$pid_file" "$log_file" "$ROOT_DIR/$app_dir" env \
+      VITE_BASE_PATH="$base_path" \
+      npm run dev -- --host "$FRONTEND_HOST" --port "$port" --strictPort)"
+    echo "$runtime_pid" >"$pid_file"
   )
 
   i=0

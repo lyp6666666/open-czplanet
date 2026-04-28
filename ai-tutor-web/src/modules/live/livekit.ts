@@ -48,6 +48,13 @@ export type LiveRoomConnectResult = {
   micError?: Error | null
 }
 
+export type LiveRoomDataMessage = {
+  topic?: string
+  payload: unknown
+  participantIdentity?: string
+  participantName?: string
+}
+
 export class BrowserMediaError extends Error {
   code: 'UNSUPPORTED' | 'INSECURE_CONTEXT' | 'PERMISSION_DENIED' | 'DEVICE_NOT_FOUND' | 'DEVICE_BUSY' | 'UNKNOWN'
 
@@ -219,6 +226,7 @@ export function attachMediaStream(element: HTMLMediaElement | null, stream: Medi
 }
 
 type TrackListener = (track: RemoteTrack, publication: RemoteTrackPublication, participant: Participant) => void
+type TrackUnpublishedListener = (publication: RemoteTrackPublication, participant: Participant) => void
 
 function redactLiveKitUrl(rawUrl: string) {
   try {
@@ -251,6 +259,8 @@ export class LiveRoomClient {
   room: Room
   localCameraPublication: LocalTrackPublication | undefined
   localMicrophonePublication: LocalTrackPublication | undefined
+  private readonly dataEncoder = new TextEncoder()
+  private readonly dataDecoder = new TextDecoder()
 
   constructor() {
     this.room = new Room({
@@ -335,6 +345,10 @@ export class LiveRoomClient {
     return publication as LocalTrackPublication | undefined
   }
 
+  async setScreenShareEnabled(enabled: boolean) {
+    return await this.room.localParticipant.setScreenShareEnabled(enabled)
+  }
+
   onTrackSubscribed(listener: TrackListener) {
     this.room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
       logLiveKit('track:subscribed', {
@@ -356,8 +370,22 @@ export class LiveRoomClient {
     })
   }
 
-  onTrackUnsubscribed(listener: (track: RemoteTrack) => void) {
+  onLocalTrackUnpublished(listener: (publication: LocalTrackPublication) => void) {
+    this.room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+      logLiveKit('track:local-unpublished', {
+        kind: publication.track?.kind,
+        source: publication.source,
+      })
+      listener(publication)
+    })
+  }
+
+  onTrackUnsubscribed(listener: (track: RemoteTrack, publication: RemoteTrackPublication, participant: Participant) => void) {
     this.room.on(RoomEvent.TrackUnsubscribed, listener)
+  }
+
+  onTrackUnpublished(listener: TrackUnpublishedListener) {
+    this.room.on(RoomEvent.TrackUnpublished, listener)
   }
 
   onParticipantConnected(listener: (participant: Participant) => void) {
@@ -387,6 +415,31 @@ export class LiveRoomClient {
 
   onMediaError(listener: (error: Error) => void) {
     this.room.on(RoomEvent.MediaDevicesError, listener)
+  }
+
+  async sendData(topic: string, payload: unknown, reliable = true) {
+    const data = this.dataEncoder.encode(JSON.stringify(payload))
+    await this.room.localParticipant.publishData(data, { topic, reliable })
+  }
+
+  onDataReceived(listener: (message: LiveRoomDataMessage) => void) {
+    const handler = (payload: Uint8Array, participant?: Participant, _kind?: unknown, topic?: string) => {
+      try {
+        const text = this.dataDecoder.decode(payload)
+        listener({
+          topic,
+          payload: text ? JSON.parse(text) : null,
+          participantIdentity: participant?.identity,
+          participantName: participant?.name,
+        })
+      } catch (error) {
+        logLiveKit('data:decode-failed', { message: error instanceof Error ? error.message : String(error), topic })
+      }
+    }
+    this.room.on(RoomEvent.DataReceived, handler)
+    return () => {
+      this.room.off(RoomEvent.DataReceived, handler)
+    }
   }
 
   async disconnect() {

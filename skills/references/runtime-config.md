@@ -4,11 +4,13 @@
 
 ## 当前共享环境
 
-- 共享远程开发/测试服务器：
+- 共享业务服务器：
   `root@111.228.20.88`
-- 共享域名/回调代理服务器：
+- 共享域名/TLS 入口服务器：
   `root@111.229.64.41`
-- 远程仓库路径：
+- 生产仓库路径：
+  `/opt/ai-platform-prod`
+- 开发/历史仓库路径：
   `/opt/ai-platform`
 - 当前共享中间件宿主机：
   `111.228.20.88`
@@ -20,6 +22,12 @@
   `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`
   `prod=c3476048-10f6-4cc3-b3f1-90135d736a73`
 - 日常工作默认使用 `dev`，除非用户明确指定 `prod`
+- 当前分支约定：
+  本地开发/联调优先 `dev`
+  生产自动部署来源 `master`
+- 当前生产自动部署：
+  `.github/workflows/deploy-prod.yml`
+  `push master` -> SSH `111.228.20.88` -> `/usr/local/bin/ai-platform-prod-deploy.sh`
 
 ## 项目通常如何运行
 
@@ -33,8 +41,10 @@
 - 本地默认行为：
   `MANAGE_INFRA=auto`
   `SPRING_PROFILES_ACTIVE=dev`
+  应用进程在本机启动
+  MySQL、Redis、RabbitMQ、MinIO、LiveKit、Prometheus/Grafana 等中间件默认使用本机 Docker
   优先使用本地 Nacos `127.0.0.1:8848`
-  如果本地 Nacos 不可用，则自动打开本地 Nacos SSH 隧道并切换到 `127.0.0.1:18848`
+  如果本地 Nacos 不可用，则自动打开本地 Nacos SSH 隧道并切换到 `127.0.0.1:18848`，此时只有 Nacos 使用远端 dev 配置中心
 
 ### 共享远程服务器
 
@@ -50,24 +60,36 @@
 - 这意味着：服务器上的中间件应已长期运行，而应用进程则从仓库副本中启动
 - 在当前支付回调拓扑下，`111.228.20.88` 仍然是真正承载应用和中间件的主机
 - 除非用户明确说明不是，否则远程测试默认认为 MinIO、MySQL、Redis、RabbitMQ、Nacos、Prometheus、Grafana 都在这台共享服务器上
+- 当前业务机 nginx 会把：
+  `/` -> `127.0.0.1:5173`
+  `/admin/` -> `127.0.0.1:5174`
+  `/api/`、`/org/`、`/user/`、`/invite/`、`/chat/`、`/payment/` -> `127.0.0.1:18080`
+  `/api/admin/` -> `127.0.0.1:18084`
+  `/livekit` -> `127.0.0.1:7880`
+  `/ops/grafana/` -> `127.0.0.1:3000`
+  `/ops/prometheus/` -> `127.0.0.1:9090`
 
 ### 直接在服务器上
 
-- 常见启动方式：
+- 开发环境常见启动方式：
   `cd /opt/ai-platform && MANAGE_INFRA=never sh scripts/dev_all_up.sh`
-- 常见停止方式：
+- 开发环境常见停止方式：
   `cd /opt/ai-platform && STOP_INFRA=0 sh scripts/dev_all_down.sh`
 - 只有当服务器确实应该由仓库脚本管理中间件时，才用 `MANAGE_INFRA=auto`
 - 对于当前 `111.228.20.88` 上的共享支付测试，更明确的启动命令是：
   `cd /opt/ai-platform && MANAGE_INFRA=never FRONTEND_HOST=0.0.0.0 NACOS_SERVER_ADDR=127.0.0.1:8848 sh scripts/dev_local_up.sh`
+- 当前生产环境手动启动方式是：
+  `cd /opt/ai-platform-prod && SPRING_PROFILES_ACTIVE=prod MANAGE_INFRA=never AUTO_BOOTSTRAP_DEV_DB=0 NACOS_SERVER_ADDR=127.0.0.1:8848 NACOS_GRPC_CHECK=warn FRONTEND_HOST=127.0.0.1 sh scripts/dev_all_up.sh`
+- 当前生产环境手动停止方式是：
+  `cd /opt/ai-platform-prod && STOP_INFRA=0 sh scripts/dev_all_down.sh`
 
 ### 域名回调代理服务器
 
-- `111.229.64.41` 只运行 `nginx`
+- `111.229.64.41` 只运行第一层 `nginx`
 - `huoyue.online` 应解析到 `111.229.64.41`
-- 这台主机只用于公网支付回调入口，不是主应用运行环境
-- `/payment/notify/*` 和 `/payment/return/*` 都代理到 `111.228.20.88`
-- 根路径 `/` 会有意返回一个很小的探活字符串，而不是应用前端
+- 主站与 API 入口会再被转发到 `111.228.20.88:80`
+- `/payment/notify/*` 和 `/payment/return/*` 也属于同一条公网入口链路
+- `/ops/grafana/` 与 `/ops/prometheus/` 在这台机器上仍是本地规则，不是继续代理到业务机
 
 ## `dev_all_up.sh` 会启动什么
 
@@ -109,9 +131,11 @@
 ## 启动决策规则
 
 - Wrapper 脚本比直接调用 `dev_all_up/down` 更安全
-- `dev_local_up.sh` 用于偏本地开发的场景
+- `dev_local_up.sh` 是日常测试默认入口：应用和大部分中间件本地跑，Nacos 按本机可用性自动选择本机或远端 dev 隧道
 - `dev_remote_up.sh` 用于“在服务器启动、在本地浏览器访问”的场景
-- `dev_all_up.sh` 是共享引擎，现在既可以在本机直接跑，也可以在服务器直接跑
+- `dev_all_up.sh` 是共享引擎，现在既可以在本机直接跑，也可以在服务器直接跑；直接调用时要显式确认 `MANAGE_INFRA` 和 `NACOS_SERVER_ADDR`
+- 本地日常联调默认先用 `bash scripts/dev_local_up.sh` / `bash scripts/dev_local_down.sh`
+- 生产发布默认不要手工执行一串命令，优先让 GitHub Actions 调用服务器上的 `/usr/local/bin/ai-platform-prod-deploy.sh`
 - 远程 wrapper 会在启动前把关键启动脚本和 `common.md` 同步到服务器
 - 如果远程表现和本地代码不一致，先怀疑同步漂移
 

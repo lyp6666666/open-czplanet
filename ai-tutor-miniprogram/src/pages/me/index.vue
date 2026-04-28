@@ -4,15 +4,31 @@
       <image class="avatar" :src="resolveImageUrl(userStore.userInfo?.avatar)" mode="aspectFill"></image>
       <text class="nickname">{{ userStore.userInfo?.name || '用户' }}</text>
       <text class="role-tag">{{ userStore.currentRole === 'student' ? '家长/学生' : '家教' }}</text>
-      
+
       <view class="action-list">
         <view class="action-item" @click="handleSwitchRole">
           <text>切换到 {{ userStore.currentRole === 'student' ? '家教版' : '学生版' }}</text>
           <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
         </view>
-        
+
         <view v-if="userStore.currentRole === 'student'" class="action-item" @click="goToMyJobs">
           <text>我的需求</text>
+          <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
+        </view>
+
+        <view class="action-item" @click="goToCourses">
+          <view>
+            <text>我的合作</text>
+            <text class="sub">查看试课、正式课表和退费进度</text>
+          </view>
+          <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
+        </view>
+
+        <view class="action-item" @click="goToFavorites">
+          <view>
+            <text>我的收藏</text>
+            <text class="sub">{{ userStore.currentRole === 'student' ? '管理收藏的老师' : '管理收藏的需求' }}</text>
+          </view>
           <u-icon name="arrow-right" color="#c8c7cc" size="16"></u-icon>
         </view>
 
@@ -29,10 +45,10 @@
         </view>
       </view>
     </view>
-    
+
     <view v-else class="login-wrapper">
-      <LoginCard 
-        @login="handleLogin" 
+      <LoginCard
+        @login="handleLogin"
         @wechat-login="handleWechatLogin"
         @send-code="handleSendCode"
       />
@@ -42,10 +58,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { userApi } from '@/api/user';
 import { useUserStore } from '@/stores/user';
 import LoginCard from '@/components/LoginCard.vue';
 import { resolveImageUrl } from '@/utils/request';
+import { consumePendingRedirect, setResumeIntent } from '@/utils/authRedirect';
 
 const userStore = useUserStore();
 const emailStatus = ref<any>(null);
@@ -53,6 +71,28 @@ const emailPrimaryVerified = computed(() => emailStatus.value?.primaryEmail?.ver
 const emailSubText = computed(() =>
   emailPrimaryVerified.value ? '已开启邮件提醒，可接收消息、开课提醒和课后总结' : '绑定后可接收消息、开课提醒和课后总结',
 );
+
+const TAB_PAGES = new Set(['/pages/home/index', '/pages/chat/list', '/pages/me/index']);
+
+function withIntent(url: string, intent?: string) {
+  if (!intent) return url;
+  return url.includes('?') ? `${url}&__intent=${encodeURIComponent(intent)}` : `${url}?__intent=${encodeURIComponent(intent)}`;
+}
+
+function continueAfterLogin() {
+  const pending = consumePendingRedirect();
+  if (pending?.role && userStore.currentRole !== pending.role) {
+    userStore.setCurrentRole(pending.role);
+  }
+  if (pending) {
+    setResumeIntent(pending.url, pending.intent);
+    const targetUrl = withIntent(pending.url, pending.intent);
+    if (TAB_PAGES.has(pending.url)) uni.switchTab({ url: targetUrl });
+    else uni.navigateTo({ url: targetUrl });
+    return;
+  }
+  void loadEmailStatus();
+}
 
 const handleSendCode = async (phone: string) => {
   try {
@@ -67,15 +107,17 @@ const handleLogin = async (data: { phone: string; code: string; role: 'student' 
   try {
     await userStore.loginBySms(data.phone, data.code, data.role);
     uni.showToast({ title: '登录成功', icon: 'success' });
+    setTimeout(continueAfterLogin, 250);
   } catch (e: any) {
     uni.showToast({ title: e.message || '登录失败', icon: 'none' });
   }
 };
 
-const handleWechatLogin = async () => {
+const handleWechatLogin = async (role: 'student' | 'tutor') => {
   try {
-    await userStore.login(); 
+    await userStore.login(role);
     uni.showToast({ title: '登录成功', icon: 'success' });
+    setTimeout(continueAfterLogin, 250);
   } catch (error: any) {
     uni.showToast({ title: error.message || '登录失败', icon: 'none' });
   }
@@ -97,6 +139,14 @@ const goToMyJobs = () => {
   uni.navigateTo({ url: '/pages/my-jobs/index' });
 };
 
+const goToCourses = () => {
+  uni.navigateTo({ url: '/pages/course/list' });
+};
+
+const goToFavorites = () => {
+  uni.navigateTo({ url: '/pages/favorites/index' });
+};
+
 const goToEmailSettings = () => {
   uni.navigateTo({ url: '/pages/account/email' });
 };
@@ -115,6 +165,12 @@ async function loadEmailStatus() {
 
 onMounted(() => {
   void loadEmailStatus();
+});
+
+onShow(() => {
+  if (userStore.isLoggedIn) {
+    continueAfterLogin();
+  }
 });
 </script>
 
@@ -143,7 +199,7 @@ onMounted(() => {
   box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
   width: 100%;
   box-sizing: border-box;
-  
+
   .avatar {
     width: 80px;
     height: 80px;
@@ -153,14 +209,14 @@ onMounted(() => {
     border: 2px solid #fff;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
-  
+
   .nickname {
     font-size: 18px;
     margin-bottom: 4px;
     font-weight: 900;
     color: #1f2329;
   }
-  
+
   .role-tag {
     font-size: 12px;
     color: #00bebd;
@@ -169,10 +225,10 @@ onMounted(() => {
     border-radius: 4px;
     margin-bottom: 24px;
   }
-  
+
   .action-list {
     width: 100%;
-    
+
     .action-item {
       display: flex;
       justify-content: space-between;
@@ -188,11 +244,11 @@ onMounted(() => {
         font-size: 12px;
         color: #8f959e;
       }
-      
+
       &:last-child {
         border-bottom: none;
       }
-      
+
       &:active {
         opacity: 0.7;
       }

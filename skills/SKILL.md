@@ -17,6 +17,13 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
 - 如果任务会修改数据库 schema、迁移 SQL 或表结构，必须在同一轮里同步更新 `sqlDoc/` 下对应文件，包括相关迁移文件和 `sqlDoc/huoyue.sql`，并在最终回复中明确说明这次同步。
 - 如果任务会修改数据库 schema、迁移 SQL 或表结构，也必须在同一轮里把变更同步到共享远程服务器 `111.228.20.88`。
 - 远程数据库同步只有在变更真正应用到 `111.228.20.88`，并且目标表或字段被验证存在后，才算完成。
+- 当前生产运行目录是 `111.228.20.88:/opt/ai-platform-prod`；旧目录 `/opt/ai-platform` 仍可能存在，但默认不要再把它当成当前生产目录。
+- 当前分支约定是：`dev` 用于本地/开发联调，`master` 用于生产自动部署。
+- GitHub Actions 生产发布链路以 `.github/workflows/deploy-prod.yml` 为准：`push master` -> SSH 到 `111.228.20.88` -> 执行 `/usr/local/bin/ai-platform-prod-deploy.sh`。
+- 当前公网入口是双机转发：
+  `111.229.64.41` 负责域名、TLS 和第一层 nginx；
+  `111.228.20.88` 负责真正的应用、第二层 nginx 和全部中间件。
+- 日常测试默认在本机启动应用进程，并使用本机 Docker 中间件；唯一常见例外是 Nacos，通常由 `dev_local_up.sh` 自动走本地 Nacos 或远端 dev Nacos 隧道。优先用 `bash scripts/dev_local_up.sh` / `bash scripts/dev_local_down.sh`，不要先默认去远程机器上改脚本或手动起服务。
 - 修改代码前，先识别受影响区域，并阅读对应背景文档：
   - `references/module-map.md`
   - `references/business-flows.md`

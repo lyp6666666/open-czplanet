@@ -100,4 +100,30 @@
         LIMIT 1
     </select>
 
+    <select id="selectLatestByCourseIdOrRoomId" resultMap="baseMap">
+        SELECT
+            id, brokerage_order_id, course_id, room_id, applicant_uid, applicant_role, type, status,
+            reason, evidence_images_json, evidence_video_url, evidence_video_duration_seconds, evidence_video_delete_status,
+            evidence_video_deleted_at, refund_percent, refund_amount_fen, admin_uid, admin_note,
+            decided_at, create_time, update_time
+        FROM refund_request
+        WHERE
+            <choose>
+                <when test="courseId != null and roomId != null">
+                    course_id = #{courseId} OR room_id = #{roomId}
+                </when>
+                <when test="courseId != null">
+                    course_id = #{courseId}
+                </when>
+                <when test="roomId != null">
+                    room_id = #{roomId}
+                </when>
+                <otherwise>
+                    1 = 0
+                </otherwise>
+            </choose>
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
 </mapper>

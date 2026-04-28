@@ -15,4 +15,3 @@ public class SmsSpugProperties {
 
     private String senderName = "推送助手";
 }
-

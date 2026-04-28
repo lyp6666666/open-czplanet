@@ -5,9 +5,11 @@ import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.integration.ai.AiAgentClient;
+import com.ai.tutor.liveclass.integration.feign.AppointmentInternalFeignClient;
 import com.ai.tutor.liveclass.integration.im.HttpImFacade;
 import com.ai.tutor.liveclass.mapper.LiveClassSessionMapper;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -16,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class LiveClassAiService {
 
     @Resource
@@ -24,6 +27,8 @@ public class LiveClassAiService {
     private LiveClassSessionMapper liveClassSessionMapper;
     @Resource
     private HttpImFacade httpImFacade;
+    @Resource
+    private AppointmentInternalFeignClient appointmentInternalFeignClient;
 
     public void ensureRealtimeSession(LiveClassSession session) {
         if (session == null) {
@@ -72,9 +77,13 @@ public class LiveClassAiService {
                     .aiStatus("OFF")
                     .realtimeEnabled(Boolean.FALSE)
                     .summaryStatus("OFF")
+                    .asrEnabled(Boolean.FALSE)
+                    .llmEnabled(Boolean.FALSE)
+                    .segmentCount(0)
                     .studentQuestions(List.of())
                     .homeworkCandidates(List.of())
                     .keyPoints(List.of())
+                    .minutesOutline(List.of())
                     .updatedAt(LocalDateTime.now())
                     .build();
         }
@@ -86,14 +95,28 @@ public class LiveClassAiService {
                 .aiStatus(aiStatus)
                 .realtimeEnabled(Boolean.TRUE)
                 .summaryStatus("ACTIVE".equals(aiStatus) ? "ACTIVE" : aiStatus)
+                .asrEnabled(state.getAsrEnabled())
+                .llmEnabled(state.getLlmEnabled())
+                .segmentCount(state.getSegmentCount())
+                .lastLlmSummaryTs(resolveLong(state.getLastLlmSummaryTs(), state.getRawState(), "lastLlmSummaryTs"))
+                .lastLlmSegmentCount(resolveInteger(state.getLastLlmSegmentCount(), state.getRawState(), "lastLlmSegmentCount"))
                 .currentTopic(state.getCurrentTopic())
                 .latestStageSummary(state.getLatestStageSummary())
                 .studentQuestions(defaultList(state.getStudentQuestions()))
                 .homeworkCandidates(defaultList(state.getHomeworkCandidates()))
                 .keyPoints(defaultList(state.getKeyPoints()))
+                .minutesOutline(defaultMapList(state.getMinutesOutline()))
+                .activeSectionTitle(state.getActiveSectionTitle())
                 .updatedAt(LocalDateTime.now())
                 .rawState(state.getRawState())
                 .build();
+    }
+
+    public void acceptAudioChunk(LiveClassSession session, AiAgentClient.AudioChunkRequest request) {
+        if (session == null || !isAiEnabled(session)) {
+            return;
+        }
+        aiAgentClient.acceptAudioChunk(session.getCourseId(), request);
     }
 
     public LiveAiResultResp getAiResult(LiveClassSession session) {
@@ -117,6 +140,7 @@ public class LiveClassAiService {
             report = reportView.getReport();
             preview = buildPreview(report);
             resultStatus = "READY";
+            syncLessonSummary(session, report, preview);
         } catch (Exception ignored) {
             if ("FINALIZING".equalsIgnoreCase(resultStatus)) {
                 resultStatus = "FINALIZING";
@@ -253,7 +277,12 @@ public class LiveClassAiService {
 
     private static boolean isAiEnabled(LiveClassSession session) {
         String policy = session.getAiPolicy();
-        return policy != null && !"OFF".equalsIgnoreCase(policy.trim());
+        if (policy != null && !"OFF".equalsIgnoreCase(policy.trim())) {
+            return true;
+        }
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
+        return Boolean.TRUE.equals(extra.get("realtimeSummaryEnabled"))
+                || Boolean.TRUE.equals(extra.get("postClassSummaryEnabled"));
     }
 
     private static String resolveAiStatus(AiAgentClient.RealtimeLessonStateView state) {
@@ -277,6 +306,46 @@ public class LiveClassAiService {
 
     private static List<String> defaultList(List<String> value) {
         return value == null ? List.of() : value;
+    }
+
+    private static List<Map<String, Object>> defaultMapList(List<Map<String, Object>> value) {
+        return value == null ? List.of() : value;
+    }
+
+    private static Long resolveLong(Long typedValue, Map<String, Object> rawState, String key) {
+        if (typedValue != null) {
+            return typedValue;
+        }
+        Object value = rawState == null ? null : rawState.get(key);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static Integer resolveInteger(Integer typedValue, Map<String, Object> rawState, String key) {
+        if (typedValue != null) {
+            return typedValue;
+        }
+        Object value = rawState == null ? null : rawState.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Integer.parseInt(text.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private static String buildPreview(Map<String, Object> report) {
@@ -305,5 +374,95 @@ public class LiveClassAiService {
         summary.put("homeworkCandidates", report.get("homework"));
         summary.put("currentTopic", report.get("reportTitle"));
         return summary;
+    }
+
+    private void syncLessonSummary(LiveClassSession session, Map<String, Object> report, String preview) {
+        if (session == null || session.getScheduleEventId() == null || report == null || report.isEmpty()) {
+            return;
+        }
+        try {
+            appointmentInternalFeignClient.upsertLessonSummary(AppointmentInternalFeignClient.UpsertLessonSummaryRequest.builder()
+                    .lessonId(session.getScheduleEventId())
+                    .title(stringValue(report.get("reportTitle")))
+                    .summaryBrief(preview)
+                    .summaryContent(buildLessonSummaryContent(report))
+                    .homework(buildHomeworkText(report.get("homework")))
+                    .build());
+        } catch (Exception ex) {
+            log.warn("sync lesson summary failed, sessionId={}, lessonId={}", session.getId(), session.getScheduleEventId(), ex);
+        }
+    }
+
+    private String buildLessonSummaryContent(Map<String, Object> report) {
+        StringBuilder builder = new StringBuilder();
+        appendSection(builder, "标题", stringValue(report.get("reportTitle")));
+        appendSection(builder, "课堂总结", stringValue(report.get("parentSummary")));
+        appendSection(builder, "知识点", buildListText(report.get("knowledgePoints")));
+        appendSection(builder, "学生表现", buildStudentPerformanceText(report.get("studentPerformance")));
+        appendSection(builder, "课后作业", buildHomeworkText(report.get("homework")));
+        appendSection(builder, "下节课建议", stringValue(report.get("nextLessonPlan")));
+        appendSection(builder, "老师建议", stringValue(report.get("teacherSuggestion")));
+        return builder.toString().trim();
+    }
+
+    private void appendSection(StringBuilder builder, String title, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append("\n\n");
+        }
+        builder.append(title).append("：\n").append(value.trim());
+    }
+
+    private String buildStudentPerformanceText(Object value) {
+        if (!(value instanceof Map<?, ?> performance)) {
+            return stringValue(value);
+        }
+        StringBuilder builder = new StringBuilder();
+        appendInline(builder, "表现总结", stringValue(performance.get("summary")));
+        appendInline(builder, "优势", buildListText(performance.get("strengths")));
+        appendInline(builder, "待提升", buildListText(performance.get("problems")));
+        return builder.toString().trim();
+    }
+
+    private void appendInline(StringBuilder builder, String label, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append("\n");
+        }
+        builder.append(label).append("：").append(value.trim());
+    }
+
+    private String buildHomeworkText(Object value) {
+        return buildListText(value);
+    }
+
+    private String buildListText(Object value) {
+        if (value instanceof Iterable<?> iterable) {
+            StringBuilder builder = new StringBuilder();
+            for (Object item : iterable) {
+                String text = stringValue(item);
+                if (text == null || text.isBlank()) {
+                    continue;
+                }
+                if (builder.length() > 0) {
+                    builder.append("\n");
+                }
+                builder.append("- ").append(text.trim());
+            }
+            return builder.toString();
+        }
+        return stringValue(value);
+    }
+
+    private String stringValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
     }
 }

@@ -23,6 +23,8 @@ class RealtimeStateStore:
         state.setdefault("studentQuestions", [])
         state.setdefault("homeworkCandidates", [])
         state.setdefault("keyPoints", [])
+        state.setdefault("minutesOutline", [])
+        state.setdefault("activeSectionTitle", None)
         state.setdefault("status", "ACTIVE")
         self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
 
@@ -90,6 +92,14 @@ class RealtimeStateStore:
         state["lastLlmSegmentCount"] = int(state.get("segmentCount") or 0)
         state["latestStageSummary"] = summary.get("stageSummary")
         state["currentTopic"] = summary.get("currentTopic") or state.get("currentTopic")
+        minutes_outline = _normalize_minutes_outline(
+            summary.get("minutesOutline") or summary.get("outline") or [],
+            segment_count=int(state.get("segmentCount") or 0),
+            fallback_title=state.get("currentTopic") or summary.get("currentTopic"),
+        )
+        if minutes_outline:
+            state["minutesOutline"] = minutes_outline[-12:]
+            state["activeSectionTitle"] = minutes_outline[-1].get("title")
         for field in ["studentQuestions", "homeworkCandidates", "keyPoints"]:
             values = summary.get(field) or []
             if values:
@@ -105,3 +115,42 @@ class RealtimeStateStore:
 
     def event_channel(self, lesson_id: int) -> str:
         return _key(lesson_id, "events")
+
+
+def _clean_text(value: object, limit: int) -> str:
+    text = str(value or "").strip()
+    return text[:limit]
+
+
+def _normalize_minutes_outline(items: object, *, segment_count: int, fallback_title: object = None) -> List[Dict]:
+    if not isinstance(items, list):
+        return []
+    normalized: List[Dict] = []
+    now = int(time.time())
+    for index, raw in enumerate(items[-12:]):
+        if not isinstance(raw, dict):
+            continue
+        title = _clean_text(raw.get("title") or fallback_title or f"课堂阶段 {index + 1}", 40)
+        summary = _clean_text(raw.get("summary") or raw.get("stageSummary") or title, 260)
+        raw_items = raw.get("items") if isinstance(raw.get("items"), list) else []
+        section_items: List[Dict] = []
+        for raw_item in raw_items[:8]:
+            if not isinstance(raw_item, dict):
+                continue
+            item_title = _clean_text(raw_item.get("title") or raw_item.get("heading"), 40)
+            item_detail = _clean_text(raw_item.get("detail") or raw_item.get("content"), 240)
+            if item_title and item_detail:
+                section_items.append({"title": item_title, "detail": item_detail})
+        section_id = _clean_text(raw.get("id") or f"section-{index + 1}", 64)
+        normalized.append(
+            {
+                "id": section_id,
+                "title": title,
+                "summary": summary,
+                "startSegment": int(raw.get("startSegment") or raw.get("start_segment") or 0),
+                "endSegment": int(raw.get("endSegment") or raw.get("end_segment") or segment_count),
+                "updatedAt": int(raw.get("updatedAt") or raw.get("updated_at") or now),
+                "items": section_items,
+            }
+        )
+    return normalized

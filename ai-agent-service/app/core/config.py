@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     realtime_stage_summary_interval_seconds: int = 300
     realtime_stage_min_segments: int = 8
     realtime_transcript_buffer_size: int = 500
+    realtime_min_audio_rms: float = 0.012
+    realtime_silence_pause_seconds: int = 20
 
     tencent_asr_enabled: bool = False
     tencent_asr_app_id: Optional[str] = None

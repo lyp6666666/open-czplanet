@@ -55,6 +55,42 @@
             }
         },
         {
+            "path": "pages/application/list",
+            "style": {
+                "navigationBarTitleText": "申请中心"
+            }
+        },
+        {
+            "path": "pages/application/detail",
+            "style": {
+                "navigationBarTitleText": "申请详情"
+            }
+        },
+        {
+            "path": "pages/pay/cashier",
+            "style": {
+                "navigationBarTitleText": "支付信息费"
+            }
+        },
+        {
+            "path": "pages/course/list",
+            "style": {
+                "navigationBarTitleText": "我的合作"
+            }
+        },
+        {
+            "path": "pages/course/detail",
+            "style": {
+                "navigationBarTitleText": "课程详情"
+            }
+        },
+        {
+            "path": "pages/favorites/index",
+            "style": {
+                "navigationBarTitleText": "我的收藏"
+            }
+        },
+        {
             "path": "pages/tutor/onboarding/index",
             "style": {
                 "navigationBarTitleText": "家教入驻"

@@ -741,11 +741,11 @@ onMounted(() => {
     <div v-if="teachingModeModalOpen" class="mask" @click.self="teachingModeModalOpen = false">
       <div class="modal card">
         <div class="m-title">请选择授课形式</div>
-        <div class="m-desc">授课形式创建后不可修改。线下只做撮合，线上会进入平台课程与支付流程。</div>
+        <div class="m-desc">授课形式创建后不可修改。线下只做撮合，线上可使用平台课堂与 AI 总结；课时费暂不由平台代收。</div>
         <div class="mode-actions">
           <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('ONLINE')">
             <strong>线上授课</strong>
-            <span>推荐，在平台内上课并使用后续课程与支付服务</span>
+            <span>推荐，在平台内上课并使用课程安排、实时课堂和 AI 总结</span>
           </button>
           <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('OFFLINE')">
             <strong>线下授课</strong>

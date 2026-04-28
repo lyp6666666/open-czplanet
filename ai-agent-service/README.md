@@ -13,17 +13,15 @@
 
 ```bash
 cd ai-agent-service
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+sh scripts/bootstrap_env.sh
 cp .env.example .env
-uvicorn app.main:app --host 0.0.0.0 --port 18086
+sh scripts/run_dev.sh
 ```
 
 The default setup uses Redis/RQ as the task queue. Run the worker when `AI_AGENT_USE_ASYNC_WORKER=true`:
 
 ```bash
-python -m app.worker
+sh scripts/run_worker.sh
 ```
 
 For quick local API tests without Redis, set:

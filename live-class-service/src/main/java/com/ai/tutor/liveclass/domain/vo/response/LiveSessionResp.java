@@ -27,4 +27,9 @@ public class LiveSessionResp {
     private Boolean peerOnline;
     private String recordPolicy;
     private String aiPolicy;
+    private String peerDisplayName;
+    private String subjectLabel;
+    private String courseKindLabel;
+    private Boolean realtimeSummaryEnabled;
+    private Boolean postClassSummaryEnabled;
 }

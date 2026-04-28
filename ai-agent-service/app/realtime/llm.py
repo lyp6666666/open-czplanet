@@ -24,9 +24,25 @@ class RealtimeLessonLLM:
     def _template_summary(self, state: Dict, segments: List[Dict]) -> Dict:
         text = "\n".join(seg.get("text", "") for seg in segments[-12:])
         topic = state.get("currentTopic") or "课堂讲解"
+        segment_count = int(state.get("segmentCount") or 0)
+        existing_outline = list(state.get("minutesOutline") or [])
+        section = {
+            "id": f"section-{len(existing_outline) + 1}",
+            "title": topic,
+            "summary": text[:180] + ("..." if len(text) > 180 else ""),
+            "startSegment": max(1, segment_count - min(len(segments), 12) + 1),
+            "endSegment": segment_count,
+            "items": [
+                {
+                    "title": "本段课堂重点",
+                    "detail": text[:180] + ("..." if len(text) > 180 else ""),
+                }
+            ] if text.strip() else [],
+        }
         return {
             "currentTopic": topic,
             "stageSummary": text[:160] + ("..." if len(text) > 160 else ""),
+            "minutesOutline": [*existing_outline, section][-12:],
             "studentQuestions": state.get("studentQuestions", [])[-5:],
             "homeworkCandidates": state.get("homeworkCandidates", [])[-5:],
             "keyPoints": state.get("keyPoints", [])[-5:],
@@ -50,25 +66,39 @@ class RealtimeLessonLLM:
         transcript = "\n".join(
             f"{seg.get('speaker', 'unknown')}：{seg.get('text', '')}" for seg in segments[-80:]
         )
+        existing_outline = json.dumps(state.get("minutesOutline") or [], ensure_ascii=False)
         prompt = f"""
-你是在线一对一课堂的实时 AI 课堂纪要助手。
-你的任务是基于“最近一个阶段”的课堂转写，产出供前端右侧实时摘要面板展示的 JSON。
+你是在线一对一课堂的实时 AI 课堂纪要编排助手。
+你的任务是基于“最近一个阶段”的课堂转写，维护供前端右侧实时纪要面板展示的结构化 JSON。
 不要输出 Markdown，不要输出任何解释，只能输出一个 JSON 对象。
 
 业务规则：
-1. 只总结最近阶段，不要假装知道整节课的完整结论。
-2. 以老师讲解内容、学生提问、作业布置、关键提醒为核心。
-3. 对学生问题、作业候选、课堂重点必须保守提取；不确定就不要写。
-4. `stageSummary` 适合实时展示，控制在 2-4 句，口吻简洁、清楚、偏课堂播报风格。
-5. `currentTopic` 尽量提炼为当前讲解主题，不超过 18 个字。
-6. `studentQuestions` 只保留学生明确提出的问题，最多 3 条。
-7. `homeworkCandidates` 只保留老师明确布置或明显暗示的课后任务，最多 3 条。
-8. `keyPoints` 只保留本阶段明确出现的知识点/解题提醒/课堂重点，最多 4 条。
+1. 面向老师/学生展示，禁止出现 ASR、LLM、转写、模型、置信度等技术词。
+2. `minutesOutline` 是课堂实时纪要树：大标题是课堂阶段/主题，小标题是该阶段下的关键内容。
+3. 如果最近转写仍在讲同一主题，请更新最后一个大标题下的 `summary` 和 `items`；如果明显进入新主题（如从作业讲评切到新知识点、从概念切到例题、从讲解切到答疑），新增一个大标题。
+4. 大标题必须由 AI 根据课堂内容生成，最多 16 个汉字，像“作业错题回顾”“一次函数概念引入”“例题建模步骤”。
+5. 每个大标题下 `items` 最多 5 个；小标题最多 14 个汉字，说明 `detail` 1-2 句，保留教学过程和结论，不要堆关键词。
+6. `stageSummary` 是最近阶段一句话摘要，控制在 40-90 个汉字。
+7. 对学生问题、作业候选、课堂重点必须保守提取；不确定就不要写。
+8. 输出只保留最近 8 个大标题；不要删除仍有价值的历史章节。
+9. 内容要忠实于转写，不要编造未出现的知识点、作业或结论。
 
 输出 JSON Schema：
 {{
   "currentTopic": "string",
   "stageSummary": "string",
+  "minutesOutline": [
+    {{
+      "id": "稳定唯一 id，比如 section-1",
+      "title": "大标题",
+      "summary": "该大主题的整体概括",
+      "startSegment": 1,
+      "endSegment": 8,
+      "items": [
+        {{ "title": "小标题", "detail": "具体说明" }}
+      ]
+    }}
+  ],
   "studentQuestions": ["string"],
   "homeworkCandidates": ["string"],
   "keyPoints": ["string"]
@@ -76,6 +106,7 @@ class RealtimeLessonLLM:
 
 lessonId: {lesson_id}
 当前状态: {json.dumps(state, ensure_ascii=False)}
+已有实时纪要树: {existing_outline}
 最近转写:
 {transcript}
 """
@@ -85,5 +116,6 @@ lessonId: {lesson_id}
             parsed = json.loads(content)
         except json.JSONDecodeError:
             parsed = {"stageSummary": content}
+        parsed.setdefault("minutesOutline", state.get("minutesOutline") or [])
         parsed["provider"] = self.settings.llm_provider
         return parsed

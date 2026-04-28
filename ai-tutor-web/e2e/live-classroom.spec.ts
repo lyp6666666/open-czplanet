@@ -58,6 +58,19 @@ async function triggerPaymentSuccess(orderNo: string, amountFen: number) {
   }
 }
 
+function createSameDayLiveWindow() {
+  const now = Date.now()
+  let startAt = now + 2 * 60_000
+  let endAt = startAt + 30 * 60_000
+  if (new Date(startAt).toDateString() !== new Date(endAt).toDateString()) {
+    const endOfToday = new Date(now)
+    endOfToday.setHours(23, 59, 0, 0)
+    endAt = endOfToday.getTime()
+    startAt = endAt - 30 * 60_000
+  }
+  return { startAt, endAt }
+}
+
 async function api(path: string, options: { method?: string; token?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   const response = await fetch(new URL(path, apiBaseUrl), {
     method: options.method || 'GET',
@@ -154,9 +167,7 @@ async function createLiveCourse() {
   }
   await triggerPaymentSuccess(orderNo, amountFen)
 
-  const now = Date.now()
-  const startAt = now + 2 * 60_000
-  const endAt = startAt + 30 * 60_000
+  const { startAt, endAt } = createSameDayLiveWindow()
 
   const collab = await api('/chat/collaboration/proposal', {
     method: 'POST',
@@ -473,16 +484,16 @@ test.describe('live classroom real media', () => {
       await expectRemoteMediaReceived(teacherPage)
       await expectRemoteMediaReceived(studentPage)
 
-      await teacherPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
-      await studentPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
+      await teacherPage.getByTestId('classroom-open-chat').click()
+      await studentPage.getByTestId('classroom-open-chat').click()
       await expect(teacherPage.getByTestId('live-chat-list')).toBeVisible()
       await expect(studentPage.getByTestId('live-chat-list')).toBeVisible()
 
       await teacherPage.getByTestId('classroom-toggle-mic').click()
       await studentPage.getByTestId('classroom-toggle-camera').click()
 
-      await expect(teacherPage.getByTestId('classroom-toggle-mic')).toContainText('打开麦克风')
-      await expect(studentPage.getByTestId('classroom-toggle-camera')).toContainText('打开摄像头')
+      await expect(teacherPage.getByTestId('classroom-toggle-mic')).toContainText('取消静音')
+      await expect(studentPage.getByTestId('classroom-toggle-camera')).toContainText('开启视频')
       expectNoMixedContentOrUnsafeLivekitUrls(teacherSession, studentSession)
     } finally {
       await closeAll([teacherContext, studentContext])
@@ -514,8 +525,8 @@ test.describe('live classroom real media', () => {
       await expectClassroomShellReady(teacherPage)
       await expectClassroomShellReady(studentPage)
 
-      await teacherPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
-      await studentPage.locator('.side-tabs').getByRole('button', { name: '课中聊天' }).click()
+      await teacherPage.getByTestId('classroom-open-chat').click()
+      await studentPage.getByTestId('classroom-open-chat').click()
 
       const text = `老师已进入课堂-${Date.now()}`
       await teacherPage.getByTestId('live-chat-input').fill(text)

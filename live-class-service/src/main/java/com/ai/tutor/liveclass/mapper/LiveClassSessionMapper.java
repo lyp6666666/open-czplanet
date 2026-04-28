@@ -31,6 +31,10 @@ public interface LiveClassSessionMapper {
 
     int updateExtraJsonById(@Param("id") Long id, @Param("extraJson") String extraJson);
 
+    int updateAiPolicyAndExtraJsonById(@Param("id") Long id,
+                                       @Param("aiPolicy") String aiPolicy,
+                                       @Param("extraJson") String extraJson);
+
     int tryMarkAiSessionCreating(@Param("id") Long id);
 
     int clearAiSessionCreating(@Param("id") Long id);

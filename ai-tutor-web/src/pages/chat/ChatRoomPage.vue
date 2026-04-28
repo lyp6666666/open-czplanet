@@ -503,6 +503,24 @@ function closeCollaboration() {
   collabEdit.value = null
 }
 
+function routeWantsCollaboration() {
+  return route.query.action === 'collaboration' || route.query.openCollaboration === '1'
+}
+
+function clearCollaborationRouteIntent() {
+  const query = { ...route.query }
+  delete query.action
+  delete query.openCollaboration
+  void router.replace({ name: route.name || 'chatRoom', params: route.params, query })
+}
+
+function tryOpenCollaborationFromRoute() {
+  if (!routeWantsCollaboration()) return
+  if (!composerEnabled.value || hasActiveCollabProposal.value) return
+  openCollaboration()
+  clearCollaborationRouteIntent()
+}
+
 // #region debug-point
 async function dbgReport(event: string, payload: Record<string, unknown>) {
   if (!import.meta.env.DEV) return
@@ -1267,6 +1285,16 @@ const collabStatusByProposalId = computed<Record<number, CollaborationProposalSt
   return out
 })
 
+const latestCollabProposalMsgIdByProposalId = computed<Record<number, number>>(() => {
+  const out: Record<number, number> = {}
+  for (const m of renderMessages.value) {
+    const b = m.body
+    if (!isCollaborationProposalBody(b)) continue
+    out[b.proposalId] = Math.max(out[b.proposalId] || 0, m.message.id)
+  }
+  return out
+})
+
 const canViewContact = computed(() => {
   return chatUnlocked.value
 })
@@ -1277,6 +1305,12 @@ const hasActiveCollabProposal = computed(() => {
 
 function effectiveCollabStatus(proposalId: number, fallback: CollaborationProposalStatus): CollaborationProposalStatus {
   return collabStatusByProposalId.value[proposalId] || fallback
+}
+
+function effectiveCollabStatusForMessage(proposalId: number, msgId: number, fallback: CollaborationProposalStatus): CollaborationProposalStatus {
+  const latestMsgId = latestCollabProposalMsgIdByProposalId.value[proposalId] || 0
+  if (latestMsgId > 0 && msgId !== latestMsgId) return 'INVALIDATED'
+  return effectiveCollabStatus(proposalId, fallback)
 }
 
 const hasAnyRefundRequest = computed(() => {
@@ -1792,6 +1826,14 @@ watch(
 )
 
 watch(
+  () => [route.query.action, route.query.openCollaboration, composerEnabled.value, hasActiveCollabProposal.value] as const,
+  () => {
+    tryOpenCollaborationFromRoute()
+  },
+  { immediate: true },
+)
+
+watch(
   () => chatRealtime.messageEventSerial,
   () => {
     const pending = chatRealtime.listMessageEventsAfter(lastConsumedMessageSerial.value)
@@ -1991,7 +2033,7 @@ watch(
               </template>
               <template v-else-if="isCollaborationProposalBody(it.m.body)">
                 <CollaborationProposalCard
-                  :body="{ ...it.m.body, status: effectiveCollabStatus(it.m.body.proposalId, it.m.body.status) }"
+                  :body="{ ...it.m.body, status: effectiveCollabStatusForMessage(it.m.body.proposalId, it.m.message.id, it.m.body.status) }"
                   :from-me="it.m.fromUser.uid === myUid"
                   :busy="collabActionBusy[it.m.body.proposalId]"
                   @edit="openCollaborationEdit"

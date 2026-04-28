@@ -451,7 +451,7 @@ export interface ChatMessageResp {
 }
 
 export type ScheduleEventStatus = 'PENDING' | 'ACCEPTED' | 'RESCHEDULE_PENDING' | 'REJECTED' | 'CANCELED' | 'COMPLETED' | 'UNKNOWN'
-export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'UNKNOWN'
+export type CollaborationProposalStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXPIRED' | 'INVALIDATED' | 'UNKNOWN'
 export type TutorApplicationCardStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED'
 
 export interface ScheduleEventVO {
@@ -500,6 +500,11 @@ export interface CourseItemVO {
   weeklyScheduleSubmittedAt?: string | null
   aiResultStatus?: string | null
   aiPreview?: string | null
+  payDeadlineAt?: string | null
+  payExpired?: boolean | null
+  archiveReason?: string | null
+  latestRefund?: CourseRefundInfoVO | null
+  latestProposal?: CourseProposalInfoVO | null
 }
 
 export interface CourseDetailVO {
@@ -521,6 +526,32 @@ export interface CourseDetailVO {
   weeklyScheduleSubmittedAt?: string | null
   aiResultStatus?: string | null
   aiPreview?: string | null
+}
+
+export interface CourseRefundInfoVO {
+  id: number
+  type?: string | null
+  status?: string | null
+  reason?: string | null
+  adminNote?: string | null
+  refundPercent?: number | null
+  refundAmountFen?: number | null
+  createTime?: string | null
+  decidedAt?: string | null
+}
+
+export interface CourseProposalInfoVO {
+  id: number
+  fromUid?: number | null
+  toUid?: number | null
+  status?: string | null
+  pricePerHour?: string | null
+  classTime?: string | null
+  frequencyPerWeek?: number | null
+  trialStartAt?: string | null
+  trialEndAt?: string | null
+  remark?: string | null
+  expireAt?: string | null
 }
 
 export interface CourseAiResultVO {

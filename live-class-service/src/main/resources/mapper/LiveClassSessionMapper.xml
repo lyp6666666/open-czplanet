@@ -119,6 +119,14 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateAiPolicyAndExtraJsonById">
+        UPDATE live_class_session
+        SET ai_policy = #{aiPolicy},
+            extra_json = #{extraJson},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+
     <update id="tryMarkAiSessionCreating">
         UPDATE live_class_session
         SET extra_json = JSON_SET(

@@ -30,7 +30,24 @@ public class LessonSummaryServiceImpl implements LessonSummaryService {
     public LessonSummary upsertReady(UpsertLessonSummaryRequest request, Long uid) {
         ThrowUtils.throwIf(request == null || request.getLessonId() == null, ErrorCode.PARAMS_ERROR);
         TutorAppointment lesson = requireParticipant(request.getLessonId(), uid);
+        return upsertReadyForLesson(request, lesson, true);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public LessonSummary upsertReadyInternal(UpsertLessonSummaryRequest request) {
+        ThrowUtils.throwIf(request == null || request.getLessonId() == null, ErrorCode.PARAMS_ERROR);
+        TutorAppointment lesson = tutorAppointmentMapper.selectById(request.getLessonId());
+        ThrowUtils.throwIf(lesson == null, ErrorCode.NOT_FOUND_ERROR);
+        return upsertReadyForLesson(request, lesson, false);
+    }
+
+    private LessonSummary upsertReadyForLesson(UpsertLessonSummaryRequest request, TutorAppointment lesson, boolean createEmailTasks) {
         ThrowUtils.throwIf(request.getSummaryContent() == null || request.getSummaryContent().isBlank(), ErrorCode.PARAMS_ERROR, "总结内容不能为空");
+        LessonSummary existing = lessonSummaryMapper.selectByLessonId(lesson.getId());
+        if (isSameReadySummary(existing, request)) {
+            return existing;
+        }
         LessonSummary summary = LessonSummary.builder()
                 .lessonId(lesson.getId())
                 .courseId(lesson.getCourseId())
@@ -45,7 +62,9 @@ public class LessonSummaryServiceImpl implements LessonSummaryService {
                 .build();
         lessonSummaryMapper.upsertReady(summary);
         LessonSummary saved = lessonSummaryMapper.selectByLessonId(lesson.getId());
-        emailNotificationService.createLessonSummaryTasks(saved == null ? summary : saved);
+        if (createEmailTasks) {
+            emailNotificationService.createLessonSummaryTasks(saved == null ? summary : saved);
+        }
         return saved == null ? summary : saved;
     }
 
@@ -65,5 +84,21 @@ public class LessonSummaryServiceImpl implements LessonSummaryService {
 
     private String safeTitle(TutorAppointment lesson) {
         return lesson.getTitle() == null || lesson.getTitle().isBlank() ? "课后总结" : lesson.getTitle();
+    }
+
+    private boolean isSameReadySummary(LessonSummary existing, UpsertLessonSummaryRequest request) {
+        if (existing == null || !"READY".equalsIgnoreCase(existing.getSummaryStatus())) {
+            return false;
+        }
+        return same(existing.getTitle(), request.getTitle())
+                && same(existing.getSummaryBrief(), request.getSummaryBrief())
+                && same(existing.getSummaryContent(), request.getSummaryContent())
+                && same(existing.getHomework(), request.getHomework());
+    }
+
+    private boolean same(String left, String right) {
+        String normalizedLeft = left == null ? "" : left.trim();
+        String normalizedRight = right == null ? "" : right.trim();
+        return normalizedLeft.equals(normalizedRight);
     }
 }

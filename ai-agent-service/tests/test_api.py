@@ -127,6 +127,42 @@ def test_realtime_session_and_segment_flow(tmp_path, monkeypatch):
     assert finalized.json()["data"]["status"] == "FINALIZED"
 
 
+def test_realtime_audio_chunk_silence_does_not_trigger_asr(tmp_path, monkeypatch):
+    client = _client(tmp_path, monkeypatch)
+    client.post(
+        "/internal/ai/live-lessons/304/sessions",
+        json={
+            "teacherId": 1,
+            "studentId": 2,
+            "subject": "数学",
+            "grade": "初二",
+            "courseType": "ONLINE_FORMAL",
+            "audioEnabled": True,
+            "realtimeAiMode": "LIGHT",
+        },
+    )
+
+    response = client.post(
+        "/internal/ai/live-lessons/304/audio-chunks",
+        json={
+            "participantId": 1,
+            "speaker": "teacher",
+            "sequence": 1,
+            "sampleRate": 16000,
+            "channelCount": 1,
+            "durationMs": 1000,
+            "rms": 0.001,
+            "format": "PCM16",
+            "audioBase64": "AAAA",
+        },
+    )
+
+    assert response.status_code == 200
+    state = response.json()["data"]
+    assert state["segmentCount"] == 0
+    assert state["rawState"]["asrListening"] is False
+
+
 def test_metrics_endpoint_exposes_prometheus_samples(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 

@@ -34,6 +34,9 @@ function toStatusText(s: CollaborationProposalStatus) {
   if (s === 'PENDING') return props.fromMe ? '等待对方确认' : '待你确认'
   if (s === 'ACCEPTED') return '已同意'
   if (s === 'REJECTED') return '已拒绝'
+  if (s === 'INVALIDATED') return '已被新提案替代'
+  if (s === 'EXPIRED') return '已过期'
+  if (s === 'CANCELED') return '已取消'
   return '状态未知'
 }
 
@@ -56,9 +59,10 @@ function formatTime(ms: number) {
   <div class="cardx" :class="body.status.toLowerCase()">
     <div class="h1">试课合作</div>
     <div class="row">
-      <div class="k">收费</div>
+      <div class="k">费用</div>
       <div class="v">{{ body.pricePerHour }}</div>
     </div>
+    <div class="hint">平台暂不代收试课费或正式课费，双方确认后私下转账。</div>
     <div class="row">
       <div class="k">试课</div>
       <div class="v">{{ trialTimeText }}</div>
@@ -71,6 +75,7 @@ function formatTime(ms: number) {
       <div class="k">状态</div>
       <div class="v">{{ statusText }}</div>
     </div>
+    <div v-if="body.status === 'INVALIDATED'" class="hint muted">这条提案已更新，请以最新一条试课合作为准。</div>
     <div v-if="body.status === 'PENDING' && expireText" class="row">
       <div class="k">有效期</div>
       <div class="v">{{ expireText }} 前确认</div>
@@ -116,6 +121,16 @@ function formatTime(ms: number) {
   margin-top: 6px;
 }
 
+.hint {
+  margin-top: 6px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .k {
   width: 40px;
   color: var(--muted);
@@ -146,5 +161,17 @@ function formatTime(ms: number) {
 .rejected {
   border-color: rgba(255, 77, 79, 0.25);
   background: rgba(255, 77, 79, 0.05);
+}
+
+.invalidated,
+.expired,
+.canceled {
+  border-color: rgba(100, 116, 139, 0.22);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.hint.muted {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
 }
 </style>

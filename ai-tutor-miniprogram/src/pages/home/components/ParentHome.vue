@@ -1,34 +1,33 @@
 <template>
   <view class="container">
-    <view v-if="!userStore.isLoggedIn" class="empty-state">
-      <text class="tip">登录后查看家教</text>
-      <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin">去登录</u-button>
+    <view v-if="!userStore.isLoggedIn" class="guest-tip">
+      <text>可先浏览老师，发起申请时再登录</text>
+      <u-button size="mini" type="primary" color="#00bebd" shape="circle" @click="goLogin">登录</u-button>
     </view>
-    <view v-else>
-      <view class="search-bar">
-        <u-icon name="search" color="#646a73" size="20"></u-icon>
-        <input class="search-input" type="text" v-model="keyword" placeholder="搜索家教..." @confirm="onSearch" />
-      </view>
-      
-      <view class="tutor-list">
-        <view v-for="tutor in tutorList" :key="tutor.userId" class="tutor-card" @click="goToDetail(tutor.userId)">
-          <image class="avatar" :src="resolveImageUrl(tutor.avatar)" mode="aspectFill"></image>
-          <view class="info">
-            <view class="header">
-              <text class="name">{{ tutor.displayName }}</text>
-              <text class="price" v-if="tutor.price">{{ tutor.price }}</text>
-            </view>
-            <view class="tags">
-              <text class="tag" v-for="(tag, index) in (tutor.subjectTags || [])" :key="index">{{ tag }}</text>
-            </view>
-            <text class="intro">{{ tutor.introduction }}</text>
+
+    <view class="search-bar">
+      <u-icon name="search" color="#646a73" size="20"></u-icon>
+      <input class="search-input" type="text" v-model="keyword" placeholder="搜索家教..." @confirm="onSearch" />
+    </view>
+
+    <view class="tutor-list">
+      <view v-for="tutor in tutorList" :key="tutor.userId" class="tutor-card" @click="goToDetail(tutor.userId)">
+        <image class="avatar" :src="resolveImageUrl(tutor.avatar)" mode="aspectFill"></image>
+        <view class="info">
+          <view class="header">
+            <text class="name">{{ tutor.displayName }}</text>
+            <text class="price" v-if="tutor.price">{{ tutor.price }}</text>
           </view>
+          <view class="tags">
+            <text class="tag" v-for="(tag, index) in (tutor.subjectTags || [])" :key="index">{{ tag }}</text>
+          </view>
+          <text class="intro">{{ tutor.introduction }}</text>
         </view>
       </view>
-      <view v-if="tutorList.length === 0" class="empty-list">
-        <text class="empty-text">暂无家教数据</text>
-        <u-button type="primary" color="#00bebd" shape="circle" @click="fetchTutors">刷新</u-button>
-      </view>
+    </view>
+    <view v-if="tutorList.length === 0" class="empty-list">
+      <text class="empty-text">暂无家教数据</text>
+      <u-button type="primary" color="#00bebd" shape="circle" @click="fetchTutors">刷新</u-button>
     </view>
   </view>
 </template>
@@ -94,9 +93,7 @@ const goLogin = () => {
 };
 
 onMounted(() => {
-  if (userStore.isLoggedIn) {
-    fetchTutors();
-  }
+  fetchTutors();
 });
 </script>
 
@@ -105,17 +102,18 @@ onMounted(() => {
   padding: 16px;
 }
 
-.empty-state {
+.guest-tip {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  padding: 60px 20px;
-  
-  .tip {
-    font-size: 16px;
-    color: var(--muted);
-    margin-bottom: 24px;
-  }
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: rgba(0, 190, 189, 0.08);
+  border: 1px solid rgba(0, 190, 189, 0.18);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .search-bar {
@@ -127,7 +125,7 @@ onMounted(() => {
   border-radius: 12px;
   margin-bottom: 16px;
   border: 1px solid var(--border);
-  
+
   .search-input {
     flex: 1;
     margin-left: 10px;
@@ -161,7 +159,7 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(31, 35, 41, 0.08);
   border: 1px solid var(--border);
-  
+
   .avatar {
     width: 56px;
     height: 56px;
@@ -170,38 +168,38 @@ onMounted(() => {
     background-color: #f0f0f0;
     flex-shrink: 0;
   }
-  
+
   .info {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    
+
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 6px;
-      
+
       .name {
         font-weight: 900;
         font-size: 16px;
         color: var(--text);
       }
-      
+
       .price {
         font-size: 14px;
         color: #ff4d4f;
         font-weight: 700;
       }
     }
-    
+
     .tags {
       display: flex;
       flex-wrap: wrap;
       margin-bottom: 8px;
       gap: 6px;
-      
+
       .tag {
         font-size: 11px;
         color: var(--primary);
@@ -210,7 +208,7 @@ onMounted(() => {
         border-radius: 6px;
       }
     }
-    
+
     .intro {
       font-size: 13px;
       color: var(--muted);

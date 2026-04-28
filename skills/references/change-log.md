@@ -484,8 +484,30 @@
   将 `skills/scripts/changed-area-check.sh` 和 `skills/scripts/project-snapshot.sh` 的输出提示改为中文
 - 新增说明：
   技能名、文件路径、脚本命令和 skill ID 保持不变，只对面向 AI 的说明文本进行了中文化
-# 2026-04-25
+## 2026-04-25
 
-- 新增 `scripts/nacos_clone_profile.py`，支持把共享 Nacos 某个 profile suffix（如 `-dev`）整批复制到另一个 suffix（如 `-prod`），并已用于把 `dev` namespace 的 12 个 DataId 发布到 `prod`
-- 调整本地 `Dockerfile/docker-compose.yml` 的镜像来源：将不稳定的 `docker.m.daocloud.io` 地址切回官方镜像，并把不可用的 `rabbitmq-exporter` tag 改为 `kbudde/rabbitmq-exporter:latest`
-- 将仓库里过期的 `prod` namespace ID 从 `44cf681d-9f93-443e-aa9e-ba6ec8f721d5` 统一更新为线上实际值 `c3476048-10f6-4cc3-b3f1-90135d736a73`
+- 请求：
+  更新项目 skill 与环境文档，清理已经过时的服务器目录、部署方式、双机 nginx 转发、本地测试入口和分支约定说明
+- 涉及区域：
+  `skills/SKILL.md`、`skills/references/commands.md`、`skills/references/gotchas.md`、`skills/references/business-flows.md`、`skills/references/runtime-config.md`、`common.md`
+- 已检查背景：
+  当前 GitHub Actions 生产工作流、`111.228.20.88` 上的 `/usr/local/bin/ai-platform-prod-deploy.sh`、业务机与域名机 nginx 配置、业务机 Docker 常驻中间件、当前生产仓库实际目录与分支
+- 验证：
+  重新核对了 `.github/workflows/deploy-prod.yml`
+  通过 SSH 检查了 `111.228.20.88:/usr/local/bin/ai-platform-prod-deploy.sh`
+  通过 SSH 检查了 `cd /opt/ai-platform-prod && git branch --show-current && git rev-parse --short HEAD`
+- 新增说明：
+  当前真实运行方式已经固定为：本地联调优先 `dev_local_*`，生产发布优先 `master` -> GitHub Actions -> `/opt/ai-platform-prod`；公网采用 `111.229.64.41 -> 111.228.20.88` 的双层 nginx，业务机上的 Docker 中间件常驻不随日常发版关闭
+
+## 2026-04-26
+
+- 请求：
+  明确当前测试默认在本地启动，且中间件也使用本地环境，只有 Nacos 通常例外
+- 涉及区域：
+  `skills/SKILL.md`、`skills/references/commands.md`、`skills/references/runtime-config.md`、`skills/references/gotchas.md`
+- 已检查背景：
+  `scripts/dev_local_up.sh`、`scripts/dev_local_down.sh`、`scripts/dev_all_up.sh`、`scripts/dev_all_down.sh` 的调用关系和默认环境变量
+- 验证：
+  核对了 `dev_all_up.sh` 中 `MANAGE_INFRA=auto` 的本地 Docker 中间件管理逻辑，以及 Nacos 自动选择本机 `127.0.0.1:8848` 或远端 dev 隧道 `127.0.0.1:18848` 的逻辑
+- 新增说明：
+  日常测试优先使用 `dev_local_*`；应用进程和 MySQL/Redis/RabbitMQ/MinIO/LiveKit 等中间件默认本机运行，Nacos 是常见例外，不应因此误判其它中间件也在远端

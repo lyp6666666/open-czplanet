@@ -7,6 +7,7 @@ import LivePreparePage from './LivePreparePage.vue'
 const {
   prepareMock,
   reportMock,
+  updateAiOptionsMock,
   requestUserMediaPreviewMock,
   stopMediaStreamMock,
   listLocalMediaDevicesMock,
@@ -27,6 +28,7 @@ const {
   return {
     prepareMock: vi.fn(),
     reportMock: vi.fn(),
+    updateAiOptionsMock: vi.fn(),
     requestUserMediaPreviewMock: vi.fn(),
     stopMediaStreamMock: vi.fn(),
     listLocalMediaDevicesMock: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('@/api/live', () => ({
   liveApi: {
     prepare: (...args: unknown[]) => prepareMock(...args),
     reportDevice: (...args: unknown[]) => reportMock(...args),
+    updateAiOptions: (...args: unknown[]) => updateAiOptionsMock(...args),
   },
 }))
 
@@ -110,6 +113,7 @@ describe('LivePreparePage', () => {
     Object.defineProperty(window, 'localStorage', { value: createMemoryStorage(), configurable: true })
     prepareMock.mockReset()
     reportMock.mockReset()
+    updateAiOptionsMock.mockReset()
     requestUserMediaPreviewMock.mockReset()
     stopMediaStreamMock.mockReset()
     listLocalMediaDevicesMock.mockReset()
@@ -120,6 +124,7 @@ describe('LivePreparePage', () => {
 
     prepareMock.mockResolvedValue(createPrepareData())
     reportMock.mockResolvedValue(true)
+    updateAiOptionsMock.mockResolvedValue({ sessionId: 8 })
     listLocalMediaDevicesMock.mockResolvedValue({
       cameras: [{ deviceId: 'cam-1', kind: 'videoinput', label: 'FaceTime 摄像头' }],
       microphones: [{ deviceId: 'mic-1', kind: 'audioinput', label: '内置麦克风' }],
@@ -183,6 +188,10 @@ describe('LivePreparePage', () => {
     await flushPromises()
 
     expect(reportMock).toHaveBeenCalledTimes(1)
+    expect(updateAiOptionsMock).toHaveBeenCalledWith(8, {
+      realtimeSummaryEnabled: true,
+      postClassSummaryEnabled: true,
+    })
     const [, payload] = reportMock.mock.calls[0]!
     expect(payload).toMatchObject({
       cameraStatus: 'READY',

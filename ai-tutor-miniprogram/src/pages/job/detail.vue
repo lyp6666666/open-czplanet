@@ -60,7 +60,17 @@
             <text class="pub-sub">{{ job.publisher.identityLabel || '发布者' }}</text>
           </view>
         </view>
-        <u-button v-if="userStore.isTutor" type="primary" color="#00bebd" shape="circle" @click="handleContact">发起沟通</u-button>
+        <view v-if="isOwner" class="owner-actions">
+          <button class="plain-btn" @click="goEdit">编辑需求</button>
+          <button class="plain-btn" :disabled="closingBusy" @click="toggleDemandStatus">
+            {{ closingBusy ? '处理中...' : isClosed ? '重新打开' : '关闭需求' }}
+          </button>
+          <button class="primary-btn" @click="viewApplications">收到的申请</button>
+        </view>
+        <view v-if="userStore.isTutor" class="publisher-actions">
+          <button class="plain-btn" :disabled="favoriteBusy" @click="toggleFavorite">{{ favorited ? '已收藏' : '收藏需求' }}</button>
+          <button class="primary-btn" @click="handleContact">发起沟通</button>
+        </view>
       </view>
     </view>
 
@@ -74,17 +84,27 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { jobsApi } from '@/api/jobs';
-import { chatApi } from '@/api/chat';
+import { applicationApi } from '@/api/application';
+import { favoritesApi } from '@/api/favorites';
 import { useUserStore } from '@/stores/user';
 import { resolveImageUrl } from '@/utils/request';
+import { ensureTutorApproved } from '@/utils/tutorGuard';
 
 const userStore = useUserStore();
 const job = ref<any>(null);
 const loading = ref(false);
+const favorited = ref(false);
+const favoriteBusy = ref(false);
+const closingBusy = ref(false);
 
 onLoad(async (options: any) => {
   if (options.id) {
     await fetchDetail(options.id);
+  }
+  if (String(options?.__intent || '') === 'open-demand-apply' && userStore.isLoggedIn && userStore.currentRole === 'tutor') {
+    setTimeout(() => {
+      void handleContact();
+    }, 300);
   }
 });
 
@@ -93,6 +113,7 @@ const fetchDetail = async (id: number) => {
     loading.value = true;
     const res: any = await jobsApi.getDemandView(id);
     job.value = res;
+    await loadFavoriteState(Number(id));
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '加载失败', icon: 'none' });
@@ -100,6 +121,43 @@ const fetchDetail = async (id: number) => {
     loading.value = false;
   }
 };
+
+async function loadFavoriteState(id: number) {
+  favorited.value = false;
+  if (!userStore.isLoggedIn || !userStore.isTutor || !id) return;
+  try {
+    const ids = await favoritesApi.checkDemandFavorites([id]);
+    favorited.value = Array.isArray(ids) && ids.some((it) => Number(it) === id);
+  } catch {
+    favorited.value = false;
+  }
+}
+
+const isOwner = computed(() => {
+  const mine = Number(userStore.userInfo?.id || 0);
+  const publisherUid = Number(job.value?.publisher?.uid || 0);
+  return !!mine && !!publisherUid && mine === publisherUid;
+});
+
+const isClosed = computed(() => {
+  return Number(job.value?.status) !== 1 || String(job.value?.bizStatus || '').toUpperCase().includes('CLOSED');
+});
+
+async function toggleFavorite() {
+  if (!job.value?.id || favoriteBusy.value) return;
+  if (!ensureTutorApproved('教师审核通过后才能收藏需求。')) return;
+  favoriteBusy.value = true;
+  try {
+    if (favorited.value) await favoritesApi.unfavoriteDemand(job.value.id);
+    else await favoritesApi.favoriteDemand(job.value.id);
+    favorited.value = !favorited.value;
+    uni.showToast({ title: favorited.value ? '已收藏' : '已取消收藏', icon: 'success' });
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || e?.msg || '操作失败', icon: 'none' });
+  } finally {
+    favoriteBusy.value = false;
+  }
+}
 
 const normalizeLower = (v: unknown) => String(v || '').trim().toLowerCase();
 
@@ -194,24 +252,56 @@ const showAddress = computed(() => {
   return s === 'offline' || s === 'both';
 });
 
+function goEdit() {
+  if (!job.value?.id) return;
+  uni.navigateTo({ url: `/pages/post/index?id=${job.value.id}` });
+}
+
+async function toggleDemandStatus() {
+  if (!job.value?.id || closingBusy.value) return;
+  closingBusy.value = true;
+  try {
+    const next = isClosed.value ? 1 : 0;
+    await jobsApi.updateDemand(Number(job.value.id), { status: next });
+    job.value.status = next;
+    uni.showToast({ title: next === 1 ? '已重新打开' : '已关闭需求', icon: 'success' });
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || e?.msg || '操作失败', icon: 'none' });
+  } finally {
+    closingBusy.value = false;
+  }
+}
+
+function viewApplications() {
+  if (!job.value?.id) return;
+  uni.navigateTo({ url: `/pages/application/list?tab=received&contextType=DEMAND&contextId=${job.value.id}` });
+}
+
 const handleContact = async () => {
     if (!job.value) return;
+    if (!ensureTutorApproved('教师审核通过后才能发起沟通。', 'open-demand-apply')) return;
     try {
         const targetUid = job.value?.publisher?.uid;
         if (!targetUid) {
             uni.showToast({ title: '缺少发布者信息', icon: 'none' });
             return;
         }
-        
-        const roomId: any = await chatApi.getOrCreateRoom(targetUid);
-        if (roomId) {
-            uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
-        } else {
-            uni.showToast({ title: '进入会话失败', icon: 'none' });
+        const created: any = await applicationApi.create({
+            receiverUid: targetUid,
+            contextType: 'DEMAND',
+            contextId: Number(job.value.id),
+            content: `您好，我想申请沟通这个${job.value.subjectName || '家教'}需求。`,
+            clientRequestId: `mp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        });
+        uni.showToast({ title: '申请已发送', icon: 'success' });
+        if (created?.id) {
+            setTimeout(() => {
+                uni.navigateTo({ url: `/pages/application/detail?id=${created.id}` });
+            }, 450);
         }
     } catch (error) {
         console.error(error);
-        uni.showToast({ title: '发起聊天失败', icon: 'none' });
+        uni.showToast({ title: '申请发送失败', icon: 'none' });
     }
 };
 </script>
@@ -347,6 +437,13 @@ const handleContact = async () => {
   gap: 12px;
 }
 
+.owner-actions,
+.publisher-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+}
+
 .pub-row {
   display: flex;
   gap: 12px;
@@ -378,6 +475,27 @@ const handleContact = async () => {
 .pub-sub {
   font-size: 12px;
   color: var(--muted);
+}
+
+.plain-btn,
+.primary-btn {
+  height: 42px;
+  line-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+  width: 100%;
+}
+
+.plain-btn {
+  color: #35444b;
+  background: #eef2f3;
+}
+
+.primary-btn {
+  color: #fff;
+  background: #0f766e;
 }
 
 .loading {

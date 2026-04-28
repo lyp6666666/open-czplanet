@@ -56,6 +56,17 @@ public class AiAgentClient {
         );
     }
 
+    public RealtimeLessonStateView acceptAudioChunk(Long lessonId, AudioChunkRequest request) {
+        return exchange(
+                "/internal/ai/live-lessons/" + lessonId + "/audio-chunks",
+                HttpMethod.POST,
+                request,
+                new ParameterizedTypeReference<BaseResponse<RealtimeLessonStateView>>() {
+                },
+                "acceptRealtimeAudioChunk"
+        );
+    }
+
     public RealtimeLessonStateView finalizeLesson(Long lessonId) {
         return exchange(
                 "/internal/ai/live-lessons/" + lessonId + "/finalize",
@@ -145,6 +156,19 @@ public class AiAgentClient {
     }
 
     @Data
+    public static class AudioChunkRequest {
+        private Long participantId;
+        private String speaker;
+        private Integer sequence;
+        private Integer sampleRate;
+        private Integer channelCount;
+        private Integer durationMs;
+        private Double rms;
+        private String format;
+        private String audioBase64;
+    }
+
+    @Data
     public static class LiveLessonSessionView {
         private Long lessonId;
         private String sessionId;
@@ -165,7 +189,11 @@ public class AiAgentClient {
         private List<String> studentQuestions;
         private List<String> homeworkCandidates;
         private List<String> keyPoints;
+        private List<Map<String, Object>> minutesOutline;
+        private String activeSectionTitle;
         private Integer segmentCount;
+        private Long lastLlmSummaryTs;
+        private Integer lastLlmSegmentCount;
         private String status;
         private Map<String, Object> rawState;
     }

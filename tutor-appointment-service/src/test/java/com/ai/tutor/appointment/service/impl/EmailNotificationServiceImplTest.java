@@ -9,10 +9,13 @@ import com.ai.tutor.appointment.mapper.EmailSendLogMapper;
 import com.ai.tutor.appointment.mapper.LessonSummaryMapper;
 import com.ai.tutor.appointment.mapper.TutorAppointmentMapper;
 import com.ai.tutor.appointment.mapper.UserEmailMapper;
+import com.ai.tutor.appointment.model.dto.summary.UpsertLessonSummaryRequest;
 import com.ai.tutor.appointment.model.entity.EmailNotificationTask;
 import com.ai.tutor.appointment.model.entity.EmailSendLog;
 import com.ai.tutor.appointment.model.entity.LessonSummary;
+import com.ai.tutor.appointment.model.entity.TutorAppointment;
 import com.ai.tutor.appointment.model.entity.UserEmail;
+import com.ai.tutor.appointment.service.EmailNotificationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -23,10 +26,55 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class EmailNotificationServiceImplTest {
+
+    @Test
+    void upsertReadyInternalShouldSkipDuplicateReadySummaryWithoutCreatingEmailTasks() {
+        TutorAppointmentMapper tutorAppointmentMapper = mock(TutorAppointmentMapper.class);
+        LessonSummaryMapper lessonSummaryMapper = mock(LessonSummaryMapper.class);
+        EmailNotificationService emailNotificationService = mock(EmailNotificationService.class);
+
+        LessonSummaryServiceImpl service = new LessonSummaryServiceImpl();
+        ReflectionTestUtils.setField(service, "tutorAppointmentMapper", tutorAppointmentMapper);
+        ReflectionTestUtils.setField(service, "lessonSummaryMapper", lessonSummaryMapper);
+        ReflectionTestUtils.setField(service, "emailNotificationService", emailNotificationService);
+
+        UpsertLessonSummaryRequest request = new UpsertLessonSummaryRequest();
+        request.setLessonId(88L);
+        request.setTitle("课后总结");
+        request.setSummaryBrief("本节课完成一次函数复盘");
+        request.setSummaryContent("课堂总结正文");
+        request.setHomework("讲义 P12-P14");
+
+        when(tutorAppointmentMapper.selectById(88L)).thenReturn(TutorAppointment.builder()
+                .id(88L)
+                .courseId(99L)
+                .tutorId(1001L)
+                .parentId(2002L)
+                .title("课后总结")
+                .build());
+        when(lessonSummaryMapper.selectByLessonId(88L)).thenReturn(LessonSummary.builder()
+                .lessonId(88L)
+                .courseId(99L)
+                .teacherUid(1001L)
+                .studentUid(2002L)
+                .title("课后总结")
+                .summaryStatus("READY")
+                .summaryBrief("本节课完成一次函数复盘")
+                .summaryContent("课堂总结正文")
+                .homework("讲义 P12-P14")
+                .build());
+
+        LessonSummary result = service.upsertReadyInternal(request);
+
+        assertThat(result.getLessonId()).isEqualTo(88L);
+        verify(lessonSummaryMapper, never()).upsertReady(any());
+        verify(emailNotificationService, never()).createLessonSummaryTasks(any());
+    }
 
     @Test
     void processOneShouldSendViaConfiguredSenderAndPersistLog() {

@@ -8,12 +8,13 @@ import { server } from '@/test/server'
 import { useAuthStore } from '@/stores/auth'
 
 const push = vi.fn()
+const replace = vi.fn()
 const toastShow = vi.fn()
 const storage: Record<string, string> = {}
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
-  useRoute: () => ({ params: { courseId: '66' } }),
+  useRouter: () => ({ push, replace }),
+  useRoute: () => ({ params: { courseId: '66' }, query: {} }),
 }))
 
 vi.mock('@/stores/toast', () => ({
@@ -73,6 +74,7 @@ function installLocalStorageMock() {
 
 function buildCourseDetailHandlers(lessonListFactory?: () => any[]) {
   server.use(
+    http.get('http://localhost/user/email/reminder-hints', () => ok({ show: false, title: '', description: '', actionText: '' })),
     http.get('http://localhost/courses/66', () =>
       ok({
         courseId: 66,
@@ -216,6 +218,7 @@ describe('CourseDetailPage', () => {
     setActivePinia(createPinia())
     seedStudentAuth()
     push.mockReset()
+    replace.mockReset()
     toastShow.mockReset()
     vi.restoreAllMocks()
   })

@@ -4,6 +4,8 @@ import { computed, ref, watch } from 'vue'
 import type { ScheduleAvailabilityVO, ScheduleBusyBlockVO } from '@/api/schedule'
 import { scheduleApi } from '@/api/schedule'
 
+const TRIAL_FEE_TEXT = '试课费用为 1 小时课时费，请双方私下转账'
+
 const props = defineProps<{
   open: boolean
   busy?: boolean
@@ -19,7 +21,6 @@ const emit = defineEmits<{
   submit: [{ pricePerHour: string; trialStartAt: number; trialEndAt: number; remark?: string }]
 }>()
 
-const pricePerHour = ref('')
 const trialStartAt = ref<number>(roundToNextHalfHour(Date.now()))
 const trialEndAt = ref<number>(trialStartAt.value + 2 * 60 * 60 * 1000)
 const remark = ref('')
@@ -34,7 +35,6 @@ watch(
     if (!open) return
     const init = props.initial
     if (init) {
-      pricePerHour.value = init.pricePerHour || ''
       trialStartAt.value = init.trialStartAt
       trialEndAt.value = init.trialEndAt
       selectedDate.value = toDateInputValue(init.trialStartAt)
@@ -43,7 +43,6 @@ watch(
       return
     }
     const start = roundToNextHalfHour(Date.now())
-    pricePerHour.value = ''
     trialStartAt.value = start
     trialEndAt.value = start + 2 * 60 * 60 * 1000
     selectedDate.value = toDateInputValue(start)
@@ -62,8 +61,7 @@ watch(
 
 const canSubmit = computed(() => {
   if (props.busy) return false
-  const p = pricePerHour.value.trim()
-  return p.length > 0 && trialEndAt.value > trialStartAt.value && trialStartAt.value >= Date.now() - 60_000 && conflicts.value.length <= 0
+  return trialEndAt.value > trialStartAt.value && trialStartAt.value >= Date.now() - 60_000 && conflicts.value.length <= 0
 })
 
 const conflicts = computed(() => {
@@ -196,7 +194,7 @@ function close() {
 function submit() {
   if (!canSubmit.value) return
   emit('submit', {
-    pricePerHour: pricePerHour.value.trim(),
+    pricePerHour: TRIAL_FEE_TEXT,
     trialStartAt: trialStartAt.value,
     trialEndAt: trialEndAt.value,
     remark: remark.value.trim() || undefined,
@@ -207,12 +205,12 @@ function submit() {
 <template>
   <div v-if="open" class="mask" @click.self="close">
     <div class="modal card">
-      <div class="m-head">
-        <div class="head-copy">
-          <div class="title">{{ title || '发起合作' }}</div>
-          <div class="subtitle">先确认试课费用与时间，再由对方选择是否接受。</div>
-        </div>
-        <button class="icon-btn" type="button" :disabled="busy" @click="close">×</button>
+        <div class="m-head">
+          <div class="head-copy">
+            <div class="title">{{ title || '发起合作' }}</div>
+          <div class="subtitle">先确认试课时间。平台暂不代收课时费，试课费用按 1 小时课时费由双方私下结算。</div>
+          </div>
+          <button class="icon-btn" type="button" :disabled="busy" @click="close">×</button>
       </div>
 
       <div class="modal-body">
@@ -220,10 +218,11 @@ function submit() {
           <section class="panel form-panel">
             <div class="panel-title">试课信息</div>
             <div class="form">
-              <label class="field">
-                <div class="k">收费标准</div>
-                <input v-model="pricePerHour" class="input" placeholder="例如：200 元/小时" :disabled="busy" />
-              </label>
+              <div class="fee-policy">
+                <div class="fee-policy-title">试课费用</div>
+                <div class="fee-policy-main">统一按 1 小时课时费计算</div>
+                <div class="fee-policy-desc">实际试课一般可安排 2 小时；平台现阶段不直接收取试课或正式课费用，请双方确认后私下转账。</div>
+              </div>
               <label class="field">
                 <div class="k">试课日期（北京时间）</div>
                 <input class="input" type="date" :value="selectedDate" :disabled="busy" @input="applyDate(($event.target as HTMLInputElement).value)" />
@@ -240,8 +239,8 @@ function submit() {
               </div>
               <div class="summary-card">
                 <div class="summary-row">
-                  <span>建议时长</span>
-                  <strong>默认 2 小时，可调</strong>
+                  <span>费用规则</span>
+                  <strong>按 1 小时课时费私下结算</strong>
                 </div>
                 <div class="summary-row">
                   <span>当前选择</span>
@@ -442,6 +441,34 @@ function submit() {
 .form {
   display: grid;
   gap: 14px;
+}
+
+.fee-policy {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.95), rgba(255, 255, 255, 0.96));
+}
+
+.fee-policy-title {
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.fee-policy-main {
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.fee-policy-desc {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .datetime-row {

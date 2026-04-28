@@ -9,6 +9,7 @@ from app.queue.redis_queue import get_redis
 from app.realtime.state_store import RealtimeStateStore
 from app.schemas.common import ApiResponse, ok
 from app.schemas.realtime import (
+    AudioChunkInput,
     LiveLessonSessionCreateRequest,
     LiveLessonSessionView,
     RealtimeLessonStateView,
@@ -36,6 +37,14 @@ def accept_segment(
     lesson_id: int, request: TranscriptSegmentInput
 ) -> ApiResponse[RealtimeLessonStateView]:
     state = RealtimeLessonService().accept_segment(lesson_id, request)
+    return ok(_to_state_view(lesson_id, state))
+
+
+@router.post("/{lesson_id}/audio-chunks", response_model=ApiResponse[RealtimeLessonStateView])
+def accept_audio_chunk(
+    lesson_id: int, request: AudioChunkInput
+) -> ApiResponse[RealtimeLessonStateView]:
+    state = RealtimeLessonService().accept_audio_chunk(lesson_id, request)
     return ok(_to_state_view(lesson_id, state))
 
 
@@ -88,6 +97,8 @@ def _to_state_view(lesson_id: int, state: dict) -> RealtimeLessonStateView:
         studentQuestions=state.get("studentQuestions") or [],
         homeworkCandidates=state.get("homeworkCandidates") or [],
         keyPoints=state.get("keyPoints") or [],
+        minutesOutline=state.get("minutesOutline") or [],
+        activeSectionTitle=state.get("activeSectionTitle"),
         segmentCount=int(state.get("segmentCount") or 0),
         status=state.get("status") or "UNKNOWN",
         rawState=state,

@@ -14,8 +14,10 @@
   不要只改 `/chat/*` 就结束，还要检查 `ai-tutor-web/src/stores/chatRealtime.ts`。
 - `scripts/dev_all_up.sh` 虽然方便，但它内置了较强的环境假设。
   在把它当成接近生产环境的行为之前，先确认 Nacos 和默认密钥等前提。
-- 远程服务器开发通常和本地开发对基础设施的处理方式不同。
-  优先使用 `MANAGE_INFRA=auto`，这样会复用已运行的中间件容器，而不是盲目重新管理。
+- 日常测试现在默认是本地应用 + 本地 Docker 中间件。
+  除非用户明确说要远程联调、公网验收或支付回调链路，否则先用 `dev_local_*`，不要默认把应用放到 `111.228.20.88` 上跑。
+- Nacos 是本地测试里的常见例外。
+  `dev_all_up.sh` 会先尝试 `127.0.0.1:8848`，如果本机没有 Nacos，会自动建立到远端 dev Nacos 的隧道并使用 `127.0.0.1:18848`；这不代表其它中间件也在远端。
 - `scripts/dev_all_down.sh` 现在默认会保留中间件。
   只有你明确想把 compose 管理的中间件一起停掉时，才使用 `STOP_INFRA=1`。
 - 优先使用封装好的 wrapper 脚本，而不是直接随手调用 `dev_all_up/down`。
@@ -26,6 +28,12 @@
   如果远程日志里没有你新加的 echo 文案，通常说明更新后的脚本还没上传到服务器。
 - 远程开发默认应该尽量不碰中间件。
   `scripts/dev_remote_up.sh` 现在默认使用 `REMOTE_MANAGE_INFRA=never`。
+- 当前生产目录已经切到 `/opt/ai-platform-prod`。
+  排查线上问题时，先确认自己看的到底是不是这个目录；旧目录 `/opt/ai-platform` 更适合当开发/历史副本看待。
+- 当前生产发布不是手工 rsync 到服务器。
+  真实链路是 `master` -> GitHub Actions -> `111.228.20.88:/usr/local/bin/ai-platform-prod-deploy.sh` -> `/opt/ai-platform-prod`。
+- 生产发布后，如果现场行为看起来和预期不一致，先核对服务器上的实际 checkout。
+  优先执行 `cd /opt/ai-platform-prod && git branch --show-current && git rev-parse --short HEAD`，不要只看 GitHub Actions 是否显示绿色。
 - 这个仓库跨环境共用一套 Nacos 服务器。
   环境隔离靠 namespace，不靠不同主机。当前默认是 `dev=481e4376-4576-4b18-ac19-f61e170ca3ae`、`prod=c3476048-10f6-4cc3-b3f1-90135d736a73`。
 - 日常测试默认使用 `dev` namespace，除非用户明确说要用 `prod`。
@@ -45,10 +53,10 @@
   它还会读取 `./.private/tutor-appointment-service.yml` 或 `../.private/tutor-appointment-service.yml`，所以它的有效配置路径会比其它后端更宽。
 - 判断最终生效配置最快的证据在启动日志里，不在模板文件里。
   大多数时候，`bash scripts/verify_nacos_effect.sh` 比手动猜哪个 DataId 被加载更快。
-- `huoyue.online` 当前是支付回调入口，不是主站前端域名。
-  根路径 `/` 返回 `ai-tutor payment callback proxy ok` 是正常且健康的表现。
-- 当前共享支付测试拓扑故意拆成两台服务器。
-  `111.229.64.41` 只承担公网回调入口，真正的应用和中间件都跑在 `111.228.20.88`。
+- `huoyue.online` 当前已经是线上公网入口的一部分，不再只是“支付回调专用域名”。
+  现在的真实拓扑是双层 nginx：`111.229.64.41` 负责域名和 TLS 第一跳，再把主站与 API 流量转发到 `111.228.20.88:80`。
+- 在 `111.229.64.41` 上，`/ops/grafana/` 与 `/ops/prometheus/` 不是转发到业务机。
+  它们仍指向域名机本地 nginx 配置，排查监控入口时不要误判成业务机路由问题。
 - 云购收回调里即使出现 `PAY_NOTIFY failed reason=missing_order_no`，也不代表支付一定失败。
   还要继续检查是否出现了 `updated to SUCCESS by provider query` 和 `PAY_FINALIZE success`。
 - 在当前远程支付测试里，最强的成功证据是三段日志链：
@@ -71,6 +79,8 @@
   在 `111.228.20.88` 上它可能是类似 `759d793c134e_mysql` 的 compose 生成名，所以执行数据库命令前先用 `docker ps --format '{{.Names}}' | grep mysql | head -1` 探测。
 - 当用户说测试跑在服务器上时，远程 MinIO 静态资源工作应在 `111.228.20.88` 上完成，而不是在笔记本上做。
   应使用服务器上已运行的 `minio` 容器，并搭配 `--network container:minio` 的 `mc` 辅助容器；笔记本直接访问 `111.228.20.88:9000` 或 `111.228.20.88:18080` 可能被拦截，即使服务器侧网关验证其实是健康的。
+- 当前业务机上的中间件是 Docker 常驻容器，不是每次发版跟着重建。
+  实际长期运行的包括 `mysql`、`redis`、`minio`、`nacos`、`livekit`、`grafana`、`prometheus`、`loki`、`promtail`、`node-exporter`、`alertmanager`；日常发版通常只停业务进程，不停中间件。
 - 在 Linux 远程服务器上，不要盲目复用默认 MinIO 地址是 `host.docker.internal:9000` 的脚本。
   这个主机名主要适用于 Docker Desktop 风格的本地环境；共享远程 MinIO 应从 `--network container:minio` 容器内部访问 `http://127.0.0.1:9000`。
 - 用户端 Web 新增课程页时，除了页面实现本身，还要同时检查 Vite dev proxy 与 Gateway 路由是否包含 `/courses/**`。
