@@ -430,6 +430,7 @@ server {
 EOF
 
   rm -f /etc/nginx/sites-enabled/default
+  rm -f /etc/nginx/sites-enabled/ai-tutor-app-host.conf
   ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/ai-platform.conf
   nginx -t
   systemctl enable nginx >/dev/null 2>&1 || true
