@@ -191,9 +191,6 @@ const badges = computed(() => {
 onLoad(async (options: any) => {
   if (options.id) {
     await fetchDetail(options.id);
-    if (String(options?.__intent || '') === 'open-tutor-apply' && userStore.isLoggedIn && userStore.currentRole === 'student') {
-      showApplyModal.value = true;
-    }
   }
 });
 

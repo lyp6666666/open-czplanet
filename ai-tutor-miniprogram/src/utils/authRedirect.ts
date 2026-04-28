@@ -52,13 +52,6 @@ export function clearPendingRedirect() {
   uni.removeStorageSync(PENDING_REDIRECT_KEY);
 }
 
-export function withRedirectIntent(url: string, intent?: string) {
-  const next = normalizeUrl(url);
-  const action = String(intent || '').trim();
-  if (!next || !action) return next;
-  return next.includes('?') ? `${next}&__intent=${encodeURIComponent(action)}` : `${next}?__intent=${encodeURIComponent(action)}`;
-}
-
 export function goLoginWithRedirect(url = currentPageUrl(), role?: UserRole, intent?: string) {
   setPendingRedirect(url, role, intent);
   uni.switchTab({ url: '/pages/me/index' });
@@ -73,7 +66,7 @@ export function resumePendingRedirect() {
   }
 
   clearPendingRedirect();
-  const targetUrl = withRedirectIntent(pending.url, pending.intent);
+  const targetUrl = pending.url;
 
   if (TAB_PAGES.has(pending.url)) {
     uni.switchTab({ url: targetUrl });
