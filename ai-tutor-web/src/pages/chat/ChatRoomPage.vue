@@ -12,16 +12,19 @@ import { jobsApi } from '@/api/jobs'
 import { liveApi } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import { userApi } from '@/api/user'
-import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, CourseDetailVO, DemandViewVO, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
+import type { ChatMessageBody, ChatMessageResp, CollaborationProposalStatus, CourseDetailVO, DemandViewVO, ScheduleEventVO, TutorApplicationCardStatus, UserSimpleVO } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 import { useToastStore } from '@/stores/toast'
+import LessonDetailModal from '@/ui/course/LessonDetailModal.vue'
 import { isRoomPinned, setRoomPinned, subscribeChatPinChange } from '@/utils/chatPins'
 import { normalizeAssetUrl, normalizeAvatarUrl } from '@/utils/avatar'
+import { buildLessonDetailModel, findRecentLesson } from '@/utils/lessonDetail'
 import BrokerageRequiredCard from '@/ui/chat/BrokerageRequiredCard.vue'
 import CollaborationProposalCard from '@/ui/chat/CollaborationProposalCard.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
 import ContactUnlockedCard from '@/ui/chat/ContactUnlockedCard.vue'
+import InfoFeePolicyModal from '@/ui/chat/InfoFeePolicyModal.vue'
 import LessonAiResultCard from '@/ui/chat/LessonAiResultCard.vue'
 import LessonRequestCard from '@/ui/chat/LessonRequestCard.vue'
 import TutorApplicationCard from '@/ui/chat/TutorApplicationCard.vue'
@@ -92,6 +95,9 @@ const collabEdit = ref<{
 } | null>(null)
 
 const currentCourse = ref<CourseDetailVO | null>(null)
+const currentCourseLessons = ref<ScheduleEventVO[]>([])
+const currentCourseLive = ref<Awaited<ReturnType<typeof liveApi.getByCourse>> | null>(null)
+const lessonModalOpen = ref(false)
 
 const cursor = ref<string | null>(null)
 const isLast = ref(false)
@@ -110,6 +116,7 @@ const imageInputRef = ref<HTMLInputElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const headerActionsRef = ref<HTMLElement | null>(null)
 const roomVersion = ref(0)
+const infoFeePolicyOpen = ref(false)
 const avatarBroken = ref<Record<number, boolean>>({})
 const lastConsumedMessageSerial = ref(0)
 const TYPING_REPORT_THROTTLE_MS = 2_000
@@ -455,6 +462,14 @@ function goPay(orderId: number, applicationId?: number | null) {
       ...(otherUid.value ? { otherUid: String(otherUid.value) } : {}),
     },
   })
+}
+
+function openInfoFeePolicy() {
+  infoFeePolicyOpen.value = true
+}
+
+function closeInfoFeePolicy() {
+  infoFeePolicyOpen.value = false
 }
 
 onMounted(() => {
@@ -942,13 +957,74 @@ async function loadLatestMessages() {
 async function loadCurrentCourse() {
   if (!(roomId.value > 0)) {
     currentCourse.value = null
+    currentCourseLessons.value = []
+    currentCourseLive.value = null
     return
   }
   try {
     currentCourse.value = await courseApi.byRoom(roomId.value)
+    if (currentCourse.value?.courseId) {
+      try {
+        currentCourseLessons.value = await scheduleApi.listCourseEvents(currentCourse.value.courseId)
+      } catch {
+        currentCourseLessons.value = []
+      }
+      try {
+        currentCourseLive.value = await liveApi.getByCourse(currentCourse.value.courseId)
+      } catch {
+        currentCourseLive.value = null
+      }
+    }
   } catch {
     currentCourse.value = null
+    currentCourseLessons.value = []
+    currentCourseLive.value = null
   }
+}
+
+const recentLesson = computed(() => findRecentLesson(currentCourseLessons.value, { live: currentCourseLive.value, aiResultStatus: currentCourse.value?.aiResultStatus || null }))
+
+const recentLessonModel = computed(() => {
+  if (!recentLesson.value) return null
+  return buildLessonDetailModel(recentLesson.value, {
+    live: recentLesson.value.id === currentCourseLessons.value[currentCourseLessons.value.length - 1]?.id ? currentCourseLive.value : null,
+    aiResultStatus: recentLesson.value.id === currentCourseLessons.value[currentCourseLessons.value.length - 1]?.id ? currentCourse.value?.aiResultStatus || null : null,
+    afterClassSummary: recentLesson.value.id === currentCourseLessons.value[currentCourseLessons.value.length - 1]?.id ? currentCourse.value?.aiPreview || null : null,
+  })
+})
+
+function openRecentLessonModal() {
+  if (!recentLessonModel.value) return
+  lessonModalOpen.value = true
+}
+
+function closeRecentLessonModal() {
+  lessonModalOpen.value = false
+}
+
+function recentLessonPrimaryLabel() {
+  const model = recentLessonModel.value
+  if (!model) return null
+  if (model.statusKey === 'READY_TO_START') return '去上课'
+  if (model.statusKey === 'IN_PROGRESS') return '继续上课'
+  if (model.statusKey === 'COMPLETED') return '查看课后总结'
+  return currentCourse.value?.courseId ? '查看合作课节' : null
+}
+
+function handleRecentLessonPrimary() {
+  const model = recentLessonModel.value
+  if (!model || !currentCourse.value?.courseId) return
+  if (model.statusKey === 'READY_TO_START' || model.statusKey === 'IN_PROGRESS') {
+    openLiveByStatus(currentCourse.value.courseId)
+    return
+  }
+  if (model.statusKey === 'COMPLETED') {
+    const query: Record<string, string> = {}
+    if (currentCourse.value.liveSessionId) query.sessionId = String(currentCourse.value.liveSessionId)
+    void router.push({ name: 'lessonAiSummary', params: { courseId: String(currentCourse.value.courseId) }, query })
+    return
+  }
+  void router.push({ name: 'courseDetail', params: { courseId: String(currentCourse.value.courseId) } })
 }
 function msgText(raw: unknown): string {
   if (!raw) return ''
@@ -2055,7 +2131,9 @@ watch(
                     (!it.m.body.payerUserId || it.m.body.payerUserId === myUid) &&
                     effectiveBrokerageStatus(it.m.body) === 'PENDING'
                   "
+                  :viewer-role="auth.user?.userType === 1 ? 'teacher' : 'student'"
                   @pay="goPay(it.m.body.orderId, it.m.body.proposalId)"
+                  @open-policy="openInfoFeePolicy"
                 />
               </template>
               <template v-else-if="isContactUnlockedBody(it.m.body)">
@@ -2105,6 +2183,23 @@ watch(
         </div>
       </div>
 
+      <button
+        v-if="recentLessonModel"
+        class="recent-lesson-card"
+        type="button"
+        @click="openRecentLessonModal"
+      >
+        <div class="recent-lesson-copy">
+          <div class="recent-lesson-label">最近的一节课</div>
+          <div class="recent-lesson-title">{{ recentLessonModel.title }}</div>
+          <div class="recent-lesson-meta">{{ recentLessonModel.timeRangeText }}</div>
+        </div>
+        <div class="recent-lesson-side">
+          <span class="status-chip" :class="`tone-${recentLessonModel.statusTone}`">{{ recentLessonModel.statusLabel }}</span>
+          <span class="recent-lesson-action">{{ recentLessonPrimaryLabel() || '查看详情' }}</span>
+        </div>
+      </button>
+
       <div class="composer">
         <div class="actions">
           <button v-if="!chatUnlocked && canSendTutorApplication" class="btn btn-primary" type="button" @click="sendTutorApplicationAgain">
@@ -2140,6 +2235,7 @@ watch(
     </div>
 
     <UserCardModal :open="cardOpen" :uid="cardUid" :unlocked-contact-phone="cardUnlockedContactPhone" @close="closeCard" />
+    <InfoFeePolicyModal :open="infoFeePolicyOpen" :viewer-role="auth.user?.userType === 1 ? 'teacher' : 'student'" @close="closeInfoFeePolicy" />
     <UnlockedContactModal
       :open="unlockOpen"
       :uid="unlockUid"
@@ -2159,6 +2255,15 @@ watch(
       :initial="collabEdit ? collabEdit.initial : null"
       @close="closeCollaboration"
       @submit="createCollaboration"
+    />
+    <LessonDetailModal
+      :open="lessonModalOpen"
+      :model="recentLessonModel"
+      :cooperation-name="currentCourse?.courseName || '最近的一节课'"
+      :primary-label="recentLessonPrimaryLabel()"
+      :primary-disabled="!recentLessonPrimaryLabel()"
+      @close="closeRecentLessonModal"
+      @primary="handleRecentLessonPrimary"
     />
   </div>
 </template>
@@ -2741,6 +2846,83 @@ watch(
   cursor: not-allowed;
 }
 
+.recent-lesson-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-lesson-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.recent-lesson-label {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.56);
+}
+
+.recent-lesson-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.recent-lesson-meta,
+.recent-lesson-action {
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.68);
+}
+
+.recent-lesson-side {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tone-slate {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.tone-amber {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.tone-sky {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0369a1;
+}
+
+.tone-emerald {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.tone-rose {
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
+}
+
 .composer {
   padding: 12px;
   border-top: 1px solid var(--border);
@@ -2959,6 +3141,15 @@ watch(
   .inline-email-hint {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .recent-lesson-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .recent-lesson-side {
+    justify-items: start;
   }
 }
 </style>

@@ -226,6 +226,7 @@
 - `tutor-appointment-service-dev.yaml`
   appointment 服务独有开关、小程序配置
 - `videoCall-IM-service-dev.yaml`
+- `videoCall-IM-service-prod.yaml`
   佣金金额、管理员 token、支付开关、MQ
 - `ai-tutor-payment-dev.yaml`
   支付平台 key、notify URL、return URL、支付启用开关
@@ -239,6 +240,18 @@
 - `docs/nacos/templates/*.yaml`
 
 当用户问“这个 Nacos 该填什么”时，先从对应模板开始看，再决定是否继续读代码。
+
+`videoCall-IM-service` 的信息费配置现在最容易混淆，建议优先看模板里的注释：
+
+- `brokerage.info-fee.unified.*`
+  新统一信息费开关；开了以后，所有新信息费订单都会直接使用统一金额
+- `brokerage.amount-fen`
+  旧默认金额；现在只在动态计算失败时作为兜底值
+
+对应模板：
+
+- `docs/nacos/templates/videoCall-IM-service-dev.yaml`
+- `docs/nacos/templates/videoCall-IM-service-prod.yaml`
 
 ### 当前最值得先复查的支付配置
 
@@ -347,6 +360,14 @@ bash scripts/verify_nacos_effect.sh
 - `brokerage.info-fee.unified.amount-fen:19900`
 - `rocketmq.name-server:127.0.0.1:9876`
 - `tutor-application.skip-payment-check:false`
+
+当 `brokerage.info-fee.unified.enabled=false` 时，IM 服务当前会按业务规则动态计算信息费：
+
+- 只看每周频次
+- 每周 1/2/3/4/5 次分别收一周课时费的 100%/90%/80%/70%/60%
+- 每周超过 5 次收 50%
+- 价格区间取上下限均值，单值取原值
+- 当前报价字段如果是时薪，代码里会按 2 小时/次折算成单次课时费
 
 如果系统行为和 Nacos 不一致，要先确认是不是落回了代码默认值。
 

@@ -9,16 +9,23 @@
       <button class="hero-btn" @click="goToPost">发布</button>
     </view>
 
-    <view v-if="error" class="state error">
-      <text>{{ error }}</text>
-      <button class="mini-btn" @click="reload">重试</button>
-    </view>
+    <AppStateCard
+      v-if="error"
+      title="需求加载失败"
+      :description="error"
+      action-text="重试"
+      variant="error"
+      @action="reload"
+    />
 
-    <view v-else-if="jobList.length === 0 && !loading" class="state">
-      <text class="state-title">还没有发布需求</text>
-      <text class="state-desc">发布后，老师可以先申请，确认后再进入支付与聊天流程。</text>
-      <button class="mini-btn" @click="goToPost">发布第一个需求</button>
-    </view>
+    <AppStateCard
+      v-else-if="jobList.length === 0 && !loading"
+      title="还没有发布需求"
+      description="发布后，老师可以先申请，确认后再进入支付与聊天流程。"
+      action-text="发布第一个需求"
+      variant="soft"
+      @action="goToPost"
+    />
 
     <view v-else class="list">
       <view v-for="job in jobList" :key="job.id" class="job-card" @click="goToDetail(job.id)">
@@ -61,6 +68,7 @@ import { ref } from 'vue';
 import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
 import { jobsApi } from '@/api/jobs';
 import { ensureStudentMode } from '@/utils/studentGuard';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const jobList = ref<any[]>([]);
 const cursor = ref<number | null>(null);

@@ -1,6 +1,9 @@
 <template>
   <view class="container">
     <scroll-view class="msg-list" scroll-y :scroll-top="scrollTop" :scroll-with-animation="true">
+      <view v-if="hasMoreHistory" class="history-entry" @click="loadOlderMessages">
+        {{ historyBusy ? '正在加载更多消息...' : '查看更早消息' }}
+      </view>
       <view v-for="msg in msgList" :key="messageId(msg)" :class="['msg-item', msg.fromUid === myUid ? 'self' : 'other']">
         <view v-if="isTextMessage(msg)" class="bubble">
           <text>{{ textContent(msg) }}</text>
@@ -40,11 +43,14 @@
 
         <view v-else-if="bodyType(msg) === 'brokerage_required'" class="sys-card pay">
           <view class="sys-head">
-            <text class="sys-title">支付信息费后开放聊天</text>
+            <view class="sys-head-main">
+              <text class="sys-title">支付信息费后开放聊天</text>
+              <button class="sys-link" @click="openInfoFeePolicy(msg.body.payerUserId === myUid ? 'teacher' : 'student')">为什么先收费</button>
+            </view>
             <text class="sys-badge">{{ orderStatusText(msg.body.status) }}</text>
           </view>
           <view class="amount">{{ formatFen(msg.body.amountFen) }}</view>
-          <text class="sys-desc">信息费完成后，双方可继续沟通试课与正式合作。</text>
+          <text class="sys-desc">{{ msg.body.payerUserId === myUid ? '支付后可继续确认详细需求与合作安排。' : '教师支付后，双方可继续确认详细需求与合作安排。' }}</text>
           <view v-if="msg.body.payerUserId === myUid && msg.body.status === 'PENDING'" class="sys-ops">
             <button class="mini" :disabled="payBusy" @click="payBrokerage(msg.body.orderId)">
               {{ payBusy ? '拉起支付' : '去支付' }}
@@ -142,6 +148,8 @@
         </button>
       </view>
     </view>
+
+    <InfoFeePolicySheet :open="infoFeePolicyOpen" :viewer-role="infoFeePolicyRole" @close="closeInfoFeePolicy" />
   </view>
 </template>
 
@@ -153,6 +161,7 @@ import { chatApi } from '@/api/chat';
 import { courseApi } from '@/api/course';
 import { paymentApi } from '@/api/payment';
 import { useUserStore } from '@/stores/user';
+import InfoFeePolicySheet from '@/components/InfoFeePolicySheet.vue';
 
 type LocalStatus = 'sending' | 'failed';
 
@@ -172,12 +181,17 @@ const proposalDate = ref(todayString());
 const proposalStartTime = ref('19:00');
 const proposalEndTime = ref('20:00');
 const proposalRemark = ref('');
+const infoFeePolicyOpen = ref(false);
+const infoFeePolicyRole = ref<'teacher' | 'student'>('teacher');
 const imageBusy = ref(false);
 const peerTyping = ref(false);
 const lastEventId = ref<number | null>(null);
 const lastAckReadMsgId = ref<number | null>(null);
 const lastDeliveredMsgId = ref<number | null>(null);
 const typingReported = ref(false);
+const historyBusy = ref(false);
+const historyCursor = ref<number | string | null>(null);
+const hasMoreHistory = ref(false);
 let timer: any = null;
 let typingTimer: any = null;
 let peerTypingTimer: any = null;
@@ -209,12 +223,36 @@ const fetchMessages = async () => {
         msgList.value = [...msgList.value.filter((it) => it.localStatus), ...newMsgs];
         scrollToBottom();
       }
+      historyCursor.value = res?.cursor ?? res?.nextCursor ?? null;
+      hasMoreHistory.value = !res?.isLast && newMsgs.length > 0;
       ackLatestMessage(newMsgs);
     }
   } catch (error) {
     console.error(error);
   }
 };
+
+async function loadOlderMessages() {
+  if (!roomId.value || historyBusy.value || !hasMoreHistory.value) return;
+  historyBusy.value = true;
+  try {
+    const res: any = await chatApi.listMessages({
+      roomId: roomId.value,
+      pageSize: 30,
+      cursor: historyCursor.value,
+    });
+    const older = Array.isArray(res?.list) ? [...res.list].reverse().map(normalizeMessage) : [];
+    const exists = new Set(msgList.value.map((it) => String(messageId(it))));
+    const mergedOlder = older.filter((it) => !exists.has(String(messageId(it))));
+    msgList.value = [...mergedOlder, ...msgList.value];
+    historyCursor.value = res?.cursor ?? res?.nextCursor ?? null;
+    hasMoreHistory.value = !res?.isLast && older.length > 0;
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '加载历史消息失败', icon: 'none' });
+  } finally {
+    historyBusy.value = false;
+  }
+}
 
 function normalizeMessage(raw: any) {
   if (raw?.message) {
@@ -564,6 +602,15 @@ const payBrokerage = async (orderId: number) => {
   }
 };
 
+function openInfoFeePolicy(role: 'teacher' | 'student') {
+  infoFeePolicyRole.value = role;
+  infoFeePolicyOpen.value = true;
+}
+
+function closeInfoFeePolicy() {
+  infoFeePolicyOpen.value = false;
+}
+
 function openProposal() {
   if (!chatUnlocked.value) {
     uni.showToast({ title: '聊天解锁后可发起合作', icon: 'none' });
@@ -666,6 +713,14 @@ onUnload(() => {
   padding: 12px 12px 128px;
   box-sizing: border-box;
   overflow-y: auto;
+}
+
+.history-entry {
+  margin-bottom: 12px;
+  text-align: center;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .msg-item {
@@ -778,6 +833,12 @@ onUnload(() => {
   margin-bottom: 8px;
 }
 
+.sys-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .sys-title,
 .k,
 .v,
@@ -790,6 +851,21 @@ onUnload(() => {
   color: #162326;
   font-size: 15px;
   font-weight: 900;
+}
+
+.sys-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 800;
+  text-align: left;
+}
+
+.sys-link::after {
+  display: none;
 }
 
 .sys-badge {

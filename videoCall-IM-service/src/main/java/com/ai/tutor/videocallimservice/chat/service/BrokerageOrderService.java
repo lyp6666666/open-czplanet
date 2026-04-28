@@ -37,8 +37,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -84,8 +82,6 @@ public class BrokerageOrderService {
 
     private static final int LESSON_HOURS = 2;
     private static final String PROMOTION_SYSTEM_INVITE = "SYSTEM_INVITE";
-    private static final Pattern PRICE_NUMBER = Pattern.compile("(\\d+(?:\\.\\d+)?)");
-
     public BrokerageOrderVO getOrCreateByProposal(Long proposalId, Long uid) {
         ThrowUtils.throwIf(proposalId == null || uid == null, ErrorCode.PARAMS_ERROR);
         CollaborationProposal proposal = collaborationProposalMapper.selectById(proposalId);
@@ -167,19 +163,12 @@ public class BrokerageOrderService {
         if (proposal == null) {
             return defaultAmountFen;
         }
-        Integer frequencyPerWeek = proposal.getFrequencyPerWeek();
-        BigDecimal rate = resolveInfoFeeRate(frequencyPerWeek);
-        Long pricePerHourFen = parsePricePerHourFen(proposal.getPricePerHour());
+        Long pricePerHourFen = InfoFeeCalculator.resolveProposalHourlyPriceFen(proposal.getPricePerHour());
         if (pricePerHourFen == null || pricePerHourFen <= 0L) {
             return defaultAmountFen;
         }
-        long lessonsPerWeek = frequencyPerWeek == null || frequencyPerWeek <= 0 ? 1L : frequencyPerWeek.longValue();
-        BigDecimal weeklyCourseFeeFen = BigDecimal.valueOf(pricePerHourFen)
-                .multiply(BigDecimal.valueOf(LESSON_HOURS))
-                .multiply(BigDecimal.valueOf(lessonsPerWeek));
-        BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
-        long out = infoFeeFen.longValue();
-        return out <= 0L ? 1L : out;
+        long amountFen = InfoFeeCalculator.computeFromHourlyPriceFen(pricePerHourFen, proposal.getFrequencyPerWeek(), LESSON_HOURS);
+        return amountFen <= 0L ? defaultAmountFen : amountFen;
     }
 
     PromotionAmount applySystemInvitePromotion(Long teacherUid, long originalAmountFen) {
@@ -218,38 +207,6 @@ public class BrokerageOrderService {
             log.warn("system_invite_promotion_query_failed teacherUid={} message={}", teacherUid, ex.getMessage());
             return PromotionAmount.none(originalAmountFen);
         }
-    }
-
-    private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
-        int n = frequencyPerWeek == null ? 1 : frequencyPerWeek;
-        if (n <= 1) return BigDecimal.ONE;
-        if (n == 2) return new BigDecimal("0.9");
-        if (n == 3) return new BigDecimal("0.8");
-        if (n == 4) return new BigDecimal("0.7");
-        if (n == 5) return new BigDecimal("0.6");
-        return new BigDecimal("0.5");
-    }
-
-    private static Long parsePricePerHourFen(String pricePerHour) {
-        String raw = pricePerHour == null ? "" : pricePerHour.trim();
-        if (raw.isEmpty()) {
-            return null;
-        }
-        Matcher m = PRICE_NUMBER.matcher(raw);
-        if (!m.find()) {
-            return null;
-        }
-        BigDecimal cny;
-        try {
-            cny = new BigDecimal(m.group(1));
-        } catch (Exception ignored) {
-            return null;
-        }
-        if (cny.compareTo(BigDecimal.ZERO) <= 0) {
-            return null;
-        }
-        BigDecimal fen = cny.multiply(BigDecimal.valueOf(100)).setScale(0, RoundingMode.HALF_UP);
-        return fen.longValue();
     }
 
     public boolean hasPaidOrderInRoom(Long roomId) {

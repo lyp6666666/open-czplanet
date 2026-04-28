@@ -1,10 +1,13 @@
 <template>
   <view class="page">
-    <view v-if="!userStore.isLoggedIn" class="login-panel">
-      <text class="login-title">登录后查看合作</text>
-      <text class="login-desc">试课、正式课表和退费进度都会汇总在这里。</text>
-      <button class="primary-btn" @click="goLogin">去登录</button>
-    </view>
+    <AppStateCard
+      v-if="!userStore.isLoggedIn"
+      title="登录后查看合作"
+      description="试课、正式课表和退费进度都会汇总在这里。"
+      action-text="去登录"
+      variant="soft"
+      @action="goLogin"
+    />
 
     <template v-else>
       <view class="hero">
@@ -25,15 +28,26 @@
         </view>
       </view>
 
-      <view v-if="loading" class="state">加载中...</view>
-      <view v-else-if="error" class="state error">
-        <text>{{ error }}</text>
-        <button class="mini-btn" @click="load">重试</button>
-      </view>
-      <view v-else-if="visibleList.length === 0" class="state">
-        <text class="state-title">暂无课程合作</text>
-        <text class="state-desc">聊天中确认试课合作后，会自动进入课程流程。</text>
-      </view>
+      <AppStateCard
+        v-if="loading"
+        title="课程合作加载中"
+        description="正在同步试课、正式课表和退费进度。"
+        variant="soft"
+      />
+      <AppStateCard
+        v-else-if="error"
+        title="课程合作加载失败"
+        :description="error"
+        action-text="重试"
+        variant="error"
+        @action="load"
+      />
+      <AppStateCard
+        v-else-if="visibleList.length === 0"
+        title="暂无课程合作"
+        description="聊天中确认试课合作后，会自动进入课程流程。"
+        variant="soft"
+      />
 
       <view v-else class="list">
         <view v-for="it in visibleList" :key="it.courseId" class="course-card" @click="openCourse(it.courseId)">
@@ -85,6 +99,7 @@ import { computed, ref } from 'vue';
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import { courseApi, type CourseItem } from '@/api/course';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 type FilterKey = 'ALL' | 'ACTIVE' | 'TRIAL' | 'TEACHING' | 'DONE';
 

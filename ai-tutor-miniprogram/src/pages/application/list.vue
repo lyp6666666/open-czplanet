@@ -1,10 +1,13 @@
 <template>
   <view class="page">
-    <view v-if="!userStore.isLoggedIn" class="login-panel">
-      <text class="login-title">登录后查看申请</text>
-      <text class="login-desc">老师和学生的沟通申请都会收在这里。</text>
-      <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin">去登录</u-button>
-    </view>
+    <AppStateCard
+      v-if="!userStore.isLoggedIn"
+      title="登录后查看申请"
+      description="老师和学生的沟通申请都会收在这里。"
+      action-text="去登录"
+      variant="soft"
+      @action="goLogin"
+    />
 
     <template v-else>
       <view class="hero">
@@ -24,15 +27,21 @@
         <view class="tab" :class="{ active: tab === 'sent' }" @click="switchTab('sent')">发出的</view>
       </view>
 
-      <view v-if="error" class="state error">
-        <text>{{ error }}</text>
-        <u-button size="mini" type="primary" color="#00bebd" @click="reload">重试</u-button>
-      </view>
+      <AppStateCard
+        v-if="error"
+        title="申请列表加载失败"
+        :description="error"
+        action-text="重试"
+        variant="error"
+        @action="reload"
+      />
 
-      <view v-if="list.length === 0 && !loading" class="state">
-        <text class="state-title">暂无申请</text>
-        <text class="state-desc">从需求页或老师详情发起申请后，会在这里同步状态。</text>
-      </view>
+      <AppStateCard
+        v-else-if="list.length === 0 && !loading"
+        title="暂无申请"
+        description="从需求页或老师详情发起申请后，会在这里同步状态。"
+        variant="soft"
+      />
 
       <view v-else class="list">
         <view v-for="it in list" :key="it.id" class="card" @click="openDetail(it.id)">
@@ -64,6 +73,7 @@ import { computed, ref } from 'vue';
 import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app';
 import { applicationApi, type TutorApplication } from '@/api/application';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 type TabKey = 'received' | 'sent';
 

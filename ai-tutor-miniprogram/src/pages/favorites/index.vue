@@ -1,10 +1,13 @@
 <template>
   <view class="page">
-    <view v-if="!userStore.isLoggedIn" class="state">
-      <text class="state-title">登录后查看收藏</text>
-      <text class="state-desc">你收藏的老师或需求会统一放在这里。</text>
-      <button class="mini-btn" @click="goLogin">去登录</button>
-    </view>
+    <AppStateCard
+      v-if="!userStore.isLoggedIn"
+      title="登录后查看收藏"
+      description="你收藏的老师或需求会统一放在这里。"
+      action-text="去登录"
+      variant="soft"
+      @action="goLogin"
+    />
 
     <template v-else>
       <view class="hero">
@@ -13,15 +16,21 @@
         <text class="subtitle">{{ userStore.currentRole === 'tutor' ? '把感兴趣的需求留住，方便之后继续申请。' : '保留喜欢的老师，之后可直接查看并发起申请。' }}</text>
       </view>
 
-      <view v-if="error" class="state error">
-        <text>{{ error }}</text>
-        <button class="mini-btn" @click="reload">重试</button>
-      </view>
+      <AppStateCard
+        v-if="error"
+        title="收藏加载失败"
+        :description="error"
+        action-text="重试"
+        variant="error"
+        @action="reload"
+      />
 
-      <view v-else-if="list.length === 0 && !loading" class="state">
-        <text class="state-title">{{ userStore.currentRole === 'tutor' ? '暂无收藏需求' : '暂无收藏老师' }}</text>
-        <text class="state-desc">{{ userStore.currentRole === 'tutor' ? '去需求广场收藏适合自己的需求。' : '浏览老师时可以先收藏，再慢慢比较。' }}</text>
-      </view>
+      <AppStateCard
+        v-else-if="list.length === 0 && !loading"
+        :title="userStore.currentRole === 'tutor' ? '暂无收藏需求' : '暂无收藏老师'"
+        :description="userStore.currentRole === 'tutor' ? '去需求广场收藏适合自己的需求。' : '浏览老师时可以先收藏，再慢慢比较。'"
+        variant="soft"
+      />
 
       <view v-else class="list">
         <view v-for="item in list" :key="itemKey(item)" class="fav-card" @click="openItem(item)">
@@ -72,6 +81,7 @@ import { favoritesApi } from '@/api/favorites';
 import { jobsApi } from '@/api/jobs';
 import { request, resolveImageUrl } from '@/utils/request';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const userStore = useUserStore();
 const list = ref<any[]>([]);

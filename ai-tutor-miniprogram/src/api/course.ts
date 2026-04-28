@@ -61,13 +61,15 @@ export const courseApi = {
     return request({
       url: '/courses/my',
       method: 'GET',
-      data: params
+      data: params,
+      silentError: true,
     }) as Promise<CourseItem[]>;
   },
   detail(courseId: number) {
     return request({
       url: `/courses/${courseId}`,
-      method: 'GET'
+      method: 'GET',
+      silentError: true,
     }) as Promise<CourseDetail>;
   },
   byRoom(roomId: number) {

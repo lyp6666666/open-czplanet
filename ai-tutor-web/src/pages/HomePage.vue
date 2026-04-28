@@ -367,7 +367,7 @@ onUnmounted(() => {
                     :modules="[Autoplay, Pagination]"
                     :loop="heroCarouselItems.length > 1"
                     :autoplay="heroCarouselItems.length > 1 ? { delay: 3600, disableOnInteraction: false } : false"
-                    :pagination="heroCarouselItems.length > 1 ? { clickable: true, el: '.teacher-stage-pagination' } : false"
+                    :pagination="heroCarouselItems.length > 1 ? { clickable: true, el: '.teacher-stage-pagination', bulletClass: 'hero-pagination-bullet', bulletActiveClass: 'hero-pagination-bullet-active' } : false"
                     @slideChange="onHeroSlideChange"
                   >
                     <SwiperSlide v-for="(item, index) in heroCarouselItems" :key="item.id">
@@ -539,7 +539,7 @@ onUnmounted(() => {
   position: relative;
   display: grid;
   gap: 32px;
-  padding-top: 34px;
+  padding-top: 18px;
 }
 
 .surface-card {
@@ -873,7 +873,8 @@ onUnmounted(() => {
   overflow: hidden;
   border-radius: 28px;
   background: linear-gradient(180deg, #d9e7ff 0%, #f3f7ff 100%);
-  min-height: 500px;
+  min-height: 420px;
+  aspect-ratio: 16 / 11;
 }
 
 .teacher-stage-swiper,
@@ -883,15 +884,20 @@ onUnmounted(() => {
 }
 
 .hero-slide-button {
+  display: block;
   padding: 0;
+  border: 0;
   background: transparent;
+  cursor: pointer;
 }
 
 .teacher-photo {
   width: 100%;
   height: 100%;
-  min-height: 500px;
-  object-fit: cover;
+  min-height: 420px;
+  object-fit: contain;
+  object-position: center;
+  background: linear-gradient(180deg, #e3edff 0%, #f6f9ff 100%);
 }
 
 .teacher-float {
@@ -917,7 +923,7 @@ onUnmounted(() => {
   position: absolute;
   left: 18px;
   right: 18px;
-  bottom: 38px;
+  bottom: 56px;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -932,23 +938,28 @@ onUnmounted(() => {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 12px;
+  bottom: 18px;
   z-index: 3;
   display: flex;
   justify-content: center;
+  gap: 8px;
 }
 
-.teacher-stage :deep(.swiper-pagination-bullet) {
-  width: 8px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.7);
-  opacity: 1;
-}
-
-.teacher-stage :deep(.swiper-pagination-bullet-active) {
-  width: 22px;
+.teacher-stage :deep(.hero-pagination-bullet) {
+  width: 9px;
+  height: 9px;
+  margin: 0 !important;
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 16px rgba(17, 32, 78, 0.16);
+  opacity: 1;
+  transition: width 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.teacher-stage :deep(.hero-pagination-bullet-active) {
+  width: 26px;
   background: #ffffff;
+  transform: translateY(-1px);
 }
 
 .link-btn,
@@ -1470,7 +1481,30 @@ onUnmounted(() => {
 
   .teacher-stage,
   .teacher-photo {
-    min-height: 320px;
+    min-height: 280px;
+  }
+
+  .teacher-stage {
+    aspect-ratio: 16 / 12;
+  }
+
+  .teacher-float {
+    top: 16px;
+    right: 16px;
+    width: 88px;
+    height: 118px;
+  }
+
+  .video-toolbar {
+    left: 12px;
+    right: 12px;
+    bottom: 44px;
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+
+  .teacher-stage-pagination {
+    bottom: 14px;
   }
 
   .teacher-card {

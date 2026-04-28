@@ -73,6 +73,46 @@
 
 ## 2026-04-20
 
+## 2026-04-28
+
+- 请求：
+  完善教师支付信息费前的信任说明，在聊天信息费系统消息上增加唯一说明入口，并在 Web/小程序收银台补充保障与联系方式规则提示
+- 涉及区域：
+  `ai-tutor-web/`、`ai-tutor-miniprogram/`、`skills/references/`
+- 已检查背景：
+  聊天申请与信息费支付链路、双端聊天消息展示、收银台页面结构、项目 UI 说明约定
+- 验证：
+  执行 `npm --prefix ai-tutor-web run typecheck`
+  执行 `npm --prefix ai-tutor-web run test -- src/ui/chat/BrokerageRequiredCard.test.ts`
+- 新增说明：
+  当前长说明的唯一入口收口在聊天 `brokerage_required` 卡片右上角；收银台只保留简短保障与“合作通过前禁止泄露联系方式，否则不予退还信息费”的规则提示
+
+- 请求：
+  梳理 Nacos 里 IM 服务的信息费配置说明，补齐 dev/prod 模板，避免旧兜底金额和新统一价开关混淆
+- 涉及区域：
+  `docs/nacos/`、`skills/references/`
+- 已检查背景：
+  Nacos DataId 组织方式、IM 服务信息费配置绑定点、运行时配置参考
+- 验证：
+  检查了 `docs/nacos/templates/videoCall-IM-service-dev.yaml`
+  新增了 `docs/nacos/templates/videoCall-IM-service-prod.yaml`
+  复核了 `BrokerageInfoFeeHotConfig` 与 `TutorApplicationService` 的绑定点
+- 新增说明：
+  `brokerage.info-fee.unified.*` 是当前真正会强制覆盖所有新信息费订单的开关；`brokerage.amount-fen` 现在只应被视为动态计算失败时的兜底值
+
+- 请求：
+  按最新线下信息费规则统一修改代码，改成按每周频次阶梯收取，并把规则写进项目 skill
+- 涉及区域：
+  `videoCall-IM-service/`、`skills/references/`
+- 已检查背景：
+  聊天/信息费支付流程、运行时配置默认值、项目 skill 维护约定
+- 验证：
+  执行 `./mvnw -pl videoCall-IM-service -Dtest=InfoFeeCalculatorTest,InfoFeeServiceWiringTest,TutorApplicationServiceTest test`
+- 新增说明：
+  当前信息费动态计算统一遵循一套规则：价格区间取均值、单值取原值、每周 1/2/3/4/5 次分别按一周课时费的 100%/90%/80%/70%/60% 收取，超过 5 次按 50%；如果报价字段存的是时薪，代码里仍按 2 小时/次折算
+
+## 2026-04-20
+
 - 请求：
   修复 `http://huoyue.online/admin/` 管理端入口空白页问题
 - 涉及区域：

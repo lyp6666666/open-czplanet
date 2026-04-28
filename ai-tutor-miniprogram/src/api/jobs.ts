@@ -22,7 +22,8 @@ export const jobsApi = {
     return request({
       url: '/api/v1/parent/jobs/mine',
       method: 'GET',
-      data: params
+      data: params,
+      silentError: true
     });
   },
   // 需求广场 (Feed)
@@ -30,21 +31,24 @@ export const jobsApi = {
     return request({
       url: '/api/v1/parent/jobs/feed',
       method: 'GET',
-      data: params
+      data: params,
+      silentError: true
     });
   },
   // 需求详情
   getDemand(id: number) {
     return request({
       url: `/api/v1/parent/jobs/${id}`,
-      method: 'GET'
+      method: 'GET',
+      silentError: true
     });
   },
   // 需求详情（教师端视图，包含发布者信息）
   getDemandView(id: number) {
     return request({
       url: `/api/v1/parent/jobs/${id}/view`,
-      method: 'GET'
+      method: 'GET',
+      silentError: true
     });
   }
 };

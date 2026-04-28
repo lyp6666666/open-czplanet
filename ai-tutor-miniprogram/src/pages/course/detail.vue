@@ -1,10 +1,19 @@
 <template>
   <view class="page">
-    <view v-if="loading" class="state">加载中...</view>
-    <view v-else-if="error" class="state error">
-      <text>{{ error }}</text>
-      <button class="mini-btn" @click="load">重试</button>
-    </view>
+    <AppStateCard
+      v-if="loading"
+      title="课程详情加载中"
+      description="正在同步课节、试课结果和正式课表。"
+      variant="soft"
+    />
+    <AppStateCard
+      v-else-if="error"
+      title="课程详情加载失败"
+      :description="error"
+      action-text="重试"
+      variant="error"
+      @action="load"
+    />
 
     <template v-else-if="detail">
       <view class="hero">
@@ -44,6 +53,25 @@
       <view v-if="detail.aiPreview" class="panel">
         <text class="section-title">课后摘要</text>
         <text class="desc">{{ detail.aiPreview }}</text>
+      </view>
+
+      <view v-if="availabilityDate" class="panel">
+        <view class="panel-head">
+          <text class="section-title">近期可约时间</text>
+          <text class="pill">{{ availabilityDate }}</text>
+        </view>
+        <view v-if="availabilityLoading" class="empty-line">正在同步双方当日可约时间...</view>
+        <view v-else-if="availabilitySlots.length" class="slot-grid">
+          <view
+            v-for="slot in availabilitySlots"
+            :key="`${slot.startAt}-${slot.endAt}`"
+            class="slot-chip"
+            @click="applyAvailabilitySlot(slot)"
+          >
+            {{ formatRange(slot.startAt, slot.endAt) }}
+          </view>
+        </view>
+        <text v-else class="desc">当天暂无可直接使用的候选时间，可继续手动选择正式课表。</text>
       </view>
 
       <view class="panel">
@@ -129,8 +157,9 @@
 import { computed, ref } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { courseApi, type CourseDetail } from '@/api/course';
-import { scheduleApi, type ScheduleEvent } from '@/api/schedule';
+import { scheduleApi, type ScheduleAvailabilitySlot, type ScheduleEvent } from '@/api/schedule';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const userStore = useUserStore();
 const courseId = ref<number | null>(null);
@@ -152,6 +181,9 @@ const weeklyPrice = ref('');
 const weeklyWeeks = ref('16');
 const refundOpen = ref(false);
 const refundReason = ref('');
+const availabilityLoading = ref(false);
+const availabilityDate = ref('');
+const availabilitySlots = ref<ScheduleAvailabilitySlot[]>([]);
 
 const dayOptions = [
   { label: '周一', value: 1 },
@@ -249,10 +281,44 @@ async function load() {
   try {
     detail.value = await courseApi.detail(courseId.value);
     lessons.value = await scheduleApi.listCourseEvents(courseId.value);
+    await loadAvailability();
   } catch (e: any) {
     error.value = e?.message || e?.msg || '加载课程失败';
   } finally {
     loading.value = false;
+  }
+}
+
+function todayString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function loadAvailability() {
+  if (!detail.value) {
+    availabilityDate.value = '';
+    availabilitySlots.value = [];
+    return;
+  }
+  availabilityLoading.value = true;
+  availabilityDate.value = todayString();
+  try {
+    const participantUserId = isTeacher.value ? detail.value.studentUid : detail.value.teacherUid;
+    const res = await scheduleApi.availabilityDay({
+      participantUserId,
+      roomId: detail.value.roomId,
+      courseId: detail.value.courseId,
+      date: availabilityDate.value,
+    });
+    const next = Array.isArray(res?.availableSlots) ? res.availableSlots : Array.isArray(res?.slots) ? res.slots : [];
+    availabilitySlots.value = next.filter((slot) => slot?.startAt && slot?.endAt).slice(0, 6);
+  } catch {
+    availabilitySlots.value = [];
+  } finally {
+    availabilityLoading.value = false;
   }
 }
 
@@ -288,6 +354,17 @@ function toMinutes(value: string) {
 
 function onDayChange(e: any) {
   weeklyDayIndex.value = Number(e.detail.value || 0);
+}
+
+function applyAvailabilitySlot(slot: ScheduleAvailabilitySlot) {
+  if (!slot?.startAt || !slot?.endAt) return;
+  const start = new Date(slot.startAt);
+  const end = new Date(slot.endAt);
+  const day = start.getDay();
+  weeklyDayIndex.value = Math.max(0, day === 0 ? 6 : day - 1);
+  weeklyStart.value = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+  weeklyEnd.value = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+  weeklyOpen.value = true;
 }
 
 async function submitWeekly() {
@@ -454,6 +531,21 @@ onShow(() => {
   color: #65717a;
   font-size: 13px;
   line-height: 1.65;
+}
+
+.slot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.slot-chip {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .pill {

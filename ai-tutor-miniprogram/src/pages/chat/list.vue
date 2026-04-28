@@ -18,7 +18,13 @@
         </view>
       </view>
 
-      <view v-if="roomList.length === 0" class="empty-state in-page">
+      <view v-if="loadError" class="empty-state in-page">
+        <text class="tip">消息加载失败</text>
+        <text class="subtip">{{ loadError }}</text>
+        <button class="retry-btn" @click="refreshAll">重新加载</button>
+      </view>
+
+      <view v-else-if="roomList.length === 0" class="empty-state in-page">
         <text class="tip">暂无聊天</text>
         <text class="subtip">发起申请并完成信息费支付后，会出现聊天会话。</text>
       </view>
@@ -46,23 +52,45 @@
 import { ref, onUnmounted } from 'vue';
 import { chatApi } from '@/api/chat';
 import { applicationApi } from '@/api/application';
-import { onShow, onHide } from '@dcloudio/uni-app';
+import { onShow, onHide, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user';
 import { resolveImageUrl } from '@/utils/request';
 
 const userStore = useUserStore();
 const roomList = ref<any[]>([]);
 const applicationUnread = ref(0);
+const cursor = ref<number | null>(null);
+const isLast = ref(false);
+const loadingMore = ref(false);
+const loadError = ref('');
 let timer: any = null;
 
-const fetchRooms = async () => {
+function normalizeCursor(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const n = Number(String(v || '').trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+const fetchRooms = async (reset = false) => {
   try {
-    const res: any = await chatApi.listRooms({ pageSize: 20 });
+    const res: any = await chatApi.listRooms({
+      pageSize: 20,
+      cursor: reset ? null : cursor.value,
+    });
     if (res && res.list) {
-        roomList.value = res.list;
+      const nextList = Array.isArray(res.list) ? res.list : [];
+      roomList.value = reset ? nextList : [...roomList.value, ...nextList];
+      cursor.value = normalizeCursor(res.nextCursor ?? res.cursor);
+      isLast.value = !!res.isLast || !nextList.length;
     }
+    loadError.value = '';
   } catch (error) {
     console.error(error);
+    if (reset) roomList.value = [];
+    loadError.value = '会话列表暂时不可用，请稍后重试。';
+  } finally {
+    loadingMore.value = false;
   }
 };
 
@@ -91,10 +119,9 @@ const formatTime = (ts: number) => {
 
 const startPolling = () => {
     if (!userStore.isLoggedIn) return;
-    fetchRooms();
-    fetchApplicationUnread();
+    refreshAll();
     timer = setInterval(() => {
-      fetchRooms();
+      fetchRooms(true);
       fetchApplicationUnread();
     }, 5000);
 };
@@ -116,6 +143,29 @@ onHide(() => {
 
 onUnmounted(() => {
     stopPolling();
+});
+
+function refreshAll() {
+  cursor.value = null;
+  isLast.value = false;
+  loadingMore.value = false;
+  void fetchRooms(true);
+  void fetchApplicationUnread();
+}
+
+function loadMore() {
+  if (loadingMore.value || isLast.value || !userStore.isLoggedIn) return;
+  loadingMore.value = true;
+  void fetchRooms(false);
+}
+
+onReachBottom(() => {
+  loadMore();
+});
+
+onPullDownRefresh(async () => {
+  refreshAll();
+  setTimeout(() => uni.stopPullDownRefresh(), 300);
 });
 
 const goLogin = () => {
@@ -162,6 +212,23 @@ const goApplications = () => {
   border-radius: 16px;
   padding: 40px 20px;
   margin-top: 12px;
+}
+
+.retry-btn {
+  margin-top: 14px;
+  min-width: 120px;
+  height: 38px;
+  line-height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: #00bebd;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.retry-btn::after {
+  border: 0;
 }
 
 .hub {

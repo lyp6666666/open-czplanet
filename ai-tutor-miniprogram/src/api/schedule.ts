@@ -36,11 +36,24 @@ export type SubmitWeeklyScheduleRequest = {
   }>;
 };
 
+export type ScheduleAvailabilitySlot = {
+  startAt: number;
+  endAt: number;
+  available?: boolean;
+};
+
+export type ScheduleAvailabilityResp = {
+  date?: string;
+  slots?: ScheduleAvailabilitySlot[];
+  availableSlots?: ScheduleAvailabilitySlot[];
+};
+
 export const scheduleApi = {
   listCourseEvents(courseId: number) {
     return request({
       url: `/api/v1/schedule/courses/${courseId}/events`,
-      method: 'GET'
+      method: 'GET',
+      silentError: true,
     }) as Promise<ScheduleEvent[]>;
   },
   respond(eventId: number, action: 'ACCEPT' | 'REJECT') {
@@ -63,5 +76,13 @@ export const scheduleApi = {
       method: 'POST',
       data
     }) as Promise<ScheduleEvent[]>;
+  },
+  availabilityDay(params: { participantUserId: number; date: string; roomId?: number | null; courseId?: number | null }) {
+    return request({
+      url: '/api/v1/schedule/availability/day',
+      method: 'GET',
+      data: params,
+      silentError: true,
+    }) as Promise<ScheduleAvailabilityResp>;
   }
 };

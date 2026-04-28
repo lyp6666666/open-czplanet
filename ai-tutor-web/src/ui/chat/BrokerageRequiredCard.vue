@@ -6,10 +6,12 @@ import type { ChatMessageBody } from '@/api/types'
 const props = defineProps<{
   body: Extract<ChatMessageBody, { type: 'brokerage_required' }>
   canPay: boolean
+  viewerRole: 'teacher' | 'student'
 }>()
 
 const emit = defineEmits<{
   (e: 'pay'): void
+  (e: 'openPolicy'): void
 }>()
 
 const amountYuan = computed(() => {
@@ -27,6 +29,12 @@ const isPaid = computed(() => statusCode.value === 'PAID')
 const showAmount = computed(() => props.canPay || isPaid.value)
 
 const showPayButton = computed(() => props.canPay && (statusCode.value === '' || statusCode.value === 'PENDING'))
+
+const descText = computed(() =>
+  props.viewerRole === 'teacher'
+    ? '支付后可继续确认详细需求与合作安排。'
+    : '教师支付后，双方可继续确认详细需求与合作安排。',
+)
 
 const statusToneClass = computed(() => {
   if (isPaid.value) return 'tone-paid'
@@ -48,9 +56,13 @@ function statusText() {
 <template>
   <div class="cardx" :class="{ paid: isPaid }">
     <div class="head">
-      <div class="h1">信息费</div>
+      <div class="title-group">
+        <div class="h1">信息费</div>
+        <button class="policy-link" type="button" @click="emit('openPolicy')">为什么先收费</button>
+      </div>
       <div class="status-tag" :class="statusToneClass">{{ canPay || isPaid ? statusText() : '待教师支付信息费' }}</div>
     </div>
+    <div class="lead">{{ descText }}</div>
     <div v-if="showAmount" class="row">
       <div class="k">金额</div>
       <div class="v">{{ amountYuan ? `${amountYuan} 元` : '待定' }}</div>
@@ -84,14 +96,37 @@ function statusText() {
 
 .head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
+.title-group {
+  display: grid;
+  gap: 4px;
+}
+
 .h1 {
   font-weight: 900;
-  margin-bottom: 8px;
+}
+
+.policy-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lead {
+  margin-top: 8px;
+  color: #52636d;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 700;
 }
 
 .status-tag {

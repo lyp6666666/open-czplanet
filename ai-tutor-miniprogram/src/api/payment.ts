@@ -46,4 +46,12 @@ export const paymentApi = {
       method: 'GET',
     });
   },
+
+  devMockSuccess(orderNo: string) {
+    return request({
+      url: `/payment/dev/orders/${orderNo}/mock-success`,
+      method: 'POST',
+      loading: true,
+    });
+  },
 };

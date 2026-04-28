@@ -673,19 +673,12 @@ public class TutorApplicationService {
         if (demand == null) {
             return defaultAmountFen;
         }
-        Integer frequencyPerWeek = demand.getFrequencyPerWeek();
-        BigDecimal rate = resolveInfoFeeRate(frequencyPerWeek);
-        BigDecimal hourlyCny = demand.getBudgetMax() != null ? demand.getBudgetMax() : demand.getBudgetMin();
-        if (hourlyCny == null || hourlyCny.compareTo(BigDecimal.ZERO) <= 0) {
+        Long hourlyPriceFen = InfoFeeCalculator.resolveDemandHourlyPriceFen(demand.getBudgetMin(), demand.getBudgetMax());
+        if (hourlyPriceFen == null || hourlyPriceFen <= 0L) {
             return defaultAmountFen;
         }
-        long lessonsPerWeek = frequencyPerWeek == null || frequencyPerWeek <= 0 ? 1L : frequencyPerWeek.longValue();
-        BigDecimal weeklyCourseFeeFen = hourlyCny.multiply(BigDecimal.valueOf(100))
-                .multiply(BigDecimal.valueOf(LESSON_HOURS))
-                .multiply(BigDecimal.valueOf(lessonsPerWeek));
-        BigDecimal infoFeeFen = weeklyCourseFeeFen.multiply(rate).setScale(0, RoundingMode.CEILING);
-        long out = infoFeeFen.longValue();
-        return out <= 0L ? 1L : out;
+        long amountFen = InfoFeeCalculator.computeFromHourlyPriceFen(hourlyPriceFen, demand.getFrequencyPerWeek(), LESSON_HOURS);
+        return amountFen <= 0L ? defaultAmountFen : amountFen;
     }
 
     PromotionAmount applySystemInvitePromotion(Long teacherUid, long originalAmountFen) {
@@ -724,16 +717,6 @@ public class TutorApplicationService {
             log.warn("system_invite_promotion_query_failed teacherUid={} message={}", teacherUid, ex.getMessage());
             return PromotionAmount.none(originalAmountFen);
         }
-    }
-
-    private static BigDecimal resolveInfoFeeRate(Integer frequencyPerWeek) {
-        int n = frequencyPerWeek == null ? 1 : frequencyPerWeek;
-        if (n <= 1) return BigDecimal.ONE;
-        if (n == 2) return new BigDecimal("0.9");
-        if (n == 3) return new BigDecimal("0.8");
-        if (n == 4) return new BigDecimal("0.7");
-        if (n == 5) return new BigDecimal("0.6");
-        return new BigDecimal("0.5");
     }
 
     private CursorPageResp<TutorApplicationVO> toPage(List<TutorApplication> list, Integer pageSize) {

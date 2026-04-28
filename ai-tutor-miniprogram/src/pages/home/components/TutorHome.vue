@@ -1,9 +1,11 @@
 <template>
-  <view class="container">
+  <view class="page">
     <view v-if="!userStore.isLoggedIn" class="empty-state">
-      <text class="tip">登录后查看需求</text>
-      <u-button type="primary" color="#00bebd" shape="circle" @click="goLogin">去登录</u-button>
+      <text class="empty-title">登录后查看需求广场</text>
+      <text class="empty-desc">登录并完成家教入驻后，可以浏览需求、收藏需求并发起沟通。</text>
+      <button class="empty-btn" @click="goLogin">去登录</button>
     </view>
+
     <view v-else-if="userStore.tutorStatus !== 'APPROVED'" class="guard-card">
       <view class="guard-icon">{{ guardIcon }}</view>
       <text class="guard-title">{{ guardTitle }}</text>
@@ -11,118 +13,169 @@
       <button class="guard-btn primary" @click="handleGuardAction">{{ guardActionText }}</button>
       <button class="guard-btn secondary" @click="switchStudent">先看老师</button>
     </view>
-    <view v-else>
-      <view class="search-bar">
-        <u-icon name="search" color="#646a73" size="20"></u-icon>
-        <input class="search-input" type="text" v-model="keyword" placeholder="搜索需求..." @confirm="onSearch" />
-      </view>
 
-      <scroll-view class="filters" scroll-x>
-        <view class="filter-chip" :class="{ active: classModeFilter === '' }" @click="setClassMode('')">不限</view>
-        <view class="filter-chip" :class="{ active: classModeFilter === 'online' }" @click="setClassMode('online')">线上</view>
-        <view class="filter-chip" :class="{ active: classModeFilter === 'offline' }" @click="setClassMode('offline')">线下</view>
-        <view class="filter-chip" :class="{ active: classModeFilter === 'both' }" @click="setClassMode('both')">线上/线下</view>
-      </scroll-view>
-      
-      <view class="job-list">
-        <view v-for="job in jobList" :key="job.id" class="job-card" @click="goToDetail(job.id)">
-          <view class="header">
-              <view class="title-row">
-                <text class="title">{{ job.title || job.subjectName || '需求' }}</text>
-                <text v-if="job.publisherIdentity === 'ORGANIZATION'" class="badge-org">机构单</text>
-              </view>
-              <text class="price">{{ formatBudget(job) }}</text>
-          </view>
-          <view class="meta">
-            <text v-if="formatPlace(job)" class="meta-item">{{ formatPlace(job) }}</text>
-            <text v-if="formatClassMode(job.classMode)" class="meta-item">{{ formatClassMode(job.classMode) }}</text>
-            <text v-if="job.frequencyPerWeek" class="meta-item">每周 {{ job.frequencyPerWeek }} 次</text>
-            <text v-if="formatEducation(job.educationRequirement)" class="meta-item">{{ formatEducation(job.educationRequirement) }}</text>
-          </view>
-          <view class="tags" v-if="job.subjectName || job.stageCode || job.gradeCode || job.teacherGenderPreference">
-              <text class="tag" v-if="job.subjectName">{{ job.subjectName }}</text>
-              <text class="tag" v-if="formatStage(job.stageCode)">{{ formatStage(job.stageCode) }}</text>
-              <text class="tag" v-if="formatGrade(job.gradeCode)">{{ formatGrade(job.gradeCode) }}</text>
-              <text class="tag" v-if="formatTeacherGender(job.teacherGenderPreference)">{{ formatTeacherGender(job.teacherGenderPreference) }}</text>
-          </view>
-          <text class="desc">{{ job.description || '暂无描述' }}</text>
+    <view v-else>
+      <view class="hero-card">
+        <text class="hero-title">需求广场</text>
+        <text class="hero-desc">先筛出值得跟进的需求，再进入详情查看预算、时间安排和发单人信息。</text>
+        <view class="search-box">
+          <text class="search-icon">⌕</text>
+          <input class="search-input" v-model="keyword" type="text" placeholder="搜索科目、城市或关键词" @confirm="refreshList" />
+          <text v-if="keyword" class="clear-text" @click="clearKeyword">清空</text>
         </view>
       </view>
-      <view v-if="jobList.length === 0" class="empty-list">
-        <text class="empty-text">暂无需求数据</text>
-        <u-button type="primary" color="#00bebd" shape="circle" @click="fetchJobs">刷新</u-button>
+
+      <view class="filter-card">
+        <scroll-view class="chip-row" scroll-x>
+          <view class="chip-track">
+            <view class="chip" :class="{ active: classModeFilter === '' }" @click="setClassMode('')">全部方式</view>
+            <view class="chip" :class="{ active: classModeFilter === 'online' }" @click="setClassMode('online')">线上</view>
+            <view class="chip" :class="{ active: classModeFilter === 'offline' }" @click="setClassMode('offline')">线下</view>
+            <view class="chip" :class="{ active: classModeFilter === 'both' }" @click="setClassMode('both')">线上/线下</view>
+          </view>
+        </scroll-view>
+
+        <scroll-view class="chip-row secondary" scroll-x>
+          <view class="chip-track">
+            <view class="chip secondary-chip" :class="{ active: selectedSubject === '' }" @click="selectSubject('')">全部科目</view>
+            <view
+              v-for="subject in SUBJECT_PRESETS"
+              :key="subject"
+              class="chip secondary-chip"
+              :class="{ active: selectedSubject === subject }"
+              @click="selectSubject(subject)"
+            >
+              {{ subject }}
+            </view>
+          </view>
+        </scroll-view>
+
+        <view class="budget-row">
+          <view class="budget-box">
+            <text class="budget-label">城市</text>
+            <input v-model="cityInput" class="budget-field" placeholder="如：上海" />
+          </view>
+        </view>
+
+        <view class="budget-row budget-range-row">
+          <view class="budget-box">
+            <text class="budget-label">最低预算</text>
+            <input v-model="budgetMinInput" type="number" class="budget-field" placeholder="不限" />
+          </view>
+          <text class="budget-sep">-</text>
+          <view class="budget-box">
+            <text class="budget-label">最高预算</text>
+            <input v-model="budgetMaxInput" type="number" class="budget-field" placeholder="不限" />
+          </view>
+        </view>
+
+        <view class="filter-actions">
+          <button class="filter-btn ghost" @click="resetFilters">重置</button>
+          <button class="filter-btn primary" @click="applyFilters">应用筛选</button>
+        </view>
+      </view>
+
+      <view class="section-head">
+        <view>
+          <text class="section-title">最新需求</text>
+          <text class="section-sub">{{ resultSummary }}</text>
+        </view>
+        <text class="refresh-link" @click="refreshList">刷新</text>
+      </view>
+
+      <view v-if="loading && !jobList.length" class="skeleton-list">
+        <view v-for="idx in 3" :key="idx" class="skeleton-card"></view>
+      </view>
+
+      <view v-else-if="jobList.length" class="job-list">
+        <view v-for="job in jobList" :key="job.id" class="job-card" @click="goToDetail(job.id)">
+          <view class="card-head">
+            <view class="title-wrap">
+              <text class="title">{{ job.title || job.subjectName || '需求' }}</text>
+              <text v-if="job.publisherIdentity === 'ORGANIZATION'" class="org-badge">机构单</text>
+            </view>
+            <text class="price">{{ formatBudget(job) }}</text>
+          </view>
+
+          <view class="meta-row">
+            <text v-if="formatPlace(job)" class="meta-pill">{{ formatPlace(job) }}</text>
+            <text v-if="formatClassMode(job.classMode)" class="meta-pill">{{ formatClassMode(job.classMode) }}</text>
+            <text v-if="job.frequencyPerWeek" class="meta-pill">每周 {{ job.frequencyPerWeek }} 次</text>
+            <text v-if="formatEducation(job.educationRequirement)" class="meta-pill">{{ formatEducation(job.educationRequirement) }}</text>
+          </view>
+
+          <view v-if="displayTags(job).length" class="tag-row">
+            <text v-for="tag in displayTags(job)" :key="tag" class="tag">{{ tag }}</text>
+          </view>
+
+          <text class="desc">{{ job.description || '暂无描述' }}</text>
+
+          <view class="foot-row">
+            <text class="publisher">{{ publisherText(job) }}</text>
+            <text class="status-tip">{{ job.publisherIdentity === 'ORGANIZATION' ? '注意核对履约规则' : '可先发起申请再沟通细节' }}</text>
+          </view>
+        </view>
+      </view>
+
+      <AppStateCard
+        v-else-if="listError"
+        title="需求列表暂时加载失败"
+        description="当前筛选已保留，可以稍后刷新，或者先调整城市、科目和预算范围。"
+        action-text="重新加载"
+        variant="error"
+        @action="refreshList"
+      />
+
+      <AppStateCard
+        v-else
+        title="暂时没有匹配到需求"
+        description="可以换关键词、放宽预算筛选，或者稍后刷新看看。"
+        action-text="重新加载"
+        variant="soft"
+        @action="refreshList"
+      />
+
+      <view v-if="jobList.length" class="footer-state">
+        <text v-if="loadingMore" class="footer-text">正在加载更多...</text>
+        <text v-else-if="isLast" class="footer-text">已经到底了</text>
+        <text v-else class="footer-link" @click="loadMore">查看更多</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app';
 import { jobsApi } from '@/api/jobs';
 import { useUserStore } from '@/stores/user';
 import { tutorStatusUrl } from '@/utils/tutorGuard';
+import AppStateCard from '@/components/AppStateCard.vue';
+
+const SUBJECT_PRESETS = ['全科辅导', '语文', '数学', '英语', '科学', '物理', '化学', '生物', '历史', '地理', '政治'] as const;
 
 const userStore = useUserStore();
 const keyword = ref('');
 const jobList = ref<any[]>([]);
 const cursor = ref<number | null>(null);
 const classModeFilter = ref<'online' | 'offline' | 'both' | ''>('');
+const selectedSubject = ref('');
+const cityInput = ref('');
+const budgetMinInput = ref('');
+const budgetMaxInput = ref('');
+const appliedCity = ref('');
+const appliedBudgetMin = ref<number | null>(null);
+const appliedBudgetMax = ref<number | null>(null);
+const loading = ref(false);
+const loadingMore = ref(false);
+const isLast = ref(false);
+const listError = ref('');
 
-const normalizeCursor = (v: unknown): number | null => {
-  if (v == null) return null;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v !== 'string') return null;
-  const s = v.trim();
-  if (!s || s === 'null' || s === 'undefined') return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-};
-
-const fetchJobs = async () => {
-  try {
-    const res: any = await jobsApi.feedDemands({
-        q: keyword.value,
-        cursor: normalizeCursor(cursor.value),
-        classMode: classModeFilter.value || undefined,
-        pageSize: 10
-    });
-    
-    if (res && Array.isArray(res.list)) {
-      if (cursor.value) {
-          jobList.value = [...jobList.value, ...res.list];
-      } else {
-          jobList.value = res.list;
-      }
-      cursor.value = normalizeCursor(res.nextCursor);
-    }
-  } catch (error) {
-    console.error(error);
-  }
-};
-
-const setClassMode = (v: '' | 'online' | 'offline' | 'both') => {
-  classModeFilter.value = v;
-  onSearch();
-};
-
-const onSearch = () => {
-  cursor.value = null;
-  jobList.value = [];
-  fetchJobs();
-};
-
-const goToDetail = (id: number) => {
-  uni.navigateTo({ url: `/pages/job/detail?id=${id}` });
-};
-
-const goLogin = () => {
-  uni.switchTab({ url: '/pages/me/index' });
-};
-
-onMounted(() => {
-  if (userStore.isLoggedIn && userStore.tutorStatus === 'APPROVED') {
-    fetchJobs();
-  }
+const resultSummary = computed(() => {
+  if (loading.value && !jobList.value.length) return '正在加载中';
+  if (listError.value && !jobList.value.length) return '加载失败';
+  if (!jobList.value.length) return '暂无结果';
+  return `已加载 ${jobList.value.length} 条需求`;
 });
 
 const guardIcon = computed(() => {
@@ -148,6 +201,106 @@ const guardActionText = computed(() => {
   if (userStore.tutorStatus === 'REJECTED') return '重新完善资料';
   return '去入驻';
 });
+
+function normalizeCursor(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  const s = v.trim();
+  if (!s || s === 'null' || s === 'undefined') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseNumber(v: string) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchJobs(reset = false) {
+  if (loading.value || loadingMore.value) return;
+  const stateRef = reset ? loading : loadingMore;
+  stateRef.value = true;
+  if (reset) listError.value = '';
+  try {
+    const res: any = await jobsApi.feedDemands({
+      q: keyword.value.trim() || undefined,
+      cursor: reset ? null : normalizeCursor(cursor.value),
+      classMode: classModeFilter.value || undefined,
+      city: appliedCity.value || undefined,
+      subject: selectedSubject.value || undefined,
+      pageSize: 10,
+      budgetMin: appliedBudgetMin.value,
+      budgetMax: appliedBudgetMax.value,
+    });
+
+    const nextList = Array.isArray(res?.list) ? res.list : [];
+    jobList.value = reset ? nextList : [...jobList.value, ...nextList];
+    cursor.value = normalizeCursor(res?.nextCursor);
+    isLast.value = !!res?.isLast || !nextList.length;
+    listError.value = '';
+  } catch {
+    if (reset) jobList.value = [];
+    listError.value = '需求列表加载失败';
+  } finally {
+    stateRef.value = false;
+  }
+}
+
+function refreshList() {
+  cursor.value = null;
+  isLast.value = false;
+  void fetchJobs(true);
+}
+
+function loadMore() {
+  if (loading.value || loadingMore.value || isLast.value) return;
+  void fetchJobs(false);
+}
+
+function setClassMode(v: '' | 'online' | 'offline' | 'both') {
+  classModeFilter.value = v;
+  refreshList();
+}
+
+function selectSubject(v: string) {
+  selectedSubject.value = v;
+  refreshList();
+}
+
+function applyFilters() {
+  appliedCity.value = String(cityInput.value || '').trim();
+  appliedBudgetMin.value = parseNumber(budgetMinInput.value);
+  appliedBudgetMax.value = parseNumber(budgetMaxInput.value);
+  refreshList();
+}
+
+function resetFilters() {
+  classModeFilter.value = '';
+  selectedSubject.value = '';
+  cityInput.value = '';
+  appliedCity.value = '';
+  budgetMinInput.value = '';
+  budgetMaxInput.value = '';
+  appliedBudgetMin.value = null;
+  appliedBudgetMax.value = null;
+  refreshList();
+}
+
+function clearKeyword() {
+  keyword.value = '';
+  refreshList();
+}
+
+function goToDetail(id: number) {
+  uni.navigateTo({ url: `/pages/job/detail?id=${id}` });
+}
+
+function goLogin() {
+  uni.switchTab({ url: '/pages/me/index' });
+}
 
 function handleGuardAction() {
   if (userStore.tutorStatus === 'PENDING') {
@@ -242,33 +395,59 @@ const formatEducation = (v: unknown) => {
   if (s === 'QS50') return 'QS50';
   return s;
 };
+
+function displayTags(job: any) {
+  return [
+    String(job?.subjectName || '').trim(),
+    formatStage(job?.stageCode),
+    formatGrade(job?.gradeCode),
+    formatTeacherGender(job?.teacherGenderPreference),
+  ].filter(Boolean).slice(0, 4);
+}
+
+function publisherText(job: any) {
+  const name = String(job?.publisher?.displayName || '').trim();
+  if (name) return `发布者：${name}`;
+  return job?.publisherIdentity === 'ORGANIZATION' ? '发布者：机构' : '发布者：学生/家长';
+}
+
+onMounted(() => {
+  if (userStore.isLoggedIn && userStore.tutorStatus === 'APPROVED') {
+    refreshList();
+  }
+});
+
+onReachBottom(() => {
+  loadMore();
+});
+
+onPullDownRefresh(async () => {
+  await fetchJobs(true);
+  uni.stopPullDownRefresh();
+});
 </script>
 
 <style lang="scss" scoped>
-.container {
+.page {
+  min-height: 100vh;
   padding: 16px;
+  background: #f6f7fb;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60px 20px;
-  
-  .tip {
-    font-size: 16px;
-    color: var(--muted);
-    margin-bottom: 24px;
-  }
+.empty-state,
+.guard-card,
+.hero-card,
+.filter-card,
+.job-card {
+  background: #ffffff;
+  border: 1px solid rgba(31, 35, 41, 0.08);
+  box-shadow: 0 10px 30px rgba(31, 35, 41, 0.06);
 }
 
 .guard-card {
   min-height: calc(100vh - 32px);
   padding: 34px 18px;
   border-radius: 16px;
-  border: 1px solid rgba(31, 35, 41, 0.08);
-  background: #ffffff;
-  box-shadow: 0 10px 30px rgba(31, 35, 41, 0.08);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -294,13 +473,13 @@ const formatEducation = (v: unknown) => {
 .guard-title {
   font-size: 20px;
   font-weight: 900;
-  color: var(--text);
+  color: #1f2329;
 }
 
 .guard-desc {
   font-size: 13px;
   line-height: 1.7;
-  color: var(--muted);
+  color: #646a73;
   margin-bottom: 8px;
 }
 
@@ -311,180 +490,329 @@ const formatEducation = (v: unknown) => {
   font-size: 15px;
   font-weight: 900;
   line-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  &::after {
-    border: 0;
-  }
-  &.primary {
-    background: #00bebd;
-    color: #fff;
-    box-shadow: 0 10px 20px rgba(0, 190, 189, 0.20);
-  }
-  &.secondary {
-    background: #f6f7fb;
-    color: var(--text);
-    border: 1px solid rgba(31, 35, 41, 0.10);
-  }
 }
 
-.search-bar {
+.guard-btn::after {
+  border: 0;
+}
+
+.guard-btn.primary {
+  background: #00bebd;
+  color: #ffffff;
+}
+
+.guard-btn.secondary {
+  background: #f6f7fb;
+  color: #1f2329;
+}
+
+.hero-card,
+.filter-card {
+  border-radius: 16px;
+  padding: 13px 13px 11px;
+}
+
+.hero-title {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+  color: #1f2329;
+}
+
+.hero-desc {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: #646a73;
+}
+
+.search-box {
+  margin-top: 12px;
+  min-height: 42px;
   display: flex;
   align-items: center;
-  background-color: #ffffff;
-  padding: 0 16px;
-  height: 44px;
+  gap: 8px;
+  padding: 0 11px;
   border-radius: 12px;
-  margin-bottom: 16px;
-  border: 1px solid var(--border);
-  
-  .search-input {
-    flex: 1;
-    margin-left: 10px;
-    font-size: 14px;
-    color: var(--text);
-  }
+  background: #f6f7fb;
 }
 
-.filters {
+.search-icon {
+  font-size: 18px;
+  color: #646a73;
+  line-height: 1;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: #1f2329;
+}
+
+.clear-text {
+  font-size: 12px;
+  color: #00a7a6;
+}
+
+.filter-card {
+  margin-top: 14px;
+}
+
+.chip-row {
   white-space: nowrap;
-  margin-bottom: 12px;
+  width: 100%;
 }
 
-.filter-chip {
+.chip-track {
+  display: inline-flex;
+  align-items: center;
+  padding-right: 10px;
+}
+
+.chip-row.secondary {
+  margin-top: 6px;
+}
+
+.chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
-  padding: 0 12px;
+  min-width: 60px;
+  height: 29px;
+  padding: 0 9px;
+  margin-right: 5px;
   border-radius: 999px;
-  border: 1px solid rgba(31, 35, 41, 0.12);
-  background: #ffffff;
+  background: #f6f7fb;
+  color: #646a73;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip.active {
+  background: rgba(0, 190, 189, 0.14);
+  color: #00a7a6;
+}
+
+.secondary-chip {
+  min-width: 56px;
+}
+
+.budget-row {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.budget-range-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  align-items: end;
+}
+
+.budget-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: #646a73;
+}
+
+.budget-field {
+  height: 34px;
+  border-radius: 10px;
+  background: #f6f7fb;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 800;
-  color: var(--muted);
-  margin-right: 8px;
+  color: #1f2329;
 }
 
-.filter-chip.active {
-  color: var(--primary);
-  border-color: rgba(0, 190, 189, 0.35);
-  background: rgba(0, 190, 189, 0.10);
+.budget-sep {
+  padding-bottom: 10px;
+  font-size: 16px;
+  color: #8f959e;
 }
 
-.job-list {
+.filter-actions {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.filter-btn {
+  height: 34px;
+  border-radius: 10px;
+  border: 0;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 34px;
+}
+
+.filter-btn::after {
+  border: 0;
+}
+
+.filter-btn.ghost {
+  background: #f1f3f5;
+  color: #4f5660;
+}
+
+.filter-btn.primary {
+  background: #00bebd;
+  color: #ffffff;
+}
+
+.section-head {
+  margin-top: 14px;
+  margin-bottom: 10px;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
   gap: 12px;
 }
 
-.empty-list {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60px 20px;
-  .empty-text {
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 16px;
-  }
+.section-title {
+  display: block;
+  font-size: 17px;
+  font-weight: 900;
+  color: #1f2329;
+}
+
+.section-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8f959e;
+}
+
+.refresh-link {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #00a7a6;
+}
+
+.skeleton-list,
+.job-list {
+  display: grid;
+  gap: 7px;
+}
+
+.skeleton-card {
+  height: 130px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, #f1f3f5 0%, #fafbfc 50%, #f1f3f5 100%);
 }
 
 .job-card {
-  padding: 16px;
-  background-color: var(--card);
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(31, 35, 41, 0.08);
-  border: 1px solid var(--border);
-  
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 10px;
-    
-    .title-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-      flex: 1;
-    }
+  padding: 10px;
+  border-radius: 15px;
+}
 
-    .title {
-      font-weight: 900;
-      font-size: 15px;
-      color: var(--text);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 210px;
-    }
-    
-    .price {
-      color: #ff4d4f;
-      font-weight: 900;
-      font-size: 13px;
-      white-space: nowrap;
-      margin-left: 10px;
-    }
-  }
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
 
-  .badge-org {
-    font-size: 10px;
-    line-height: 16px;
-    color: #0a78ff;
-    background: rgba(10, 120, 255, 0.10);
-    border: 1px solid rgba(10, 120, 255, 0.25);
-    padding: 0 8px;
-    border-radius: 999px;
-    font-weight: 900;
-    flex-shrink: 0;
-  }
+.title-wrap {
+  flex: 1;
+  min-width: 0;
+}
 
-  .meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-    color: var(--muted);
-    font-size: 12px;
-  }
+.title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #1f2329;
+  line-height: 1.35;
+}
 
-  .meta-item {
-    padding: 3px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(31, 35, 41, 0.08);
-    background: rgba(255, 255, 255, 0.7);
-  }
-  
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
-    gap: 6px;
-    
-    .tag {
-      font-size: 10px;
-      color: var(--primary);
-      background-color: rgba(0, 190, 189, 0.10);
-      border: 1px solid rgba(0, 190, 189, 0.22);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-weight: 900;
-    }
-  }
-  
-  .desc {
-    font-size: 13px;
-    color: var(--muted);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+.org-badge {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14);
+  color: #b86a00;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.price {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 900;
+  color: #ff4d4f;
+  white-space: nowrap;
+}
+
+.meta-row,
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.meta-pill {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #f6f7fb;
+  color: #646a73;
+  font-size: 9px;
+}
+
+.tag {
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0, 190, 189, 0.08);
+  color: #00a7a6;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.desc {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #4f5660;
+}
+
+.foot-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-top: 7px;
+}
+
+.publisher,
+.status-tip {
+  font-size: 9px;
+  color: #8f959e;
+}
+
+.status-tip {
+  text-align: right;
+}
+
+.footer-state {
+  padding: 12px 0 8px;
+  text-align: center;
+}
+
+.footer-text,
+.footer-link {
+  font-size: 12px;
+  color: #8f959e;
+}
+
+.footer-link {
+  color: #00a7a6;
 }
 </style>

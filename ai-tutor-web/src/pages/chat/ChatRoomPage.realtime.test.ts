@@ -43,7 +43,9 @@ const mocks = vi.hoisted(() => ({
   sendImage: vi.fn(),
   recallMessage: vi.fn(),
   createEvent: vi.fn(),
+  listCourseEvents: vi.fn(),
   dayAvailability: vi.fn(),
+  getLiveByCourse: vi.fn(),
   unlockContact: vi.fn(),
   courseByRoom: vi.fn(),
   getDemandView: vi.fn(),
@@ -104,8 +106,15 @@ vi.mock('@/api/application', () => ({
 vi.mock('@/api/schedule', () => ({
   scheduleApi: {
     createEvent: mocks.createEvent,
+    listCourseEvents: mocks.listCourseEvents,
     dayAvailability: mocks.dayAvailability,
     respond: vi.fn(),
+  },
+}))
+
+vi.mock('@/api/live', () => ({
+  liveApi: {
+    getByCourse: mocks.getLiveByCourse,
   },
 }))
 
@@ -494,6 +503,26 @@ describe('ChatRoomPage realtime read receipt', () => {
     mocks.unlockContact.mockResolvedValue({
       uid: 3001,
       phone: '13800138001',
+    })
+    mocks.listCourseEvents.mockResolvedValue([
+      {
+        id: 701,
+        courseId: 66,
+        title: '最近的一节课',
+        description: '通过聊天继续确认本节重点',
+        startAt: Date.now() + 30 * 60 * 1000,
+        endAt: Date.now() + 90 * 60 * 1000,
+        status: 'ACCEPTED',
+        creatorUserId: 2001,
+        participant: { id: 3001, name: '张老师', realName: '张老师', avatar: '', userType: 1 },
+        chatRoomId: 10,
+      },
+    ])
+    mocks.getLiveByCourse.mockResolvedValue({
+      sessionId: 888,
+      courseId: 66,
+      status: 'SCHEDULED',
+      joinableNow: false,
     })
     mocks.courseByRoom.mockResolvedValue({
       courseId: 66,
@@ -1357,6 +1386,35 @@ describe('ChatRoomPage realtime read receipt', () => {
     const openButton = wrapper.find('.schedule-action')
     expect(openButton.exists()).toBe(false)
     expect(wrapper.text()).not.toContain('发起线上约课')
+  })
+
+  it('renders the recent lesson card with the completed primary action', async () => {
+    mocks.listCourseEvents.mockResolvedValueOnce([
+      {
+        id: 702,
+        courseId: 66,
+        title: '最近的一节课',
+        description: '通过聊天继续确认本节重点',
+        startAt: Date.parse('2026-04-18T09:00:00'),
+        endAt: Date.parse('2026-04-18T10:00:00'),
+        status: 'ACCEPTED',
+        creatorUserId: 2001,
+        participant: { id: 3001, name: '张老师', realName: '张老师', avatar: '', userType: 1 },
+        chatRoomId: 10,
+      },
+    ])
+    mocks.getLiveByCourse.mockResolvedValueOnce({
+      sessionId: 888,
+      courseId: 66,
+      status: 'ENDED',
+      joinableNow: false,
+    })
+
+    const { wrapper } = await mountChatRoomPage()
+
+    expect(wrapper.text()).toContain('最近的一节课')
+    expect(wrapper.text()).toContain('查看课后总结')
+    expect(wrapper.text()).toContain('已完课')
   })
 
   it('auto opens unlocked contact only once after offline collaboration accepted', async () => {

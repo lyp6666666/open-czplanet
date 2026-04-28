@@ -6,7 +6,12 @@
       <text class="subtitle">授课方式、预算、时间和老师要求会影响匹配质量。</text>
     </view>
 
-    <view v-if="loading" class="state">加载中...</view>
+    <AppStateCard
+      v-if="loading"
+      :title="isEdit ? '需求详情加载中' : '表单准备中'"
+      description="正在同步当前需求内容。"
+      variant="soft"
+    />
 
     <template v-else>
       <view class="panel">
@@ -90,7 +95,12 @@
         </view>
       </view>
 
-      <view v-if="error" class="error">{{ error }}</view>
+      <AppStateCard
+        v-if="error"
+        title="表单暂时无法提交"
+        :description="error"
+        variant="error"
+      />
 
       <view class="bottom-bar">
         <button class="submit" :disabled="saving" @click="submit">{{ saving ? '保存中...' : isEdit ? '保存修改' : '发布需求' }}</button>
@@ -104,6 +114,7 @@ import { computed, reactive, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { jobsApi } from '@/api/jobs';
 import { ensureStudentMode } from '@/utils/studentGuard';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const id = ref<number | null>(null);
 const loading = ref(false);

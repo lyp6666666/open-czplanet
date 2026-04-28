@@ -1,10 +1,19 @@
 <template>
   <view class="page">
-    <view v-if="loading" class="state">加载中...</view>
-    <view v-else-if="error" class="state error">
-      <text>{{ error }}</text>
-      <u-button size="mini" type="primary" color="#00bebd" @click="load">重试</u-button>
-    </view>
+    <AppStateCard
+      v-if="loading"
+      title="申请详情加载中"
+      description="正在同步申请状态和下一步动作。"
+      variant="soft"
+    />
+    <AppStateCard
+      v-else-if="error"
+      title="申请详情加载失败"
+      :description="error"
+      action-text="重试"
+      variant="error"
+      @action="load"
+    />
 
     <template v-else-if="detail">
       <view class="top">
@@ -66,6 +75,7 @@ import { computed, ref } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { applicationApi, type ApplicationDecision, type TutorApplication } from '@/api/application';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const userStore = useUserStore();
 const id = ref<number | null>(null);

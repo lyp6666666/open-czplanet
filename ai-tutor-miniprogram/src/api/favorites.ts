@@ -24,7 +24,8 @@ export const favoritesApi = {
     return request({
       url: '/api/v1/tutor/favorites/demands/page',
       method: 'GET',
-      data: params
+      data: params,
+      silentError: true,
     });
   },
   favoriteTutor(tutorId: number) {
@@ -50,7 +51,8 @@ export const favoritesApi = {
     return request({
       url: '/api/v1/parent/favorites/tutors/page',
       method: 'GET',
-      data: params
+      data: params,
+      silentError: true,
     });
   }
 };

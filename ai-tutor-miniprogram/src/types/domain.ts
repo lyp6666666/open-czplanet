@@ -24,8 +24,12 @@ export interface TeacherProfile {
   teachingMode?: string;
   realnameVerifyStatus?: number;
   realnameVerifyRejectReason?: string;
+  realnameVerifyIdnoMasked?: string;
+  realnameVerifyIdFrontUrl?: string;
+  realnameVerifyIdBackUrl?: string;
   eduVerifyStatus?: number;
   eduVerifyRejectReason?: string;
+  eduVerifyProofUrls?: string;
   status?: number;
 }
 
@@ -34,6 +38,10 @@ export interface StudentProfile {
   userId?: number;
   realName?: string;
   city?: string;
+  childAge?: number;
+  address?: string;
+  demandDescription?: string;
+  budget?: number;
   status?: number;
 }
 

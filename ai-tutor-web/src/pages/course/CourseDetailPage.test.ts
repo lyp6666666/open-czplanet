@@ -144,10 +144,10 @@ function buildCourseDetailHandlers(lessonListFactory?: () => any[]) {
           ],
       ),
     ),
-    http.get('http://localhost/live/sessions/by-course/701', () =>
+    http.get('http://localhost/live/sessions/by-course/66', () =>
       ok({
         sessionId: 8801,
-        courseId: 701,
+        courseId: 66,
         status: 'ENDED',
         joinableNow: false,
       }),
@@ -466,7 +466,7 @@ describe('CourseDetailPage', () => {
 
     expect(confirmSpy).toHaveBeenCalled()
     expect(confirmRescheduleCalled).toBe(true)
-    expect(wrapper.text()).toContain('已确认')
+    expect(wrapper.text()).toContain('第 3 节｜几何专项')
     expect(toastShow).toHaveBeenCalledWith('调课已确认。', 'success')
   })
 })

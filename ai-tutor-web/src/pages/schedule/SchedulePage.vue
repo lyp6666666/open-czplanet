@@ -5,6 +5,9 @@ import { useRouter } from 'vue-router'
 import { liveApi, type LiveSessionResp } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import type { ScheduleEventVO, UserSimpleVO } from '@/api/types'
+import LessonDetailModal from '@/ui/course/LessonDetailModal.vue'
+import LessonPreviewCard from '@/ui/course/LessonPreviewCard.vue'
+import { buildLessonDetailModel } from '@/utils/lessonDetail'
 
 type ViewMode = 'month' | 'week' | 'day'
 
@@ -21,6 +24,9 @@ const detailBusy = ref(false)
 const detailError = ref<string | null>(null)
 const detailTitle = ref('')
 const detailTimeline = ref<Array<{ eventType: string; eventSource: string; occurredAt: string }>>([])
+const hoverPreview = ref<{ eventId: number; top: number; left: number } | null>(null)
+const lessonModalEventId = ref<number | null>(null)
+const lessonModalOpen = ref(false)
 
 const createOpen = ref(false)
 const createBusy = ref(false)
@@ -149,6 +155,69 @@ function liveStatusLabel(eventId: number) {
   if (live.status === 'IN_PROGRESS') return '进行中'
   if (live.joinableNow) return '可入会'
   return ''
+}
+
+function lessonModel(event: ScheduleEventVO) {
+  return buildLessonDetailModel(event, {
+    live: liveMap.value[event.id] || null,
+  })
+}
+
+const hoveredEventModel = computed(() => {
+  const event = events.value.find((item) => item.id === hoverPreview.value?.eventId) || null
+  return event ? lessonModel(event) : null
+})
+
+const selectedEventModel = computed(() => {
+  const event = events.value.find((item) => item.id === lessonModalEventId.value) || null
+  return event ? lessonModel(event) : null
+})
+
+function showHoverPreview(event: ScheduleEventVO, mouseEvent: MouseEvent) {
+  const target = mouseEvent.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  hoverPreview.value = {
+    eventId: event.id,
+    top: rect.top + window.scrollY + rect.height / 2,
+    left: rect.right + window.scrollX + 16,
+  }
+}
+
+function hideHoverPreview() {
+  hoverPreview.value = null
+}
+
+function openLessonModal(event: ScheduleEventVO) {
+  lessonModalEventId.value = event.id
+  lessonModalOpen.value = true
+}
+
+function closeLessonModal() {
+  lessonModalOpen.value = false
+  lessonModalEventId.value = null
+}
+
+function lessonModalPrimaryLabel() {
+  const event = events.value.find((item) => item.id === lessonModalEventId.value) || null
+  const model = selectedEventModel.value
+  if (!event || !model) return null
+  if (model.statusKey === 'READY_TO_START' || model.statusKey === 'IN_PROGRESS') return '去上课'
+  if (event.courseId) return '打开课程总览'
+  return null
+}
+
+function handleLessonModalPrimary() {
+  const event = events.value.find((item) => item.id === lessonModalEventId.value) || null
+  const model = selectedEventModel.value
+  if (!event || !model) return
+  if (model.statusKey === 'READY_TO_START' || model.statusKey === 'IN_PROGRESS') {
+    openLivePrepare(event.courseId)
+    return
+  }
+  if (event.courseId) {
+    void router.push({ name: 'courseDetail', params: { courseId: String(event.courseId) } })
+  }
 }
 
 function openLivePrepare(courseId?: number | null) {
@@ -765,7 +834,9 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
                     class="event"
                     :class="p.event.status.toLowerCase()"
                     :style="{ top: `${p.top}px`, height: `${p.height}px`, left: `${p.leftPct}%`, width: `${p.widthPct}%` }"
-                    @click.stop="liveMap[p.event.id] ? openLivePrepare(p.event.courseId) : void 0"
+                    @mouseenter="showHoverPreview(p.event, $event)"
+                    @mouseleave="hideHoverPreview"
+                    @click.stop="openLessonModal(p.event)"
                   >
                     <div class="event-accent" />
                     <div class="et">
@@ -784,9 +855,9 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
                       v-if="liveMap[p.event.id]"
                       class="event-link"
                       type="button"
-                      @click.stop="openEventDetail(p.event)"
+                      @click.stop="openLivePrepare(p.event.courseId)"
                     >
-                      课堂详情
+                      去上课
                     </button>
                   </div>
                 </div>
@@ -945,6 +1016,24 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
         </div>
       </div>
     </div>
+
+    <div
+      v-if="hoverPreview && hoveredEventModel"
+      class="lesson-hover-preview"
+      :style="{ top: `${hoverPreview.top}px`, left: `${hoverPreview.left}px` }"
+    >
+      <LessonPreviewCard :model="hoveredEventModel" />
+    </div>
+
+    <LessonDetailModal
+      :open="lessonModalOpen"
+      :model="selectedEventModel"
+      cooperation-name="单节课详情"
+      :primary-label="lessonModalPrimaryLabel()"
+      :primary-disabled="!lessonModalPrimaryLabel()"
+      @close="closeLessonModal"
+      @primary="handleLessonModalPrimary"
+    />
 
     <div
       v-if="detailOpen"
@@ -1647,6 +1736,13 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
   cursor: pointer;
 }
 
+.lesson-hover-preview {
+  position: absolute;
+  z-index: 40;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .mask {
   position: fixed;
   inset: 0;
@@ -1859,6 +1955,10 @@ function layoutDayEvents(list: ScheduleEventVO[], day: Date): PlacedEvent[] {
 
   .agenda-item {
     grid-template-columns: 1fr;
+  }
+
+  .lesson-hover-preview {
+    display: none;
   }
 }
 </style>

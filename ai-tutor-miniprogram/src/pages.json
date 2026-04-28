@@ -3,7 +3,8 @@
 		{
 			"path": "pages/home/index",
 			"style": {
-				"navigationBarTitleText": "AI Tutor"
+				"navigationBarTitleText": "AI Tutor",
+				"enablePullDownRefresh": true
 			}
 		},
         {
@@ -27,13 +28,15 @@
         {
             "path": "pages/post/index",
             "style": {
-                "navigationBarTitleText": "发布需求"
+                "navigationBarTitleText": "发布需求",
+                "enablePullDownRefresh": true
             }
         },
         {
             "path": "pages/my-jobs/index",
             "style": {
-                "navigationBarTitleText": "我的需求"
+                "navigationBarTitleText": "我的需求",
+                "enablePullDownRefresh": true
             }
         },
         {
@@ -57,7 +60,8 @@
         {
             "path": "pages/application/list",
             "style": {
-                "navigationBarTitleText": "申请中心"
+                "navigationBarTitleText": "申请中心",
+                "enablePullDownRefresh": true
             }
         },
         {
@@ -75,7 +79,8 @@
         {
             "path": "pages/course/list",
             "style": {
-                "navigationBarTitleText": "我的合作"
+                "navigationBarTitleText": "我的合作",
+                "enablePullDownRefresh": true
             }
         },
         {
@@ -87,7 +92,8 @@
         {
             "path": "pages/favorites/index",
             "style": {
-                "navigationBarTitleText": "我的收藏"
+                "navigationBarTitleText": "我的收藏",
+                "enablePullDownRefresh": true
             }
         },
         {

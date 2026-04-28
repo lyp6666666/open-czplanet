@@ -13,8 +13,10 @@ import type { CourseItemVO, ScheduleEventStatus, ScheduleEventVO, TutorApplicati
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import LessonDetailModal from '@/ui/course/LessonDetailModal.vue'
 import CollaborationProposalModal from '@/ui/chat/CollaborationProposalModal.vue'
 import { normalizeAvatarUrl } from '@/utils/avatar'
+import { buildLessonDetailModel, findPreviousLesson, findRecentLesson } from '@/utils/lessonDetail'
 
 type CourseStageKey =
   | 'WAIT_PAY'
@@ -203,6 +205,9 @@ const endModalBusy = ref(false)
 const endModalCountdown = ref(3)
 const endModalErr = ref<string | null>(null)
 const endModalCourseId = ref<number | null>(null)
+const lessonModalOpen = ref(false)
+const lessonModalCourseId = ref<number | null>(null)
+const lessonModalLessonId = ref<number | null>(null)
 let endModalTimer: number | null = null
 
 function roundToNextHalfHour(nowMs: number) {
@@ -1136,6 +1141,73 @@ function lessonOverviewStats(item: CourseViewModel) {
   return { total, upcoming, finished, abnormal, trialCount, normalCount }
 }
 
+function recentLessonFor(item: CourseViewModel) {
+  return findRecentLesson(item.lessonList, { live: item.live, aiResultStatus: item.aiResultStatus })
+}
+
+function previousLessonFor(item: CourseViewModel) {
+  return findPreviousLesson(item.lessonList, recentLessonFor(item)?.id || null)
+}
+
+function lessonDetailModelFor(item: CourseViewModel, lesson: ScheduleEventVO | null) {
+  if (!lesson) return null
+  return buildLessonDetailModel(lesson, {
+    live: item.latestLesson?.id === lesson.id ? item.live : null,
+    aiResultStatus: item.latestLesson?.id === lesson.id ? item.aiResultStatus : null,
+    afterClassSummary: item.latestLesson?.id === lesson.id ? item.aiPreview : null,
+  })
+}
+
+const selectedLessonModalModel = computed(() => {
+  const course = courseViews.value.find((item) => item.courseId === lessonModalCourseId.value) || null
+  if (!course) return null
+  const lesson = course.lessonList.find((item) => item.id === lessonModalLessonId.value) || null
+  return lesson ? lessonDetailModelFor(course, lesson) : null
+})
+
+function openLessonModal(item: CourseViewModel, lesson: ScheduleEventVO | null) {
+  if (!lesson) return
+  lessonModalCourseId.value = item.courseId
+  lessonModalLessonId.value = lesson.id
+  lessonModalOpen.value = true
+}
+
+function closeLessonModal() {
+  lessonModalOpen.value = false
+  lessonModalCourseId.value = null
+  lessonModalLessonId.value = null
+}
+
+function lessonModalPrimaryLabel() {
+  const course = courseViews.value.find((item) => item.courseId === lessonModalCourseId.value) || null
+  const model = selectedLessonModalModel.value
+  if (!course || !model) return null
+  if (model.statusKey === 'READY_TO_START') return '去上课'
+  if (model.statusKey === 'IN_PROGRESS') return '继续上课'
+  if (model.statusKey === 'COMPLETED') return '查看课后总结'
+  if (course.roomId) return '进入聊天'
+  return '查看全部课节'
+}
+
+function handleLessonModalPrimary() {
+  const course = courseViews.value.find((item) => item.courseId === lessonModalCourseId.value) || null
+  const model = selectedLessonModalModel.value
+  if (!course || !model) return
+  if (model.statusKey === 'READY_TO_START' || model.statusKey === 'IN_PROGRESS') {
+    goLivePrepare(course.courseId)
+    return
+  }
+  if (model.statusKey === 'COMPLETED') {
+    goLessonAiSummary(course)
+    return
+  }
+  if (course.roomId) {
+    goChat(course.roomId)
+    return
+  }
+  goCourseDetail(course.courseId)
+}
+
 function hasUpcomingLesson(item: CourseViewModel) {
   return item.lessonList.some((lesson) => (
     lesson.status === 'ACCEPTED'
@@ -1236,10 +1308,6 @@ function goEditDemand(item: CourseViewModel | null) {
     return
   }
   void router.push({ name: 'studentMineJobs' })
-}
-
-function goSchedule() {
-  void router.push({ name: 'schedule' })
 }
 
 function goLivePrepare(courseId?: number | null) {
@@ -2174,8 +2242,42 @@ onUnmounted(() => {
         </section>
 
         <section v-if="shouldShowLessonListSection(selectedCourse)" class="detail-section">
-          <div class="section-title strong">课节概览</div>
-          <div class="section-subtitle">这里不再展开全部课节，避免长期合作课多后页面过长；完整课节统一到课程安排里查看。</div>
+          <div class="section-title strong">合作课节</div>
+          <div class="section-subtitle">这里先展示最近的一节课和上一节课；需要完整查看这个合作里的所有课节时，再进入合作课程总览页。</div>
+          <div class="lesson-summary-grid">
+            <button
+              v-if="recentLessonFor(selectedCourse)"
+              class="lesson-summary-card"
+              type="button"
+              @click="openLessonModal(selectedCourse, recentLessonFor(selectedCourse))"
+            >
+              <div class="summary-card-label">最近的一节课</div>
+              <div class="summary-card-title">{{ lessonDetailModelFor(selectedCourse, recentLessonFor(selectedCourse))?.title }}</div>
+              <div class="summary-card-meta">{{ lessonDetailModelFor(selectedCourse, recentLessonFor(selectedCourse))?.timeRangeText }}</div>
+              <div class="summary-card-copy">{{ lessonDetailModelFor(selectedCourse, recentLessonFor(selectedCourse))?.topic }}</div>
+              <span class="status-pill sm" :class="statusToneClass(lessonDetailModelFor(selectedCourse, recentLessonFor(selectedCourse))?.statusTone || 'slate')">
+                {{ lessonDetailModelFor(selectedCourse, recentLessonFor(selectedCourse))?.statusLabel }}
+              </span>
+            </button>
+            <div v-else class="lesson-summary-empty">还没有排到最近的一节课。</div>
+
+            <button
+              v-if="previousLessonFor(selectedCourse)"
+              class="lesson-summary-card"
+              type="button"
+              @click="openLessonModal(selectedCourse, previousLessonFor(selectedCourse))"
+            >
+              <div class="summary-card-label">上一节课</div>
+              <div class="summary-card-title">{{ lessonDetailModelFor(selectedCourse, previousLessonFor(selectedCourse))?.title }}</div>
+              <div class="summary-card-meta">{{ lessonDetailModelFor(selectedCourse, previousLessonFor(selectedCourse))?.timeRangeText }}</div>
+              <div class="summary-card-copy">{{ lessonDetailModelFor(selectedCourse, previousLessonFor(selectedCourse))?.summaryText }}</div>
+              <span class="status-pill sm" :class="statusToneClass(lessonDetailModelFor(selectedCourse, previousLessonFor(selectedCourse))?.statusTone || 'slate')">
+                {{ lessonDetailModelFor(selectedCourse, previousLessonFor(selectedCourse))?.statusLabel }}
+              </span>
+            </button>
+            <div v-else class="lesson-summary-empty">上一节课会在第一节课结束后显示。</div>
+          </div>
+
           <div class="lesson-overview-card">
             <div class="overview-stat">
               <strong>{{ lessonOverviewStats(selectedCourse).total }}</strong>
@@ -2194,10 +2296,10 @@ onUnmounted(() => {
               <span>异常待处理</span>
             </div>
             <div class="overview-copy">
-              <div class="overview-title">合作页只保留当前关键课节</div>
-              <div class="overview-desc">试课确认、正式课安排和异常处理会在上方突出展示；历史课节、短期课和课后总结请到课程安排集中查看。</div>
+              <div class="overview-title">查看完整合作课程总览</div>
+              <div class="overview-desc">进入后会看到这个合作的全部课节列表、后续规划时间，并支持 hover 预览和单节课详情弹窗。</div>
             </div>
-            <button class="btn" type="button" @click="goSchedule">进入课程安排</button>
+            <button class="btn" type="button" @click="goCourseDetail(selectedCourse.courseId)">查看全部课节</button>
           </div>
         </section>
 
@@ -2354,6 +2456,16 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <LessonDetailModal
+      :open="lessonModalOpen"
+      :model="selectedLessonModalModel"
+      :cooperation-name="courseViews.find((item) => item.courseId === lessonModalCourseId)?.headline || '单节课详情'"
+      :primary-label="lessonModalPrimaryLabel()"
+      :primary-disabled="!lessonModalPrimaryLabel()"
+      @close="closeLessonModal"
+      @primary="handleLessonModalPrimary"
+    />
   </div>
 </template>
 
@@ -3124,6 +3236,53 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.lesson-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.lesson-summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid rgba(45, 98, 242, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  text-align: left;
+}
+
+.lesson-summary-empty {
+  display: grid;
+  place-items: center;
+  min-height: 128px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(31, 35, 41, 0.035);
+  color: var(--muted);
+  text-align: center;
+}
+
+.summary-card-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.summary-card-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.summary-card-meta,
+.summary-card-copy {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .lesson-overview-card {
   grid-template-columns: repeat(4, minmax(0, 110px)) minmax(240px, 1fr) auto;
   align-items: center;
@@ -3316,6 +3475,7 @@ onUnmounted(() => {
   .stage-context-grid,
   .info-card-head,
   .info-grid,
+  .lesson-summary-grid,
   .lesson-overview-card,
   .class-policy-card,
   .detail-head,

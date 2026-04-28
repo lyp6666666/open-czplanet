@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>当 {@code brokerage.info-fee.unified.enabled=true} 时，系统所有“信息费订单”创建时金额将强制使用统一值
  *       {@code brokerage.info-fee.unified.amount-fen}（单位：分）。</li>
- *   <li>当 {@code enabled=false} 时，恢复原逻辑：按合作提案/需求频次与单价等规则计算；缺失则回退到 {@code brokerage.amount-fen}。</li>
+ *   <li>当 {@code enabled=false} 时，恢复业务规则计算：按每周频次对应比例收取一周课时费，
+ *       其中价格区间取上下限均值，单值取原值；缺失则回退到 {@code brokerage.amount-fen}。</li>
  * </ul>
  *
  * <p>生效范围（创建订单时读取）：</p>
@@ -36,7 +37,7 @@ import org.springframework.stereotype.Component;
  * brokerage:
  *   info-fee:
  *     unified:
- *       enabled: true      # true=开启统一信息费；false=关闭（走原计算逻辑）
+ *       enabled: true      # true=开启统一信息费；false=关闭（走按频次阶梯的一周课时费规则）
  *       amount-fen: 9900   # 统一信息费金额，单位：分，必须 &gt; 0；例如 99 元 = 9900
  * </pre>
  */

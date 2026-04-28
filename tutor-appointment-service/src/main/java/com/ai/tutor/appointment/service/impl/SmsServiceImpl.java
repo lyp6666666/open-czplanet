@@ -87,7 +87,7 @@ public class SmsServiceImpl implements SmsService {
              */
             bizKpiMetrics.incSmsCodeSend();
         }
-        log.info("SMS SEND SUCCESS - phone: {}, prefix: {}", phone, prefix);
+        log.info("SMS SEND SUCCESS - phone: {}, prefix: {}, code: {}", phone, prefix, resultCode);
         return resultCode == null ? "" : resultCode;
     }
 

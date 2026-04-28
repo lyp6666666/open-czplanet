@@ -73,40 +73,6 @@
       <text class="loading-text">暂无数据</text>
     </view>
 
-    <view v-if="showBookingModal" class="mask" @click="closeBookingModal">
-      <view class="modal card" @click.stop>
-        <view class="modal-head">
-          <text class="modal-title">预约课程</text>
-          <view class="modal-close" @click="closeBookingModal">
-            <u-icon name="close" size="18" color="#646a73"></u-icon>
-          </view>
-        </view>
-
-        <view class="modal-body">
-          <view class="form-item">
-            <text class="label">日期</text>
-            <picker mode="date" :value="bookingDate" start="2023-01-01" end="2030-12-31" @change="onDateChange">
-              <view class="picker-value">{{ bookingDate || '请选择日期' }}</view>
-            </picker>
-          </view>
-          <view class="form-item">
-            <text class="label">时间</text>
-            <picker mode="time" :value="bookingTime" start="00:00" end="23:59" @change="onTimeChange">
-              <view class="picker-value">{{ bookingTime || '请选择时间' }}</view>
-            </picker>
-          </view>
-          <view class="form-item">
-            <text class="label">备注</text>
-            <input class="input" v-model="bookingRemark" placeholder="可填写上课需求/说明（选填）" />
-          </view>
-        </view>
-
-        <view class="modal-footer">
-          <u-button type="primary" color="#00bebd" shape="circle" @click="handleBook">确认并支付</u-button>
-        </view>
-      </view>
-    </view>
-
     <view v-if="showApplyModal" class="mask" @click="closeApplyModal">
       <view class="modal card" @click.stop>
         <view class="modal-head">
@@ -145,10 +111,6 @@ import { ensureStudentMode } from '@/utils/studentGuard';
 const userStore = useUserStore();
 const tutor = ref<any>(null);
 const loading = ref(false);
-const showBookingModal = ref(false);
-const bookingDate = ref('');
-const bookingTime = ref('');
-const bookingRemark = ref('');
 const showApplyModal = ref(false);
 const applyContent = ref('您好老师，我这边有一个家教需求，方便聊聊吗？');
 const applyBusy = ref(false);
@@ -294,119 +256,6 @@ const handleApply = async () => {
   }
 };
 
-const openBookingModal = () => {
-    uni.showToast({ title: '请先发起申请，沟通后确认试课', icon: 'none' });
-};
-
-const closeBookingModal = () => {
-    showBookingModal.value = false;
-};
-
-const onDateChange = (e: any) => {
-    bookingDate.value = e.detail.value;
-};
-
-const onTimeChange = (e: any) => {
-    bookingTime.value = e.detail.value;
-};
-
-const handleBook = async () => {
-  if (!bookingDate.value || !bookingTime.value) {
-      uni.showToast({ title: '请选择日期和时间', icon: 'none' });
-      return;
-  }
-
-  try {
-    const startTime = `${bookingDate.value}T${bookingTime.value}:00`;
-    const apptRes: any = await request({
-        url: '/appointment/create',
-        method: 'POST',
-        data: {
-            targetUid: tutor.value.user.id,
-            subjectId: 1,
-            startTime: startTime,
-            durationMinutes: 60,
-            classMode: 'ONLINE',
-            city: '线上',
-            address: '线上',
-            remark: bookingRemark.value
-        },
-        loading: true
-    });
-
-    const appointmentId = apptRes;
-    const orderRes: any = await request({
-      url: '/chat/brokerage/order/direct',
-      method: 'POST',
-      data: {
-        amountFen: 1,
-        subject: `预约家教 ${tutor.value?.user?.name || ''}`,
-        appointmentId: appointmentId
-      },
-      loading: true
-    });
-
-    if (!orderRes || !orderRes.id) {
-        throw new Error('创建订单失败');
-    }
-
-    const payRes: any = await request({
-      url: '/payment/create',
-      method: 'POST',
-      data: {
-        channel: 'WECHAT',
-        contextId: orderRes.id,
-        contextType: 'BROKERAGE_ORDER',
-        openid: userStore.userInfo?.openid
-      },
-      loading: true
-    });
-
-    if (payRes && payRes.payParams) {
-        const params = payRes.payParams;
-        
-        if (params.mock) {
-            uni.showModal({
-                title: '模拟支付',
-                content: '是否模拟支付成功？',
-                success: (res) => {
-                    if (res.confirm) {
-                        uni.showToast({ title: '支付成功（模拟）', icon: 'success' });
-                        closeBookingModal();
-                    } else {
-                        uni.showToast({ title: '已取消（模拟）', icon: 'none' });
-                    }
-                }
-            });
-            return;
-        }
-
-        uni.requestPayment({
-            provider: 'wxpay',
-            timeStamp: params.timeStamp,
-            nonceStr: params.nonceStr,
-            package: params.package,
-            signType: params.signType,
-            paySign: params.paySign,
-            success: function (res: any) {
-                console.log('success:' + JSON.stringify(res));
-                uni.showToast({ title: '支付成功', icon: 'success' });
-                closeBookingModal();
-            },
-            fail: function (err: any) {
-                console.log('fail:' + JSON.stringify(err));
-                uni.showToast({ title: '支付失败', icon: 'none' });
-            }
-        } as any);
-    } else {
-        throw new Error('支付参数缺失');
-    }
-
-  } catch (error: any) {
-    console.error(error);
-    uni.showToast({ title: error.message || '预约失败', icon: 'none' });
-  }
-};
 </script>
 
 <style lang="scss" scoped>

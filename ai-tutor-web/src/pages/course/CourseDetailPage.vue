@@ -5,13 +5,23 @@ import { useRoute, useRouter } from 'vue-router'
 import { applicationApi } from '@/api/application'
 import { appointmentApi } from '@/api/appointment'
 import { courseApi } from '@/api/course'
-import { liveApi } from '@/api/live'
+import { liveApi, type LiveSessionResp } from '@/api/live'
 import { scheduleApi } from '@/api/schedule'
 import type { CourseDetailVO, ScheduleEventVO, TutorApplicationVO, UserCardVO, UserSimpleVO } from '@/api/types'
 import { userApi } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import LessonDetailModal from '@/ui/course/LessonDetailModal.vue'
+import LessonPreviewCard from '@/ui/course/LessonPreviewCard.vue'
 import { normalizeAvatarUrl } from '@/utils/avatar'
+import {
+  buildLessonDetailModel,
+  findPreviousLesson,
+  findRecentLesson,
+  formatLessonDateTime,
+  groupLessonsForOverview,
+  resolveLessonStatus,
+} from '@/utils/lessonDetail'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +41,11 @@ const application = ref<TutorApplicationVO | null>(null)
 const participant = ref<UserSimpleVO | null>(null)
 const participantCard = ref<UserCardVO | null>(null)
 const lessons = ref<ScheduleEventVO[]>([])
+const liveSession = ref<LiveSessionResp | null>(null)
 const avatarBroken = ref(false)
+const lessonModalOpen = ref(false)
+const lessonModalId = ref<number | null>(null)
+const lessonPreview = ref<{ lessonId: number; top: number; left: number } | null>(null)
 
 const scheduleOpen = ref(false)
 const scheduleTitle = ref('')
@@ -116,45 +130,12 @@ function applyScheduleEndInput(value: string) {
   scheduleEndAt.value = parseLocalDateTimeInputValue(value)
 }
 
-function formatDuration(startAt: number, endAt: number) {
-  const minutes = Math.max(0, Math.round((endAt - startAt) / 60000))
-  if (!minutes) return '未设置时长'
-  if (minutes % 60 === 0) return `${minutes / 60} 小时`
-  if (minutes > 60) return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`
-  return `${minutes} 分钟`
-}
-
-function lessonStatusText(status: string) {
-  const normalized = String(status || '').trim().toUpperCase()
-  if (normalized === 'PENDING') return '待确认'
-  if (normalized === 'ACCEPTED') return '已确认'
-  if (normalized === 'RESCHEDULE_PENDING') return '待确认调课'
-  if (normalized === 'REJECTED') return '已拒绝'
-  if (normalized === 'CANCELED') return '已取消'
-  if (normalized === 'COMPLETED') return '已结课'
-  return normalized || '未知状态'
-}
-
 function courseStatusText(status?: string | null) {
   const normalized = String(status || '').trim().toUpperCase()
   if (normalized === 'TRIAL_WAIT_STUDENT_DECISION') return '待学生确认是否继续'
   if (normalized === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return '待提交正式课表'
   if (normalized === 'TRIAL_FAILED') return '试课失败'
   return normalized || '未知状态'
-}
-
-function formatMoneyFen(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) return '--'
-  return `¥${(value / 100).toFixed(2)}`
-}
-
-function offlineSettlementText(item: ScheduleEventVO, index: number) {
-  if (isTrialLesson(index)) {
-    const reference = item.lessonPriceFen ? `（参考 ${formatMoneyFen(item.lessonPriceFen)}）` : ''
-    return `试课费用按 1 小时课时费${reference}，请双方私下转账`
-  }
-  if (item.lessonPriceFen) return `参考课时费 ${formatMoneyFen(item.lessonPriceFen)}，平台不代收，请私下结算`
-  return '平台不代收正式课费用，请双方私下约定并结算'
 }
 
 const participantUid = computed(() => {
@@ -185,6 +166,9 @@ const sortedLessons = computed(() =>
 
 const currentUid = computed(() => auth.user?.id ?? null)
 const latestLesson = computed(() => sortedLessons.value[sortedLessons.value.length - 1] || null)
+const recentLesson = computed(() => findRecentLesson(sortedLessons.value, { live: liveSession.value, aiResultStatus: detail.value?.aiResultStatus || null }))
+const previousLesson = computed(() => findPreviousLesson(sortedLessons.value, recentLesson.value?.id || null))
+const lessonGroups = computed(() => groupLessonsForOverview(sortedLessons.value, { live: liveSession.value, aiResultStatus: detail.value?.aiResultStatus || null }))
 
 const lessonStats = computed(() => ({
   total: lessons.value.length,
@@ -192,6 +176,23 @@ const lessonStats = computed(() => ({
   accepted: lessons.value.filter((item) => item.status === 'ACCEPTED').length,
   canceled: lessons.value.filter((item) => item.status === 'CANCELED' || item.status === 'REJECTED').length,
 }))
+
+const completedLessonCount = computed(() =>
+  lessonGroups.value.completed.filter((item) =>
+    resolveLessonStatus(item, { live: latestLesson.value?.id === item.id ? liveSession.value : null, aiResultStatus: latestLesson.value?.id === item.id ? detail.value?.aiResultStatus || null : null }).key === 'COMPLETED').length,
+)
+
+const nextLessonText = computed(() => (recentLesson.value ? `${formatLessonDateTime(recentLesson.value.startAt)} 开始` : '待安排'))
+
+const selectedLessonModel = computed(() => {
+  const lesson = sortedLessons.value.find((item) => item.id === lessonModalId.value) || null
+  return lesson ? lessonCardModel(lesson) : null
+})
+
+const hoveredLessonModel = computed(() => {
+  const lesson = sortedLessons.value.find((item) => item.id === lessonPreview.value?.lessonId) || null
+  return lesson ? lessonCardModel(lesson) : null
+})
 
 function goBack() {
   void router.push({ name: 'myCourses' })
@@ -268,6 +269,75 @@ function lessonMetaText(item: ScheduleEventVO, index: number) {
     bits.push(item.proposedBy === currentUid.value ? '由你发起调课' : '等待你确认调课')
   }
   return bits.join(' · ')
+}
+
+function linkLiveSession(lesson: ScheduleEventVO) {
+  return latestLesson.value?.id === lesson.id ? liveSession.value : null
+}
+
+function linkAiStatus(lesson: ScheduleEventVO) {
+  return latestLesson.value?.id === lesson.id ? detail.value?.aiResultStatus || null : null
+}
+
+function lessonSummaryText(lesson: ScheduleEventVO) {
+  return latestLesson.value?.id === lesson.id ? detail.value?.aiPreview || null : null
+}
+
+function lessonCardModel(lesson: ScheduleEventVO) {
+  return buildLessonDetailModel(lesson, {
+    live: linkLiveSession(lesson),
+    aiResultStatus: linkAiStatus(lesson),
+    afterClassSummary: lessonSummaryText(lesson),
+  })
+}
+
+function openLessonModal(lesson: ScheduleEventVO) {
+  lessonModalId.value = lesson.id
+  lessonModalOpen.value = true
+}
+
+function closeLessonModal() {
+  lessonModalOpen.value = false
+  lessonModalId.value = null
+}
+
+function showLessonPreview(lesson: ScheduleEventVO, event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  lessonPreview.value = {
+    lessonId: lesson.id,
+    top: rect.top + window.scrollY + rect.height / 2,
+    left: rect.right + window.scrollX + 16,
+  }
+}
+
+function hideLessonPreview() {
+  lessonPreview.value = null
+}
+
+function lessonModalPrimaryLabel() {
+  const model = selectedLessonModel.value
+  if (!model) return null
+  if (model.statusKey === 'READY_TO_START') return '去上课'
+  if (model.statusKey === 'IN_PROGRESS') return '继续上课'
+  if (model.statusKey === 'COMPLETED') return '查看课后总结'
+  if (detail.value?.roomId) return '进入聊天'
+  return null
+}
+
+function handleLessonModalPrimary() {
+  const model = selectedLessonModel.value
+  if (!model || !detail.value) return
+  if (model.statusKey === 'READY_TO_START' || model.statusKey === 'IN_PROGRESS') {
+    void router.push({ name: 'livePrepare', params: { courseId: String(detail.value.courseId) } })
+    return
+  }
+  if (model.statusKey === 'COMPLETED') {
+    goLessonAiSummary()
+    return
+  }
+  goChat()
 }
 
 function openScheduleCreate() {
@@ -625,7 +695,8 @@ async function load() {
 
     if (latestLesson?.id) {
       try {
-        const live = await liveApi.getByCourse(latestLesson.id)
+        const live = await liveApi.getByCourse(current.courseId)
+        liveSession.value = live
         detail.value = {
           ...detail.value,
           liveSessionId: live.sessionId,
@@ -646,8 +717,11 @@ async function load() {
           }
         }
       } catch {
+        liveSession.value = null
         // 课程未生成课堂会话时，页面继续按基础课程信息展示。
       }
+    } else {
+      liveSession.value = null
     }
     if (
       route.query.weeklySchedule === '1'
@@ -673,7 +747,7 @@ onMounted(() => {
   <div class="page-shell">
     <section class="hero card">
       <div>
-        <div class="eyebrow">长期课程详情</div>
+        <div class="eyebrow">合作课程总览</div>
         <h1 class="hero-title">{{ detail?.courseName || '长期课程' }}</h1>
         <p class="hero-desc">
           {{ detail?.classTime || '还未配置固定时间' }}
@@ -705,25 +779,73 @@ onMounted(() => {
 
       <section class="summary-grid">
         <div class="card metric">
+          <div class="metric-label">合作状态</div>
+          <div class="metric-value">{{ courseStatusText(detail.status) }}</div>
+        </div>
+        <div class="card metric">
           <div class="metric-label">授课形式</div>
           <div class="metric-value">{{ detail.teachingMode === 'ONLINE' ? '线上' : detail.teachingMode === 'OFFLINE' ? '线下' : '待确认' }}</div>
         </div>
         <div class="card metric">
-          <div class="metric-label">课程状态</div>
-          <div class="metric-value">{{ courseStatusText(detail.status) }}</div>
-        </div>
-        <div class="card metric">
-          <div class="metric-label">已建课节</div>
+          <div class="metric-label">全部课节</div>
           <div class="metric-value">{{ lessonStats.total }}</div>
         </div>
         <div class="card metric">
-          <div class="metric-label">待确认课节</div>
-          <div class="metric-value">{{ lessonStats.pending }}</div>
+          <div class="metric-label">最近一节课</div>
+          <div class="metric-value metric-small">{{ nextLessonText }}</div>
         </div>
         <div class="card metric">
-          <div class="metric-label">课堂 AI</div>
-          <div class="metric-value">{{ detail.aiResultStatus === 'READY' ? '已生成' : detail.aiResultStatus === 'FAILED' ? '失败' : detail.aiResultStatus === 'OFF' ? '未开启' : '整理中' }}</div>
+          <div class="metric-label">已完课</div>
+          <div class="metric-value">{{ completedLessonCount }}</div>
         </div>
+      </section>
+
+      <section class="focus-grid">
+        <article class="card focus-card">
+          <div class="focus-head">
+            <div>
+              <div class="section-title">最近的一节课</div>
+              <div class="section-desc">当前最值得关注的一节课，点击可打开单节课详情弹窗。</div>
+            </div>
+          </div>
+          <button
+            v-if="recentLesson"
+            class="focus-lesson"
+            type="button"
+            @click="openLessonModal(recentLesson)"
+          >
+            <div>
+              <div class="focus-lesson-title">{{ lessonCardModel(recentLesson).title }}</div>
+              <div class="focus-lesson-meta">{{ lessonCardModel(recentLesson).timeRangeText }}</div>
+              <div class="focus-lesson-copy">{{ lessonCardModel(recentLesson).topic }}</div>
+            </div>
+            <span class="status-pill" :class="`tone-${lessonCardModel(recentLesson).statusTone}`">{{ lessonCardModel(recentLesson).statusLabel }}</span>
+          </button>
+          <div v-else class="mini-empty">暂时还没有排到最近的一节课。</div>
+        </article>
+
+        <article class="card focus-card">
+          <div class="focus-head">
+            <div>
+              <div class="section-title">上一节课</div>
+              <div class="section-desc">如果已经上过课，这里保留最近一次的回顾入口。</div>
+            </div>
+          </div>
+          <button
+            v-if="previousLesson"
+            class="focus-lesson"
+            type="button"
+            @click="openLessonModal(previousLesson)"
+          >
+            <div>
+              <div class="focus-lesson-title">{{ lessonCardModel(previousLesson).title }}</div>
+              <div class="focus-lesson-meta">{{ lessonCardModel(previousLesson).timeRangeText }}</div>
+              <div class="focus-lesson-copy">{{ lessonCardModel(previousLesson).summaryText }}</div>
+            </div>
+            <span class="status-pill" :class="`tone-${lessonCardModel(previousLesson).statusTone}`">{{ lessonCardModel(previousLesson).statusLabel }}</span>
+          </button>
+          <div v-else class="mini-empty">还没有上一节课记录，等第一节课结束后会展示在这里。</div>
+        </article>
       </section>
 
       <section class="content-grid">
@@ -763,53 +885,126 @@ onMounted(() => {
         <section class="card lessons-card">
           <div class="section-head">
             <div>
-              <div class="section-title">课节列表</div>
-              <div class="section-desc">这里展示这门长期课程下的所有短期课节。首节默认视为试课，后续可继续新增、删课、调课并确认改期。</div>
+              <div class="section-title">全部课节</div>
+              <div class="section-desc">按“正在上 / 最近待上 / 已上过 / 后续规划”组织这段合作里的所有课节。鼠标移上去可以先看预览，点击再打开完整单节课详情弹窗。</div>
             </div>
             <button class="btn btn-primary" type="button" :disabled="!participantUid" @click="openScheduleCreate">新增课节</button>
           </div>
           <div v-if="lessonActionError" class="hint error">{{ lessonActionError }}</div>
 
           <div v-if="sortedLessons.length === 0" class="mini-empty">这门课还没有创建任何课节，先创建第一节试课或正式课吧。</div>
-          <div v-else class="lesson-list">
-            <article v-for="(item, index) in sortedLessons" :key="item.id" class="lesson-item">
-              <div class="lesson-main">
-                <div class="lesson-title-row">
-                  <div class="lesson-title">{{ item.title }}</div>
-                  <span v-if="isTrialLesson(index)" class="trial-pill">试课</span>
-                </div>
-                <div class="lesson-time">{{ fmtDateTime(item.startAt) }} - {{ fmtDateTime(item.endAt, { hour: '2-digit', minute: '2-digit' }) }}</div>
-                <div class="lesson-sub">{{ item.description || '暂无备注' }}</div>
-                <div v-if="lessonMetaText(item, index)" class="lesson-meta">{{ lessonMetaText(item, index) }}</div>
-                <div class="lesson-pay-meta">
-                  <span>线下结算</span>
-                  <span>{{ offlineSettlementText(item, index) }}</span>
-                </div>
+          <div v-else class="lesson-board">
+            <section v-if="lessonGroups.ongoing.length" class="lesson-group">
+              <div class="lesson-group-title">正在上的课</div>
+              <div class="lesson-list">
+                <article
+                  v-for="item in lessonGroups.ongoing"
+                  :key="item.id"
+                  class="lesson-item"
+                  @mouseenter="showLessonPreview(item, $event)"
+                  @mouseleave="hideLessonPreview"
+                  @click="openLessonModal(item)"
+                >
+                  <div class="lesson-main">
+                    <div class="lesson-title-row">
+                      <div class="lesson-title">{{ item.title }}</div>
+                      <span v-if="item.lessonType === 'TRIAL'" class="trial-pill">试课</span>
+                    </div>
+                    <div class="lesson-time">{{ lessonCardModel(item).timeRangeText }}</div>
+                    <div class="lesson-sub">{{ lessonCardModel(item).topic }}</div>
+                    <div class="lesson-inline-actions">
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canRescheduleLesson(item)" @click.stop="openReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '调课' }}
+                      </button>
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click.stop="confirmReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '确认改期' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="lesson-side compact">
+                    <span class="status-pill" :class="`tone-${lessonCardModel(item).statusTone}`">{{ lessonCardModel(item).statusLabel }}</span>
+                  </div>
+                </article>
               </div>
-              <div class="lesson-side">
-                <div class="status-pill">{{ lessonStatusText(item.status) }}</div>
-                <div class="lesson-duration">{{ formatDuration(item.startAt, item.endAt) }}</div>
-                <div class="lesson-actions">
-                  <router-link class="btn btn-link" :to="{ name: 'chatRoom', params: { roomId: String(detail.roomId) } }">聊天</router-link>
-                  <router-link class="btn btn-link" :to="{ name: 'schedule' }">日程</router-link>
-                </div>
-                <div class="lesson-actions lesson-actions-secondary">
-                  <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canRescheduleLesson(item)" @click="openReschedule(item)">
-                    {{ getLessonActionBusyText(item.id) || '调课' }}
-                  </button>
-                  <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click="confirmReschedule(item)">
-                    {{ getLessonActionBusyText(item.id) || '确认改期' }}
-                  </button>
-                  <button v-if="isTeacher" class="btn" type="button" :disabled="isLessonActionBusy(item.id) || item.status !== 'ACCEPTED'" @click="completeLesson(item)">
-                    {{ getLessonActionBusyText(item.id) || '结课' }}
-                  </button>
-                  <button v-else class="btn" type="button" disabled>费用线下结算</button>
-                  <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click="cancelLesson(item)">
-                    {{ getLessonActionBusyText(item.id) || '删课' }}
-                  </button>
-                </div>
+            </section>
+
+            <section v-if="lessonGroups.nextUp.length || lessonGroups.planned.length" class="lesson-group">
+              <div class="lesson-group-title">最近待上的一节课与后续规划</div>
+              <div class="lesson-list">
+                <article
+                  v-for="item in [...lessonGroups.nextUp, ...lessonGroups.planned]"
+                  :key="item.id"
+                  class="lesson-item"
+                  @mouseenter="showLessonPreview(item, $event)"
+                  @mouseleave="hideLessonPreview"
+                  @click="openLessonModal(item)"
+                >
+                  <div class="lesson-main">
+                    <div class="lesson-title-row">
+                      <div class="lesson-title">{{ item.title }}</div>
+                      <span v-if="item.lessonType === 'TRIAL'" class="trial-pill">试课</span>
+                    </div>
+                    <div class="lesson-time">{{ lessonCardModel(item).timeRangeText }}</div>
+                    <div class="lesson-sub">{{ lessonCardModel(item).topic }}</div>
+                    <div v-if="lessonMetaText(item, sortedLessons.findIndex((row) => row.id === item.id))" class="lesson-meta">{{ lessonMetaText(item, sortedLessons.findIndex((row) => row.id === item.id)) }}</div>
+                    <div class="lesson-inline-actions">
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canRescheduleLesson(item)" @click.stop="openReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '调课' }}
+                      </button>
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click.stop="confirmReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '确认改期' }}
+                      </button>
+                      <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click.stop="cancelLesson(item)">
+                        {{ getLessonActionBusyText(item.id) || '删课' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="lesson-side compact">
+                    <span class="status-pill" :class="`tone-${lessonCardModel(item).statusTone}`">{{ lessonCardModel(item).statusLabel }}</span>
+                  </div>
+                </article>
               </div>
-            </article>
+            </section>
+
+            <section v-if="lessonGroups.completed.length" class="lesson-group">
+              <div class="lesson-group-title">已上过的课</div>
+              <div class="lesson-list">
+                <article
+                  v-for="item in lessonGroups.completed"
+                  :key="item.id"
+                  class="lesson-item"
+                  @mouseenter="showLessonPreview(item, $event)"
+                  @mouseleave="hideLessonPreview"
+                  @click="openLessonModal(item)"
+                >
+                  <div class="lesson-main">
+                    <div class="lesson-title-row">
+                      <div class="lesson-title">{{ item.title }}</div>
+                      <span v-if="item.lessonType === 'TRIAL'" class="trial-pill">试课</span>
+                    </div>
+                    <div class="lesson-time">{{ lessonCardModel(item).timeRangeText }}</div>
+                    <div class="lesson-sub">{{ lessonCardModel(item).summaryText }}</div>
+                    <div class="lesson-inline-actions">
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canRescheduleLesson(item)" @click.stop="openReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '调课' }}
+                      </button>
+                      <button class="btn" type="button" :disabled="isLessonActionBusy(item.id) || !canConfirmReschedule(item)" @click.stop="confirmReschedule(item)">
+                        {{ getLessonActionBusyText(item.id) || '确认改期' }}
+                      </button>
+                      <button v-if="isTeacher" class="btn" type="button" :disabled="isLessonActionBusy(item.id) || item.status !== 'ACCEPTED'" @click.stop="completeLesson(item)">
+                        {{ getLessonActionBusyText(item.id) || '结课' }}
+                      </button>
+                      <button class="btn btn-danger" type="button" :disabled="isLessonActionBusy(item.id) || !canCancelLesson(item)" @click.stop="cancelLesson(item)">
+                        {{ getLessonActionBusyText(item.id) || '删课' }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="lesson-side compact">
+                    <span class="status-pill" :class="`tone-${lessonCardModel(item).statusTone}`">{{ lessonCardModel(item).statusLabel }}</span>
+                  </div>
+                </article>
+              </div>
+            </section>
           </div>
         </section>
       </section>
@@ -967,6 +1162,24 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <div
+      v-if="lessonPreview && hoveredLessonModel"
+      class="lesson-hover-preview"
+      :style="{ top: `${lessonPreview.top}px`, left: `${lessonPreview.left}px` }"
+    >
+      <LessonPreviewCard :model="hoveredLessonModel" />
+    </div>
+
+    <LessonDetailModal
+      :open="lessonModalOpen"
+      :model="selectedLessonModel"
+      :cooperation-name="detail?.courseName || '单节课详情'"
+      :primary-label="lessonModalPrimaryLabel()"
+      :primary-disabled="!lessonModalPrimaryLabel()"
+      @close="closeLessonModal"
+      @primary="handleLessonModalPrimary"
+    />
   </div>
 </template>
 
@@ -1014,6 +1227,7 @@ onMounted(() => {
 
 .hero-actions,
 .summary-grid,
+.focus-grid,
 .content-grid,
 .time-grid,
 .modal-actions,
@@ -1037,7 +1251,13 @@ onMounted(() => {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.focus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1073,6 +1293,49 @@ onMounted(() => {
   margin-top: 6px;
   font-size: 28px;
   font-weight: 800;
+}
+
+.metric-small {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.focus-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border-radius: 22px;
+}
+
+.focus-head {
+  display: flex;
+  justify-content: space-between;
+}
+
+.focus-lesson {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.86);
+  cursor: pointer;
+  text-align: left;
+}
+
+.focus-lesson-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.focus-lesson-meta,
+.focus-lesson-copy {
+  margin-top: 6px;
+  color: rgba(15, 23, 42, 0.72);
+  line-height: 1.55;
 }
 
 .content-grid {
@@ -1148,6 +1411,18 @@ onMounted(() => {
   gap: 12px;
 }
 
+.lesson-board,
+.lesson-group {
+  display: grid;
+  gap: 14px;
+}
+
+.lesson-group-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #111827;
+}
+
 .lesson-item {
   padding: 16px;
   border-radius: 18px;
@@ -1159,6 +1434,13 @@ onMounted(() => {
   display: grid;
   gap: 6px;
   flex: 1 1 auto;
+}
+
+.lesson-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .lesson-time,
@@ -1202,6 +1484,12 @@ onMounted(() => {
   gap: 8px;
 }
 
+.lesson-side.compact {
+  min-width: 148px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1212,6 +1500,31 @@ onMounted(() => {
   color: #0d7e7d;
   font-size: 12px;
   font-weight: 700;
+}
+
+.tone-slate {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.tone-amber {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.tone-sky {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0369a1;
+}
+
+.tone-emerald {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.tone-rose {
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
 }
 
 .mini-empty {
@@ -1295,9 +1608,20 @@ onMounted(() => {
   color: #be123c;
 }
 
+.lesson-hover-preview {
+  position: absolute;
+  z-index: 30;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 @media (max-width: 980px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focus-grid {
+    grid-template-columns: 1fr;
   }
 
   .content-grid {
@@ -1326,9 +1650,17 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .focus-lesson {
+    flex-direction: column;
+  }
+
   .lesson-side {
     width: 100%;
     justify-items: start;
+  }
+
+  .lesson-hover-preview {
+    display: none;
   }
 }
 </style>

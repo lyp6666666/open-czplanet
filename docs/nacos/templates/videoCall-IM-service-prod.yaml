@@ -1,5 +1,5 @@
-# IM 服务配置（DEV）
-# DataId: videoCall-IM-service-dev.yaml
+# IM 服务配置（PROD）
+# DataId: videoCall-IM-service-prod.yaml
 # Group: DEFAULT_GROUP
 
 security:
@@ -9,13 +9,13 @@ security:
 integration:
   appointment:
     remote:
-      # 是否启用远程调用预约服务（生产建议 true；本地可按需关闭）
+      # 生产建议保持 true，避免本服务绕过预约服务的远程能力。
       enabled: true
 
 brokerage:
   # 旧默认金额 / 兜底金额（分）。
   # 只有在“统一信息费开关”关闭，且动态计算因为缺少价格/频次等必要字段而无法得出结果时，才会回退到这里。
-  # 不建议把它配成 1（0.01 元），否则一旦进入兜底分支，就会出现 0.01 元信息费订单。
+  # 生产不建议配置成 1（0.01 元），否则异常回退时会产生明显失真的订单金额。
   amount-fen: 19900
 
   info-fee:
@@ -32,12 +32,12 @@ brokerage:
   admin-token: "<TODO:BROKERAGE_ADMIN_TOKEN>"
 
 tutor-application:
-  # 是否跳过支付校验（仅 DEV 排障可开，生产禁止）
+  # 生产禁止跳过支付校验。
   skip-payment-check: false
 
 rocketmq:
-  # RocketMQ NameServer（如果你们有共享的 mq 配置，也可以放到 ai-tutor-common-dev.yaml）
+  # RocketMQ NameServer，替换为生产环境实际值。
   name-server: 127.0.0.1:9876
 
-# 邮件配置已统一迁移到 ai-tutor-email-dev.yaml。
+# 邮件配置已统一迁移到 ai-tutor-email-prod.yaml。
 # 请不要在本服务 DataId 中重复配置 email.*，避免覆盖统一邮件配置。

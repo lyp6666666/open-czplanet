@@ -6,6 +6,17 @@
       <text class="desc">支付成功后会自动解锁聊天，随后可以继续确认试课与合作安排。</text>
     </view>
 
+    <view class="trust-card">
+      <text class="trust-mark">平台保障</text>
+      <text class="trust-title">先预付信息费，再沟通详细需求</text>
+      <text class="trust-copy">支付成功后才会继续解锁详细沟通，双方再确认孩子情况、试课安排与合作方式；若沟通未成立，可按平台规则申请处理。</text>
+      <view class="trust-pills">
+        <text class="trust-pill">真实需求撮合</text>
+        <text class="trust-pill">记录可追踪</text>
+        <text class="trust-pill">符合规则可申请退款</text>
+      </view>
+    </view>
+
     <view class="panel">
       <view class="row">
         <text class="k">支付渠道</text>
@@ -19,14 +30,33 @@
         <text class="k">订单状态</text>
         <text class="v">{{ statusText }}</text>
       </view>
+      <view v-if="expireText" class="row">
+        <text class="k">支付截止</text>
+        <text class="v">{{ expireText }}</text>
+      </view>
+    </view>
+
+    <view class="compliance-card">
+      <text class="compliance-title">合作通过前请勿泄露联系方式</text>
+      <text class="compliance-copy">在合作通过前，双方不得交换或泄露微信、电话等联系方式。若存在提前泄露联系方式、绕过平台私下成交等行为，平台将不予退还信息费。</text>
     </view>
 
     <view v-if="message" class="message" :class="{ success: paid }">{{ message }}</view>
+
+    <AppStateCard
+      v-if="!prepay && !busy && message"
+      title="支付单暂未就绪"
+      :description="message"
+      action-text="重新获取"
+      variant="error"
+      @action="retryPrepay"
+    />
 
     <view class="actions">
       <button class="action-btn primary" :disabled="busy || paid" @click="startPay">
         {{ paid ? '已支付' : busy ? '处理中...' : '立即支付' }}
       </button>
+      <button v-if="showMockAction" class="action-btn ghost" :disabled="busy || paid" @click="mockSuccess">开发态模拟成功</button>
       <button v-if="applicationId" class="action-btn ghost" @click="backToApplication">返回申请</button>
     </view>
   </view>
@@ -38,8 +68,15 @@ import { onLoad, onUnload } from '@dcloudio/uni-app';
 import { paymentApi, type PrepayResponse } from '@/api/payment';
 import { applicationApi } from '@/api/application';
 import { useUserStore } from '@/stores/user';
+import AppStateCard from '@/components/AppStateCard.vue';
 
 const userStore = useUserStore();
+const accountInfo = typeof uni.getAccountInfoSync === 'function' ? uni.getAccountInfoSync() : null;
+const showMockAction = Boolean(
+  (import.meta as any).env?.DEV ||
+  (accountInfo as any)?.miniProgram?.envVersion === 'develop' ||
+  (accountInfo as any)?.miniProgram?.envVersion === 'trial',
+);
 const contextType = ref('BROKERAGE_ORDER');
 const contextId = ref<number | null>(null);
 const applicationId = ref<number | null>(null);
@@ -57,11 +94,18 @@ const amountText = computed(() => {
   return `¥ ${(fen / 100).toFixed(2)}`;
 });
 
+const expireText = computed(() => {
+  const value = prepay.value?.expireTime;
+  if (!value) return '';
+  return formatDateTime(value);
+});
+
 const statusText = computed(() => {
   const s = String(status.value || '').toUpperCase();
   if (!s) return '待支付';
   if (s === 'SUCCESS' || s === 'PAID') return '支付成功';
   if (s === 'FAILED') return '支付失败';
+  if (s === 'CANCELED') return '已取消';
   if (s === 'EXPIRED') return '已过期';
   return s;
 });
@@ -106,7 +150,13 @@ async function startPay() {
     message.value = '支付已提交，正在确认到账状态。';
     startPolling();
   } catch (e: any) {
-    message.value = e?.message || e?.errMsg || '支付失败或已取消';
+    const raw = String(e?.errMsg || e?.message || '').toLowerCase();
+    if (raw.includes('cancel')) {
+      status.value = 'CANCELED';
+      message.value = '你已取消支付，可以稍后继续。';
+      return;
+    }
+    message.value = e?.message || e?.errMsg || '支付失败';
   } finally {
     busy.value = false;
   }
@@ -130,6 +180,11 @@ async function pollOnce() {
       message.value = '支付成功，正在打开聊天。';
       stopPolling();
       await enterChatAfterPay();
+      return;
+    }
+    if (s === 'FAILED' || s === 'EXPIRED' || s === 'CANCELED') {
+      stopPolling();
+      message.value = s === 'EXPIRED' ? '支付单已过期，请重新获取支付单。' : s === 'CANCELED' ? '支付已取消，可稍后继续。' : '支付失败，请重试。';
     }
   } catch {
     // 查询失败时保留页面，下一轮继续查。
@@ -159,6 +214,43 @@ function stopPolling() {
 
 function backToApplication() {
   if (applicationId.value) uni.redirectTo({ url: `/pages/application/detail?id=${applicationId.value}` });
+}
+
+async function retryPrepay() {
+  prepay.value = null;
+  paid.value = false;
+  status.value = '';
+  message.value = '';
+  try {
+    await ensurePrepay();
+  } catch (e: any) {
+    message.value = e?.message || '创建支付单失败';
+  }
+}
+
+async function mockSuccess() {
+  if (!showMockAction || !orderNo.value || busy.value || paid.value) return;
+  busy.value = true;
+  try {
+    await paymentApi.devMockSuccess(orderNo.value);
+    message.value = '已标记为开发态支付成功，正在同步状态。';
+    startPolling();
+  } catch (e: any) {
+    message.value = e?.message || '模拟支付成功失败';
+  } finally {
+    busy.value = false;
+  }
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  const h = `${d.getHours()}`.padStart(2, '0');
+  const min = `${d.getMinutes()}`.padStart(2, '0');
+  return `${m}-${day} ${h}:${min}`;
 }
 
 onLoad((options: any) => {
@@ -225,6 +317,69 @@ onUnload(() => {
   border: 1px solid rgba(16, 24, 32, 0.08);
 }
 
+.trust-card {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(199, 240, 226, 0.72), transparent 34%),
+    linear-gradient(180deg, rgba(247, 252, 250, 0.98), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.trust-mark,
+.trust-title,
+.trust-copy {
+  display: block;
+}
+
+.trust-mark {
+  width: fit-content;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+  font-size: 12px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.trust-title {
+  margin-top: 12px;
+  color: #12212a;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 900;
+}
+
+.trust-copy {
+  margin-top: 10px;
+  color: #52636d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.trust-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.trust-pill {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(18, 33, 42, 0.08);
+  color: #12212a;
+  font-size: 12px;
+  line-height: 32px;
+  font-weight: 800;
+}
+
 .row {
   display: flex;
   justify-content: space-between;
@@ -263,6 +418,32 @@ onUnload(() => {
 .message.success {
   color: #087268;
   background: #dff7f4;
+}
+
+.compliance-card {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(196, 92, 39, 0.16);
+  background: linear-gradient(180deg, rgba(255, 244, 235, 0.96), rgba(255, 252, 248, 0.96));
+}
+
+.compliance-title,
+.compliance-copy {
+  display: block;
+}
+
+.compliance-title {
+  color: #8e4316;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.compliance-copy {
+  margin-top: 8px;
+  color: #9a5b00;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .actions {

@@ -7,10 +7,31 @@ const normalizeBaseUrl = (raw: unknown): string | null => {
   return s.endsWith('/') ? s.slice(0, -1) : s;
 };
 
-export const BASE_URL =
-  normalizeBaseUrl((import.meta as any).env?.VITE_API_BASE_URL) ??
-  normalizeBaseUrl(uni.getStorageSync('ai_tutor_api_base_url')) ??
-  'http://localhost:8080';
+const ENV_BASE_URL = normalizeBaseUrl((import.meta as any).env?.VITE_API_BASE_URL);
+const STORAGE_BASE_URL_KEY = 'ai_tutor_api_base_url';
+const DEFAULT_BASE_URL = 'http://localhost:8080';
+
+export const getBaseUrl = () =>
+  normalizeBaseUrl(uni.getStorageSync(STORAGE_BASE_URL_KEY)) ??
+  ENV_BASE_URL ??
+  DEFAULT_BASE_URL;
+
+export const setBaseUrl = (raw: string) => {
+  const normalized = normalizeBaseUrl(raw);
+  if (!normalized) {
+    uni.removeStorageSync(STORAGE_BASE_URL_KEY);
+    return getBaseUrl();
+  }
+  uni.setStorageSync(STORAGE_BASE_URL_KEY, normalized);
+  return normalized;
+};
+
+export const clearBaseUrl = () => {
+  uni.removeStorageSync(STORAGE_BASE_URL_KEY);
+  return getBaseUrl();
+};
+
+export const BASE_URL = getBaseUrl();
 
 let redirectingToLogin = false;
 
@@ -20,6 +41,7 @@ interface RequestOptions {
   data?: any;
   header?: any;
   loading?: boolean;
+  silentError?: boolean;
 }
 
 const cleanData = (data: any) => {
@@ -41,6 +63,7 @@ const cleanData = (data: any) => {
 };
 
 export const resolveImageUrl = (path?: string) => {
+  const baseUrl = getBaseUrl();
   if (!path) return '/static/avatars/default-avatar.png';
   if (path.startsWith('https://i.pravatar.cc/') || path.startsWith('http://i.pravatar.cc/')) {
     return '/static/avatars/default-avatar.png';
@@ -48,8 +71,8 @@ export const resolveImageUrl = (path?: string) => {
   if (path.startsWith('http')) return path;
   if (path.endsWith('.svg')) return '/static/avatars/default-avatar.png';
   if (path.startsWith('/avatars/')) return '/static/avatars/default-avatar.png';
-  if (path.startsWith('/')) return BASE_URL + path;
-  return BASE_URL + '/' + path;
+  if (path.startsWith('/')) return baseUrl + path;
+  return baseUrl + '/' + path;
 };
 
 export const request = (options: RequestOptions): Promise<any> => {
@@ -75,9 +98,10 @@ export const request = (options: RequestOptions): Promise<any> => {
     }
 
     const cleanedData = cleanData(options.data);
+    const baseUrl = getBaseUrl();
 
     uni.request({
-      url: BASE_URL + options.url,
+      url: baseUrl + options.url,
       method: options.method || 'GET',
       data: cleanedData,
       header: header,
@@ -116,10 +140,12 @@ export const request = (options: RequestOptions): Promise<any> => {
                 uni.hideLoading();
                 isLoadingShown = false;
             }
-            uni.showToast({
-              title: data.msg || data.message || '请求错误',
-              icon: 'none'
-            });
+            if (!options.silentError) {
+              uni.showToast({
+                title: data.msg || data.message || '请求错误',
+                icon: 'none'
+              });
+            }
             reject(data);
           }
         } else if (res.statusCode === 401) {
@@ -141,10 +167,12 @@ export const request = (options: RequestOptions): Promise<any> => {
             uni.hideLoading();
             isLoadingShown = false;
           }
-          uni.showToast({
-            title: `错误: ${res.statusCode}`,
-            icon: 'none'
-          });
+          if (!options.silentError) {
+            uni.showToast({
+              title: `错误: ${res.statusCode}`,
+              icon: 'none'
+            });
+          }
           reject(res);
         }
       },
@@ -153,10 +181,12 @@ export const request = (options: RequestOptions): Promise<any> => {
             uni.hideLoading();
             isLoadingShown = false;
         }
-        uni.showToast({
-          title: '网络错误',
-          icon: 'none'
-        });
+        if (!options.silentError) {
+          uni.showToast({
+            title: '网络错误',
+            icon: 'none'
+          });
+        }
         reject(err);
       },
       complete: () => {

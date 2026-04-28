@@ -260,6 +260,17 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div class="card trust-card">
+        <div class="trust-mark">平台保障</div>
+        <div class="trust-title">先预付信息费，再沟通详细需求</div>
+        <div class="trust-copy">支付成功后会自动解锁聊天，双方才能继续确认孩子情况、试课安排与合作方式；若沟通未成立，可按平台规则申请处理。</div>
+        <div class="trust-pills">
+          <span class="trust-pill">真实需求撮合</span>
+          <span class="trust-pill">沟通记录可追踪</span>
+          <span class="trust-pill">符合规则可申请退款</span>
+        </div>
+      </div>
+
       <div class="card panel">
         <div class="row">
           <div class="k">订单号</div>
@@ -304,6 +315,11 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="card compliance-card">
+        <div class="compliance-title">合作通过前请勿泄露联系方式</div>
+        <div class="compliance-copy">在合作通过前，双方不得交换或泄露微信、电话等联系方式。若存在提前泄露联系方式、绕过平台私下成交等行为，平台将不予退还信息费。</div>
       </div>
 
       <div v-if="state === 'paid'" class="card result ok">
@@ -357,6 +373,64 @@ onUnmounted(() => {
   padding: 12px;
   display: grid;
   gap: 8px;
+}
+
+.trust-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  border-color: rgba(15, 118, 110, 0.12);
+  background:
+    radial-gradient(circle at top left, rgba(199, 240, 226, 0.7), transparent 34%),
+    linear-gradient(180deg, rgba(247, 252, 250, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.trust-mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  width: fit-content;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.trust-title {
+  color: #12212a;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.trust-copy {
+  color: #52636d;
+  font-size: 14px;
+  line-height: 1.75;
+  font-weight: 700;
+}
+
+.trust-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trust-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(18, 33, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: #12212a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .row {
@@ -482,6 +556,27 @@ onUnmounted(() => {
 
 .g-actions {
   margin-top: 6px;
+}
+
+.compliance-card {
+  padding: 16px;
+  border-radius: 20px;
+  border-color: rgba(196, 92, 39, 0.16);
+  background: linear-gradient(180deg, rgba(255, 244, 235, 0.96), rgba(255, 252, 248, 0.96));
+}
+
+.compliance-title {
+  color: #8e4316;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.compliance-copy {
+  margin-top: 8px;
+  color: #9a5b00;
+  font-size: 13px;
+  line-height: 1.7;
+  font-weight: 700;
 }
 
 .result {

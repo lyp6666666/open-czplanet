@@ -69,6 +69,7 @@ export const applicationApi = {
       url: '/chat/application/sent/page',
       method: 'GET',
       data: params,
+      silentError: true,
     });
   },
 
@@ -77,6 +78,7 @@ export const applicationApi = {
       url: '/chat/application/received/page',
       method: 'GET',
       data: params,
+      silentError: true,
     });
   },
 
@@ -91,6 +93,7 @@ export const applicationApi = {
     return request({
       url: `/chat/application/${applicationId}`,
       method: 'GET',
+      silentError: true,
     });
   },
 

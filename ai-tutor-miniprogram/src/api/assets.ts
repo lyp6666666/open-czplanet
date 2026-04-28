@@ -1,4 +1,4 @@
-import { BASE_URL, resolveImageUrl } from '@/utils/request';
+import { getBaseUrl, resolveImageUrl } from '@/utils/request';
 
 export type UploadResult = {
   objectKey: string;
@@ -12,7 +12,7 @@ export const assetsApi = {
     return new Promise<UploadResult>((resolve, reject) => {
       const token = uni.getStorageSync('token');
       uni.uploadFile({
-        url: `${BASE_URL}/api/v1/assets/upload`,
+        url: `${getBaseUrl()}/api/v1/assets/upload`,
         filePath,
         name: 'file',
         formData: { biz },
