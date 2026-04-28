@@ -248,12 +248,7 @@ NACOS_DISCOVERY_NAMESPACE="$(escape_systemd_env_value "$NACOS_DISCOVERY_NAMESPAC
 NACOS_USERNAME="$(escape_systemd_env_value "$NACOS_USERNAME")"
 NACOS_PASSWORD="$(escape_systemd_env_value "$NACOS_PASSWORD")"
 JWT_ISSUER="$(escape_systemd_env_value "$JWT_ISSUER")"
-JWT_SECRET_PRIMARY="$(escape_systemd_env_value "$JWT_SECRET_PRIMARY")"
 GATEWAY_JWT_ISSUER="$(escape_systemd_env_value "$GATEWAY_JWT_ISSUER")"
-GATEWAY_JWT_SECRET="$(escape_systemd_env_value "$GATEWAY_JWT_SECRET")"
-GATEWAY_SIGN_SECRET="$(escape_systemd_env_value "$GATEWAY_SIGN_SECRET")"
-JWT_SECRETS_0="$(escape_systemd_env_value "$JWT_SECRETS_0")"
-GATEWAY_JWT_SECRETS_0="$(escape_systemd_env_value "$GATEWAY_JWT_SECRETS_0")"
 LIVEKIT_API_KEY="$(escape_systemd_env_value "$LIVEKIT_API_KEY")"
 LIVEKIT_API_SECRET="$(escape_systemd_env_value "$LIVEKIT_API_SECRET")"
 LIVEKIT_WS_URL="$(escape_systemd_env_value "$LIVEKIT_WS_URL")"
@@ -262,6 +257,20 @@ LIVEKIT_TOKEN_TTL_SECONDS="$(escape_systemd_env_value "$LIVEKIT_TOKEN_TTL_SECOND
 OPS_VERIFY_TOKEN="$(escape_systemd_env_value "$OPS_VERIFY_TOKEN")"
 DEV_EXPOSE_SMS_CODE="$(escape_systemd_env_value "$DEV_EXPOSE_SMS_CODE")"
 EOF
+
+append_optional_env() {
+  local key="$1"
+  local value="$2"
+  if [ -n "$value" ]; then
+    printf '%s="%s"\n' "$key" "$(escape_systemd_env_value "$value")" >> "$SHARED_DIR/runtime.env"
+  fi
+}
+
+append_optional_env "JWT_SECRET_PRIMARY" "$JWT_SECRET_PRIMARY"
+append_optional_env "GATEWAY_JWT_SECRET" "$GATEWAY_JWT_SECRET"
+append_optional_env "GATEWAY_SIGN_SECRET" "$GATEWAY_SIGN_SECRET"
+append_optional_env "JWT_SECRETS_0" "$JWT_SECRETS_0"
+append_optional_env "GATEWAY_JWT_SECRETS_0" "$GATEWAY_JWT_SECRETS_0"
 
 for item in "${SERVICES[@]}"; do
   service_name="${item%%:*}"

@@ -173,6 +173,28 @@ class UserServiceImplTest {
     }
 
     @Test
+    void shouldStillLoginWhenExistingUserInviteEnsureFails() {
+        String phone = "13800007777";
+        when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
+
+        User existing = new User();
+        existing.setId(7701L);
+        existing.setPhone(phone);
+        existing.setStatus(0);
+        existing.setUserType(UserRoleEnum.STUDENT.getValue());
+        when(userMapper.selectByPhone(phone)).thenReturn(existing);
+        when(studentProfileMapper.selectByUserId(7701L)).thenReturn(new StudentProfile());
+        doThrow(new RuntimeException("Table 'invite_code' doesn't exist")).when(inviteService).ensureInviteCode(7701L);
+        when(userMapper.updateUserType(7701L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
+        when(jwtUtil.generateToken(7701L, phone, UserRoleEnum.STUDENT)).thenReturn("token7701");
+
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
+
+        assertThat(vo.getId()).isEqualTo(7701L);
+        assertThat(vo.getToken()).isEqualTo("token7701");
+    }
+
+    @Test
     void shouldRejectDisabledUserLogin() {
         String phone = "13800008888";
         when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
@@ -258,6 +280,28 @@ class UserServiceImplTest {
         assertThat(vo.getId()).isEqualTo(5005L);
         verify(inviteService).ensureInviteCode(5005L);
         verify(inviteService).bindInviteCodeIfNeeded(5005L, "ABC123");
+    }
+
+    @Test
+    void shouldStillRegisterWhenInviteEnsureFailsWithoutInviteCode() {
+        String phone = "13800004568";
+        when(smsService.verifyCode(eq(phone), anyString(), anyString())).thenReturn(true);
+        when(userMapper.selectByPhone(phone)).thenReturn(null);
+        doAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(5006L);
+            return 1;
+        }).when(userMapper).insert(any(User.class));
+        when(studentProfileMapper.selectByUserId(5006L)).thenReturn(null);
+        doThrow(new RuntimeException("Table 'invite_code' doesn't exist")).when(inviteService).ensureInviteCode(5006L);
+        when(userMapper.updateUserType(5006L, UserRoleEnum.STUDENT.getValue())).thenReturn(1);
+        when(jwtUtil.generateToken(5006L, phone, UserRoleEnum.STUDENT)).thenReturn("token6");
+
+        LoginUserVO vo = userService.userLoginOrRegister(phone, "1234", UserRoleEnum.STUDENT, null);
+
+        assertThat(vo.getId()).isEqualTo(5006L);
+        assertThat(vo.getToken()).isEqualTo("token6");
+        verify(inviteService, never()).bindInviteCodeIfNeeded(anyLong(), anyString());
     }
 
     @Test

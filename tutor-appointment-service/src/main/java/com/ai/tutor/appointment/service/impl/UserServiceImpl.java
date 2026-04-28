@@ -28,6 +28,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.util.StringUtils;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -136,9 +137,7 @@ public class UserServiceImpl implements UserService {
             transactionTemplate.execute(status -> {
                 ensureProfile(userId, phone, role);
                 // 企业规范：历史用户每次成功登录时都要保证邀请码已补齐，避免依赖邀请页首访触发。
-                if (inviteService != null) {
-                    inviteService.ensureInviteCode(userId);
-                }
+                ensureInviteCodeBestEffort(userId, "existing_login");
                 return true;
             });
         }
@@ -250,24 +249,44 @@ public class UserServiceImpl implements UserService {
                 u.setUpdateTime(LocalDateTime.now());
                 userMapper.insert(u);
                 ensureProfile(u.getId(), phone, role);
-                if (inviteService != null) {
-                    inviteService.ensureInviteCode(u.getId());
-                    inviteService.bindInviteCodeIfNeeded(u.getId(), inviteCode);
-                }
+                ensureInviteCodeBestEffort(u.getId(), "register");
+                bindInviteCodeIfNeeded(u.getId(), inviteCode);
                 return new CreateUserResult(u, true);
             } catch (DuplicateKeyException e) {
                 User existing = userMapper.selectByPhone(phone);
                 if (existing != null) {
                     ensureProfile(existing.getId(), phone, role);
-                    if (inviteService != null) {
-                        inviteService.ensureInviteCode(existing.getId());
-                    }
+                    ensureInviteCodeBestEffort(existing.getId(), "duplicate_fallback");
                     return new CreateUserResult(existing, false);
                 }
                 ThrowUtils.throwIf(true, ErrorCode.SYSTEM_ERROR);
                 return null;
             }
         });
+    }
+
+    /**
+     * 邀请体系属于登录后的增强能力，线上库迁移滞后或邀请子系统异常时不应阻断手机号登录主链路。
+     */
+    private void ensureInviteCodeBestEffort(Long userId, String scene) {
+        if (inviteService == null || userId == null) {
+            return;
+        }
+        try {
+            inviteService.ensureInviteCode(userId);
+        } catch (Exception e) {
+            log.error("invite_code_ensure_skipped scene={} userId={} reason={}", scene, userId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 用户主动填写的邀请码仍然保留强校验；只有“无邀请码”的普通登录/注册路径才允许降级。
+     */
+    private void bindInviteCodeIfNeeded(Long userId, String inviteCode) {
+        if (inviteService == null || userId == null || !StringUtils.hasText(inviteCode)) {
+            return;
+        }
+        inviteService.bindInviteCodeIfNeeded(userId, inviteCode);
     }
 
     private void ensureProfile(Long userId, String phone, UserRoleEnum role) {
