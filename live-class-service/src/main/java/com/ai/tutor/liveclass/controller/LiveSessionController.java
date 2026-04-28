@@ -7,14 +7,18 @@ import com.ai.tutor.liveclass.domain.vo.request.EndLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.IssueJoinTokenRequest;
 import com.ai.tutor.liveclass.domain.vo.request.JoinLiveSessionAckRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
+import com.ai.tutor.liveclass.domain.vo.request.LiveAiAudioChunkRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
+import com.ai.tutor.liveclass.domain.vo.request.LiveWhiteboardSnapshotRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
+import com.ai.tutor.liveclass.domain.vo.request.UpdateLiveAiOptionsRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveWhiteboardSnapshotResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
 import com.ai.tutor.liveclass.service.LiveClassService;
 import com.ai.tutor.liveclass.service.LiveKitUrlResolver;
@@ -91,6 +95,22 @@ public class LiveSessionController {
         return ResultUtils.success(liveClassService.aiState(sessionId, uid));
     }
 
+    @PostMapping("/sessions/{sessionId}/ai/options")
+    @Operation(summary = "更新课堂 AI 实时总结与课后总结选项")
+    public BaseResponse<LiveSessionResp> updateAiOptions(@PathVariable("sessionId") Long sessionId,
+                                                         @RequestBody(required = false) UpdateLiveAiOptionsRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.updateAiOptions(sessionId, uid, request == null ? new UpdateLiveAiOptionsRequest() : request));
+    }
+
+    @PostMapping("/sessions/{sessionId}/ai/audio-chunks")
+    @Operation(summary = "上传课堂 AI 旁路音频分片")
+    public BaseResponse<LiveAiStateResp> uploadAiAudioChunk(@PathVariable("sessionId") Long sessionId,
+                                                            @RequestBody LiveAiAudioChunkRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.acceptAiAudioChunk(sessionId, uid, request));
+    }
+
     @GetMapping("/sessions/{sessionId}/ai/result")
     @Operation(summary = "查询课堂 AI 课后结果")
     public BaseResponse<LiveAiResultResp> aiResult(@PathVariable("sessionId") Long sessionId) {
@@ -135,5 +155,28 @@ public class LiveSessionController {
     public BaseResponse<List<LiveTimelineItemResp>> timeline(@PathVariable("sessionId") Long sessionId) {
         Long uid = RequestHolder.get().getUid();
         return ResultUtils.success(liveClassService.timeline(sessionId, uid));
+    }
+
+    @GetMapping("/sessions/{sessionId}/whiteboard")
+    @Operation(summary = "查询或创建本节课白板快照")
+    public BaseResponse<LiveWhiteboardSnapshotResp> whiteboard(@PathVariable("sessionId") Long sessionId) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.whiteboard(sessionId, uid));
+    }
+
+    @PutMapping("/sessions/{sessionId}/whiteboard/snapshot")
+    @Operation(summary = "保存本节课白板快照")
+    public BaseResponse<LiveWhiteboardSnapshotResp> saveWhiteboard(@PathVariable("sessionId") Long sessionId,
+                                                                   @RequestBody(required = false) LiveWhiteboardSnapshotRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.saveWhiteboard(sessionId, uid, request == null ? new LiveWhiteboardSnapshotRequest() : request, false));
+    }
+
+    @PostMapping("/sessions/{sessionId}/whiteboard/finalize")
+    @Operation(summary = "结束课堂前保存并归档白板快照")
+    public BaseResponse<LiveWhiteboardSnapshotResp> finalizeWhiteboard(@PathVariable("sessionId") Long sessionId,
+                                                                       @RequestBody(required = false) LiveWhiteboardSnapshotRequest request) {
+        Long uid = RequestHolder.get().getUid();
+        return ResultUtils.success(liveClassService.saveWhiteboard(sessionId, uid, request == null ? new LiveWhiteboardSnapshotRequest() : request, true));
     }
 }

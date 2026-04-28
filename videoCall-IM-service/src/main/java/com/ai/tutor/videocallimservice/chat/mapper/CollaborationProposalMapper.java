@@ -12,6 +12,7 @@ public interface CollaborationProposalMapper {
     void insert(CollaborationProposal proposal);
     CollaborationProposal selectById(@Param("id") Long id);
     CollaborationProposal selectLatestByRoomId(@Param("roomId") Long roomId);
+    CollaborationProposal selectLatestPendingByRoomId(@Param("roomId") Long roomId);
     CollaborationProposal selectByFromUidAndClientRequestId(@Param("fromUid") Long fromUid, @Param("clientRequestId") String clientRequestId);
     int updateStatus(@Param("id") Long id,
                      @Param("status") String status,

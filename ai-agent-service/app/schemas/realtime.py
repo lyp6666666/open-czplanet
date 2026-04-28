@@ -33,6 +33,33 @@ class TranscriptSegmentInput(BaseModel):
     isFinal: bool = True
 
 
+class AudioChunkInput(BaseModel):
+    participantId: Optional[int] = None
+    speaker: str = "unknown"
+    sequence: int = 0
+    sampleRate: int = 16000
+    channelCount: int = 1
+    durationMs: int = 0
+    rms: float = 0.0
+    format: str = "PCM16"
+    audioBase64: str = Field(min_length=1, max_length=160000)
+
+
+class RealtimeMinuteItem(BaseModel):
+    title: str = Field(min_length=1, max_length=40)
+    detail: str = Field(min_length=1, max_length=240)
+
+
+class RealtimeMinuteSection(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=40)
+    summary: str = Field(min_length=1, max_length=260)
+    startSegment: int = 0
+    endSegment: int = 0
+    updatedAt: int = 0
+    items: List[RealtimeMinuteItem] = Field(default_factory=list)
+
+
 class RealtimeLessonStateView(BaseModel):
     lessonId: int
     mode: str
@@ -43,6 +70,8 @@ class RealtimeLessonStateView(BaseModel):
     studentQuestions: List[str] = Field(default_factory=list)
     homeworkCandidates: List[str] = Field(default_factory=list)
     keyPoints: List[str] = Field(default_factory=list)
+    minutesOutline: List[RealtimeMinuteSection] = Field(default_factory=list)
+    activeSectionTitle: Optional[str] = None
     segmentCount: int = 0
     status: str
     rawState: Optional[Dict] = None

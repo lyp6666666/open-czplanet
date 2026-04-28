@@ -1,0 +1,26 @@
+# Tasks
+
+- [x] 1.1 确认白板绑定口径：以 `live_class_session.id` 作为唯一白板归属，`courseId` 仅用于路由兼容和冗余查询。
+- [x] 1.2 增加 `live_whiteboard` 迁移 SQL，并补充 entity、mapper、service。
+- [x] 1.3 增加 `GET /live/sessions/{sessionId}/whiteboard` 快照读取接口。
+- [x] 1.4 增加 `PUT /live/sessions/{sessionId}/whiteboard/snapshot` 快照保存接口，包含参与者鉴权和乐观锁。
+- [x] 1.5 增加 `POST /live/sessions/{sessionId}/whiteboard/finalize` 或结束课堂前复用最终保存流程。
+- [x] 2.1 前端安装 `react`、`react-dom`、`@excalidraw/excalidraw`，并配置 Excalidraw 字体资源路径。
+- [x] 2.2 新增 `ExcalidrawWhiteboardHost.tsx` React 白板组件。
+- [x] 2.3 新增 `LiveWhiteboardPanel.vue` Vue wrapper，管理 React root 生命周期。
+- [x] 2.4 新增 `whiteboardSync.ts`，封装加载快照、保存快照、场景合并、防抖和状态提示。
+- [x] 2.5 改造 `LiveClassroomPage.vue`，增加 `video` / `whiteboard` 模式切换。
+- [x] 2.6 白板模式下将现有本地/远端视频 DOM 改为浮层停靠，确保不销毁 LiveKit track。
+- [x] 2.7 白板模式下右侧 AI/聊天面板高度下收，内容区独立滚动，不挤压白板和会议控制。
+- [x] 3.1 扩展 `LiveRoomClient`，支持 LiveKit DataChannel 发送可靠白板消息。
+- [x] 3.2 扩展 `LiveRoomClient`，支持订阅 DataChannel 并按 topic 分发。
+- [x] 3.3 同步 `whiteboard.scene.snapshot`，远端更新使用非 undo 写入，避免回环。
+- [ ] 3.4 同步 `whiteboard.cursor` 和协作者 presence，光标消息使用非可靠通道。
+- [x] 3.5 增加 payload 大小保护和异常降级，不影响音视频连接。
+- [x] 4.1 前端单测：点击白板后展示白板舞台和视频浮层。
+- [x] 4.2 前端单测：白板保存接口按防抖调用，远端更新不会再次广播。
+- [x] 4.3 后端测试：非课堂参与者不能读取/保存白板。
+- [x] 4.4 后端测试：同一 `live_session_id` 只创建一个白板。
+- [ ] 4.5 E2E：教师和学生同时进入课堂，教师绘制后学生端可见。
+- [x] 4.6 E2E：刷新页面后白板内容从后端快照恢复。
+- [x] 4.7 回归测试：LiveKit 音视频、AI 实时纪要、结束课堂确认弹窗不回退。

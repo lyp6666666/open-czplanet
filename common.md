@@ -4,12 +4,17 @@
 
 命令以当前仓库 `scripts/` 的真实脚本为准，优先给可直接复制执行的入口；更完整的背景说明见文末参考文档。
 
-当前 Nacos 约定：
+当前环境约定：
 
 - Nacos 地址：`111.228.20.88:8848`
 - `dev` namespace：`481e4376-4576-4b18-ac19-f61e170ca3ae`
 - `prod` namespace：`c3476048-10f6-4cc3-b3f1-90135d736a73`
 - 日常开发和测试默认使用 `dev`
+- 本地/开发分支：`dev`
+- 生产分支：`master`
+- 当前生产仓库：`111.228.20.88:/opt/ai-platform-prod`
+- 旧开发/历史仓库：`111.228.20.88:/opt/ai-platform`
+- 当前生产自动部署：`push master` -> GitHub Actions `deploy-prod.yml` -> `111.228.20.88:/usr/local/bin/ai-platform-prod-deploy.sh`
 
 ## 最常用
 
@@ -50,17 +55,39 @@ bash scripts/ssh_tunnel.sh status
 bash scripts/nacos_tunnel.sh status
 ```
 
-服务器手动启动：
+服务器手动启动开发环境：
 
 ```bash
 cd /opt/ai-platform
 MANAGE_INFRA=never sh scripts/dev_all_up.sh
 ```
 
-服务器手动关闭：
+
+本地验证码日志，一行命令：
+cd /Users/luyipeng/project/ai_platform/ai-platform && tail -f .logs/tutor-appointment-service.log | grep --line-buffered "SMS SEND"
+
+远程验证码日志，一行命令：
+ssh -p 22 root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/tutor-appointment-service.log | grep --line-buffered 'SMS SEND'"
+
+
+服务器手动关闭开发环境：
 
 ```bash
 cd /opt/ai-platform
+STOP_INFRA=0 sh scripts/dev_all_down.sh
+```
+
+服务器手动启动生产环境：
+
+```bash
+cd /opt/ai-platform-prod
+SPRING_PROFILES_ACTIVE=prod MANAGE_INFRA=never AUTO_BOOTSTRAP_DEV_DB=0 NACOS_SERVER_ADDR=127.0.0.1:8848 NACOS_GRPC_CHECK=warn FRONTEND_HOST=127.0.0.1 sh scripts/dev_all_up.sh
+```
+
+服务器手动关闭生产环境：
+
+```bash
+cd /opt/ai-platform-prod
 STOP_INFRA=0 sh scripts/dev_all_down.sh
 ```
 
@@ -171,6 +198,11 @@ REMOTE_USER=root REMOTE_HOST=111.228.20.88 REMOTE_PATH=/opt/ai-platform bash scr
 ```bash
 REMOTE_USER=root REMOTE_HOST=111.228.20.88 REMOTE_PATH=/opt/ai-platform bash scripts/dev_remote_sync_up.sh
 ```
+
+注意：
+
+- `dev_remote_*` 默认是给开发副本 `/opt/ai-platform` 用的，不是给生产目录 `/opt/ai-platform-prod` 用的
+- 生产环境发布不建议靠 `dev_remote_sync_up.sh`，而是走 GitHub Actions 的 `master` 自动部署
 
 如果你不想删除远程多出来的文件：
 

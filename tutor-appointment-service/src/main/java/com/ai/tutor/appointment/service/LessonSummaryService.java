@@ -6,5 +6,7 @@ import com.ai.tutor.appointment.model.entity.LessonSummary;
 public interface LessonSummaryService {
     LessonSummary upsertReady(UpsertLessonSummaryRequest request, Long uid);
 
+    LessonSummary upsertReadyInternal(UpsertLessonSummaryRequest request);
+
     LessonSummary getByLessonId(Long lessonId, Long uid);
 }

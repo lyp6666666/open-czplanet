@@ -23,6 +23,35 @@ const isLoggedIn = computed(() => auth.isLoggedIn)
 const isTeacher = computed(() => auth.user?.userType === 1)
 const isOrg = computed(() => auth.user?.userType === 3)
 const canChat = computed(() => !isOrg.value)
+const showCity = computed(() => !isOrg.value)
+
+const navItems = computed(() => {
+  if (isTeacher.value) {
+    return [
+      { key: 'home', label: '首页', path: '/' },
+      { key: 'jobs', label: '需求', path: '/tutor/jobs' },
+      { key: 'schedule', label: '我的课程', path: '/schedule' },
+      { key: 'courses', label: '我的合作', path: '/courses/my' },
+    ]
+  }
+
+  if (isOrg.value) {
+    return [
+      { key: 'tutors', label: '找教师', path: '/org/tutors' },
+      { key: 'post', label: '发布需求', path: '/org/post' },
+      { key: 'jobs', label: '我的需求', path: '/org/jobs/mine' },
+    ]
+  }
+
+  return [
+    { key: 'home', label: '首页', path: '/' },
+    { key: 'tutors', label: '找教师', path: '/student/tutors' },
+    { key: 'post', label: '发布需求', path: '/student/post' },
+    { key: 'jobs', label: '我的需求', path: '/student/jobs/mine' },
+    { key: 'schedule', label: '我的课程', path: '/schedule' },
+    { key: 'courses', label: '我的合作', path: '/courses/my' },
+  ]
+})
 
 function normalizedText(raw: string | null | undefined) {
   const text = String(raw || '').trim()
@@ -80,6 +109,31 @@ const switchDesc = computed(() =>
 
 function go(path: string) {
   void router.push(path)
+}
+
+function goNav(path: string) {
+  if (isLoggedIn.value) {
+    void router.push(path)
+    return
+  }
+  if (path === '/' || path === '/about' || path === '/privacy') {
+    void router.push(path)
+    return
+  }
+  if (path.startsWith('/org/')) {
+    void router.push('/auth/org')
+    return
+  }
+  if (path.startsWith('/tutor/')) {
+    void router.push('/auth/tutor')
+    return
+  }
+  void router.push('/auth/student')
+}
+
+function isTabActive(path: string) {
+  if (path === '/') return route.path === '/'
+  return route.path.startsWith(path)
 }
 
 function goLiveQuickJoin() {
@@ -282,7 +336,7 @@ async function loadLiveQuickJoin() {
           <span class="logo">{{ BRAND_NAME }}</span>
         </button>
 
-        <div v-if="isLoggedIn" class="city">
+        <div v-if="showCity" class="city">
           <button class="city-trigger" type="button" @click.stop="cityModalOpen = true">
             <svg class="city-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -296,47 +350,17 @@ async function loadLiveQuickJoin() {
           <CitySelectModal :open="cityModalOpen" v-model="city" :hot-cities="cities" @close="cityModalOpen = false" />
         </div>
 
-        <nav v-if="isLoggedIn" class="tabs">
-          <button class="tab" :class="{ active: route.path === '/' }" type="button" @click="go('/')">首页</button>
-          <template v-if="isTeacher">
-            <button class="tab" :class="{ active: route.path.startsWith('/tutor/jobs') }" type="button" @click="go('/tutor/jobs')">
-              需求
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
-              课程安排
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/courses') }" type="button" @click="go('/courses/my')">
-              我的课程
-            </button>
-          </template>
-          <template v-else-if="isOrg">
-            <button class="tab" :class="{ active: route.path.startsWith('/org/tutors') }" type="button" @click="go('/org/tutors')">
-              找教师
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/org/post') }" type="button" @click="go('/org/post')">
-              发布需求
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/org/jobs') }" type="button" @click="go('/org/jobs/mine')">
-              我的需求
-            </button>
-          </template>
-          <template v-else>
-            <button class="tab" :class="{ active: route.path.startsWith('/student/tutors') }" type="button" @click="go('/student/tutors')">
-              找教师
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/student/post') }" type="button" @click="go('/student/post')">
-              发布需求
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/student/jobs') }" type="button" @click="go('/student/jobs/mine')">
-              我的需求
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/schedule') }" type="button" @click="go('/schedule')">
-              课程安排
-            </button>
-            <button class="tab" :class="{ active: route.path.startsWith('/courses') }" type="button" @click="go('/courses/my')">
-              我的课程
-            </button>
-          </template>
+        <nav class="tabs">
+          <button
+            v-for="item in navItems"
+            :key="item.key"
+            class="tab"
+            :class="{ active: isTabActive(item.path) }"
+            type="button"
+            @click="goNav(item.path)"
+          >
+            {{ item.label }}
+          </button>
         </nav>
       </div>
 

@@ -15,11 +15,18 @@ public class LiveAiStateResp {
     private String aiStatus;
     private Boolean realtimeEnabled;
     private String summaryStatus;
+    private Boolean asrEnabled;
+    private Boolean llmEnabled;
+    private Integer segmentCount;
+    private Long lastLlmSummaryTs;
+    private Integer lastLlmSegmentCount;
     private String currentTopic;
     private String latestStageSummary;
     private List<String> studentQuestions;
     private List<String> homeworkCandidates;
     private List<String> keyPoints;
+    private List<Map<String, Object>> minutesOutline;
+    private String activeSectionTitle;
     private LocalDateTime updatedAt;
     private Map<String, Object> rawState;
 }

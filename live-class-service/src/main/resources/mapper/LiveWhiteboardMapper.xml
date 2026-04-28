@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ai.tutor.liveclass.mapper.LiveWhiteboardMapper">
+
+    <resultMap id="BaseMap" type="com.ai.tutor.liveclass.domain.entity.LiveWhiteboard">
+        <id column="id" property="id"/>
+        <result column="live_session_id" property="liveSessionId"/>
+        <result column="course_id" property="courseId"/>
+        <result column="schedule_event_id" property="scheduleEventId"/>
+        <result column="scene_json" property="sceneJson"/>
+        <result column="scene_version" property="sceneVersion"/>
+        <result column="updated_by_uid" property="updatedByUid"/>
+        <result column="finalized" property="finalized"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <select id="selectBySessionId" resultMap="BaseMap">
+        SELECT *
+        FROM live_whiteboard
+        WHERE live_session_id = #{sessionId}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" parameterType="com.ai.tutor.liveclass.domain.entity.LiveWhiteboard" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO live_whiteboard (
+            live_session_id, course_id, schedule_event_id, scene_json, scene_version,
+            updated_by_uid, finalized, create_time, update_time
+        ) VALUES (
+            #{liveSessionId}, #{courseId}, #{scheduleEventId}, #{sceneJson}, #{sceneVersion},
+            #{updatedByUid}, #{finalized}, NOW(3), NOW(3)
+        )
+    </insert>
+
+    <update id="updateSnapshot">
+        UPDATE live_whiteboard
+        SET scene_json = #{sceneJson},
+            scene_version = #{sceneVersion},
+            updated_by_uid = #{updatedByUid},
+            finalized = #{finalized},
+            update_time = NOW(3)
+        WHERE id = #{id}
+    </update>
+</mapper>

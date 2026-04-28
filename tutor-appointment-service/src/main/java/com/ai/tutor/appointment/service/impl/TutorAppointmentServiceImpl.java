@@ -220,11 +220,6 @@ public class TutorAppointmentServiceImpl implements com.ai.tutor.appointment.ser
                     .build();
             studentJobPostingMapper.updateById(toUpdate);
         }
-        TutorAppointment latest = tutorAppointmentMapper.selectById(db.getId());
-        TutorAppointment billable = latest == null ? db : latest;
-        if (billable.getCourseId() != null && billable.getPayableAmountFen() != null && billable.getPayableAmountFen() > 0) {
-            lessonPaymentOrderService.createAfterLessonCompleted(billable);
-        }
         emailNotificationService.cancelLessonStartTasks(db.getId(), "lesson completed");
     }
 

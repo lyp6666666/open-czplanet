@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['huoyue.online', 'www.huoyue.online'],
+    allowedHosts: ['huoyue.online', 'www.huoyue.online', '.trycloudflare.com', '.loca.lt'],
     proxy: {
       '/api': {
         target: 'http://localhost:18084',

@@ -2,7 +2,9 @@ package com.ai.tutor.liveclass.service;
 
 import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.integration.ai.AiAgentClient;
+import com.ai.tutor.liveclass.integration.feign.AppointmentInternalFeignClient;
 import com.ai.tutor.liveclass.integration.im.HttpImFacade;
 import com.ai.tutor.liveclass.mapper.LiveClassSessionMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +33,8 @@ class LiveClassAiServiceTest {
     private LiveClassSessionMapper liveClassSessionMapper;
     @Mock
     private HttpImFacade httpImFacade;
+    @Mock
+    private AppointmentInternalFeignClient appointmentInternalFeignClient;
 
     @InjectMocks
     private LiveClassAiService liveClassAiService;
@@ -44,6 +48,7 @@ class LiveClassAiServiceTest {
                 .courseId(66L)
                 .teacherUid(1001L)
                 .studentUid(2002L)
+                .scheduleEventId(77L)
                 .roomId(3003L)
                 .providerRoomName("class-66")
                 .aiPolicy("LIGHT")
@@ -85,6 +90,30 @@ class LiveClassAiServiceTest {
     }
 
     @Test
+    void getAiStateShouldExposeRealtimePipelineFields() {
+        AiAgentClient.RealtimeLessonStateView state = new AiAgentClient.RealtimeLessonStateView();
+        state.setStatus("ACTIVE");
+        state.setAsrEnabled(Boolean.TRUE);
+        state.setLlmEnabled(Boolean.TRUE);
+        state.setSegmentCount(12);
+        state.setLastLlmSummaryTs(1800000000L);
+        state.setLastLlmSegmentCount(8);
+        state.setCurrentTopic("一次函数");
+        state.setLatestStageSummary("本阶段讲解了一次函数图像。");
+        when(aiAgentClient.getState(66L)).thenReturn(state);
+
+        LiveAiStateResp result = liveClassAiService.getAiState(session);
+
+        assertThat(result.getAiStatus()).isEqualTo("ACTIVE");
+        assertThat(result.getAsrEnabled()).isTrue();
+        assertThat(result.getLlmEnabled()).isTrue();
+        assertThat(result.getSegmentCount()).isEqualTo(12);
+        assertThat(result.getLastLlmSummaryTs()).isEqualTo(1800000000L);
+        assertThat(result.getLastLlmSegmentCount()).isEqualTo(8);
+        assertThat(result.getLatestStageSummary()).contains("一次函数");
+    }
+
+    @Test
     void finalizeAndNotifyShouldQueueReportTaskBeforePollingResult() {
         when(liveClassSessionMapper.tryMarkAiReportTaskQueued(8L)).thenReturn(1);
         when(liveClassSessionMapper.selectById(8L)).thenReturn(LiveClassSession.builder()
@@ -105,6 +134,7 @@ class LiveClassAiServiceTest {
 
         verify(aiAgentClient).finalizeLesson(66L);
         verify(aiAgentClient).createLessonReportTask(anyLong(), any());
+        verify(appointmentInternalFeignClient).upsertLessonSummary(any());
         assertThat(result.getResultStatus()).isEqualTo("READY");
         assertThat(result.getReportStatus()).isEqualTo("WAITING_TEACHER_REVIEW");
         ArgumentCaptor<AiAgentClient.CreateLessonReportTaskRequest> requestCaptor =
@@ -113,6 +143,12 @@ class LiveClassAiServiceTest {
         assertThat(requestCaptor.getValue().getLessonTopic()).isEqualTo("课程 #66 实时课堂总结");
         assertThat(requestCaptor.getValue().getExtraContext()).containsEntry("sessionId", 8L);
         assertThat(requestCaptor.getValue().getExtraContext()).containsEntry("aiSessionId", "lesson_ai_123");
+        ArgumentCaptor<AppointmentInternalFeignClient.UpsertLessonSummaryRequest> summaryCaptor =
+                ArgumentCaptor.forClass(AppointmentInternalFeignClient.UpsertLessonSummaryRequest.class);
+        verify(appointmentInternalFeignClient).upsertLessonSummary(summaryCaptor.capture());
+        assertThat(summaryCaptor.getValue().getLessonId()).isEqualTo(77L);
+        assertThat(summaryCaptor.getValue().getTitle()).isEqualTo("未配置未配置课后反馈");
+        assertThat(summaryCaptor.getValue().getSummaryContent()).contains("课堂总结");
     }
 
     @Test

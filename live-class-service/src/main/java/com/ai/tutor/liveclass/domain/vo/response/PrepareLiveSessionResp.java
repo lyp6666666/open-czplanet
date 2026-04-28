@@ -17,4 +17,8 @@ public class PrepareLiveSessionResp {
     private Long blockingLessonId;
     private String defaultMediaPolicy;
     private Boolean deviceCheckRequired;
+    private Boolean realtimeSummaryEnabled;
+    private Boolean postClassSummaryEnabled;
+    private String subjectLabel;
+    private String courseKindLabel;
 }

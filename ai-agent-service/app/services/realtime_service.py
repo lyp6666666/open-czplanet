@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import base64
+import time
+from dataclasses import dataclass
+from typing import Dict
+
 from app.asr.provider import get_realtime_asr_provider
 from app.core.id_generator import new_task_id
+from app.core.config import get_settings
 from app.realtime.graph import REALTIME_GRAPH
 from app.realtime.state_store import RealtimeStateStore
 from app.repositories.realtime_repository import (
@@ -9,8 +15,29 @@ from app.repositories.realtime_repository import (
     LiveLessonSessionRepository,
     TranscriptRepository,
 )
-from app.schemas.realtime import LiveLessonSessionCreateRequest, TranscriptSegmentInput
+from app.schemas.realtime import AudioChunkInput, LiveLessonSessionCreateRequest, TranscriptSegmentInput
 from app.storage.database import session_scope
+
+
+@dataclass
+class _AsrRuntime:
+    recognizer: object
+    provider: object
+    started: bool = False
+    last_voice_at: float = 0.0
+
+
+_ASR_RUNTIMES: Dict[int, _AsrRuntime] = {}
+
+
+def _discard_asr_runtime(lesson_id: int) -> None:
+    runtime = _ASR_RUNTIMES.pop(lesson_id, None)
+    if not runtime:
+        return
+    try:
+        runtime.provider.stop_session(runtime.recognizer)
+    except Exception:
+        pass
 
 
 class RealtimeLessonService:
@@ -76,6 +103,102 @@ class RealtimeLessonService:
                     summary_json=graph_result["summary"],
                 )
         return RealtimeStateStore().get_state(lesson_id)
+
+    def accept_audio_chunk(self, lesson_id: int, chunk: AudioChunkInput) -> dict:
+        settings = get_settings()
+        store = RealtimeStateStore()
+        state = store.get_state(lesson_id)
+        if not state:
+            state = {
+                "lessonId": lesson_id,
+                "mode": "LIGHT",
+                "asrEnabled": False,
+                "llmEnabled": True,
+                "status": "ACTIVE",
+            }
+            store.create_session_state(lesson_id, state)
+
+        now = time.time()
+        rms = float(chunk.rms or 0.0)
+        patch = {
+            "lastAudioAt": int(now),
+            "lastAudioRms": rms,
+            "audioSampleRate": chunk.sampleRate,
+            "audioFormat": chunk.format,
+        }
+        if rms < settings.realtime_min_audio_rms:
+            last_voice_at = int(state.get("lastVoiceAt") or 0)
+            patch["asrListening"] = bool(
+                last_voice_at
+                and int(now) - last_voice_at < settings.realtime_silence_pause_seconds
+            )
+            return store.update_state(lesson_id, patch)
+
+        patch["lastVoiceAt"] = int(now)
+        patch["asrListening"] = True
+        state = store.update_state(lesson_id, patch)
+
+        provider = get_realtime_asr_provider()
+        if not provider.available():
+            return store.update_state(lesson_id, {"asrEnabled": False, "status": "ASR_DEGRADED"})
+
+        runtime = _ASR_RUNTIMES.get(lesson_id)
+        is_closed = getattr(provider, "session_closed", None)
+        if runtime is not None and callable(is_closed) and is_closed(runtime.recognizer):
+            _discard_asr_runtime(lesson_id)
+            runtime = None
+        if runtime is None:
+            runtime = _AsrRuntime(
+                recognizer=provider.create_session(
+                    lesson_id=lesson_id,
+                    callback=lambda event: self._handle_asr_event(lesson_id, chunk.speaker, event),
+                ),
+                provider=provider,
+            )
+            _ASR_RUNTIMES[lesson_id] = runtime
+        if not runtime.started:
+            runtime.provider.start_session(runtime.recognizer)
+            runtime.started = True
+        runtime.last_voice_at = now
+
+        audio = base64.b64decode(chunk.audioBase64)
+        if not runtime.provider.write_audio(runtime.recognizer, audio):
+            _discard_asr_runtime(lesson_id)
+            return store.update_state(lesson_id, {"asrEnabled": False, "status": "ASR_DEGRADED"})
+        return store.update_state(lesson_id, {"asrEnabled": True, "status": "ACTIVE"})
+
+    def _handle_asr_event(self, lesson_id: int, speaker: str, event: dict) -> None:
+        if event.get("type") == "asr.error":
+            payload = event.get("payload") or {}
+            message = str(payload.get("message") or "")
+            if "超过15秒未发送音频数据" in message:
+                _discard_asr_runtime(lesson_id)
+                RealtimeStateStore().update_state(
+                    lesson_id,
+                    {
+                        "status": "ACTIVE",
+                        "asrListening": False,
+                        "lastAsrIdleAt": int(time.time()),
+                        "lastAsrNotice": message,
+                    },
+                )
+                return
+            RealtimeStateStore().update_state(
+                lesson_id, {"status": "ASR_DEGRADED", "lastAsrError": payload}
+            )
+            return
+        text = str(event.get("text") or "").strip()
+        if not text:
+            return
+        segment = TranscriptSegmentInput(
+            seq=int(event.get("seq") or int(time.time() * 1000)),
+            speaker=event.get("speaker") or speaker or "unknown",
+            startMs=int(event.get("startMs") or 0),
+            endMs=int(event.get("endMs") or 0),
+            text=text,
+            isFinal=bool(event.get("isFinal", True)),
+        )
+        self.accept_segment(lesson_id, segment)
 
     def get_state(self, lesson_id: int) -> dict:
         return RealtimeStateStore().get_state(lesson_id)

@@ -8,4 +8,6 @@ public class PrepareLiveSessionRequest {
     @NotBlank
     private String clientType;
     private String sourcePage;
+    private Boolean realtimeSummaryEnabled;
+    private Boolean postClassSummaryEnabled;
 }

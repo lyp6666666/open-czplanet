@@ -1,8 +1,9 @@
 import { request } from '@/utils/request';
+import type { CurrentUser } from '@/types/domain';
 
 export const userApi = {
   // 获取当前用户信息（包含扩展资料）
-  getUserInfo() {
+  getUserInfo(): Promise<CurrentUser> {
     return request({
       url: '/user/me',
       method: 'GET'

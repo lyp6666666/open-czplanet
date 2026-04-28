@@ -81,6 +81,16 @@
         LIMIT 1
     </select>
 
+    <select id="selectLatestPendingByRoomId" resultMap="baseMap">
+        SELECT
+            id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, trial_start_at, trial_end_at, remark, expire_at, client_request_id, status, actor_uid, action_time, create_time, update_time
+        FROM collaboration_proposal
+        WHERE room_id = #{roomId}
+          AND status = 'PENDING'
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <select id="selectByFromUidAndClientRequestId" resultMap="baseMap">
         SELECT
             id, room_id, from_uid, to_uid, price_per_hour, class_time, frequency_per_week, trial_start_at, trial_end_at, remark, expire_at, client_request_id, status, actor_uid, action_time, create_time, update_time

@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { Autoplay, Pagination } from 'swiper/modules'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 
-import { useAuthStore } from '@/stores/auth'
 import { useCityStore } from '@/stores/city'
 import { useHomeStore } from '@/stores/home'
 import HomeFooter from '@/ui/home/HomeFooter.vue'
@@ -14,7 +13,6 @@ import 'swiper/css/pagination'
 
 const router = useRouter()
 const home = useHomeStore()
-const auth = useAuthStore()
 const cityStore = useCityStore()
 
 const activeProofIndex = ref(0)
@@ -78,6 +76,24 @@ const trustBadges = [
   '资金安全保障',
   '隐私安全保护',
   '售后无忧服务',
+] as const
+
+const heroAssurances = [
+  {
+    title: '严选名校教师',
+    desc: '5重审核，履历纪实',
+    icon: 'badge',
+  },
+  {
+    title: 'AI数据驱动',
+    desc: '课堂表现实时记录',
+    icon: 'spark',
+  },
+  {
+    title: '效果可视化',
+    desc: '成长看得见，进步看得清',
+    icon: 'shield',
+  },
 ] as const
 
 const parentProofs = [
@@ -153,13 +169,6 @@ const fallbackTutors = [
   },
 ] as const
 
-const heroTags = computed(() => {
-  if (home.hotWords?.list?.length) {
-    return home.hotWords.list.slice(0, 3).map((item) => item.word)
-  }
-  return ['AI诊断', '在线1对1', '课后复盘']
-})
-
 const heroCarouselItems = computed(() => {
   const rows = home.banners?.carousel || []
   if (rows.length) return rows
@@ -175,6 +184,8 @@ const heroCarouselItems = computed(() => {
 })
 
 const currentHeroSlide = computed(() => heroCarouselItems.value[activeHeroIndex.value] || heroCarouselItems.value[0] || null)
+
+const heroFallbackBanners = ['/banners/carousel-1.svg', '/banners/carousel-2.svg', '/banners/carousel-3.svg'] as const
 
 const displayTutors = computed(() => {
   const source = home.hotTutorsPool.length ? home.hotTutorsPool : home.hotTutors.list
@@ -197,13 +208,6 @@ const displayTutors = computed(() => {
     .slice(0, 12)
 })
 
-const isTeacher = computed(() => auth.user?.userType === 1)
-
-function userRouteByAuth() {
-  if (!auth.isLoggedIn) return '/auth/student'
-  return isTeacher.value ? '/tutor/jobs' : '/student/tutors'
-}
-
 function goRoute(path: string) {
   void router.push(path)
 }
@@ -225,10 +229,30 @@ function fallbackAvatar(index = 0) {
   return fallbackTutors[index % fallbackTutors.length]!.avatar
 }
 
+function fallbackHeroBanner(index = 0) {
+  return heroFallbackBanners[index % heroFallbackBanners.length]!
+}
+
 function handleTutorImageError(event: Event, index = 0) {
   const target = event.target as HTMLImageElement | null
   if (!target) return
   const next = fallbackAvatar(index)
+  if (target.src.endsWith(next)) return
+  target.src = next
+}
+
+function handleHeroImageError(event: Event, index = 0) {
+  const target = event.target as HTMLImageElement | null
+  if (!target) return
+  const next = fallbackHeroBanner(index)
+  if (target.src.endsWith(next)) return
+  target.src = next
+}
+
+function handleHeroFloatImageError(event: Event) {
+  const target = event.target as HTMLImageElement | null
+  if (!target) return
+  const next = fallbackHeroBanner(activeHeroIndex.value)
   if (target.src.endsWith(next)) return
   target.src = next
 }
@@ -279,9 +303,6 @@ onUnmounted(() => {
 <template>
   <div class="home-shell">
     <main class="page-main">
-      <div class="page-glow page-glow-left"></div>
-      <div class="page-glow page-glow-right"></div>
-
       <div class="container landing">
         <section class="hero-panel surface-card">
           <div class="hero-copy">
@@ -298,15 +319,6 @@ onUnmounted(() => {
             <p class="hero-subtitle">
               课堂表现实时分析、错题精准定位、学习路径动态优化，让每一次上课都成为进步的阶梯。
             </p>
-
-            <div class="hero-tags">
-              <span v-for="tag in heroTags" :key="tag" class="hero-tag">{{ tag }}</span>
-            </div>
-
-            <div class="hero-actions">
-              <button class="hero-primary" type="button" @click="goRoute(userRouteByAuth())">立即匹配老师</button>
-              <button class="hero-secondary" type="button" @click="goRoute('/guide/student')">查看AI流程</button>
-            </div>
 
             <div class="service-grid">
               <button
@@ -326,9 +338,15 @@ onUnmounted(() => {
             </div>
 
             <div class="hero-bottom">
-              <div class="hero-bottom-item">严选名校教师</div>
-              <div class="hero-bottom-item">AI数据驱动</div>
-              <div class="hero-bottom-item">效果可视化</div>
+              <article v-for="item in heroAssurances" :key="item.title" class="hero-bottom-item">
+                <div class="hero-bottom-icon" :class="`hero-bottom-icon-${item.icon}`">
+                  <span></span>
+                </div>
+                <div class="hero-bottom-copy">
+                  <div class="hero-bottom-title">{{ item.title }}</div>
+                  <div class="hero-bottom-desc">{{ item.desc }}</div>
+                </div>
+              </article>
             </div>
           </div>
 
@@ -356,9 +374,9 @@ onUnmounted(() => {
                       <button class="hero-slide-button" type="button" @click="goHeroLink">
                         <img
                           class="teacher-photo"
-                          :src="item.imageUrl || fallbackAvatar(index)"
+                          :src="item.imageUrl || fallbackHeroBanner(index)"
                           :alt="item.title || `首页轮播图-${index + 1}`"
-                          @error="handleTutorImageError($event, index)"
+                          @error="handleHeroImageError($event, index)"
                         />
                       </button>
                     </SwiperSlide>
@@ -366,9 +384,9 @@ onUnmounted(() => {
                   <div class="teacher-float">
                     <img
                       class="teacher-float-avatar"
-                      :src="currentHeroSlide?.imageUrl || displayTutors[1]?.avatar || displayTutors[0]?.avatar"
+                      :src="currentHeroSlide?.imageUrl || fallbackHeroBanner(activeHeroIndex)"
                       alt="assistant"
-                      @error="handleTutorImageError($event, 1)"
+                      @error="handleHeroFloatImageError"
                     />
                   </div>
                   <div class="video-toolbar">
@@ -494,23 +512,26 @@ onUnmounted(() => {
 :global(body),
 :global(#app) {
   background:
-    radial-gradient(circle at top left, rgba(99, 145, 255, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(39, 201, 183, 0.16), transparent 24%),
-    linear-gradient(180deg, #f7faff 0%, #f3f7ff 45%, #f7f9fc 100%);
+    radial-gradient(circle at 0% 18%, rgba(99, 145, 255, 0.22), transparent 30%),
+    radial-gradient(circle at 100% 14%, rgba(39, 201, 183, 0.18), transparent 26%),
+    linear-gradient(180deg, #f7faff 0%, #eef4ff 42%, #f6fbff 100%);
 }
 
 .home-shell {
+  position: relative;
   min-height: 100vh;
+  margin-top: -18px;
+  padding-top: 18px;
   background:
-    radial-gradient(circle at top left, rgba(99, 145, 255, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(39, 201, 183, 0.16), transparent 24%),
-    linear-gradient(180deg, #f7faff 0%, #f3f7ff 45%, #f7f9fc 100%);
+    radial-gradient(circle at 0% 18%, rgba(99, 145, 255, 0.22), transparent 30%),
+    radial-gradient(circle at 100% 14%, rgba(39, 201, 183, 0.18), transparent 26%),
+    linear-gradient(180deg, #f7faff 0%, #eef4ff 42%, #f6fbff 100%);
 }
 
 .page-main {
   position: relative;
   overflow: hidden;
-  padding: 34px 0 56px;
+  padding: 0 0 56px;
 }
 
 .landing {
@@ -518,28 +539,7 @@ onUnmounted(() => {
   position: relative;
   display: grid;
   gap: 32px;
-}
-
-.page-glow {
-  position: absolute;
-  width: 420px;
-  height: 420px;
-  border-radius: 50%;
-  filter: blur(28px);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.page-glow-left {
-  top: 60px;
-  left: -180px;
-  background: rgba(87, 131, 255, 0.2);
-}
-
-.page-glow-right {
-  top: 160px;
-  right: -180px;
-  background: rgba(18, 197, 182, 0.18);
+  padding-top: 34px;
 }
 
 .surface-card {
@@ -567,12 +567,11 @@ onUnmounted(() => {
 }
 
 .hero-badge,
-.hero-tags,
 .hero-bottom,
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
 }
 
@@ -625,15 +624,6 @@ onUnmounted(() => {
   line-height: 1.9;
 }
 
-.hero-tag {
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: #edf3ff;
-  color: #3057ad;
-  font-size: 14px;
-  font-weight: 700;
-}
-
 .hero-primary,
 .hero-secondary,
 .link-btn,
@@ -651,10 +641,14 @@ onUnmounted(() => {
 .hero-secondary,
 .teacher-btn {
   height: 52px;
-  padding: 0 22px;
+  min-width: 168px;
+  padding: 0 28px;
   border-radius: 999px;
   font-size: 15px;
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hero-primary {
@@ -731,26 +725,100 @@ onUnmounted(() => {
 }
 
 .hero-bottom {
-  gap: 18px;
-  color: #536893;
-  font-size: 15px;
-  font-weight: 700;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .hero-bottom-item {
-  position: relative;
-  padding-left: 20px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
 }
 
-.hero-bottom-item::before {
+.hero-bottom-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #eef5ff, #eafcff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.hero-bottom-icon span,
+.hero-bottom-icon::before,
+.hero-bottom-icon::after {
   content: '';
   position: absolute;
-  left: 0;
-  top: 7px;
+}
+
+.hero-bottom-icon-badge::before {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #3a74f2;
+  border-radius: 50%;
+}
+
+.hero-bottom-icon-badge::after {
+  bottom: 6px;
+  width: 10px;
+  height: 8px;
+  background: #3a74f2;
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+}
+
+.hero-bottom-icon-spark::before {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #19c2bf, #2d62f2);
+  transform: rotate(45deg);
+}
+
+.hero-bottom-icon-spark span {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #19c2bf, #2d62f2);
+  background: #fff;
+  clip-path: polygon(50% 0, 62% 36%, 100% 50%, 62% 64%, 50% 100%, 38% 64%, 0 50%, 38% 36%);
+}
+
+.hero-bottom-icon-shield::before {
+  width: 18px;
+  height: 20px;
+  background: linear-gradient(135deg, #5c8dff, #2d62f2);
+  clip-path: polygon(50% 0, 90% 14%, 90% 54%, 50% 100%, 10% 54%, 10% 14%);
+}
+
+.hero-bottom-icon-shield::after {
+  width: 7px;
+  height: 4px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg);
+  margin-top: 1px;
+}
+
+.hero-bottom-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.hero-bottom-title {
+  color: #142a61;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.hero-bottom-desc {
+  color: #7d8cad;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .hero-visual {
@@ -1333,7 +1401,7 @@ onUnmounted(() => {
 
 @media (max-width: 960px) {
   .page-main {
-    padding-top: 18px;
+    padding-top: 0;
   }
 
   .hero-panel,
@@ -1359,6 +1427,7 @@ onUnmounted(() => {
   .landing {
     width: min(100%, calc(100% - 24px));
     gap: 20px;
+    padding-top: 18px;
   }
 
   .hero-panel {
@@ -1382,7 +1451,8 @@ onUnmounted(() => {
   .service-grid,
   .metrics-bar,
   .bottom-metrics,
-  .ai-grid {
+  .ai-grid,
+  .hero-bottom {
     grid-template-columns: 1fr;
   }
 

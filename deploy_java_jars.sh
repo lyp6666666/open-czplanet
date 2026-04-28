@@ -183,6 +183,11 @@ if ! command -v systemctl >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v ss >/dev/null 2>&1; then
+  echo "[deploy_java_jars] ss is required on the target Ubuntu server. Install iproute2 first." >&2
+  exit 1
+fi
+
 if [ -z "$RELEASE_ID" ]; then
   RELEASE_ID="$(basename "$(pwd)")"
 fi
@@ -394,6 +399,22 @@ server {
     location ^~ /live/ {
         proxy_pass http://127.0.0.1:18080;
         proxy_read_timeout 60s;
+    }
+
+    location = /livekit {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+    }
+
+    location ^~ /livekit/ {
+        proxy_pass http://127.0.0.1:7880/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
     }
 
     location ^~ /payment/ {

@@ -19,6 +19,16 @@ DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-Dockerfile/docker-compose.yml}"
 INFRA_CONTAINERS="${INFRA_CONTAINERS:-mysql redis rabbitmq minio prometheus grafana loki alertmanager promtail node-exporter cadvisor mysqld-exporter redis-exporter rabbitmq-exporter livekit}"
 
 PID_DIR="$ROOT_DIR/.pids"
+OS_NAME="$(uname -s 2>/dev/null || echo unknown)"
+
+stop_launchd_service() {
+  svc_name="$1"
+  if [ "$OS_NAME" != "Darwin" ] || ! command -v launchctl >/dev/null 2>&1; then
+    return 0
+  fi
+  label="com.ai.tutor.dev.$svc_name"
+  launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || true
+}
 
 docker_compose_cmd() {
   if docker compose version >/dev/null 2>&1; then
@@ -95,15 +105,25 @@ any_infra_running() {
 }
 
 stop_by_pid_file "ai-tutor-admin-web"
+stop_launchd_service "ai-tutor-admin-web"
 stop_by_pid_file "ai-tutor-web"
+stop_launchd_service "ai-tutor-web"
 stop_by_pid_file "ai-tutor-admin"
+stop_launchd_service "ai-tutor-admin"
 stop_by_pid_file "payment-service"
+stop_launchd_service "payment-service"
 stop_by_pid_file "videoCall-IM-service"
+stop_launchd_service "videoCall-IM-service"
 stop_by_pid_file "tutor-appointment-service"
+stop_launchd_service "tutor-appointment-service"
 stop_by_pid_file "ai-tutor-gateway"
+stop_launchd_service "ai-tutor-gateway"
 stop_by_pid_file "ai-agent-service"
+stop_launchd_service "ai-agent-service"
 stop_by_pid_file "ai-agent-worker"
+stop_launchd_service "ai-agent-worker"
 stop_by_pid_file "live-class-service"
+stop_launchd_service "live-class-service"
 
 stop_by_port "ai-tutor-gateway" "$GATEWAY_PORT"
 stop_by_port "tutor-appointment-service" "$APPOINTMENT_PORT"

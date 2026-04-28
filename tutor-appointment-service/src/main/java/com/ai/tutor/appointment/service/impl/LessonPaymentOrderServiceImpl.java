@@ -22,8 +22,6 @@ import java.time.LocalDateTime;
 @Service
 public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService {
 
-    private static final int PLATFORM_FEE_RATE = 10;
-
     @Resource
     private LessonPaymentOrderMapper lessonPaymentOrderMapper;
 
@@ -40,26 +38,7 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
         if (existing != null) {
             return existing;
         }
-        Long payableAmountFen = normalizePositive(appointment.getPayableAmountFen());
-        ThrowUtils.throwIf(payableAmountFen == null || payableAmountFen <= 0, ErrorCode.OPERATION_ERROR, "当前课节缺少应付金额");
-
-        long platformFeeAmountFen = payableAmountFen * PLATFORM_FEE_RATE / 100;
-        long teacherIncomeAmountFen = Math.max(0L, payableAmountFen - platformFeeAmountFen);
-        LessonPaymentOrder order = LessonPaymentOrder.builder()
-                .lessonId(appointment.getId())
-                .courseId(appointment.getCourseId())
-                .studentUid(appointment.getParentId())
-                .teacherUid(appointment.getTutorId())
-                .lessonType(normalizeLessonType(appointment.getLessonType()))
-                .totalAmountFen(payableAmountFen)
-                .platformFeeRate(PLATFORM_FEE_RATE)
-                .platformFeeAmountFen(platformFeeAmountFen)
-                .teacherIncomeAmountFen(teacherIncomeAmountFen)
-                .status("PENDING")
-                .build();
-        lessonPaymentOrderMapper.insert(order);
-        ThrowUtils.throwIf(order.getId() == null, ErrorCode.OPERATION_ERROR, "创建课节支付单失败");
-        return order;
+        return null;
     }
 
     @Override
@@ -107,10 +86,7 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
 
     @Override
     public LessonPaymentOrder findUnpaidByCourseId(Long courseId) {
-        if (courseId == null) {
-            return null;
-        }
-        return lessonPaymentOrderMapper.selectUnpaidByCourseId(courseId);
+        return null;
     }
 
     @Override
@@ -122,17 +98,6 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
         info.setLessonId(lessonId);
         info.setCourseId(appointment.getCourseId());
         info.setBlocked(Boolean.FALSE);
-        if (appointment.getCourseId() == null) {
-            return info;
-        }
-        LessonPaymentOrder unpaid = lessonPaymentOrderMapper.selectFirstUnpaidBeforeLesson(appointment.getCourseId(), lessonId);
-        if (unpaid == null || unpaid.getId() == null) {
-            return info;
-        }
-        info.setBlocked(Boolean.TRUE);
-        info.setBlockingOrderId(unpaid.getId());
-        info.setBlockingLessonId(unpaid.getLessonId());
-        info.setReason("上一节课尚未支付，支付后才能进入本节课堂");
         return info;
     }
 
@@ -169,10 +134,4 @@ public class LessonPaymentOrderServiceImpl implements LessonPaymentOrderService 
         return "TRIAL".equals(normalized) ? "TRIAL" : "NORMAL";
     }
 
-    private static Long normalizePositive(Long value) {
-        if (value == null || value <= 0) {
-            return null;
-        }
-        return value;
-    }
 }

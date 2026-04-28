@@ -10,4 +10,6 @@ import org.springframework.stereotype.Component;
 public class SmsProperties {
 
     private boolean realSendEnabled = true;
+
+    private String provider = "aliyun";
 }

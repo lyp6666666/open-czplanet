@@ -18,6 +18,7 @@ const useAppFrame = computed(() => {
   if (p.startsWith('/student/onboarding/first-demand')) return false
   if (p.startsWith('/tutor/onboarding/basic')) return false
   if (p.startsWith('/tutor/onboarding/profile')) return false
+  if (p.startsWith('/live/classroom/')) return false
   if (p === '/') return true
   if (p.startsWith('/guide/')) return auth.isLoggedIn
   return (

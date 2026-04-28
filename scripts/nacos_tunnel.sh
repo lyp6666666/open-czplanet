@@ -5,7 +5,9 @@ set -eu
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PID_DIR="$ROOT_DIR/.pids"
 LOG_DIR="$ROOT_DIR/.logs"
-mkdir -p "$PID_DIR" "$LOG_DIR"
+LAUNCHD_DIR="$ROOT_DIR/.launchd"
+mkdir -p "$PID_DIR" "$LOG_DIR" "$LAUNCHD_DIR"
+OS_NAME="$(uname -s 2>/dev/null || echo unknown)"
 
 REMOTE_USER="${REMOTE_USER:-root}"
 REMOTE_HOST="${REMOTE_HOST:-111.228.20.88}"
@@ -21,6 +23,7 @@ NACOS_RAFT_REMOTE_PORT="${NACOS_RAFT_REMOTE_PORT:-9849}"
 
 PID_FILE="$PID_DIR/nacos-tunnel.pid"
 LOG_FILE="$LOG_DIR/nacos-tunnel.log"
+LAUNCHD_LABEL="com.ai.tutor.dev.nacos-tunnel"
 
 ACTION="${1:-start}"
 
@@ -94,23 +97,80 @@ start_tunnel() {
   echo "  localhost:${NACOS_GRPC_LOCAL_PORT} -> remote 127.0.0.1:${NACOS_GRPC_REMOTE_PORT}"
   echo "  localhost:${NACOS_RAFT_LOCAL_PORT} -> remote 127.0.0.1:${NACOS_RAFT_REMOTE_PORT}"
 
-  nohup ssh \
-    -N \
-    -p "$REMOTE_PORT" \
-    -o ExitOnForwardFailure=yes \
-    -o ServerAliveInterval=30 \
-    -o ServerAliveCountMax=3 \
-    -L "${NACOS_LOCAL_PORT}:127.0.0.1:${NACOS_REMOTE_PORT}" \
-    -L "${NACOS_GRPC_LOCAL_PORT}:127.0.0.1:${NACOS_GRPC_REMOTE_PORT}" \
-    -L "${NACOS_RAFT_LOCAL_PORT}:127.0.0.1:${NACOS_RAFT_REMOTE_PORT}" \
-    "${REMOTE_USER}@${REMOTE_HOST}" >"$LOG_FILE" 2>&1 &
-
-  pid=$!
-  echo "$pid" >"$PID_FILE"
+  if [ "$OS_NAME" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
+    wrapper_script="$LAUNCHD_DIR/$LAUNCHD_LABEL.sh"
+    plist_file="$LAUNCHD_DIR/$LAUNCHD_LABEL.plist"
+    cat >"$wrapper_script" <<EOF
+#!/bin/sh
+cd '$ROOT_DIR'
+echo \$\$ > '$PID_FILE'
+exec ssh -N -p '$REMOTE_PORT' \\
+  -o ExitOnForwardFailure=yes \\
+  -o ServerAliveInterval=30 \\
+  -o ServerAliveCountMax=3 \\
+  -L '${NACOS_LOCAL_PORT}:127.0.0.1:${NACOS_REMOTE_PORT}' \\
+  -L '${NACOS_GRPC_LOCAL_PORT}:127.0.0.1:${NACOS_GRPC_REMOTE_PORT}' \\
+  -L '${NACOS_RAFT_LOCAL_PORT}:127.0.0.1:${NACOS_RAFT_REMOTE_PORT}' \\
+  '${REMOTE_USER}@${REMOTE_HOST}'
+EOF
+    chmod +x "$wrapper_script"
+    cat >"$plist_file" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LAUNCHD_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$wrapper_script</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>WorkingDirectory</key>
+  <string>$ROOT_DIR</string>
+  <key>StandardOutPath</key>
+  <string>$LOG_FILE</string>
+  <key>StandardErrorPath</key>
+  <string>$LOG_FILE</string>
+</dict>
+</plist>
+EOF
+    launchctl bootout "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$plist_file" >/dev/null
+    launchctl kickstart -k "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null
+    wait_loops=0
+    while [ ! -s "$PID_FILE" ]; do
+      wait_loops=$((wait_loops + 1))
+      if [ "$wait_loops" -ge 50 ]; then
+        break
+      fi
+      sleep 0.1
+    done
+    pid="$(read_pid)"
+  else
+    nohup ssh \
+      -N \
+      -p "$REMOTE_PORT" \
+      -o ExitOnForwardFailure=yes \
+      -o ServerAliveInterval=30 \
+      -o ServerAliveCountMax=3 \
+      -L "${NACOS_LOCAL_PORT}:127.0.0.1:${NACOS_REMOTE_PORT}" \
+      -L "${NACOS_GRPC_LOCAL_PORT}:127.0.0.1:${NACOS_GRPC_REMOTE_PORT}" \
+      -L "${NACOS_RAFT_LOCAL_PORT}:127.0.0.1:${NACOS_RAFT_REMOTE_PORT}" \
+      "${REMOTE_USER}@${REMOTE_HOST}" >"$LOG_FILE" 2>&1 &
+    pid=$!
+    echo "$pid" >"$PID_FILE"
+  fi
   wait_until_ready "$pid"
 }
 
 stop_tunnel() {
+  if [ "$OS_NAME" = "Darwin" ] && command -v launchctl >/dev/null 2>&1; then
+    launchctl bootout "gui/$(id -u)/$LAUNCHD_LABEL" >/dev/null 2>&1 || true
+  fi
   pid="$(read_pid)"
   if ! is_pid_alive "$pid"; then
     rm -f "$PID_FILE"

@@ -24,6 +24,7 @@ def main() -> int:
     profile = os.getenv("SPRING_PROFILES_ACTIVE", "dev").strip() or "dev"
     data_id = os.getenv("AI_AGENT_NACOS_DATA_ID", f"ai-agent-service-{profile}.yaml").strip()
     timeout = float(os.getenv("AI_AGENT_NACOS_FETCH_TIMEOUT", "5").strip() or "5")
+    required = os.getenv("AI_AGENT_NACOS_REQUIRED", "false").strip().lower() in {"1", "true", "yes"}
 
     query = urllib.parse.urlencode(
         {
@@ -37,12 +38,12 @@ def main() -> int:
         with urllib.request.urlopen(url, timeout=timeout) as response:
             content = response.read().decode("utf-8")
     except Exception as exc:
-        print(f"echo '[ai-agent] failed to fetch nacos config: {exc}' >&2")
-        return 1
+        print(f"echo '[ai-agent] failed to fetch nacos config, fallback to local env/defaults: {exc}' >&2")
+        return 1 if required else 0
 
     if not content.strip() or content.strip() == "config data not exist":
-        print(f"echo '[ai-agent] nacos config missing: {data_id}' >&2")
-        return 1
+        print(f"echo '[ai-agent] nacos config missing, fallback to local env/defaults: {data_id}' >&2")
+        return 1 if required else 0
 
     raw = yaml.safe_load(content) or {}
     root = raw.get("ai-agent") or {}

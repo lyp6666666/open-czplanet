@@ -11,27 +11,34 @@ import com.ai.tutor.liveclass.domain.entity.LiveClassEvent;
 import com.ai.tutor.liveclass.domain.entity.LiveClassParticipant;
 import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.entity.LiveClassWebhookEvent;
+import com.ai.tutor.liveclass.domain.entity.LiveWhiteboard;
 import com.ai.tutor.liveclass.domain.vo.request.EndLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.IssueJoinTokenRequest;
 import com.ai.tutor.liveclass.domain.vo.request.JoinLiveSessionAckRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LeaveLiveSessionRequest;
+import com.ai.tutor.liveclass.domain.vo.request.LiveAiAudioChunkRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveDeviceReportRequest;
 import com.ai.tutor.liveclass.domain.vo.request.LiveKitWebhookRequest;
+import com.ai.tutor.liveclass.domain.vo.request.LiveWhiteboardSnapshotRequest;
 import com.ai.tutor.liveclass.domain.vo.request.PrepareLiveSessionRequest;
 import com.ai.tutor.liveclass.domain.vo.request.SyncCourseSessionRequest;
+import com.ai.tutor.liveclass.domain.vo.request.UpdateLiveAiOptionsRequest;
 import com.ai.tutor.liveclass.domain.vo.response.IssueJoinTokenResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveReminderItemResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveSessionResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveTimelineItemResp;
+import com.ai.tutor.liveclass.domain.vo.response.LiveWhiteboardSnapshotResp;
 import com.ai.tutor.liveclass.domain.vo.response.PrepareLiveSessionResp;
+import com.ai.tutor.liveclass.integration.ai.AiAgentClient;
 import com.ai.tutor.liveclass.integration.feign.AppointmentInternalFeignClient;
 import com.ai.tutor.liveclass.mapper.LiveClassDeviceReportMapper;
 import com.ai.tutor.liveclass.mapper.LiveClassEventMapper;
 import com.ai.tutor.liveclass.mapper.LiveClassParticipantMapper;
 import com.ai.tutor.liveclass.mapper.LiveClassSessionMapper;
 import com.ai.tutor.liveclass.mapper.LiveClassWebhookEventMapper;
+import com.ai.tutor.liveclass.mapper.LiveWhiteboardMapper;
 import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +65,8 @@ public class LiveClassService {
     private LiveClassDeviceReportMapper liveClassDeviceReportMapper;
     @Resource
     private LiveClassWebhookEventMapper liveClassWebhookEventMapper;
+    @Resource
+    private LiveWhiteboardMapper liveWhiteboardMapper;
     @Resource
     private LiveKitTokenService liveKitTokenService;
     @Resource
@@ -88,6 +97,7 @@ public class LiveClassService {
                     .scheduledEndAt(request.getScheduledEndAt())
                     .recordPolicy(defaulted(request.getRecordPolicy(), "OFF"))
                     .aiPolicy(defaulted(request.getAiPolicy(), "OFF"))
+                    .extraJson(buildCourseExtraJson(request))
                     .version(0)
                     .build();
             liveClassSessionMapper.insert(session);
@@ -105,6 +115,7 @@ public class LiveClassService {
             session.setRecordPolicy(defaulted(request.getRecordPolicy(), session.getRecordPolicy()));
             session.setAiPolicy(defaulted(request.getAiPolicy(), session.getAiPolicy()));
             liveClassSessionMapper.updateByCourseId(session);
+            liveClassSessionMapper.updateExtraJsonById(session.getId(), mergeCourseExtraJson(session, request));
             appendEvent(session.getId(), "SESSION_SYNCED", "APP", null, request);
         }
         return toResp(requireByCourseId(request.getCourseId()), null);
@@ -116,12 +127,10 @@ public class LiveClassService {
 
     public PrepareLiveSessionResp prepare(Long courseId, Long viewerUid, PrepareLiveSessionRequest request) {
         LiveClassSession session = requireByCourseId(courseId);
-        try {
-            liveClassAiService.ensureRealtimeSession(session);
-        } catch (Exception ignored) {
-            // AI 初始化失败不影响主课堂准备流程
-        }
         String peerName = resolvePeerDisplayName(session, viewerUid);
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
+        String subjectLabel = resolveSubjectLabel(session, extra);
+        String courseKindLabel = resolveCourseKindLabel(extra);
         boolean joinableNow = joinableNow(session);
         LessonPaymentAccessCheckInfo accessCheck = loadLessonJoinAccess(courseId);
         boolean paymentBlocked = accessCheck != null && Boolean.TRUE.equals(accessCheck.getBlocked());
@@ -129,7 +138,7 @@ public class LiveClassService {
         return PrepareLiveSessionResp.builder()
                 .sessionId(session.getId())
                 .status(session.getStatus())
-                .courseTitle("实时课程")
+                .courseTitle(resolveCourseTitle(extra))
                 .peerDisplayName(peerName)
                 .canJoin(canJoin)
                 .joinableNow(joinableNow)
@@ -138,6 +147,10 @@ public class LiveClassService {
                 .blockingLessonId(paymentBlocked ? accessCheck.getBlockingLessonId() : null)
                 .defaultMediaPolicy("AUDIO_VIDEO")
                 .deviceCheckRequired(Boolean.TRUE)
+                .realtimeSummaryEnabled(resolveRealtimeSummaryEnabled(session, extra))
+                .postClassSummaryEnabled(resolvePostClassSummaryEnabled(extra))
+                .subjectLabel(subjectLabel)
+                .courseKindLabel(courseKindLabel)
                 .build();
     }
 
@@ -249,17 +262,73 @@ public class LiveClassService {
         LiveClassSession session = requireParticipantSession(sessionId, uid);
         liveClassSessionMapper.markEnded(sessionId, uid, defaulted(request == null ? null : request.getReason(), "USER_END"), LocalDateTime.now());
         appendEvent(sessionId, "CLASS_ENDED", "APP", uid, request);
-        try {
-            liveClassAiService.finalizeAndNotify(requireById(sessionId), uid);
-            appendEvent(sessionId, "CLASS_AI_FINALIZED", "APP", uid, Map.of("courseId", session.getCourseId()));
-        } catch (Exception ex) {
-            appendEvent(sessionId, "CLASS_AI_FINALIZE_FAILED", "APP", uid, Map.of("courseId", session.getCourseId()));
+        if (resolvePostClassSummaryEnabled(parseExtra(session.getExtraJson()))) {
+            try {
+                liveClassAiService.finalizeAndNotify(requireById(sessionId), uid);
+                appendEvent(sessionId, "CLASS_AI_FINALIZED", "APP", uid, Map.of("courseId", session.getCourseId()));
+            } catch (Exception ex) {
+                appendEvent(sessionId, "CLASS_AI_FINALIZE_FAILED", "APP", uid, Map.of("courseId", session.getCourseId()));
+            }
+        } else {
+            appendEvent(sessionId, "CLASS_AI_FINALIZE_SKIPPED", "APP", uid, Map.of("courseId", session.getCourseId(), "reason", "POST_CLASS_SUMMARY_OFF"));
         }
         return toResp(requireById(sessionId), uid);
     }
 
     public LiveAiStateResp aiState(Long sessionId, Long uid) {
         LiveClassSession session = requireParticipantSession(sessionId, uid);
+        return liveClassAiService.getAiState(session);
+    }
+
+    @Transactional
+    public LiveSessionResp updateAiOptions(Long sessionId, Long uid, UpdateLiveAiOptionsRequest request) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        boolean realtimeEnabled = Boolean.TRUE.equals(request.getRealtimeSummaryEnabled());
+        boolean postClassEnabled = Boolean.TRUE.equals(request.getPostClassSummaryEnabled());
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
+        extra.put("realtimeSummaryEnabled", realtimeEnabled);
+        extra.put("postClassSummaryEnabled", postClassEnabled);
+        extra.put("aiOptionsUpdatedBy", uid);
+        extra.put("aiOptionsUpdatedAt", LocalDateTime.now().toString());
+        String aiPolicy = realtimeEnabled || postClassEnabled ? "LIGHT" : "OFF";
+        session.setAiPolicy(aiPolicy);
+        session.setExtraJson(JSONUtil.toJsonStr(extra));
+        liveClassSessionMapper.updateAiPolicyAndExtraJsonById(sessionId, aiPolicy, session.getExtraJson());
+        appendEvent(sessionId, "CLASS_AI_OPTIONS_UPDATED", "APP", uid, Map.of(
+                "realtimeSummaryEnabled", realtimeEnabled,
+                "postClassSummaryEnabled", postClassEnabled
+        ));
+        if (realtimeEnabled) {
+            try {
+                liveClassAiService.ensureRealtimeSession(session);
+            } catch (Exception ignored) {
+                appendEvent(sessionId, "CLASS_AI_INIT_FAILED", "APP", uid, Map.of("courseId", session.getCourseId()));
+            }
+        }
+        return toResp(requireById(sessionId), uid);
+    }
+
+    public LiveAiStateResp acceptAiAudioChunk(Long sessionId, Long uid, LiveAiAudioChunkRequest request) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
+        ThrowUtils.throwIf(!resolveRealtimeSummaryEnabled(session, extra), ErrorCode.OPERATION_ERROR, "本节课未开启 AI 实时总结");
+        ThrowUtils.throwIf(request == null || request.getAudioBase64() == null || request.getAudioBase64().isBlank(), ErrorCode.PARAMS_ERROR);
+        AiAgentClient.AudioChunkRequest aiRequest = new AiAgentClient.AudioChunkRequest();
+        aiRequest.setParticipantId(uid);
+        aiRequest.setSpeaker(Objects.equals(uid, session.getTeacherUid()) ? "teacher" : "student");
+        aiRequest.setSequence(request.getSequence());
+        aiRequest.setSampleRate(request.getSampleRate());
+        aiRequest.setChannelCount(request.getChannelCount());
+        aiRequest.setDurationMs(request.getDurationMs());
+        aiRequest.setRms(request.getRms());
+        aiRequest.setFormat(defaulted(request.getFormat(), "PCM16"));
+        aiRequest.setAudioBase64(request.getAudioBase64());
+        try {
+            liveClassAiService.ensureRealtimeSession(session);
+            liveClassAiService.acceptAudioChunk(session, aiRequest);
+        } catch (Exception ignored) {
+            // AI 旁路音频失败不能影响实时课堂音视频通话。
+        }
         return liveClassAiService.getAiState(session);
     }
 
@@ -286,6 +355,53 @@ public class LiveClassService {
                         .occurredAt(item.getOccurredAt())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public LiveWhiteboardSnapshotResp whiteboard(Long sessionId, Long uid) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        LiveWhiteboard whiteboard = liveWhiteboardMapper.selectBySessionId(sessionId);
+        if (whiteboard == null) {
+            whiteboard = LiveWhiteboard.builder()
+                    .liveSessionId(session.getId())
+                    .courseId(session.getCourseId())
+                    .scheduleEventId(session.getScheduleEventId())
+                    .sceneJson(JSONUtil.toJsonStr(defaultWhiteboardScene()))
+                    .sceneVersion(0L)
+                    .updatedByUid(uid)
+                    .finalized(Boolean.FALSE)
+                    .build();
+            liveWhiteboardMapper.insert(whiteboard);
+            appendEvent(sessionId, "WHITEBOARD_CREATED", "APP", uid, Map.of("courseId", session.getCourseId()));
+        }
+        return toWhiteboardResp(whiteboard);
+    }
+
+    @Transactional
+    public LiveWhiteboardSnapshotResp saveWhiteboard(Long sessionId, Long uid, LiveWhiteboardSnapshotRequest request, boolean finalize) {
+        LiveClassSession session = requireParticipantSession(sessionId, uid);
+        LiveWhiteboard whiteboard = liveWhiteboardMapper.selectBySessionId(sessionId);
+        if (whiteboard == null) {
+            whiteboard(sessionId, uid);
+            whiteboard = liveWhiteboardMapper.selectBySessionId(sessionId);
+        }
+        ThrowUtils.throwIf(whiteboard == null, ErrorCode.OPERATION_ERROR, "白板初始化失败");
+        if (Boolean.TRUE.equals(whiteboard.getFinalized()) && !finalize) {
+            return toWhiteboardResp(whiteboard);
+        }
+        Map<String, Object> scene = sanitizeWhiteboardScene(request == null ? null : request.getScene());
+        String sceneJson = JSONUtil.toJsonStr(scene);
+        ThrowUtils.throwIf(sceneJson.length() > 1_500_000, ErrorCode.PARAMS_ERROR, "白板内容过大，请减少图片或复杂图形");
+        long nextVersion = Math.max(
+                whiteboard.getSceneVersion() == null ? 0L : whiteboard.getSceneVersion() + 1L,
+                request == null || request.getSceneVersion() == null ? 0L : request.getSceneVersion() + 1L
+        );
+        liveWhiteboardMapper.updateSnapshot(whiteboard.getId(), sceneJson, nextVersion, uid, finalize || Boolean.TRUE.equals(whiteboard.getFinalized()));
+        appendEvent(sessionId, finalize ? "WHITEBOARD_FINALIZED" : "WHITEBOARD_SAVED", "APP", uid, Map.of(
+                "courseId", session.getCourseId(),
+                "sceneVersion", nextVersion
+        ));
+        return toWhiteboardResp(liveWhiteboardMapper.selectBySessionId(sessionId));
     }
 
     @Transactional
@@ -453,10 +569,62 @@ public class LiveClassService {
                 .build());
     }
 
+    private LiveWhiteboardSnapshotResp toWhiteboardResp(LiveWhiteboard whiteboard) {
+        return LiveWhiteboardSnapshotResp.builder()
+                .whiteboardId(whiteboard.getId())
+                .sessionId(whiteboard.getLiveSessionId())
+                .courseId(whiteboard.getCourseId())
+                .scheduleEventId(whiteboard.getScheduleEventId())
+                .sceneVersion(whiteboard.getSceneVersion() == null ? 0L : whiteboard.getSceneVersion())
+                .scene(sanitizeWhiteboardScene(parseMap(whiteboard.getSceneJson())))
+                .finalized(Boolean.TRUE.equals(whiteboard.getFinalized()))
+                .updatedAt(whiteboard.getUpdateTime())
+                .build();
+    }
+
+    private static Map<String, Object> defaultWhiteboardScene() {
+        Map<String, Object> scene = new HashMap<>();
+        scene.put("elements", List.of());
+        scene.put("appState", Map.of(
+                "viewBackgroundColor", "#fffaf0",
+                "currentItemStrokeColor", "#172033",
+                "currentItemBackgroundColor", "transparent",
+                "currentItemStrokeWidth", 2
+        ));
+        scene.put("files", Map.of());
+        return scene;
+    }
+
+    private static Map<String, Object> sanitizeWhiteboardScene(Map<String, Object> raw) {
+        if (raw == null) {
+            return defaultWhiteboardScene();
+        }
+        Map<String, Object> scene = new HashMap<>();
+        Object elements = raw.get("elements");
+        scene.put("elements", elements instanceof List<?> ? elements : List.of());
+        Object appState = raw.get("appState");
+        scene.put("appState", appState instanceof Map<?, ?> ? appState : Map.of("viewBackgroundColor", "#fffaf0"));
+        Object files = raw.get("files");
+        scene.put("files", files instanceof Map<?, ?> ? files : Map.of());
+        return scene;
+    }
+
+    private static Map<String, Object> parseMap(String json) {
+        if (blank(json)) {
+            return new HashMap<>();
+        }
+        try {
+            return JSONUtil.toBean(json, HashMap.class);
+        } catch (Exception ignored) {
+            return new HashMap<>();
+        }
+    }
+
     private LiveSessionResp toResp(LiveClassSession session, Long viewerUid) {
         List<LiveClassParticipant> participants = liveClassParticipantMapper.listBySessionId(session.getId());
         Long peerUid = viewerUid == null ? null : Objects.equals(viewerUid, session.getTeacherUid()) ? session.getStudentUid() : session.getTeacherUid();
         boolean peerJoined = peerUid != null && participants.stream().anyMatch(it -> Objects.equals(it.getUid(), peerUid) && "JOINED".equals(it.getOnlineStatus()));
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
         return LiveSessionResp.builder()
                 .sessionId(session.getId())
                 .courseId(session.getCourseId())
@@ -477,7 +645,104 @@ public class LiveClassService {
                 .peerOnline(peerJoined)
                 .recordPolicy(session.getRecordPolicy())
                 .aiPolicy(session.getAiPolicy())
+                .peerDisplayName(viewerUid == null ? null : resolvePeerDisplayName(session, viewerUid))
+                .subjectLabel(resolveSubjectLabel(session, extra))
+                .courseKindLabel(resolveCourseKindLabel(extra))
+                .realtimeSummaryEnabled(resolveRealtimeSummaryEnabled(session, extra))
+                .postClassSummaryEnabled(resolvePostClassSummaryEnabled(extra))
                 .build();
+    }
+
+    private String buildCourseExtraJson(SyncCourseSessionRequest request) {
+        Map<String, Object> extra = new HashMap<>();
+        putIfPresent(extra, "courseTitle", request.getTitle());
+        putIfPresent(extra, "subjectLabel", request.getTitle());
+        extra.put("courseKindLabel", inferCourseKindLabel(request.getTitle()));
+        extra.put("realtimeSummaryEnabled", Boolean.TRUE);
+        extra.put("postClassSummaryEnabled", Boolean.TRUE);
+        return JSONUtil.toJsonStr(extra);
+    }
+
+    private String mergeCourseExtraJson(LiveClassSession session, SyncCourseSessionRequest request) {
+        Map<String, Object> extra = parseExtra(session.getExtraJson());
+        putIfPresent(extra, "courseTitle", request.getTitle());
+        putIfPresent(extra, "subjectLabel", request.getTitle());
+        extra.put("courseKindLabel", inferCourseKindLabel(request.getTitle()));
+        extra.putIfAbsent("realtimeSummaryEnabled", Boolean.TRUE);
+        extra.putIfAbsent("postClassSummaryEnabled", Boolean.TRUE);
+        return JSONUtil.toJsonStr(extra);
+    }
+
+    private static void putIfPresent(Map<String, Object> map, String key, String value) {
+        if (!blank(value)) {
+            map.put(key, value.trim());
+        }
+    }
+
+    private static Map<String, Object> parseExtra(String extraJson) {
+        if (blank(extraJson)) {
+            return new HashMap<>();
+        }
+        try {
+            return JSONUtil.toBean(extraJson, HashMap.class);
+        } catch (Exception ignored) {
+            return new HashMap<>();
+        }
+    }
+
+    private static String resolveCourseTitle(Map<String, Object> extra) {
+        Object value = extra.get("courseTitle");
+        String text = value == null ? null : String.valueOf(value).trim();
+        return blank(text) ? "实时课程" : text;
+    }
+
+    private static String resolveSubjectLabel(LiveClassSession session, Map<String, Object> extra) {
+        Object value = extra.get("subjectLabel");
+        String text = value == null ? null : String.valueOf(value).trim();
+        if (blank(text)) {
+            return "课程";
+        }
+        String sanitized = text
+                .replace("正式每周课", "")
+                .replace("正式课", "")
+                .replace("试课", "")
+                .trim();
+        return blank(sanitized) ? "课程" : sanitized;
+    }
+
+    private static String resolveCourseKindLabel(Map<String, Object> extra) {
+        Object value = extra.get("courseKindLabel");
+        String text = value == null ? null : String.valueOf(value).trim();
+        return blank(text) ? "正式课" : text;
+    }
+
+    private static String inferCourseKindLabel(String title) {
+        if (!blank(title) && (title.toUpperCase(Locale.ROOT).contains("TRIAL") || title.contains("试课"))) {
+            return "试课";
+        }
+        return "正式课";
+    }
+
+    private static boolean resolveRealtimeSummaryEnabled(LiveClassSession session, Map<String, Object> extra) {
+        Object value = extra.get("realtimeSummaryEnabled");
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            return Boolean.parseBoolean(text);
+        }
+        return session == null || session.getAiPolicy() == null || !"OFF".equalsIgnoreCase(session.getAiPolicy());
+    }
+
+    private static boolean resolvePostClassSummaryEnabled(Map<String, Object> extra) {
+        Object value = extra.get("postClassSummaryEnabled");
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            return Boolean.parseBoolean(text);
+        }
+        return true;
     }
 
     private boolean canJoin(LiveClassSession session, Long uid) {

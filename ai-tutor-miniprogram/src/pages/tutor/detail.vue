@@ -64,8 +64,8 @@
       </view>
 
       <view class="ops">
-        <u-button type="default" shape="circle" @click="handleContact">发起申请</u-button>
-        <u-button type="primary" color="#00bebd" shape="circle" @click="openBookingModal">预约课程</u-button>
+        <button class="op-btn ghost" :disabled="favoriteBusy" @click="toggleFavorite">{{ favorited ? '已收藏' : '收藏老师' }}</button>
+        <button class="op-btn primary" @click="handleContact">发起申请</button>
       </view>
     </view>
 
@@ -138,7 +138,10 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { request, resolveImageUrl } from '@/utils/request';
 import { chatApi } from '@/api/chat';
+import { favoritesApi } from '@/api/favorites';
 import { useUserStore } from '@/stores/user';
+import { ensureStudentMode } from '@/utils/studentGuard';
+import { consumeResumeIntent } from '@/utils/authRedirect';
 
 const userStore = useUserStore();
 const tutor = ref<any>(null);
@@ -150,6 +153,9 @@ const bookingRemark = ref('');
 const showApplyModal = ref(false);
 const applyContent = ref('您好老师，我这边有一个家教需求，方便聊聊吗？');
 const applyBusy = ref(false);
+const favorited = ref(false);
+const favoriteBusy = ref(false);
+const pendingIntent = ref('');
 
 const subjectTags = computed(() => {
   const raw = String(tutor.value?.teacherProfile?.subject || '').trim();
@@ -186,6 +192,7 @@ const badges = computed(() => {
 });
 
 onLoad(async (options: any) => {
+  pendingIntent.value = String(options?.__intent || '');
   if (options.id) {
     await fetchDetail(options.id);
   }
@@ -198,6 +205,13 @@ const fetchDetail = async (id: string) => {
       url: `/user/card?uid=${id}`
     });
     tutor.value = res;
+    await loadFavoriteState();
+    const resumeIntent = consumeResumeIntent(`/pages/tutor/detail?id=${id}`);
+    const nextIntent = resumeIntent || pendingIntent.value;
+    if (nextIntent === 'open-tutor-apply' && userStore.isLoggedIn && userStore.currentRole === 'student') {
+      showApplyModal.value = true;
+      pendingIntent.value = '';
+    }
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '加载失败', icon: 'none' });
@@ -206,14 +220,38 @@ const fetchDetail = async (id: string) => {
   }
 };
 
-const handleContact = async () => {
-  if (!userStore.isLoggedIn) {
-    uni.showToast({ title: '请先登录', icon: 'none' });
-    setTimeout(() => {
-      uni.switchTab({ url: '/pages/me/index' });
-    }, 800);
-    return;
+async function loadFavoriteState() {
+  favorited.value = false;
+  if (!userStore.isLoggedIn || userStore.currentRole !== 'student') return;
+  const uid = tutor.value?.user?.id;
+  if (!uid) return;
+  try {
+    const ids = await favoritesApi.checkTutorFavorites([uid]);
+    favorited.value = Array.isArray(ids) && ids.some((it) => Number(it) === Number(uid));
+  } catch {
+    favorited.value = false;
   }
+}
+
+async function toggleFavorite() {
+  const uid = tutor.value?.user?.id;
+  if (!uid || favoriteBusy.value) return;
+  if (!ensureStudentMode('学生/家长身份可以收藏老师。')) return;
+  favoriteBusy.value = true;
+  try {
+    if (favorited.value) await favoritesApi.unfavoriteTutor(uid);
+    else await favoritesApi.favoriteTutor(uid);
+    favorited.value = !favorited.value;
+    uni.showToast({ title: favorited.value ? '已收藏' : '已取消收藏', icon: 'success' });
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || e?.msg || '操作失败', icon: 'none' });
+  } finally {
+    favoriteBusy.value = false;
+  }
+}
+
+const handleContact = async () => {
+  if (!ensureStudentMode('学生/家长身份可以向老师发起申请。', 'open-tutor-apply')) return;
   if (!tutor.value) return;
   showApplyModal.value = true;
 };
@@ -245,6 +283,7 @@ const handleApply = async () => {
       clientRequestId,
     });
     const roomId = msg?.message?.roomId;
+    const applicationId = msg?.body?.applicationId || msg?.message?.body?.applicationId;
     if (roomId) {
       showApplyModal.value = false;
       uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
@@ -252,6 +291,11 @@ const handleApply = async () => {
     }
     uni.showToast({ title: '申请已发送', icon: 'success' });
     showApplyModal.value = false;
+    if (applicationId) {
+      setTimeout(() => {
+        uni.navigateTo({ url: `/pages/application/detail?id=${applicationId}` });
+      }, 450);
+    }
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '发送申请失败', icon: 'none' });
@@ -261,14 +305,7 @@ const handleApply = async () => {
 };
 
 const openBookingModal = () => {
-    if (!userStore.isLoggedIn) {
-        uni.showToast({ title: '请先登录', icon: 'none' });
-        setTimeout(() => {
-            uni.switchTab({ url: '/pages/me/index' });
-        }, 1500);
-        return;
-    }
-    showBookingModal.value = true;
+    uni.showToast({ title: '请先发起申请，沟通后确认试课', icon: 'none' });
 };
 
 const closeBookingModal = () => {
@@ -574,6 +611,25 @@ const handleBook = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.op-btn {
+  height: 42px;
+  line-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.op-btn.ghost {
+  color: #35444b;
+  background: #eef2f3;
+}
+
+.op-btn.primary {
+  color: #fff;
+  background: #0f766e;
 }
 
 .loading {

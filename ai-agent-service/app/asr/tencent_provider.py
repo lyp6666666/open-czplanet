@@ -54,6 +54,29 @@ class TencentRealtimeASRProvider(RealtimeASRProvider):
         recognizer.set_convert_num_mode(1)
         return recognizer
 
+    def session_closed(self, session) -> bool:
+        self._ensure_sdk_path()
+        from asr import speech_recognizer
+
+        return getattr(session, "status", None) in {
+            speech_recognizer.FINAL,
+            speech_recognizer.ERROR,
+            speech_recognizer.CLOSED,
+        }
+
+    def write_audio(self, session, audio: bytes) -> bool:
+        self._ensure_sdk_path()
+        from asr import speech_recognizer
+
+        if getattr(session, "status", None) in {
+            speech_recognizer.FINAL,
+            speech_recognizer.ERROR,
+            speech_recognizer.CLOSED,
+        }:
+            return False
+        session.write(audio)
+        return True
+
     def _ensure_sdk_path(self) -> None:
         sdk_path = self.settings.tencent_speech_sdk_path
         if not sdk_path:

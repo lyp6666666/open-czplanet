@@ -20,6 +20,11 @@ export type LiveSessionResp = {
   peerOnline?: boolean | null
   recordPolicy?: string | null
   aiPolicy?: string | null
+  peerDisplayName?: string | null
+  subjectLabel?: string | null
+  courseKindLabel?: string | null
+  realtimeSummaryEnabled?: boolean | null
+  postClassSummaryEnabled?: boolean | null
 }
 
 export type PrepareLiveSessionResp = {
@@ -34,6 +39,10 @@ export type PrepareLiveSessionResp = {
   blockingLessonId?: number | null
   defaultMediaPolicy?: string | null
   deviceCheckRequired: boolean
+  realtimeSummaryEnabled?: boolean | null
+  postClassSummaryEnabled?: boolean | null
+  subjectLabel?: string | null
+  courseKindLabel?: string | null
 }
 
 export type IssueJoinTokenResp = {
@@ -60,13 +69,35 @@ export type LiveAiStateResp = {
   aiStatus: string
   realtimeEnabled: boolean
   summaryStatus: string
+  asrEnabled?: boolean | null
+  llmEnabled?: boolean | null
+  segmentCount?: number | null
+  lastLlmSummaryTs?: number | null
+  lastLlmSegmentCount?: number | null
   currentTopic?: string | null
   latestStageSummary?: string | null
   studentQuestions: string[]
   homeworkCandidates: string[]
   keyPoints: string[]
+  minutesOutline?: LiveAiMinuteSection[] | null
+  activeSectionTitle?: string | null
   updatedAt?: string | null
   rawState?: Record<string, unknown> | null
+}
+
+export type LiveAiMinuteItem = {
+  title: string
+  detail: string
+}
+
+export type LiveAiMinuteSection = {
+  id: string
+  title: string
+  summary: string
+  startSegment?: number | null
+  endSegment?: number | null
+  updatedAt?: number | null
+  items?: LiveAiMinuteItem[] | null
 }
 
 export type LiveAiResultResp = {
@@ -77,6 +108,23 @@ export type LiveAiResultResp = {
   summary?: Record<string, unknown> | null
   report?: Record<string, unknown> | null
   preview?: string | null
+  updatedAt?: string | null
+}
+
+export type LiveWhiteboardScene = {
+  elements: unknown[]
+  appState: Record<string, unknown>
+  files?: Record<string, unknown>
+}
+
+export type LiveWhiteboardSnapshotResp = {
+  whiteboardId: number
+  sessionId: number
+  courseId: number
+  scheduleEventId?: number | null
+  sceneVersion: number
+  scene: LiveWhiteboardScene
+  finalized?: boolean | null
   updatedAt?: string | null
 }
 
@@ -102,8 +150,24 @@ export const liveApi = {
     return http.get<unknown, LiveReminderItemResp[]>('/live/sessions/reminders')
   },
 
-  prepare(courseId: number, payload: { clientType: string; sourcePage?: string }) {
+  prepare(courseId: number, payload: { clientType: string; sourcePage?: string; realtimeSummaryEnabled?: boolean; postClassSummaryEnabled?: boolean }) {
     return http.post<unknown, PrepareLiveSessionResp>(`/live/sessions/by-course/${courseId}/prepare`, payload)
+  },
+
+  updateAiOptions(sessionId: number, payload: { realtimeSummaryEnabled: boolean; postClassSummaryEnabled: boolean }) {
+    return http.post<unknown, LiveSessionResp>(`/live/sessions/${sessionId}/ai/options`, payload)
+  },
+
+  uploadAiAudioChunk(sessionId: number, payload: {
+    sequence: number
+    sampleRate: number
+    channelCount: number
+    durationMs: number
+    rms: number
+    format: string
+    audioBase64: string
+  }) {
+    return http.post<unknown, LiveAiStateResp>(`/live/sessions/${sessionId}/ai/audio-chunks`, payload)
   },
 
   joinToken(sessionId: number, payload: { clientType: string; deviceFingerprint?: string; joinMode?: string }) {
@@ -152,5 +216,17 @@ export const liveApi = {
 
   retryAiResult(sessionId: number) {
     return http.post<unknown, LiveAiResultResp>(`/live/sessions/${sessionId}/ai/result/retry`, {})
+  },
+
+  getWhiteboard(sessionId: number) {
+    return http.get<unknown, LiveWhiteboardSnapshotResp>(`/live/sessions/${sessionId}/whiteboard`)
+  },
+
+  saveWhiteboardSnapshot(sessionId: number, payload: { sceneVersion: number; scene: LiveWhiteboardScene }) {
+    return http.put<unknown, LiveWhiteboardSnapshotResp>(`/live/sessions/${sessionId}/whiteboard/snapshot`, payload)
+  },
+
+  finalizeWhiteboard(sessionId: number, payload: { sceneVersion: number; scene: LiveWhiteboardScene }) {
+    return http.post<unknown, LiveWhiteboardSnapshotResp>(`/live/sessions/${sessionId}/whiteboard/finalize`, payload)
   },
 }

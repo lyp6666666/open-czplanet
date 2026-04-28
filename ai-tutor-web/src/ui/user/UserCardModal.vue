@@ -296,7 +296,7 @@ async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
         <div v-if="canFavoriteTutor" class="sec">
           <div class="sec-title">发起申请</div>
           <div v-if="applyError" class="hint error">{{ applyError }}</div>
-          <div class="apply-tip">先选择线上或线下授课。授课形式创建后不可修改，线上会进入平台课程与支付流程。</div>
+          <div class="apply-tip">先选择线上或线下授课。授课形式创建后不可修改；线上可使用平台课堂与 AI 总结，课时费由双方私下结算。</div>
           <div class="apply-actions">
             <button class="btn btn-primary" type="button" :disabled="applyBusy" @click="startTutorApplication">
               {{ applyBusy ? '发送中...' : '发起家教申请' }}
@@ -309,7 +309,7 @@ async function confirmTeachingMode(teachingMode: 'ONLINE' | 'OFFLINE') {
       <div v-if="teachingModeModalOpen" class="sub-mask" @click.self="teachingModeModalOpen = false">
         <div class="sub-modal card">
           <div class="sec-title">请选择授课形式</div>
-          <div class="hint">授课形式创建后不可修改。线下只负责撮合，线上会进入平台课程和课后支付流程。</div>
+          <div class="hint">授课形式创建后不可修改。线下只负责撮合，线上可使用平台课程、实时课堂和 AI 课后总结；课时费暂不由平台代收。</div>
           <div class="mode-actions">
             <button class="mode-card" type="button" :disabled="applyBusy" @click="confirmTeachingMode('ONLINE')">
               <strong>线上授课</strong>

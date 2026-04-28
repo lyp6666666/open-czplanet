@@ -133,6 +133,22 @@ apply_live_class_migration_if_needed() {
   mysql_exec_stdin "$DB_NAME" < "$live_class_sql"
 }
 
+apply_email_notification_migration_if_needed() {
+  if table_exists "lesson_summary" && table_exists "email_notification_task" && table_exists "email_send_log"; then
+    echo "[db_bootstrap_if_missing] 邮件通知/课后总结表已存在，跳过邮件增量迁移"
+    return 0
+  fi
+
+  email_sql="$ROOT_DIR/sqlDoc/migrations/20260421_email_notification.sql"
+  if [ ! -f "$email_sql" ]; then
+    echo "[db_bootstrap_if_missing] 未找到邮件迁移文件: $(basename "$email_sql")"
+    exit 1
+  fi
+
+  echo "[db_bootstrap_if_missing] 补齐邮件通知与课后总结表结构: $(basename "$email_sql")"
+  mysql_exec_stdin "$DB_NAME" < "$email_sql"
+}
+
 apply_seed() {
   echo "[db_bootstrap_if_missing] 导入开发种子数据: sqlDoc/seed_dev_data.sql"
   sed "s/^USE ai_tutor;$/USE \`${DB_NAME}\`;/" "$ROOT_DIR/sqlDoc/seed_dev_data.sql" | mysql_exec_stdin "$DB_NAME"
@@ -150,6 +166,7 @@ ensure_database
 if table_exists "user"; then
   echo "[db_bootstrap_if_missing] 检测到核心表已存在，跳过基线初始化，按需补齐增量表结构"
   apply_live_class_migration_if_needed
+  apply_email_notification_migration_if_needed
   exit 0
 fi
 

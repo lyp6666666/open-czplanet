@@ -26,9 +26,23 @@ bash scripts/dev_local_down.sh
 - 本地启动：`MANAGE_INFRA=auto`
 - 本地停止：`STOP_INFRA=1`
 - 本地默认 profile：`dev` -> namespace `481e4376-4576-4b18-ac19-f61e170ca3ae`
-- `sh scripts/dev_all_up.sh` 会优先使用本机 `127.0.0.1:8848`；如果本地 Nacos 不可用，脚本可能自动拉起本地 Nacos SSH 隧道并切换到 `127.0.0.1:18848`
+- 日常测试默认是在本机启动应用进程，并让 MySQL、Redis、RabbitMQ、MinIO、LiveKit、Prometheus/Grafana 等中间件走本机 Docker；不要默认把测试放到远程服务器跑
+- Nacos 是常见例外：`sh scripts/dev_all_up.sh` 会优先使用本机 `127.0.0.1:8848`；如果本地 Nacos 不可用，脚本会自动拉起 Nacos SSH 隧道并切换到 `127.0.0.1:18848`，此时只有 Nacos 来自远端 dev
 - 现在也支持直接一键启动：
   `sh scripts/dev_all_up.sh`
+
+日常本地联调默认就用下面这组：
+
+- 启动：`bash scripts/dev_local_up.sh`
+- 关闭：`bash scripts/dev_local_down.sh`
+- 只关应用不关本地中间件：`STOP_INFRA=0 bash scripts/dev_local_down.sh`
+
+本地几个启动/停止脚本的区别：
+
+- `dev_local_up.sh`：本地日常入口，设置本地开发默认值后调用 `dev_all_up.sh`；会管理本机中间件，并按需处理 Nacos 隧道
+- `dev_local_down.sh`：本地日常关闭入口，默认 `STOP_INFRA=1`，会停应用、本机中间件，以及本地公网/SSH/Nacos 隧道
+- `dev_all_up.sh`：底层启动引擎；本机和远程都复用它。直接跑也可以，但需要你自己理解 `MANAGE_INFRA`、`NACOS_SERVER_ADDR` 等环境变量
+- `dev_all_down.sh`：底层停止引擎；默认 `STOP_INFRA=0`，直接跑时会保留中间件。通过 `dev_local_down.sh` 跑时默认会变成 `STOP_INFRA=1`
 
 一些常用的本地变体：
 
@@ -66,7 +80,7 @@ REMOTE_USE_TUNNEL=0 bash scripts/dev_remote_up.sh
 - 你仍然需要放通安全组或防火墙中的 `5173`、`5174`、`18080`
 - 如果保留隧道模式，前端仍然会只绑定在 `127.0.0.1`
 
-直接在服务器上启动：
+直接在服务器上启动开发环境：
 
 ```bash
 cd /opt/ai-platform
@@ -74,7 +88,22 @@ MANAGE_INFRA=never sh scripts/dev_all_up.sh
 STOP_INFRA=0 sh scripts/dev_all_down.sh
 ```
 
-当前共享远程支付测试在 `111.228.20.88` 上的启动方式：
+当前生产环境使用的不是上面这个目录。生产目录与发布入口是：
+
+```bash
+ssh root@111.228.20.88 "sed -n '1,220p' /usr/local/bin/ai-platform-prod-deploy.sh"
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && git branch --show-current && git rev-parse --short HEAD"
+```
+
+如果需要在服务器上手动启动当前生产应用：
+
+```bash
+cd /opt/ai-platform-prod
+SPRING_PROFILES_ACTIVE=prod MANAGE_INFRA=never AUTO_BOOTSTRAP_DEV_DB=0 NACOS_SERVER_ADDR=127.0.0.1:8848 NACOS_GRPC_CHECK=warn FRONTEND_HOST=127.0.0.1 sh scripts/dev_all_up.sh
+STOP_INFRA=0 sh scripts/dev_all_down.sh
+```
+
+当前 `111.228.20.88` 上手动启动开发环境的方式：
 
 ```bash
 cd /opt/ai-platform
@@ -165,12 +194,16 @@ bash scripts/dev_local_up.sh
 
 ## 远程 MinIO 静态资源
 
-共享远程测试服务器是 `root@111.228.20.88`，仓库路径是 `/opt/ai-platform`，中间件也跑在同一台服务器上。
+共享业务服务器是 `root@111.228.20.88`。
+
+- 开发/历史副本通常在：`/opt/ai-platform`
+- 当前生产副本在：`/opt/ai-platform-prod`
+- 中间件当前常驻在同一台业务机上，通过 Docker 运行
 
 把品牌 logo 资源上传到共享远程 MinIO：
 
 ```bash
-ssh root@111.228.20.88 "cd /opt/ai-platform && docker run --rm --network container:minio --entrypoint /bin/sh -v \"\$PWD/ai-tutor-web/public/brand:/data/brand:ro\" quay.io/minio/mc:latest -lc \"mc alias set local http://127.0.0.1:9000 minioadmin minioadmin; mc mb -p local/ai-tutor-assets || true; mc anonymous set download local/ai-tutor-assets || true; mc mirror --overwrite /data/brand local/ai-tutor-assets/brand; mc ls local/ai-tutor-assets/brand\""
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && docker run --rm --network container:minio --entrypoint /bin/sh -v \"\$PWD/ai-tutor-web/public/brand:/data/brand:ro\" quay.io/minio/mc:latest -lc \"mc alias set local http://127.0.0.1:9000 minioadmin minioadmin; mc mb -p local/ai-tutor-assets || true; mc anonymous set download local/ai-tutor-assets || true; mc mirror --overwrite /data/brand local/ai-tutor-assets/brand; mc ls local/ai-tutor-assets/brand\""
 ```
 
 通过服务器上的网关验证上传后的 logo：
@@ -183,7 +216,7 @@ ssh root@111.228.20.88 "curl -sS http://127.0.0.1:18080/api/v1/public/assets/bra
 如果上传的是其它静态资源目录，沿用同样模式：
 
 ```bash
-ssh root@111.228.20.88 "cd /opt/ai-platform && docker run --rm --network container:minio --entrypoint /bin/sh -v \"\$PWD/<local-folder>:/data/<folder>:ro\" quay.io/minio/mc:latest -lc \"mc alias set local http://127.0.0.1:9000 minioadmin minioadmin; mc mirror --overwrite /data/<folder> local/ai-tutor-assets/<object-prefix>; mc ls local/ai-tutor-assets/<object-prefix>\""
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && docker run --rm --network container:minio --entrypoint /bin/sh -v \"\$PWD/<local-folder>:/data/<folder>:ro\" quay.io/minio/mc:latest -lc \"mc alias set local http://127.0.0.1:9000 minioadmin minioadmin; mc mirror --overwrite /data/<folder> local/ai-tutor-assets/<object-prefix>; mc ls local/ai-tutor-assets/<object-prefix>\""
 ```
 
 ## 运行态排查
@@ -254,6 +287,14 @@ git diff -- sqlDoc/huoyue.sql sqlDoc/migrations
 ssh root@111.229.64.41 "tail -f /var/log/nginx/ai-tutor-payment-domain.access.log | grep --line-buffered -E 'payment/notify/yungouos|payment/return/yungouos'"
 ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/payment-service.log | grep --line-buffered -E 'PAY_NOTIFY|PAY_FINALIZE|updated to SUCCESS|YunGouOS 回调|YunGouOS 回调验签|YunGouOS 回调订单不存在'"
 ssh root@111.228.20.88 "cd /opt/ai-platform && tail -f .logs/videoCall-IM-service.log | grep --line-buffered -E 'payment_success_received|brokerage_payment_success|tutor_application_paid'"
+```
+
+生产环境常用日志查看：
+
+```bash
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && tail -f .logs/tutor-appointment-service.log | grep --line-buffered 'SMS SEND SUCCESS'"
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && tail -f .logs/payment-service.log"
+ssh root@111.228.20.88 "cd /opt/ai-platform-prod && tail -f .logs/videoCall-IM-service.log"
 ```
 
 实时课堂媒体链路验证：

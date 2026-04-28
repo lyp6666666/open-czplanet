@@ -18,7 +18,7 @@
         <view class="line"></view>
         <view class="step-item" :class="{ active: currentStep >= 2 }">
             <text class="num">3</text>
-            <text class="text">教育信息</text>
+            <text class="text">认证资料</text>
         </view>
     </view>
 
@@ -78,19 +78,44 @@
                 <input class="input" v-model="form.education" placeholder="例如：本科、硕士" />
             </view>
             <view class="form-item">
-                <text class="label">证书（选填）</text>
-                <view class="cert-uploader" @click="uploadCert">
-                    <text v-if="!certUrl">上传图片</text>
-                    <text v-else>已上传（1 张）</text>
+                <text class="label">学历证明</text>
+                <view class="cert-uploader" :class="{ done: certUrl }" @click="uploadCert">
+                    <text class="upload-mark">{{ certUrl ? '✓' : '+' }}</text>
+                    <text>{{ certUrl ? '已上传学历证明' : '上传学信网/学生证/毕业证截图' }}</text>
                 </view>
+            </view>
+            <view class="form-item">
+                <text class="label">身份证人像面</text>
+                <view class="proof-box" :class="{ done: idFrontUrl }" @click="uploadIdFront">
+                    <image v-if="idFrontUrl" class="proof-img" :src="resolveImageUrl(idFrontUrl)" mode="aspectFill"></image>
+                    <view class="proof-overlay">
+                        <text class="upload-mark">{{ idFrontUrl ? '✓' : '+' }}</text>
+                        <text>{{ idFrontUrl ? '已上传人像面' : '上传人像面' }}</text>
+                    </view>
+                </view>
+            </view>
+            <view class="form-item">
+                <text class="label">身份证国徽面</text>
+                <view class="proof-box" :class="{ done: idBackUrl }" @click="uploadIdBack">
+                    <image v-if="idBackUrl" class="proof-img" :src="resolveImageUrl(idBackUrl)" mode="aspectFill"></image>
+                    <view class="proof-overlay">
+                        <text class="upload-mark">{{ idBackUrl ? '✓' : '+' }}</text>
+                        <text>{{ idBackUrl ? '已上传国徽面' : '上传国徽面' }}</text>
+                    </view>
+                </view>
+            </view>
+            <view class="verify-note">
+                <text>平台仅用于教师身份与学历审核，审核中不会公开证件图片。</text>
             </view>
         </view>
     </view>
 
     <view class="footer">
-        <u-button class="btn prev" v-if="currentStep > 0" shape="circle" @click="prev">上一步</u-button>
-        <u-button class="btn next" type="primary" color="#00bebd" shape="circle" v-if="currentStep < 2" @click="next">下一步</u-button>
-        <u-button class="btn submit" type="primary" color="#00bebd" shape="circle" v-if="currentStep === 2" @click="submit">提交</u-button>
+        <button class="action-btn secondary" v-if="currentStep > 0" @click="prev">上一步</button>
+        <button class="action-btn primary" v-if="currentStep < 2" @click="next">下一步</button>
+        <button class="action-btn primary" v-if="currentStep === 2" :disabled="submitBusy" @click="submit">
+            {{ submitBusy ? '提交中...' : '提交审核' }}
+        </button>
     </view>
   </view>
 </template>
@@ -99,12 +124,16 @@
 import { ref, reactive } from 'vue';
 import { userApi } from '@/api/user';
 import { tutorApi } from '@/api/tutor';
+import { assetsApi } from '@/api/assets';
 import { useUserStore } from '@/stores/user';
-import { BASE_URL, resolveImageUrl } from '@/utils/request';
+import { resolveImageUrl } from '@/utils/request';
 
 const userStore = useUserStore();
 const currentStep = ref(0);
 const certUrl = ref('');
+const idFrontUrl = ref('');
+const idBackUrl = ref('');
+const submitBusy = ref(false);
 
 const form = reactive({
     avatar: (userStore.userInfo?.avatar && !String(userStore.userInfo.avatar).includes('pravatar.cc') && !String(userStore.userInfo.avatar).endsWith('.svg')) ? userStore.userInfo.avatar : '',
@@ -149,33 +178,41 @@ const uploadCert = () => {
     });
 };
 
-const uploadFile = (filePath: string, biz: 'avatar' | 'other', cb: (url: string) => void) => {
-    const token = uni.getStorageSync('token');
-    uni.showLoading({ title: '上传中...', mask: true });
-    uni.uploadFile({
-        url: `${BASE_URL}/api/v1/assets/upload`,
-        filePath: filePath,
-        name: 'file',
-        formData: { biz },
-        header: {
-            'Authorization': 'Bearer ' + token
-        },
-        success: (uploadFileRes) => {
-            const data = JSON.parse(uploadFileRes.data);
-            if (data.code === 0) {
-                cb(data.data?.url);
-            } else {
-                uni.showToast({ title: data.msg || data.message || '上传失败', icon: 'none' });
-            }
-        },
-        fail: (err) => {
-            console.error(err);
-            uni.showToast({ title: '上传失败', icon: 'none' });
-        },
-        complete: () => {
-            uni.hideLoading();
+const uploadIdFront = () => {
+    chooseAndUpload('other', (url) => {
+        idFrontUrl.value = url;
+    });
+};
+
+const uploadIdBack = () => {
+    chooseAndUpload('other', (url) => {
+        idBackUrl.value = url;
+    });
+};
+
+const chooseAndUpload = (biz: 'avatar' | 'other', cb: (url: string) => void) => {
+    uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+            const filePath = res.tempFilePaths[0];
+            void uploadFile(filePath, biz, cb);
         }
     });
+};
+
+const uploadFile = async (filePath: string, biz: 'avatar' | 'other', cb: (url: string) => void) => {
+    uni.showLoading({ title: '上传中...', mask: true });
+    try {
+        const uploaded = await assetsApi.uploadImage(filePath, biz);
+        cb(uploaded.url);
+    } catch (err: any) {
+        console.error(err);
+        uni.showToast({ title: err?.message || '上传失败', icon: 'none' });
+    } finally {
+        uni.hideLoading();
+    }
 };
 
 const next = () => {
@@ -202,6 +239,16 @@ const submit = async () => {
         uni.showToast({ title: '请完善学校与学历', icon: 'none' });
         return;
     }
+    if (!form.certificateUrls) {
+        uni.showToast({ title: '请上传学历证明', icon: 'none' });
+        return;
+    }
+    if (!idFrontUrl.value || !idBackUrl.value) {
+        uni.showToast({ title: '请上传身份证正反面', icon: 'none' });
+        return;
+    }
+    if (submitBusy.value) return;
+    submitBusy.value = true;
 
     try {
         const updateData = {
@@ -225,17 +272,15 @@ const submit = async () => {
 
         await userApi.updateUserInfo(updateData);
         
-        // Also submit verification if cert exists (optional flow)
-        if (form.certificateUrls) {
-            try {
-                const urls = JSON.parse(form.certificateUrls);
-                await tutorApi.submitEducation(urls);
-            } catch (e) {
-                console.warn('学历认证提交失败', e);
-            }
-        }
+        const urls = JSON.parse(form.certificateUrls);
+        await tutorApi.submitEducation(urls);
+        await tutorApi.submitRealname({
+            method: 'ID_PHOTO',
+            idFrontUrl: idFrontUrl.value,
+            idBackUrl: idBackUrl.value
+        });
 
-        uni.showToast({ title: '已提交', icon: 'success' });
+        uni.showToast({ title: '已提交审核', icon: 'success' });
         
         // Refresh user info to update status
         await userStore.refreshUserInfo();
@@ -247,6 +292,8 @@ const submit = async () => {
     } catch (error: any) {
         console.error(error);
         uni.showToast({ title: error.message || '提交失败', icon: 'none' });
+    } finally {
+        submitBusy.value = false;
     }
 };
 </script>
@@ -400,16 +447,93 @@ const submit = async () => {
 }
 
 .cert-uploader {
-    height: 44px;
+    height: 48px;
     border-radius: 12px;
     border: 1px dashed rgba(31, 35, 41, 0.18);
     background: rgba(31, 35, 41, 0.03);
     display: flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     font-size: 13px;
     color: var(--muted);
     font-weight: 800;
+    &.done {
+        border-color: rgba(0, 190, 189, 0.42);
+        background: rgba(0, 190, 189, 0.08);
+        color: #007f7e;
+    }
+}
+
+.proof-box {
+    height: 118px;
+    border-radius: 14px;
+    border: 1px dashed rgba(31, 35, 41, 0.18);
+    background: rgba(31, 35, 41, 0.03);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 800;
+    overflow: hidden;
+    position: relative;
+    &.done {
+        border-style: solid;
+        border-color: rgba(0, 190, 189, 0.35);
+        background: rgba(0, 190, 189, 0.08);
+    }
+}
+
+.proof-img {
+    width: 100%;
+    height: 118px;
+}
+
+.proof-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.76);
+    color: #007f7e;
+}
+
+.proof-box:not(.done) .proof-overlay {
+    background: transparent;
+    color: var(--muted);
+}
+
+.upload-mark {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #00bebd;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 22px;
+}
+
+.proof-box:not(.done) .upload-mark,
+.cert-uploader:not(.done) .upload-mark {
+    background: rgba(31, 35, 41, 0.14);
+    color: rgba(31, 35, 41, 0.5);
+}
+
+.verify-note {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(15, 118, 110, 0.08);
+    color: #0f766e;
+    font-size: 12px;
+    line-height: 1.6;
 }
 
 .radio {
@@ -424,7 +548,32 @@ const submit = async () => {
     gap: 10px;
 }
 
-.btn {
+.action-btn {
     flex: 1;
+    height: 48px;
+    border-radius: 999px;
+    border: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 48px;
+    &::after {
+        border: 0;
+    }
+    &.primary {
+        background: #00bebd;
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(0, 190, 189, 0.22);
+    }
+    &.secondary {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid rgba(31, 35, 41, 0.12);
+    }
+    &[disabled] {
+        opacity: 0.62;
+    }
 }
 </style>

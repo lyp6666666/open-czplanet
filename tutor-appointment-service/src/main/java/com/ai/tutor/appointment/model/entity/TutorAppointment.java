@@ -45,12 +45,12 @@ public class TutorAppointment {
     private Long lessonPriceFen;
 
     /**
-     * 试课按标准课价的折扣比例，默认 50 表示半节课费用。
+     * 兼容旧字段：当前平台不代收课时费，试课统一按 1 小时课时费线下结算。
      */
     private Integer trialPricePercent;
 
     /**
-     * 当前课节应付金额（分）。
+     * 兼容旧字段：当前平台不代收课时费，通常为 0。
      */
     private Long payableAmountFen;
 

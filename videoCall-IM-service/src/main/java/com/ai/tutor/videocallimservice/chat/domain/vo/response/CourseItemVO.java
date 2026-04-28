@@ -49,4 +49,51 @@ public class CourseItemVO {
 
     @Schema(description = "试课结束时间（可空）")
     private LocalDateTime trialEndAt;
+
+    @Schema(description = "信息费支付截止时间（WAIT_PAY 后 48 小时，可空）")
+    private LocalDateTime payDeadlineAt;
+
+    @Schema(description = "是否已因教师超时未支付信息费而归档")
+    private Boolean payExpired;
+
+    @Schema(description = "归档原因")
+    private String archiveReason;
+
+    @Schema(description = "最近一条退费申请")
+    private RefundInfo latestRefund;
+
+    @Schema(description = "最近一条合作/试课提案")
+    private ProposalInfo latestProposal;
+
+    @Data
+    @Builder
+    @Schema(description = "课程退费信息")
+    public static class RefundInfo {
+        private Long id;
+        private String type;
+        private String status;
+        private String reason;
+        private String adminNote;
+        private Integer refundPercent;
+        private Long refundAmountFen;
+        private LocalDateTime createTime;
+        private LocalDateTime decidedAt;
+    }
+
+    @Data
+    @Builder
+    @Schema(description = "课程合作/试课提案信息")
+    public static class ProposalInfo {
+        private Long id;
+        private Long fromUid;
+        private Long toUid;
+        private String status;
+        private String pricePerHour;
+        private String classTime;
+        private Integer frequencyPerWeek;
+        private LocalDateTime trialStartAt;
+        private LocalDateTime trialEndAt;
+        private String remark;
+        private LocalDateTime expireAt;
+    }
 }

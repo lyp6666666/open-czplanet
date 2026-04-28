@@ -9,6 +9,14 @@ export const jobsApi = {
       data
     });
   },
+  // 更新需求
+  updateDemand(id: number, data: any) {
+    return request({
+      url: `/api/v1/parent/jobs/${id}`,
+      method: 'PUT',
+      data
+    });
+  },
   // 我的需求
   mineDemands(params: any) {
     return request({

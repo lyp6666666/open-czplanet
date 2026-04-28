@@ -1,3 +1,5 @@
+import { goLoginWithRedirect } from '@/utils/authRedirect';
+
 const normalizeBaseUrl = (raw: unknown): string | null => {
   if (typeof raw !== 'string') return null;
   const s = raw.trim();
@@ -100,7 +102,7 @@ export const request = (options: RequestOptions): Promise<any> => {
               if (!redirectingToLogin) {
                 redirectingToLogin = true;
                 setTimeout(() => {
-                  uni.switchTab({ url: '/pages/me/index' });
+                  goLoginWithRedirect();
                   setTimeout(() => {
                     redirectingToLogin = false;
                   }, 800);
@@ -131,7 +133,7 @@ export const request = (options: RequestOptions): Promise<any> => {
             icon: 'none'
           });
           setTimeout(() => {
-            uni.switchTab({ url: '/pages/me/index' });
+            goLoginWithRedirect();
           }, 500);
           reject(res);
         } else {
