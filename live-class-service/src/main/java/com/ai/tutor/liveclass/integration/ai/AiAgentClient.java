@@ -4,7 +4,7 @@ import com.ai.tutor.common.BaseResponse;
 import com.ai.tutor.enums.ErrorCode;
 import com.ai.tutor.exception.BusinessException;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -15,12 +15,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpStatusCodeException;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 @Component
+@Slf4j
 public class AiAgentClient {
 
     private final AiAgentProperties properties;
@@ -125,9 +127,31 @@ public class AiAgentClient {
                     type
             );
             return unwrap(response.getBody(), action);
+        } catch (HttpStatusCodeException ex) {
+            String detail = abbreviate(ex.getResponseBodyAsString(), 500);
+            log.warn("AI agent call failed: action={}, method={}, url={}, status={}, body={}",
+                    action, method, baseUrl + path, ex.getStatusCode(), detail);
+            String message = "AI agent call failed: " + action + " (" + ex.getStatusCode() + ")";
+            if (detail != null && !detail.isBlank()) {
+                message = message + ": " + detail;
+            }
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, message);
         } catch (RestClientException ex) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI agent call failed: " + action);
+            log.warn("AI agent call failed: action={}, method={}, url={}, error={}",
+                    action, method, baseUrl + path, ex.getMessage());
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI agent call failed: " + action + ": " + ex.getMessage());
         }
+    }
+
+    private static String abbreviate(String value, int maxLength) {
+        if (value == null) {
+            return "";
+        }
+        String text = value.trim();
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + "...";
     }
 
     private static <T> T unwrap(BaseResponse<T> response, String action) {

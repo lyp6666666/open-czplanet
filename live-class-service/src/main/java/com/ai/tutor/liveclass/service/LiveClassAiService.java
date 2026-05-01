@@ -1,6 +1,7 @@
 package com.ai.tutor.liveclass.service;
 
 import cn.hutool.json.JSONUtil;
+import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
@@ -87,7 +88,14 @@ public class LiveClassAiService {
                     .updatedAt(LocalDateTime.now())
                     .build();
         }
-        AiAgentClient.RealtimeLessonStateView state = aiAgentClient.getState(session.getCourseId());
+        AiAgentClient.RealtimeLessonStateView state;
+        try {
+            state = aiAgentClient.getState(session.getCourseId());
+        } catch (BusinessException ex) {
+            log.warn("Failed to fetch realtime AI state, sessionId={}, courseId={}, msg={}",
+                    session.getId(), session.getCourseId(), ex.getMessage());
+            return unavailableAiState(session, ex.getMessage());
+        }
         String aiStatus = resolveAiStatus(state);
         return LiveAiStateResp.builder()
                 .sessionId(session.getId())
@@ -273,6 +281,28 @@ public class LiveClassAiService {
         } catch (Exception ignored) {
             return new HashMap<>();
         }
+    }
+
+    private static LiveAiStateResp unavailableAiState(LiveClassSession session, String message) {
+        return LiveAiStateResp.builder()
+                .sessionId(session.getId())
+                .courseId(session.getCourseId())
+                .aiStatus("FAILED")
+                .realtimeEnabled(Boolean.TRUE)
+                .summaryStatus("FAILED")
+                .asrEnabled(Boolean.FALSE)
+                .llmEnabled(Boolean.FALSE)
+                .segmentCount(0)
+                .studentQuestions(List.of())
+                .homeworkCandidates(List.of())
+                .keyPoints(List.of())
+                .minutesOutline(List.of())
+                .updatedAt(LocalDateTime.now())
+                .rawState(Map.of(
+                        "error", message == null || message.isBlank() ? "AI agent state unavailable" : message,
+                        "recoverable", Boolean.TRUE
+                ))
+                .build();
     }
 
     private static boolean isAiEnabled(LiveClassSession session) {

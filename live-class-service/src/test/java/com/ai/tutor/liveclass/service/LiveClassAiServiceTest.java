@@ -1,5 +1,7 @@
 package com.ai.tutor.liveclass.service;
 
+import com.ai.tutor.enums.ErrorCode;
+import com.ai.tutor.exception.BusinessException;
 import com.ai.tutor.liveclass.domain.entity.LiveClassSession;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiResultResp;
 import com.ai.tutor.liveclass.domain.vo.response.LiveAiStateResp;
@@ -111,6 +113,24 @@ class LiveClassAiServiceTest {
         assertThat(result.getLastLlmSummaryTs()).isEqualTo(1800000000L);
         assertThat(result.getLastLlmSegmentCount()).isEqualTo(8);
         assertThat(result.getLatestStageSummary()).contains("一次函数");
+    }
+
+    @Test
+    void getAiStateShouldDegradeWhenRealtimeStateEndpointIsUnavailable() {
+        when(aiAgentClient.getState(66L)).thenThrow(
+                new BusinessException(ErrorCode.SYSTEM_ERROR, "AI agent call failed: getRealtimeLessonState不可用")
+        );
+
+        LiveAiStateResp result = liveClassAiService.getAiState(session);
+
+        assertThat(result.getAiStatus()).isEqualTo("FAILED");
+        assertThat(result.getSummaryStatus()).isEqualTo("FAILED");
+        assertThat(result.getRealtimeEnabled()).isTrue();
+        assertThat(result.getAsrEnabled()).isFalse();
+        assertThat(result.getLlmEnabled()).isFalse();
+        assertThat(result.getSegmentCount()).isEqualTo(0);
+        assertThat(result.getRawState()).containsEntry("recoverable", Boolean.TRUE);
+        assertThat(String.valueOf(result.getRawState().get("error"))).contains("getRealtimeLessonState");
     }
 
     @Test
