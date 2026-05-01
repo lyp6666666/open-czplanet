@@ -49,12 +49,15 @@
         variant="soft"
       />
 
-      <view v-else class="list">
-        <view v-for="it in visibleList" :key="it.courseId" class="course-card" @click="openCourse(it.courseId)">
+        <view v-else class="list">
+          <view v-for="it in visibleList" :key="it.courseId" class="course-card" @click="openCourse(it.courseId)">
           <view class="card-head">
-            <view>
+            <view class="head-main">
+              <image class="avatar" :src="participantAvatar(it)" mode="aspectFill"></image>
+              <view class="head-copy">
               <text class="course-title">{{ titleOf(it) }}</text>
-              <text class="course-sub">{{ participantLabel(it) }} · {{ modeText(it.teachingMode) }}</text>
+                <text class="course-sub">{{ participantLabel(it) }} · {{ modeText(it.teachingMode) }}</text>
+              </view>
             </view>
             <text class="badge" :class="stageTone(it.status)">{{ stageText(it.status) }}</text>
           </view>
@@ -98,13 +101,16 @@
 import { computed, ref } from 'vue';
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app';
 import { courseApi, type CourseItem } from '@/api/course';
+import { userApi, type UserSimple } from '@/api/user';
 import { useUserStore } from '@/stores/user';
+import { resolveImageUrl } from '@/utils/request';
 import AppStateCard from '@/components/AppStateCard.vue';
 
 type FilterKey = 'ALL' | 'ACTIVE' | 'TRIAL' | 'TEACHING' | 'DONE';
 
 const userStore = useUserStore();
 const list = ref<CourseItem[]>([]);
+const userMap = ref<Record<number, UserSimple>>({});
 const loading = ref(false);
 const error = ref('');
 const filter = ref<FilterKey>('ALL');
@@ -171,7 +177,15 @@ function titleOf(it: CourseItem) {
 
 function participantLabel(it: CourseItem) {
   const uid = role.value === 'TEACHER' ? it.studentUid : it.teacherUid;
+  const user = userMap.value[uid];
+  const name = String(user?.realName || user?.name || user?.nickname || '').trim();
+  if (name) return name;
   return role.value === 'TEACHER' ? `学生 ${uid}` : `老师 ${uid}`;
+}
+
+function participantAvatar(it: CourseItem) {
+  const uid = role.value === 'TEACHER' ? it.studentUid : it.teacherUid;
+  return resolveImageUrl(userMap.value[uid]?.avatar);
 }
 
 function modeText(mode?: string | null) {
@@ -215,11 +229,32 @@ function nextHint(it: CourseItem) {
   const s = normalizeStatus(it.status);
   if (s === 'WAIT_PAY') return '进入详情完成信息费支付';
   if (s === 'COMMUNICATING') return '去聊天确认试课时间';
+  if (s === 'TRIALING') return '查看最近课节并准备上课';
   if (s === 'TRIAL_WAIT_STUDENT_DECISION') return '学生需要确认试课结果';
   if (s === 'TRIAL_WAIT_WEEKLY_SCHEDULE') return '学生需要提交正式课表';
-  if (s === 'TEACHING') return '查看课节和正式课表';
+  if (s === 'TEACHING') return '查看课节、课表和课堂总结';
+  if (s === 'FINISHED') return '回看历史课节和课后总结';
   if (s.includes('REFUND')) return '查看退费处理进度';
   return '查看课程详情';
+}
+
+async function loadParticipants(items: CourseItem[]) {
+  const ids = Array.from(new Set(items.map((it) => (role.value === 'TEACHER' ? it.studentUid : it.teacherUid)).filter((id) => Number(id) > 0)));
+  if (!ids.length) {
+    userMap.value = {};
+    return;
+  }
+  try {
+    const users = await userApi.batch(ids);
+    const next: Record<number, UserSimple> = {};
+    for (const user of users || []) {
+      const uid = Number(user?.id || user?.uid || 0);
+      if (uid > 0) next[uid] = user;
+    }
+    userMap.value = next;
+  } catch {
+    userMap.value = {};
+  }
 }
 
 async function load() {
@@ -228,6 +263,7 @@ async function load() {
   error.value = '';
   try {
     list.value = await courseApi.myCourses({ role: role.value, size: 50 });
+    await loadParticipants(list.value);
   } catch (e: any) {
     error.value = e?.message || e?.msg || '加载课程失败';
   } finally {
@@ -371,16 +407,37 @@ onPullDownRefresh(async () => {
   align-items: flex-start;
 }
 
+.head-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.head-copy {
+  min-width: 0;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eef2f3;
+}
+
 .course-title {
   font-size: 17px;
   font-weight: 900;
   color: #142326;
   margin-bottom: 5px;
+  line-height: 1.35;
 }
 
 .course-sub {
   font-size: 12px;
   color: #7a838c;
+  line-height: 1.5;
 }
 
 .badge {

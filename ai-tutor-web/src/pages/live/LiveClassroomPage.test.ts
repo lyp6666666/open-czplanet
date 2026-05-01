@@ -229,6 +229,65 @@ describe('LiveClassroomPage', () => {
     expect(connectMock).toHaveBeenCalledTimes(1)
   })
 
+  it('uses preissued mp bridge token instead of requesting join token again', async () => {
+    getByCourseMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    statusMock.mockResolvedValue({
+      sessionId: 8,
+      courseId: 66,
+      status: 'IN_PROGRESS',
+      providerRoomName: 'class-66',
+      provider: 'LIVEKIT',
+      teacherUid: 1001,
+      studentUid: 1002,
+      peerJoined: false,
+      roomId: 7001,
+    })
+    connectMock.mockResolvedValue(undefined)
+
+    const router = createRouter({
+      history: createWebHashHistory(),
+      routes: [{ path: '/live/classroom/:courseId', component: LiveClassroomPage }],
+    })
+    router.push({
+      path: '/live/classroom/66',
+      query: {
+        sessionId: '8',
+        serverUrl: 'wss://live.example.com',
+        roomName: 'class-66',
+        participantIdentity: 'teacher-1001',
+        participantName: '老师',
+        accessToken: 'preissued-token',
+        expireAt: '2099-01-01T00:00:00Z',
+        source: 'mp_weixin',
+      },
+    })
+    await router.isReady()
+
+    mount(LiveClassroomPage, {
+      global: { plugins: [createPinia(), router] },
+    })
+    await flushPromises()
+
+    expect(joinTokenMock).not.toHaveBeenCalled()
+    expect(connectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverUrl: 'wss://live.example.com',
+        token: 'preissued-token',
+      }),
+    )
+    expect(joinAckMock).toHaveBeenCalledTimes(1)
+  })
+
   it('toggles microphone through live room client', async () => {
     getByCourseMock.mockResolvedValue({
       sessionId: 8,

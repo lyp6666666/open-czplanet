@@ -5,7 +5,7 @@ from typing import Iterator
 
 import pytest
 
-from core.auth import SEED_STUDENT, SEED_TEACHER, login_or_mint_seed_user
+from core.auth import SEED_STUDENT, SEED_TEACHER, SeedUser, login_or_mint_seed_user, seed_user_from_env
 from core.config import QAConfig, load_config
 from core.http_client import ApiClient
 
@@ -29,6 +29,24 @@ def teacher_token(api_client: ApiClient, qa_config: QAConfig) -> str:
 @pytest.fixture(scope="session")
 def student_token(api_client: ApiClient, qa_config: QAConfig) -> str:
     return login_or_mint_seed_user(api_client, SEED_STUDENT, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
+
+
+@pytest.fixture(scope="session")
+def funds_teacher_token(api_client: ApiClient, qa_config: QAConfig) -> str:
+    seed = seed_user_from_env(
+        "QA_FUNDS_TEACHER",
+        SeedUser(user_id=910102, phone="18611721002", role_enum="TEACHER", role_code="teacher"),
+    )
+    return login_or_mint_seed_user(api_client, seed, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
+
+
+@pytest.fixture(scope="session")
+def funds_student_token(api_client: ApiClient, qa_config: QAConfig) -> str:
+    seed = seed_user_from_env(
+        "QA_FUNDS_STUDENT",
+        SeedUser(user_id=910002, phone="18611720002", role_enum="STUDENT", role_code="student"),
+    )
+    return login_or_mint_seed_user(api_client, seed, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
 
 
 @pytest.fixture

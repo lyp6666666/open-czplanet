@@ -20,6 +20,7 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
 - 当前生产运行目录是 `111.228.20.88:/opt/ai-platform-prod`；旧目录 `/opt/ai-platform` 仍可能存在，但默认不要再把它当成当前生产目录。
 - 当前分支约定是：`dev` 用于本地/开发联调，`master` 用于生产自动部署。
 - GitHub Actions 生产发布链路以 `.github/workflows/deploy-prod.yml` 为准：`push master` -> SSH 到 `111.228.20.88` -> 执行 `/usr/local/bin/ai-platform-prod-deploy.sh`。
+- 任何 Git 提交、推送、MR/PR 或发布相关操作，必须先遵循 `skills/git-commit-workflow/SKILL.md`：提交 subject 必须包含中文；提交前必须先 fetch/pull 目标分支最新代码；默认提交并推送 `dev`；通过 MR/PR 合并到 `master`；`master` 会触发生产自动部署。
 - 当前公网入口是双机转发：
   `111.229.64.41` 负责域名、TLS 和第一层 nginx；
   `111.228.20.88` 负责真正的应用、第二层 nginx 和全部中间件。
@@ -60,12 +61,13 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
 2. 在提出方案或动手前，先读匹配的背景文档。
 3. 做出符合现有仓库模式的、最小但完整的改动。
 4. 按 `references/testing-matrix.md` 运行最小但有意义的验证。
-5. 如果学到了新的仓库专属规则、坑点或捷径，就更新：
+5. 如果任务涉及 Git 提交、推送、MR/PR 或发布，先读取并遵循 `git-commit-workflow/SKILL.md`。
+6. 如果学到了新的仓库专属规则、坑点或捷径，就更新：
    - `references/gotchas.md`
    - `references/commands.md`
    - `references/business-flows.md`
    - `references/testing-matrix.md`
-6. 变更验证通过后，在 `references/change-log.md` 追加一条简洁的日期记录。
+7. 变更验证通过后，在 `references/change-log.md` 追加一条简洁的日期记录。
 
 ## 持续改进约定
 
@@ -99,6 +101,8 @@ description: "当需要分析、修改、排查、评审或扩展 ai-tutor-platf
   `references/gotchas.md`
 - 这个 skill 的持续维护记录：
   `references/change-log.md`
+- Git 提交、推送、MR/PR 与生产发布约定：
+  `git-commit-workflow/SKILL.md`
 
 ## 脚本
 

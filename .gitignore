@@ -72,6 +72,9 @@ ai-tutor-miniprogram/unpackage/
 playwright-report/
 test-results/
 ai-tutor-web/playwright/.auth/
+ai-tutor-web/tmp/
+ai-tutor-web/_tmp_*.png
+tmp/
 
 node_modules/
 huoyue.online_nginx.zip

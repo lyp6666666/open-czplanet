@@ -63,6 +63,22 @@
         <text class="desc">{{ tutor.teacherProfile?.introduction || '暂无简介' }}</text>
       </view>
 
+      <view v-if="latestApplication" class="card sec">
+        <text class="sec-title">最近申请进度</text>
+        <view class="kv">
+          <text class="k">当前状态</text>
+          <text class="v">{{ applicationStatusText(latestApplication.status) }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">下一步</text>
+          <text class="v">{{ applicationHint(latestApplication) }}</text>
+        </view>
+        <view class="inline-actions">
+          <button class="mini-btn ghost" @click="openLatestApplication">查看申请</button>
+          <button v-if="canOpenApplicationChat" class="mini-btn" @click="enterLatestChat">进入聊天</button>
+        </view>
+      </view>
+
       <view class="ops">
         <button class="op-btn ghost" :disabled="favoriteBusy" @click="toggleFavorite">{{ favorited ? '已收藏' : '收藏老师' }}</button>
         <button class="op-btn primary" @click="handleContact">发起申请</button>
@@ -84,6 +100,20 @@
 
         <view class="modal-body">
           <view class="form-item">
+            <text class="label">授课形式</text>
+            <view class="mode-seg">
+              <view
+                v-for="item in availableTeachingModeOptions"
+                :key="item.value"
+                class="mode-item"
+                :class="{ active: applyTeachingMode === item.value }"
+                @click="applyTeachingMode = item.value"
+              >
+                {{ item.label }}
+              </view>
+            </view>
+          </view>
+          <view class="form-item">
             <text class="label">申请语</text>
             <textarea class="textarea" v-model="applyContent" placeholder="请简单描述你的需求，便于老师判断是否通过"></textarea>
           </view>
@@ -103,6 +133,7 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { request, resolveImageUrl } from '@/utils/request';
+import { applicationApi, type TutorApplication } from '@/api/application';
 import { chatApi } from '@/api/chat';
 import { favoritesApi } from '@/api/favorites';
 import { useUserStore } from '@/stores/user';
@@ -111,11 +142,24 @@ import { ensureStudentMode } from '@/utils/studentGuard';
 const userStore = useUserStore();
 const tutor = ref<any>(null);
 const loading = ref(false);
+const latestApplication = ref<TutorApplication | null>(null);
 const showApplyModal = ref(false);
 const applyContent = ref('您好老师，我这边有一个家教需求，方便聊聊吗？');
+const applyTeachingMode = ref<'ONLINE' | 'OFFLINE'>('ONLINE');
 const applyBusy = ref(false);
 const favorited = ref(false);
 const favoriteBusy = ref(false);
+const teachingModeOptions = [
+  { label: '线上', value: 'ONLINE' as const },
+  { label: '线下', value: 'OFFLINE' as const },
+];
+const availableTeachingModeOptions = computed(() => {
+  const teacherMode = String(tutor.value?.teacherProfile?.teachingMode || '').trim().toUpperCase();
+  if (teacherMode === 'ONLINE') return teachingModeOptions.filter((it) => it.value === 'ONLINE');
+  if (teacherMode === 'OFFLINE') return teachingModeOptions.filter((it) => it.value === 'OFFLINE');
+  return teachingModeOptions;
+});
+const canOpenApplicationChat = computed(() => latestApplication.value?.chatAccessStatus === 'CHAT_ENABLED' && !!latestApplication.value?.roomId);
 const subjectTags = computed(() => {
   const raw = String(tutor.value?.teacherProfile?.subject || '').trim();
   if (!raw) return [];
@@ -154,6 +198,11 @@ onLoad(async (options: any) => {
   if (options.id) {
     await fetchDetail(options.id);
   }
+  if (String(options?.__intent || '') === 'open-tutor-apply' && userStore.isLoggedIn && userStore.currentRole === 'student') {
+    setTimeout(() => {
+      void handleContact();
+    }, 300);
+  }
 });
 
 const fetchDetail = async (id: string) => {
@@ -164,6 +213,7 @@ const fetchDetail = async (id: string) => {
     });
     tutor.value = res;
     await loadFavoriteState();
+    await loadLatestApplication();
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '加载失败', icon: 'none' });
@@ -182,6 +232,21 @@ async function loadFavoriteState() {
     favorited.value = Array.isArray(ids) && ids.some((it) => Number(it) === Number(uid));
   } catch {
     favorited.value = false;
+  }
+}
+
+async function loadLatestApplication() {
+  latestApplication.value = null;
+  if (!userStore.isLoggedIn || userStore.currentRole !== 'student') return;
+  const tutorId = Number(tutor.value?.teacherProfile?.id || 0);
+  if (!(tutorId > 0)) return;
+  try {
+    const page = await applicationApi.sent({ pageSize: 20 });
+    const rows = Array.isArray(page?.list) ? page.list : [];
+    latestApplication.value =
+      rows.find((it) => String(it.contextType || '').toUpperCase() === 'TUTOR' && Number(it.contextId) === tutorId) || null;
+  } catch {
+    latestApplication.value = null;
   }
 }
 
@@ -205,6 +270,10 @@ async function toggleFavorite() {
 const handleContact = async () => {
   if (!ensureStudentMode('学生/家长身份可以向老师发起申请。', 'open-tutor-apply')) return;
   if (!tutor.value) return;
+  const teacherMode = String(tutor.value?.teacherProfile?.teachingMode || '').trim().toUpperCase();
+  if (teacherMode === 'ONLINE') applyTeachingMode.value = 'ONLINE';
+  else if (teacherMode === 'OFFLINE') applyTeachingMode.value = 'OFFLINE';
+  else applyTeachingMode.value = 'ONLINE';
   showApplyModal.value = true;
 };
 
@@ -224,6 +293,10 @@ const handleApply = async () => {
     uni.showToast({ title: '请填写申请语', icon: 'none' });
     return;
   }
+  if (!availableTeachingModeOptions.value.some((it) => it.value === applyTeachingMode.value)) {
+    uni.showToast({ title: '请选择老师支持的授课形式', icon: 'none' });
+    return;
+  }
   applyBusy.value = true;
   try {
     const clientRequestId = `mp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -232,6 +305,7 @@ const handleApply = async () => {
       contextType: 'TUTOR',
       contextId: tutorId,
       content,
+      teachingMode: applyTeachingMode.value,
       clientRequestId,
     });
     const roomId = msg?.message?.roomId;
@@ -244,6 +318,16 @@ const handleApply = async () => {
     uni.showToast({ title: '申请已发送', icon: 'success' });
     showApplyModal.value = false;
     if (applicationId) {
+      latestApplication.value = {
+        id: Number(applicationId),
+        senderUid: Number(userStore.userInfo?.id || 0),
+        receiverUid: Number(targetUid),
+        contextType: 'TUTOR',
+        contextId: Number(tutorId),
+        content,
+        status: 'PENDING',
+        teachingMode: applyTeachingMode.value,
+      } as TutorApplication;
       setTimeout(() => {
         uni.navigateTo({ url: `/pages/application/detail?id=${applicationId}` });
       }, 450);
@@ -255,6 +339,32 @@ const handleApply = async () => {
     applyBusy.value = false;
   }
 };
+
+function applicationStatusText(status?: string) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'PENDING') return '待处理';
+  if (s === 'ACCEPTED') return '已通过';
+  if (s === 'REJECTED') return '已拒绝';
+  return s || '未知';
+}
+
+function applicationHint(item: TutorApplication) {
+  if (item.status === 'PENDING') return '等待老师处理你的申请';
+  if (item.chatAccessStatus === 'PAYMENT_REQUIRED') return '等待教师支付信息费';
+  if (item.chatAccessStatus === 'CHAT_ENABLED') return '聊天已开放，可继续确认试课';
+  if (item.status === 'REJECTED') return '本次申请已结束，可重新发起';
+  return '可进入申请详情查看';
+}
+
+function openLatestApplication() {
+  if (!latestApplication.value?.id) return;
+  uni.navigateTo({ url: `/pages/application/detail?id=${latestApplication.value.id}` });
+}
+
+function enterLatestChat() {
+  if (!latestApplication.value?.roomId) return;
+  uni.navigateTo({ url: `/pages/chat/room?id=${latestApplication.value.roomId}` });
+}
 
 </script>
 
@@ -452,6 +562,29 @@ const handleApply = async () => {
   gap: 10px;
 }
 
+.inline-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.mini-btn {
+  height: 34px;
+  line-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: #0f766e;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mini-btn.ghost {
+  color: #35444b;
+  background: #eef2f3;
+}
+
 .op-btn {
   height: 42px;
   line-height: 42px;
@@ -527,6 +660,28 @@ const handleApply = async () => {
   display: grid;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.mode-seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mode-item {
+  height: 40px;
+  line-height: 40px;
+  border-radius: 12px;
+  text-align: center;
+  color: #5d6972;
+  background: #f3f5f6;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mode-item.active {
+  color: #fff;
+  background: #0f766e;
 }
 
 .label {

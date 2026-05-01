@@ -64,3 +64,23 @@ class PaymentClient:
         resp = self.client.session.post(url, data=params, timeout=self.client.timeout_s)
         resp.raise_for_status()
         return resp.text
+
+    def mock_success(self, order_no: str, ops_token: str) -> PaymentStatus:
+        resp = self.client.session.post(
+            self.client.base_url + f"/payment/dev/orders/{order_no}/mock-success",
+            headers={"X-Ops-Token": ops_token},
+            timeout=self.client.timeout_s,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict):
+            raise RuntimeError("mock_success_invalid")
+        return PaymentStatus(
+            orderNo=str(data.get("orderNo")),
+            status=str(data.get("status")),
+            amountFen=int(data.get("amountFen")),
+            channel=str(data.get("channel")),
+            expireTime=data.get("expireTime"),
+            successTime=data.get("successTime"),
+        )

@@ -1,6 +1,17 @@
 import { request } from '@/utils/request';
 import type { CurrentUser } from '@/types/domain';
 
+export type UserSimple = {
+  id: number;
+  uid?: number;
+  name?: string;
+  realName?: string;
+  nickname?: string;
+  avatar?: string;
+  phone?: string;
+  userType?: number;
+};
+
 export const userApi = {
   // 获取当前用户信息（包含扩展资料）
   getUserInfo(): Promise<CurrentUser> {
@@ -42,5 +53,13 @@ export const userApi = {
       url: '/user/email/summary',
       method: 'DELETE'
     });
+  },
+  batch(ids: number[]) {
+    return request({
+      url: '/user/batch',
+      method: 'GET',
+      data: { ids: ids.join(',') },
+      silentError: true,
+    }) as Promise<UserSimple[]>;
   }
 };

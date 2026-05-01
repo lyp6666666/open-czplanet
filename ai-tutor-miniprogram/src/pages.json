@@ -90,6 +90,45 @@
             }
         },
         {
+            "path": "pages/course/lesson-detail",
+            "style": {
+                "navigationBarTitleText": "课节详情"
+            }
+        },
+        {
+            "path": "pages/course/ai-summary",
+            "style": {
+                "navigationBarTitleText": "课后总结",
+                "enablePullDownRefresh": true
+            }
+        },
+        {
+            "path": "pages/schedule/index",
+            "style": {
+                "navigationBarTitleText": "课程表",
+                "enablePullDownRefresh": true
+            }
+        },
+        {
+            "path": "pages/live/prepare",
+            "style": {
+                "navigationBarTitleText": "课堂准备",
+                "enablePullDownRefresh": true
+            }
+        },
+        {
+            "path": "pages/live/launch",
+            "style": {
+                "navigationBarTitleText": "进入课堂"
+            }
+        },
+        {
+            "path": "pages/live/webview",
+            "style": {
+                "navigationBarTitleText": "线上课堂"
+            }
+        },
+        {
             "path": "pages/favorites/index",
             "style": {
                 "navigationBarTitleText": "我的收藏",

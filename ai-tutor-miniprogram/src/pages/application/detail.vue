@@ -24,8 +24,20 @@
 
       <view class="panel">
         <view class="row">
+          <text class="k">当前进度</text>
+          <text class="v">{{ progressText(detail) }}</text>
+        </view>
+        <view class="row">
           <text class="k">聊天状态</text>
           <text class="v">{{ accessText(detail) }}</text>
+        </view>
+        <view v-if="detail.paymentPayerRole" class="row">
+          <text class="k">支付责任</text>
+          <text class="v">{{ payerRoleText(detail.paymentPayerRole) }}</text>
+        </view>
+        <view v-if="detail.orderId" class="row">
+          <text class="k">信息费订单</text>
+          <text class="v">#{{ detail.orderId }}</text>
         </view>
         <view class="row">
           <text class="k">申请类型</text>
@@ -50,6 +62,11 @@
         <text class="content">{{ detail.content || '暂无申请内容' }}</text>
       </view>
 
+      <view class="panel next-panel">
+        <text class="section-title">下一步</text>
+        <text class="content">{{ nextActionHint(detail) }}</text>
+      </view>
+
       <view v-if="opError" class="op-error">{{ opError }}</view>
 
       <view class="actions">
@@ -63,6 +80,25 @@
           <button class="action-btn primary single" :disabled="busy" @click="enterChat">
             {{ busy ? '处理中...' : primaryActionText }}
           </button>
+          <button
+            v-if="canOpenCourse"
+            class="action-btn ghost single"
+            :disabled="busy"
+            @click="openCourse"
+          >
+            查看合作
+          </button>
+        </template>
+        <template v-else-if="detail.status === 'REJECTED'">
+          <button
+            v-if="canRetryFromContext"
+            class="action-btn primary single"
+            :disabled="busy"
+            @click="retryFromContext"
+          >
+            重新发起申请
+          </button>
+          <button class="action-btn ghost single" @click="back">返回</button>
         </template>
         <button v-else class="action-btn ghost single" @click="back">返回</button>
       </view>
@@ -74,6 +110,7 @@
 import { computed, ref } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { applicationApi, type ApplicationDecision, type TutorApplication } from '@/api/application';
+import { courseApi } from '@/api/course';
 import { useUserStore } from '@/stores/user';
 import AppStateCard from '@/components/AppStateCard.vue';
 
@@ -88,11 +125,18 @@ const opError = ref('');
 const canDecide = computed(() => {
   return !!detail.value && detail.value.status === 'PENDING' && detail.value.receiverUid === userStore.userInfo?.id;
 });
+const canOpenCourse = computed(() => detail.value?.chatAccessStatus === 'CHAT_ENABLED' && !!detail.value?.roomId);
+const canRetryFromContext = computed(() => {
+  if (!detail.value || detail.value.status !== 'REJECTED') return false;
+  const type = String(detail.value.contextType || '').toUpperCase();
+  return type === 'DEMAND' || type === 'TUTOR' || type === 'ORG_POSTING';
+});
 
 const primaryActionText = computed(() => {
   if (!detail.value) return '进入聊天';
   if (detail.value.chatAccessStatus === 'PAYMENT_REQUIRED' && userStore.currentRole === 'tutor') return '去支付信息费';
   if (detail.value.chatAccessStatus === 'PAYMENT_REQUIRED') return '查看进度';
+  if (detail.value.chatAccessStatus === 'CHAT_ENABLED') return '进入聊天';
   return '进入聊天';
 });
 
@@ -112,6 +156,14 @@ function accessText(it: TutorApplication) {
   return '等待系统确认';
 }
 
+function progressText(it: TutorApplication) {
+  if (it.status === 'PENDING') return '等待接收方处理';
+  if (it.status === 'REJECTED') return '申请已结束';
+  if (it.chatAccessStatus === 'PAYMENT_REQUIRED') return '等待信息费支付';
+  if (it.chatAccessStatus === 'CHAT_ENABLED') return '已进入沟通阶段';
+  return '状态同步中';
+}
+
 function flowTip(it: TutorApplication) {
   if (it.status === 'PENDING') return '接收方通过后才会进入信息费支付与聊天解锁。';
   if (it.status === 'ACCEPTED' && it.chatAccessStatus === 'PAYMENT_REQUIRED') return '申请已通过，教师支付信息费后双方才能继续聊天。';
@@ -124,6 +176,28 @@ function contextText(it: TutorApplication) {
   if (it.contextType === 'DEMAND') return `学生需求 #${it.contextId}`;
   if (it.contextType === 'ORG_POSTING') return `机构需求 #${it.contextId}`;
   return `老师主页 #${it.contextId}`;
+}
+
+function payerRoleText(role?: string | null) {
+  const value = String(role || '').toUpperCase();
+  if (value === 'TEACHER' || value === 'TUTOR') return '教师支付';
+  if (value === 'STUDENT' || value === 'PARENT') return '学生支付';
+  return '待系统确认';
+}
+
+function nextActionHint(it: TutorApplication) {
+  if (it.status === 'PENDING') {
+    return canDecide.value ? '你可以现在决定是否通过这条申请。' : '等待对方处理申请，通过后会进入支付和聊天解锁。';
+  }
+  if (it.status === 'REJECTED') return '这次申请已经结束，如仍要继续沟通，需要重新发起申请。';
+  if (it.chatAccessStatus === 'PAYMENT_REQUIRED') {
+    if (userStore.currentRole === 'tutor') return '先完成信息费支付，支付成功后会自动开放聊天。';
+    return '当前等待教师完成信息费支付，支付成功后你就可以进入聊天。';
+  }
+  if (it.chatAccessStatus === 'CHAT_ENABLED') {
+    return '现在可以进入聊天继续确认试课、合作提案与后续课程安排。';
+  }
+  return '请刷新申请状态，等待系统同步下一步动作。';
 }
 
 function otherUid(it: TutorApplication) {
@@ -188,6 +262,43 @@ async function enterChat() {
   } finally {
     busy.value = false;
   }
+}
+
+async function openCourse() {
+  if (!detail.value?.roomId || busy.value) return;
+  busy.value = true;
+  opError.value = '';
+  try {
+    const course = await courseApi.byRoom(detail.value.roomId);
+    if (course?.courseId) {
+      uni.navigateTo({ url: `/pages/course/detail?id=${course.courseId}` });
+      return;
+    }
+    opError.value = '当前合作还未生成课程详情';
+  } catch (e: any) {
+    opError.value = e?.message || e?.msg || '打开合作失败';
+  } finally {
+    busy.value = false;
+  }
+}
+
+function retryFromContext() {
+  if (!detail.value) return;
+  const type = String(detail.value.contextType || '').toUpperCase();
+  const contextId = Number(detail.value.contextId);
+  if (!(contextId > 0)) {
+    opError.value = '缺少重新发起所需的上下文信息';
+    return;
+  }
+  if (type === 'DEMAND' || type === 'ORG_POSTING') {
+    uni.navigateTo({ url: `/pages/job/detail?id=${contextId}` });
+    return;
+  }
+  if (type === 'TUTOR') {
+    uni.navigateTo({ url: `/pages/tutor/detail?id=${contextId}` });
+    return;
+  }
+  opError.value = '当前申请暂不支持原路径重开';
 }
 
 function back() {
@@ -290,6 +401,10 @@ onShow(() => {
   color: #27313a;
   font-size: 14px;
   line-height: 1.75;
+}
+
+.next-panel {
+  border-style: dashed;
 }
 
 .actions {

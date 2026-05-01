@@ -68,6 +68,33 @@ cd qa/automation
 ./scripts/run_regression.sh
 ```
 
+### 资金链路 P0 门禁
+
+先确认 117 测试机已导入 `sqlDoc/qa_seed_data.sql`，且服务以 `qa`/`test` profile 启动。
+
+```bash
+cd qa/automation
+export QA_API_BASE_URL=http://117.72.111.39:18080
+export SPRING_PROFILES_ACTIVE=qa
+export PAYMENT_ENABLED=true
+export QA_LOGIN_MODE=otp
+export QA_FUNDS_TEACHER_USER_ID=910102
+export QA_FUNDS_TEACHER_PHONE=18611721002
+export QA_FUNDS_STUDENT_USER_ID=910002
+export QA_FUNDS_STUDENT_PHONE=18611720002
+export QA_FUNDS_DEMAND_ID=940002
+export QA_FUNDS_BROKERAGE_ORDER_ID=980001
+export QA_FUNDS_REFUND_REQUEST_ID=985001
+pytest -m funds tests/api/test_funds_p0.py
+```
+
+如需覆盖后台退款详情校验，额外设置：
+
+```bash
+export QA_ADMIN_USERNAME=admin
+export QA_ADMIN_PASSWORD=<测试机后台密码>
+```
+
 产物输出：
 - `artifacts/junit-*.xml`
 - `artifacts/ui/*.png`（UI 失败截图）

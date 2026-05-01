@@ -27,6 +27,29 @@
         <view class="tab" :class="{ active: tab === 'sent' }" @click="switchTab('sent')">发出的</view>
       </view>
 
+      <view v-if="filterSummary" class="filter-bar">
+        <view>
+          <text class="filter-label">当前筛选</text>
+          <text class="filter-text">{{ filterSummary }}</text>
+        </view>
+        <button class="filter-clear" @click="clearFilter">查看全部</button>
+      </view>
+
+      <view v-if="list.length > 0" class="summary-strip">
+        <view class="summary-card">
+          <text class="summary-num">{{ list.length }}</text>
+          <text class="summary-label">当前列表</text>
+        </view>
+        <view class="summary-card">
+          <text class="summary-num">{{ pendingCount }}</text>
+          <text class="summary-label">{{ tab === 'received' ? '待你处理' : '等待回复' }}</text>
+        </view>
+        <view class="summary-card">
+          <text class="summary-num">{{ chatReadyCount }}</text>
+          <text class="summary-label">已可聊天</text>
+        </view>
+      </view>
+
       <AppStateCard
         v-if="error"
         title="申请列表加载失败"
@@ -90,18 +113,44 @@ const error = ref('');
 const unreadCount = ref(0);
 const contextIdFilter = ref<number | null>(null);
 const contextTypeFilter = ref<string>('');
+const statusFilter = ref('');
+const chatAccessFilter = ref('');
 
 const rawList = computed(() => (tab.value === 'received' ? received.value : sent.value));
 const list = computed(() => {
   const id = contextIdFilter.value;
   const type = String(contextTypeFilter.value || '').trim().toUpperCase();
-  if (!id && !type) return rawList.value;
   return rawList.value.filter((it) => {
     const sameId = id ? Number(it.contextId) === id : true;
     const sameType = type ? String(it.contextType || '').toUpperCase() === type : true;
-    return sameId && sameType;
+    const sameStatus = statusFilter.value ? String(it.status || '').toUpperCase() === statusFilter.value : true;
+    const sameChatAccess = chatAccessFilter.value ? String(it.chatAccessStatus || '').toUpperCase() === chatAccessFilter.value : true;
+    return sameId && sameType && sameStatus && sameChatAccess;
   });
 });
+const filterSummary = computed(() => {
+  const parts: string[] = [];
+  if (contextIdFilter.value || contextTypeFilter.value) {
+    const type = String(contextTypeFilter.value || '').toUpperCase();
+    const name = type === 'DEMAND' ? '需求' : type === 'ORG_POSTING' ? '机构需求' : type === 'TUTOR' ? '老师主页' : '指定来源';
+    parts.push(contextIdFilter.value ? `${name} #${contextIdFilter.value}` : name);
+  }
+  if (statusFilter.value === 'PENDING') {
+    parts.push(tab.value === 'received' ? '待你处理' : '等待回复');
+  } else if (statusFilter.value === 'ACCEPTED') {
+    parts.push('已通过');
+  } else if (statusFilter.value === 'REJECTED') {
+    parts.push('已拒绝');
+  }
+  if (chatAccessFilter.value === 'CHAT_ENABLED') {
+    parts.push('已可聊天');
+  } else if (chatAccessFilter.value === 'PAYMENT_REQUIRED') {
+    parts.push('待支付信息费');
+  }
+  return parts.join(' · ');
+});
+const pendingCount = computed(() => list.value.filter((it) => String(it.status || '').toUpperCase() === 'PENDING').length);
+const chatReadyCount = computed(() => list.value.filter((it) => String(it.chatAccessStatus || '').toUpperCase() === 'CHAT_ENABLED').length);
 const isLast = computed(() => (tab.value === 'received' ? receivedLast.value : sentLast.value));
 
 function statusText(status: string) {
@@ -200,6 +249,13 @@ function switchTab(next: TabKey) {
   if (rawList.value.length === 0) void loadPage();
 }
 
+function clearFilter() {
+  contextIdFilter.value = null;
+  contextTypeFilter.value = '';
+  statusFilter.value = '';
+  chatAccessFilter.value = '';
+}
+
 function openDetail(id: number) {
   uni.navigateTo({ url: `/pages/application/detail?id=${id}` });
 }
@@ -214,6 +270,8 @@ onLoad((options: any) => {
   const contextId = Number(options?.contextId);
   contextIdFilter.value = Number.isFinite(contextId) && contextId > 0 ? contextId : null;
   contextTypeFilter.value = String(options?.contextType || '').trim().toUpperCase();
+  statusFilter.value = String(options?.status || '').trim().toUpperCase();
+  chatAccessFilter.value = String(options?.chatAccessStatus || '').trim().toUpperCase();
 });
 
 onShow(() => {
@@ -322,6 +380,81 @@ onPullDownRefresh(async () => {
   background: #ff5a5f;
   font-size: 10px;
   line-height: 18px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 32, 0.07);
+}
+
+.filter-label,
+.filter-text,
+.summary-num,
+.summary-label {
+  display: block;
+}
+
+.filter-label {
+  color: #7b8690;
+  font-size: 11px;
+}
+
+.filter-text {
+  margin-top: 4px;
+  color: #142326;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.filter-clear {
+  flex: 0 0 auto;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.1);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.filter-clear::after {
+  border: 0;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.summary-card {
+  padding: 12px 8px;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 8px 18px rgba(15, 23, 32, 0.05);
+}
+
+.summary-num {
+  color: #142326;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.summary-label {
+  margin-top: 4px;
+  color: #7b8690;
+  font-size: 11px;
 }
 
 .list {

@@ -58,7 +58,14 @@ export const chatApi = {
       data: { targetUid }
     });
   },
-  startChatByApplication(params: { receiverUid: number; contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING'; contextId: number; content: string; clientRequestId?: string }) {
+  startChatByApplication(params: {
+    receiverUid: number;
+    contextType: 'DEMAND' | 'TUTOR' | 'ORG_POSTING';
+    contextId: number;
+    content: string;
+    teachingMode?: 'ONLINE' | 'OFFLINE';
+    clientRequestId?: string;
+  }) {
     return request({
       url: '/chat/application/start-chat',
       method: 'POST',

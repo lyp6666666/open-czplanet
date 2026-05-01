@@ -48,13 +48,47 @@ export type ScheduleAvailabilityResp = {
   availableSlots?: ScheduleAvailabilitySlot[];
 };
 
+export type ListScheduleEventsParams = {
+  startAt: number;
+  endAt: number;
+  includePending?: boolean;
+};
+
+export type CreateScheduleEventRequest = {
+  courseId?: number;
+  lessonType?: 'TRIAL' | 'NORMAL';
+  lessonPriceFen?: number;
+  trialPricePercent?: number;
+  title: string;
+  participantUserId: number;
+  startAt: number;
+  endAt: number;
+  description?: string;
+  subjectId?: number;
+};
+
 export const scheduleApi = {
+  listEvents(params: ListScheduleEventsParams) {
+    return request({
+      url: '/api/v1/schedule/events',
+      method: 'GET',
+      data: params,
+      silentError: true,
+    }) as Promise<ScheduleEvent[]>;
+  },
   listCourseEvents(courseId: number) {
     return request({
       url: `/api/v1/schedule/courses/${courseId}/events`,
       method: 'GET',
       silentError: true,
     }) as Promise<ScheduleEvent[]>;
+  },
+  createEvent(data: CreateScheduleEventRequest) {
+    return request({
+      url: '/api/v1/schedule/events',
+      method: 'POST',
+      data,
+    }) as Promise<ScheduleEvent>;
   },
   respond(eventId: number, action: 'ACCEPT' | 'REJECT') {
     return request({

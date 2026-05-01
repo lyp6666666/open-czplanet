@@ -88,6 +88,9 @@
               {{ proposalBusy[msg.body.proposalId] ? '处理中' : '接受' }}
             </button>
           </view>
+          <view v-else-if="canReopenProposal(msg.body)" class="sys-ops">
+            <button class="mini" @click="reopenProposal(msg.body)">重新发起</button>
+          </view>
         </view>
 
         <view v-else-if="bodyType(msg) === 'collaboration_status'" class="sys-card">
@@ -98,6 +101,9 @@
           <text class="sys-desc">{{ msg.body.status === 'ACCEPTED' ? '合作已确认，可进入我的合作查看试课和课程进展。' : '合作提案状态已更新。' }}</text>
           <view v-if="msg.body.status === 'ACCEPTED'" class="sys-ops">
             <button class="mini" @click="goCourseByRoom">查看合作</button>
+          </view>
+          <view v-else-if="canReopenProposal(msg.body)" class="sys-ops">
+            <button class="mini" @click="reopenProposal(msg.body)">重新发起</button>
           </view>
         </view>
 
@@ -184,6 +190,7 @@ const proposalRemark = ref('');
 const infoFeePolicyOpen = ref(false);
 const infoFeePolicyRole = ref<'teacher' | 'student'>('teacher');
 const imageBusy = ref(false);
+const payPollingOrderNo = ref('');
 const peerTyping = ref(false);
 const lastEventId = ref<number | null>(null);
 const lastAckReadMsgId = ref<number | null>(null);
@@ -195,6 +202,7 @@ const hasMoreHistory = ref(false);
 let timer: any = null;
 let typingTimer: any = null;
 let peerTypingTimer: any = null;
+let payPollingTimer: any = null;
 
 const chatUnlocked = computed(() => {
   const bodies = msgList.value.map((it) => it.body || {});
@@ -432,6 +440,13 @@ function proposalStatusText(status: string) {
   return s || '未知';
 }
 
+function canReopenProposal(body: any) {
+  if (!chatUnlocked.value) return false;
+  if (!body || Number(body.creatorUserId) !== Number(myUid)) return false;
+  const status = String(body.status || '').toUpperCase();
+  return status === 'REJECTED' || status === 'EXPIRED' || status === 'CANCELED';
+}
+
 function orderStatusText(status: string) {
   const s = String(status || '').toUpperCase();
   if (s === 'PENDING') return '待支付';
@@ -573,8 +588,14 @@ const payBrokerage = async (orderId: number) => {
     });
     const params = payRes?.payParams;
     if (params?.mock) {
-      uni.showToast({ title: '模拟支付成功', icon: 'success' });
-      await fetchMessages();
+      if (payRes?.orderNo) {
+        payPollingOrderNo.value = payRes.orderNo;
+        uni.showToast({ title: '模拟支付已提交', icon: 'success' });
+        startPayPolling();
+      } else {
+        uni.showToast({ title: '模拟支付成功', icon: 'success' });
+        await fetchMessages();
+      }
       return;
     }
     if (!params) {
@@ -593,14 +614,66 @@ const payBrokerage = async (orderId: number) => {
         fail: (err: any) => reject(err)
       } as any);
     });
-    uni.showToast({ title: '支付成功', icon: 'success' });
-    await fetchMessages();
+    if (payRes?.orderNo) {
+      payPollingOrderNo.value = payRes.orderNo;
+      uni.showToast({ title: '支付成功，正在确认', icon: 'success' });
+      startPayPolling();
+    } else {
+      uni.showToast({ title: '支付成功', icon: 'success' });
+      await fetchMessages();
+    }
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '支付失败', icon: 'none' });
+    const raw = String(error?.errMsg || error?.message || '').toLowerCase();
+    if (raw.includes('cancel')) {
+      uni.showToast({ title: '你已取消支付', icon: 'none' });
+    } else {
+      uni.showToast({ title: error?.message || '支付失败', icon: 'none' });
+    }
   } finally {
     payBusy.value = false;
   }
 };
+
+function startPayPolling() {
+  if (!payPollingOrderNo.value) return;
+  stopPayPolling();
+  void pollPayStatusOnce();
+  payPollingTimer = setInterval(() => {
+    void pollPayStatusOnce();
+  }, 1800);
+}
+
+function stopPayPolling() {
+  if (payPollingTimer) {
+    clearInterval(payPollingTimer);
+    payPollingTimer = null;
+  }
+}
+
+async function pollPayStatusOnce() {
+  if (!payPollingOrderNo.value) return;
+  try {
+    const res = await paymentApi.orderStatus(payPollingOrderNo.value);
+    const status = String(res?.status || '').toUpperCase();
+    if (status === 'SUCCESS' || status === 'PAID') {
+      stopPayPolling();
+      payPollingOrderNo.value = '';
+      await fetchMessages();
+      if (chatUnlocked.value) {
+        uni.showToast({ title: '聊天已解锁', icon: 'success' });
+      }
+      return;
+    }
+    if (status === 'FAILED' || status === 'EXPIRED' || status === 'CANCELED') {
+      stopPayPolling();
+      payPollingOrderNo.value = '';
+      const text = status === 'EXPIRED' ? '支付单已过期' : status === 'CANCELED' ? '支付已取消' : '支付失败';
+      uni.showToast({ title: text, icon: 'none' });
+    }
+  } catch {
+    // 查询失败时保留轮询，等待下一轮。
+  }
+}
 
 function openInfoFeePolicy(role: 'teacher' | 'student') {
   infoFeePolicyRole.value = role;
@@ -615,6 +688,29 @@ function openProposal() {
   if (!chatUnlocked.value) {
     uni.showToast({ title: '聊天解锁后可发起合作', icon: 'none' });
     return;
+  }
+  proposalOpen.value = true;
+}
+
+function reopenProposal(body: any) {
+  if (!chatUnlocked.value) {
+    uni.showToast({ title: '聊天解锁后可发起合作', icon: 'none' });
+    return;
+  }
+  proposalPrice.value = String(body?.pricePerHour || '').trim();
+  proposalRemark.value = String(body?.remark || '').trim();
+  if (body?.trialStartAt) {
+    const start = new Date(Number(body.trialStartAt));
+    if (!Number.isNaN(start.getTime())) {
+      proposalDate.value = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+      proposalStartTime.value = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
+    }
+  }
+  if (body?.trialEndAt) {
+    const end = new Date(Number(body.trialEndAt));
+    if (!Number.isNaN(end.getTime())) {
+      proposalEndTime.value = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+    }
   }
   proposalOpen.value = true;
 }
@@ -696,6 +792,7 @@ onUnload(() => {
   if (timer) clearInterval(timer);
   if (typingTimer) clearTimeout(typingTimer);
   if (peerTypingTimer) clearTimeout(peerTypingTimer);
+  stopPayPolling();
   void reportTyping(false);
 });
 </script>

@@ -55,6 +55,10 @@
             <text class="quick-name">我的合作</text>
             <text class="quick-desc">跟进试课、正式课表和退费进度</text>
           </view>
+          <view class="quick-card" @click="goToSchedule">
+            <text class="quick-name">课程表</text>
+            <text class="quick-desc">查看今天、本周待上课和待确认课节</text>
+          </view>
           <view class="quick-card" @click="goToFavorites">
             <text class="quick-name">我的收藏</text>
             <text class="quick-desc">{{ favoriteHint }}</text>
@@ -508,6 +512,9 @@ const goToMyJobs = () => {
 };
 const goToCourses = () => {
   uni.navigateTo({ url: '/pages/course/list' });
+};
+const goToSchedule = () => {
+  uni.navigateTo({ url: '/pages/schedule/index' });
 };
 const goToFavorites = () => {
   uni.navigateTo({ url: '/pages/favorites/index' });

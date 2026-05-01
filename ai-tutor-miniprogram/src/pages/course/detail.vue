@@ -50,9 +50,13 @@
         <view v-if="detail.latestRefund.refundAmountFen" class="refund-money">{{ formatFen(detail.latestRefund.refundAmountFen) }}</view>
       </view>
 
-      <view v-if="detail.aiPreview" class="panel">
-        <text class="section-title">课后摘要</text>
+      <view v-if="detail.aiPreview || detail.aiResultStatus" class="panel" @click="goAiSummary">
+        <view class="panel-head">
+          <text class="section-title">课后摘要</text>
+          <text class="pill">{{ aiStatusText(detail.aiResultStatus) }}</text>
+        </view>
         <text class="desc">{{ detail.aiPreview }}</text>
+        <text class="link-line">查看完整课后总结</text>
       </view>
 
       <view v-if="availabilityDate" class="panel">
@@ -80,7 +84,7 @@
           <text class="pill">{{ lessons.length }} 节</text>
         </view>
         <view v-if="lessons.length === 0" class="empty-line">暂无课节，确认试课或正式课表后会自动同步。</view>
-        <view v-for="(lesson, index) in sortedLessons" :key="lesson.id" class="lesson">
+        <view v-for="(lesson, index) in sortedLessons" :key="lesson.id" class="lesson" @click="openLessonDetail(lesson)">
           <view>
             <text class="lesson-title">{{ index === 0 ? '首节试课' : lesson.title }}</text>
             <text class="lesson-time">{{ formatRange(lesson.startAt, lesson.endAt) }}</text>
@@ -100,6 +104,7 @@
         <button v-if="canSubmitTrial" class="bar-btn primary" @click="trialOpen = true">确认试课结果</button>
         <button v-else-if="canSubmitWeekly" class="bar-btn primary" @click="weeklyOpen = true">提交正式课表</button>
         <button v-else-if="canApplyRefund" class="bar-btn primary danger" @click="refundOpen = true">申请试课退费</button>
+        <button v-else-if="canCreateLesson" class="bar-btn primary" @click="openCreateLesson">新增课节</button>
         <button v-else class="bar-btn primary" @click="load">刷新</button>
       </view>
 
@@ -118,24 +123,31 @@
       <view v-if="weeklyOpen" class="sheet-mask" @click.self="weeklyOpen = false">
         <view class="sheet">
           <text class="sheet-title">正式课表</text>
-          <view class="form-row">
-            <text>每周星期</text>
-            <picker :range="dayOptions" range-key="label" :value="weeklyDayIndex" @change="onDayChange">
-              <view class="picker-value">{{ dayOptions[weeklyDayIndex].label }}</view>
-            </picker>
+          <view v-for="(slot, index) in weeklySlots" :key="slot.key" class="weekly-slot">
+            <view class="weekly-slot-head">
+              <text class="weekly-slot-title">时段 {{ index + 1 }}</text>
+              <text v-if="weeklySlots.length > 1" class="weekly-remove" @click="removeWeeklySlot(index)">删除</text>
+            </view>
+            <view class="form-row">
+              <text>每周星期</text>
+              <picker :range="dayOptions" range-key="label" :value="slot.dayIndex" @change="onDayChange(index, $event)">
+                <view class="picker-value">{{ dayOptions[slot.dayIndex].label }}</view>
+              </picker>
+            </view>
+            <view class="form-row">
+              <text>开始时间</text>
+              <picker mode="time" :value="slot.start" @change="onWeeklyTimeChange(index, 'start', $event)">
+                <view class="picker-value">{{ slot.start }}</view>
+              </picker>
+            </view>
+            <view class="form-row">
+              <text>结束时间</text>
+              <picker mode="time" :value="slot.end" @change="onWeeklyTimeChange(index, 'end', $event)">
+                <view class="picker-value">{{ slot.end }}</view>
+              </picker>
+            </view>
           </view>
-          <view class="form-row">
-            <text>开始时间</text>
-            <picker mode="time" :value="weeklyStart" @change="weeklyStart = String($event.detail.value)">
-              <view class="picker-value">{{ weeklyStart }}</view>
-            </picker>
-          </view>
-          <view class="form-row">
-            <text>结束时间</text>
-            <picker mode="time" :value="weeklyEnd" @change="weeklyEnd = String($event.detail.value)">
-              <view class="picker-value">{{ weeklyEnd }}</view>
-            </picker>
-          </view>
+          <button class="add-slot-btn" :disabled="saving" @click="addWeeklySlot">新增每周时段</button>
           <input v-model="weeklyPrice" class="input" type="digit" placeholder="正式课时费（元/小时，选填）" />
           <input v-model="weeklyWeeks" class="input" type="number" placeholder="持续周数" />
           <button class="submit" :disabled="saving" @click="submitWeekly">{{ saving ? '提交中...' : '提交课表' }}</button>
@@ -146,7 +158,41 @@
         <view class="sheet">
           <text class="sheet-title">申请试课退费</text>
           <textarea v-model="refundReason" class="textarea" placeholder="说明退费原因" maxlength="200" />
+          <input v-model="refundVideoUrl" class="input" type="text" placeholder="录屏地址（线下试课失败时必填）" />
+          <input v-model="refundVideoDurationSeconds" class="input" type="number" placeholder="录屏时长（秒，线下试课失败时必填）" />
+          <view class="evidence-head">
+            <text class="section-title">证据图片</text>
+            <button class="tiny" :disabled="saving || refundUploading" @click="chooseRefundImages">
+              {{ refundUploading ? '上传中...' : '上传图片' }}
+            </button>
+          </view>
+          <view v-if="refundEvidenceImages.length" class="evidence-grid">
+            <view v-for="(url, index) in refundEvidenceImages" :key="`${url}-${index}`" class="evidence-item">
+              <image class="evidence-image" :src="url" mode="aspectFill" @click="previewRefundImage(url)" />
+              <text class="remove" @click="removeRefundImage(index)">移除</text>
+            </view>
+          </view>
+          <text v-else class="desc">建议上传课堂现场、沟通记录等证据图片。</text>
           <button class="submit danger" :disabled="saving" @click="applyRefund">{{ saving ? '提交中...' : '提交退费申请' }}</button>
+        </view>
+      </view>
+
+      <view v-if="createLessonOpen" class="sheet-mask" @click.self="createLessonOpen = false">
+        <view class="sheet">
+          <text class="sheet-title">新增课节</text>
+          <input v-model="createLessonTitle" class="input" type="text" placeholder="课节名称，如：第 2 节正式课" />
+          <picker mode="date" :value="createLessonDate" @change="createLessonDate = String($event.detail.value)">
+            <view class="field">上课日期：{{ createLessonDate }}</view>
+          </picker>
+          <picker mode="time" :value="createLessonStart" @change="createLessonStart = String($event.detail.value)">
+            <view class="field">开始时间：{{ createLessonStart }}</view>
+          </picker>
+          <picker mode="time" :value="createLessonEnd" @change="createLessonEnd = String($event.detail.value)">
+            <view class="field">结束时间：{{ createLessonEnd }}</view>
+          </picker>
+          <input v-model="createLessonPrice" class="input" type="digit" placeholder="单节价格（元，选填）" />
+          <textarea v-model="createLessonDescription" class="textarea" placeholder="课节说明（选填）" maxlength="200" />
+          <button class="submit" :disabled="saving" @click="submitCreateLesson">{{ saving ? '创建中...' : '创建课节' }}</button>
         </view>
       </view>
     </template>
@@ -156,9 +202,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
+import { assetsApi } from '@/api/assets';
 import { courseApi, type CourseDetail } from '@/api/course';
 import { scheduleApi, type ScheduleAvailabilitySlot, type ScheduleEvent } from '@/api/schedule';
 import { useUserStore } from '@/stores/user';
+import { consumeLiveReturnRefresh } from '@/utils/liveRefresh';
 import AppStateCard from '@/components/AppStateCard.vue';
 
 const userStore = useUserStore();
@@ -174,13 +222,24 @@ const trialOpen = ref(false);
 const trialResult = ref<'PASS' | 'FAIL'>('PASS');
 const trialReason = ref('');
 const weeklyOpen = ref(false);
-const weeklyDayIndex = ref(1);
-const weeklyStart = ref('19:00');
-const weeklyEnd = ref('21:00');
 const weeklyPrice = ref('');
 const weeklyWeeks = ref('16');
+const weeklySlots = ref([
+  createWeeklySlot(1, '19:00', '21:00'),
+]);
 const refundOpen = ref(false);
 const refundReason = ref('');
+const refundVideoUrl = ref('');
+const refundVideoDurationSeconds = ref('');
+const refundEvidenceImages = ref<string[]>([]);
+const refundUploading = ref(false);
+const createLessonOpen = ref(false);
+const createLessonTitle = ref('');
+const createLessonDate = ref('');
+const createLessonStart = ref('19:00');
+const createLessonEnd = ref('20:00');
+const createLessonPrice = ref('');
+const createLessonDescription = ref('');
 const availabilityLoading = ref(false);
 const availabilityDate = ref('');
 const availabilitySlots = ref<ScheduleAvailabilitySlot[]>([]);
@@ -204,6 +263,8 @@ const sortedLessons = computed(() => lessons.value.slice().sort((a, b) => Number
 const canSubmitTrial = computed(() => !isTeacher.value && detail.value?.status === 'TRIAL_WAIT_STUDENT_DECISION');
 const canSubmitWeekly = computed(() => !isTeacher.value && detail.value?.status === 'TRIAL_WAIT_WEEKLY_SCHEDULE');
 const canApplyRefund = computed(() => isTeacher.value && detail.value?.status === 'TRIAL_FAILED' && !detail.value?.latestRefund);
+const canCreateLesson = computed(() => normalizeStatus(detail.value?.status) === 'TEACHING');
+const requiresOfflineRefundEvidence = computed(() => detail.value?.teachingMode === 'OFFLINE');
 
 function normalizeStatus(status?: string | null) {
   return String(status || '').trim().toUpperCase();
@@ -269,8 +330,25 @@ function formatFen(value?: number | null) {
   return `¥${(Number(value) / 100).toFixed(2)}`;
 }
 
+function aiStatusText(status?: string | null) {
+  const s = normalizeStatus(status);
+  if (s === 'READY') return '已生成';
+  if (s === 'GENERATING' || s === 'PENDING') return '生成中';
+  if (s === 'FAILED') return '生成失败';
+  return s || '可查看';
+}
+
 function canRespondLesson(lesson: ScheduleEvent) {
   return lesson.status === 'PENDING' && lesson.creatorUserId !== userStore.userInfo?.id;
+}
+
+function localDateTimeString(date: string, time: string) {
+  return `${date}T${time}:00`;
+}
+
+function lessonParticipantUserId() {
+  if (!detail.value) return 0;
+  return isTeacher.value ? detail.value.studentUid : detail.value.teacherUid;
 }
 
 async function load() {
@@ -291,6 +369,15 @@ async function load() {
 
 function todayString() {
   const d = new Date();
+  const year = d.getFullYear();
+  const month = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function plusDays(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
   const year = d.getFullYear();
   const month = `${d.getMonth() + 1}`.padStart(2, '0');
   const day = `${d.getDate()}`.padStart(2, '0');
@@ -352,27 +439,34 @@ function toMinutes(value: string) {
   return h * 60 + m;
 }
 
-function onDayChange(e: any) {
-  weeklyDayIndex.value = Number(e.detail.value || 0);
-}
-
 function applyAvailabilitySlot(slot: ScheduleAvailabilitySlot) {
   if (!slot?.startAt || !slot?.endAt) return;
   const start = new Date(slot.startAt);
   const end = new Date(slot.endAt);
   const day = start.getDay();
-  weeklyDayIndex.value = Math.max(0, day === 0 ? 6 : day - 1);
-  weeklyStart.value = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
-  weeklyEnd.value = `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`;
+  weeklySlots.value = [
+    createWeeklySlot(
+      Math.max(0, day === 0 ? 6 : day - 1),
+      `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`,
+      `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`,
+    ),
+  ];
   weeklyOpen.value = true;
 }
 
 async function submitWeekly() {
   if (!courseId.value || !detail.value || saving.value) return;
-  const startMinute = toMinutes(weeklyStart.value);
-  const endMinute = toMinutes(weeklyEnd.value);
-  if (!(endMinute > startMinute)) {
-    actionError.value = '结束时间必须晚于开始时间';
+  const slots = weeklySlots.value.map((slot) => ({
+    dayOfWeek: dayOptions[slot.dayIndex].value,
+    startMinute: toMinutes(slot.start),
+    endMinute: toMinutes(slot.end),
+  }));
+  if (!slots.length) {
+    actionError.value = '请至少添加一个每周时段';
+    return;
+  }
+  if (slots.some((slot) => !(slot.endMinute > slot.startMinute))) {
+    actionError.value = '每个时段的结束时间都必须晚于开始时间';
     return;
   }
   const price = Number(weeklyPrice.value);
@@ -386,7 +480,7 @@ async function submitWeekly() {
       description: '试课通过后确认的固定课表',
       weeks: Number(weeklyWeeks.value) || 16,
       lessonPriceFen: Number.isFinite(price) && price > 0 ? Math.round(price * 100) : undefined,
-      slots: [{ dayOfWeek: dayOptions[weeklyDayIndex.value].value, startMinute, endMinute }]
+      slots,
     });
     weeklyOpen.value = false;
     await load();
@@ -403,14 +497,160 @@ async function applyRefund() {
     actionError.value = '请填写退费原因';
     return;
   }
+  const duration = Number(refundVideoDurationSeconds.value);
+  if (requiresOfflineRefundEvidence.value) {
+    if (!refundEvidenceImages.value.length) {
+      actionError.value = '线下试课失败请至少上传一张证据图片';
+      return;
+    }
+    if (!refundVideoUrl.value.trim()) {
+      actionError.value = '线下试课失败请填写录屏地址';
+      return;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      actionError.value = '线下试课失败请填写有效的录屏时长';
+      return;
+    }
+  }
   saving.value = true;
   actionError.value = '';
   try {
-    await courseApi.applyTrialRefund(courseId.value, { reason: refundReason.value.trim() });
+    await courseApi.applyTrialRefund(courseId.value, {
+      reason: refundReason.value.trim(),
+      evidenceImageUrls: refundEvidenceImages.value,
+      evidenceVideoUrl: refundVideoUrl.value.trim() || undefined,
+      evidenceVideoDurationSeconds: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : undefined,
+    });
     refundOpen.value = false;
+    refundReason.value = '';
+    refundVideoUrl.value = '';
+    refundVideoDurationSeconds.value = '';
+    refundEvidenceImages.value = [];
     await load();
   } catch (e: any) {
     actionError.value = e?.message || e?.msg || '提交退费申请失败';
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function chooseRefundImages() {
+  if (refundUploading.value || saving.value) return;
+  refundUploading.value = true;
+  try {
+    const tempFiles = await new Promise<string[]>((resolve, reject) => {
+      uni.chooseImage({
+        count: 3,
+        sizeType: ['compressed'],
+        success: (res) => {
+          const next = Array.isArray(res.tempFilePaths)
+            ? res.tempFilePaths
+            : typeof res.tempFilePaths === 'string' && res.tempFilePaths
+              ? [res.tempFilePaths]
+              : [];
+          resolve(next.slice(0, 3));
+        },
+        fail: reject,
+      });
+    });
+    const uploaded: string[] = [];
+    for (const filePath of tempFiles) {
+      const res = await assetsApi.uploadImage(filePath, 'trial_refund');
+      if (res.url) uploaded.push(res.url);
+    }
+    refundEvidenceImages.value = [...refundEvidenceImages.value, ...uploaded].slice(0, 6);
+  } catch (e: any) {
+    actionError.value = e?.message || e?.msg || '上传证据图片失败';
+  } finally {
+    refundUploading.value = false;
+  }
+}
+
+function previewRefundImage(url: string) {
+  if (!url) return;
+  uni.previewImage({ urls: refundEvidenceImages.value, current: url });
+}
+
+function removeRefundImage(index: number) {
+  refundEvidenceImages.value = refundEvidenceImages.value.filter((_, i) => i !== index);
+}
+
+function openCreateLesson() {
+  if (!detail.value) return;
+  createLessonTitle.value = lessons.value.length === 0 ? '首节试课' : `第 ${lessons.value.length + 1} 节正式课`;
+  createLessonDate.value = plusDays(1);
+  createLessonStart.value = '19:00';
+  createLessonEnd.value = '20:00';
+  createLessonPrice.value = detail.value.lessonPrice ? String(detail.value.lessonPrice).replace(/[^\d.]/g, '') : '';
+  createLessonDescription.value = '';
+  createLessonOpen.value = true;
+}
+
+function createWeeklySlot(dayIndex = 1, start = '19:00', end = '21:00') {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    dayIndex,
+    start,
+    end,
+  };
+}
+
+function addWeeklySlot() {
+  weeklySlots.value = [...weeklySlots.value, createWeeklySlot()];
+}
+
+function removeWeeklySlot(index: number) {
+  if (weeklySlots.value.length <= 1) return;
+  weeklySlots.value = weeklySlots.value.filter((_, i) => i !== index);
+}
+
+function onDayChange(index: number, e: any) {
+  const value = Number(e?.detail?.value || 0);
+  weeklySlots.value = weeklySlots.value.map((slot, i) => (i === index ? { ...slot, dayIndex: value } : slot));
+}
+
+function onWeeklyTimeChange(index: number, field: 'start' | 'end', e: any) {
+  const value = String(e?.detail?.value || '');
+  weeklySlots.value = weeklySlots.value.map((slot, i) => (i === index ? { ...slot, [field]: value } : slot));
+}
+
+async function submitCreateLesson() {
+  if (!courseId.value || !detail.value || saving.value) return;
+  const title = createLessonTitle.value.trim();
+  if (!title) {
+    actionError.value = '请填写课节名称';
+    return;
+  }
+  const startAt = new Date(localDateTimeString(createLessonDate.value, createLessonStart.value)).getTime();
+  const endAt = new Date(localDateTimeString(createLessonDate.value, createLessonEnd.value)).getTime();
+  if (!createLessonDate.value || !Number.isFinite(startAt) || !Number.isFinite(endAt)) {
+    actionError.value = '请填写完整的上课时间';
+    return;
+  }
+  if (!(endAt > startAt)) {
+    actionError.value = '结束时间必须晚于开始时间';
+    return;
+  }
+  const price = Number(createLessonPrice.value);
+  saving.value = true;
+  actionError.value = '';
+  try {
+    const created = await scheduleApi.createEvent({
+      courseId: detail.value.courseId,
+      lessonType: lessons.value.length === 0 ? 'TRIAL' : 'NORMAL',
+      lessonPriceFen: Number.isFinite(price) && price > 0 ? Math.round(price * 100) : undefined,
+      trialPricePercent: lessons.value.length === 0 ? 100 : undefined,
+      title,
+      participantUserId: lessonParticipantUserId(),
+      startAt,
+      endAt,
+      description: createLessonDescription.value.trim() || undefined,
+    });
+    lessons.value = [...lessons.value, created];
+    createLessonOpen.value = false;
+    uni.showToast({ title: '课节已创建', icon: 'none' });
+  } catch (e: any) {
+    actionError.value = e?.message || e?.msg || '创建课节失败';
   } finally {
     saving.value = false;
   }
@@ -421,12 +661,26 @@ function goChat() {
   uni.navigateTo({ url: `/pages/chat/room?id=${detail.value.roomId}` });
 }
 
+function openLessonDetail(lesson: ScheduleEvent) {
+  if (!detail.value) return;
+  uni.navigateTo({ url: `/pages/course/lesson-detail?courseId=${detail.value.courseId}&eventId=${lesson.id}` });
+}
+
+function goAiSummary() {
+  if (!detail.value) return;
+  uni.navigateTo({ url: `/pages/course/ai-summary?courseId=${detail.value.courseId}` });
+}
+
 onLoad((options: any) => {
   const n = Number(options?.id);
   courseId.value = Number.isFinite(n) ? n : null;
 });
 
 onShow(() => {
+  const returned = consumeLiveReturnRefresh((payload) => Number(payload.courseId || 0) === Number(courseId.value || 0));
+  if (returned) {
+    uni.showToast({ title: '已同步课堂最新状态', icon: 'none' });
+  }
   void load();
 });
 </script>
@@ -531,6 +785,91 @@ onShow(() => {
   color: #65717a;
   font-size: 13px;
   line-height: 1.65;
+}
+
+.link-line {
+  display: block;
+  margin-top: 10px;
+  color: #0f766e;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.weekly-slot {
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f7f9f9;
+  border: 1px solid rgba(18, 37, 41, 0.06);
+}
+
+.weekly-slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.weekly-slot-title {
+  color: #152326;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.weekly-remove {
+  color: #c14e4e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.add-slot-btn {
+  margin-bottom: 12px;
+  border: 0;
+  border-radius: 12px;
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.1);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.add-slot-btn::after {
+  border: 0;
+}
+
+.evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.evidence-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-image {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  background: #eef2f3;
+}
+
+.remove {
+  display: block;
+  color: #c24141;
+  font-size: 12px;
+  text-align: center;
 }
 
 .slot-grid {

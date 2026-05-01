@@ -72,10 +72,56 @@
           <button class="primary-btn" @click="handleContact">发起沟通</button>
         </view>
       </view>
+
+      <view v-if="latestApplication" class="card sec">
+        <text class="sec-title">最近申请进度</text>
+        <view class="kv">
+          <text class="k">当前状态</text>
+          <text class="v">{{ applicationStatusText(latestApplication.status) }}</text>
+        </view>
+        <view class="kv">
+          <text class="k">下一步</text>
+          <text class="v">{{ applicationHint(latestApplication) }}</text>
+        </view>
+        <view class="modal-actions">
+          <button class="plain-btn" @click="openLatestApplication">查看申请</button>
+          <button v-if="canOpenApplicationChat" class="primary-btn" @click="enterLatestChat">进入聊天</button>
+        </view>
+      </view>
     </view>
 
     <view v-else class="loading">
       <text class="loading-text">暂无数据</text>
+    </view>
+
+    <view v-if="showApplyModal" class="mask" @click="closeApplyModal">
+      <view class="modal card" @click.stop>
+        <view class="modal-head">
+          <text class="modal-title">发起需求沟通</text>
+        </view>
+        <view class="form-item">
+          <text class="label">授课形式</text>
+          <view class="mode-seg">
+            <view
+              v-for="item in availableTeachingModeOptions"
+              :key="item.value"
+              class="mode-item"
+              :class="{ active: applyTeachingMode === item.value }"
+              @click="applyTeachingMode = item.value"
+            >
+              {{ item.label }}
+            </view>
+          </view>
+        </view>
+        <view class="form-item">
+          <text class="label">申请语</text>
+          <textarea v-model="applyContent" class="textarea" placeholder="简单说明你的授课思路和可配合时间"></textarea>
+        </view>
+        <view class="modal-actions">
+          <button class="plain-btn" :disabled="applyBusy" @click="closeApplyModal">取消</button>
+          <button class="primary-btn" :disabled="applyBusy" @click="submitApply">{{ applyBusy ? '发送中...' : '发送申请' }}</button>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -84,7 +130,7 @@
 import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { jobsApi } from '@/api/jobs';
-import { applicationApi } from '@/api/application';
+import { applicationApi, type TutorApplication } from '@/api/application';
 import { favoritesApi } from '@/api/favorites';
 import { useUserStore } from '@/stores/user';
 import { resolveImageUrl } from '@/utils/request';
@@ -93,9 +139,25 @@ import { ensureTutorApproved } from '@/utils/tutorGuard';
 const userStore = useUserStore();
 const job = ref<any>(null);
 const loading = ref(false);
+const latestApplication = ref<TutorApplication | null>(null);
 const favorited = ref(false);
 const favoriteBusy = ref(false);
 const closingBusy = ref(false);
+const showApplyModal = ref(false);
+const applyBusy = ref(false);
+const applyContent = ref('您好，我想申请沟通这个家教需求。');
+const applyTeachingMode = ref<'ONLINE' | 'OFFLINE'>('ONLINE');
+const teachingModeOptions = [
+  { label: '线上', value: 'ONLINE' as const },
+  { label: '线下', value: 'OFFLINE' as const },
+];
+const availableTeachingModeOptions = computed(() => {
+  const mode = normalizeLower(job.value?.classMode);
+  if (mode === 'online') return teachingModeOptions.filter((it) => it.value === 'ONLINE');
+  if (mode === 'offline') return teachingModeOptions.filter((it) => it.value === 'OFFLINE');
+  return teachingModeOptions;
+});
+const canOpenApplicationChat = computed(() => latestApplication.value?.chatAccessStatus === 'CHAT_ENABLED' && !!latestApplication.value?.roomId);
 
 onLoad(async (options: any) => {
   if (options.id) {
@@ -114,6 +176,7 @@ const fetchDetail = async (id: number) => {
     const res: any = await jobsApi.getDemandView(id);
     job.value = res;
     await loadFavoriteState(Number(id));
+    await loadLatestApplication();
   } catch (error) {
     console.error(error);
     uni.showToast({ title: '加载失败', icon: 'none' });
@@ -130,6 +193,19 @@ async function loadFavoriteState(id: number) {
     favorited.value = Array.isArray(ids) && ids.some((it) => Number(it) === id);
   } catch {
     favorited.value = false;
+  }
+}
+
+async function loadLatestApplication() {
+  latestApplication.value = null;
+  if (!userStore.isLoggedIn || !userStore.isTutor || !job.value?.id) return;
+  try {
+    const page = await applicationApi.sent({ pageSize: 20 });
+    const rows = Array.isArray(page?.list) ? page.list : [];
+    latestApplication.value =
+      rows.find((it) => String(it.contextType || '').toUpperCase() === 'DEMAND' && Number(it.contextId) === Number(job.value.id)) || null;
+  } catch {
+    latestApplication.value = null;
   }
 }
 
@@ -280,30 +356,95 @@ function viewApplications() {
 const handleContact = async () => {
     if (!job.value) return;
     if (!ensureTutorApproved('教师审核通过后才能发起沟通。', 'open-demand-apply')) return;
-    try {
-        const targetUid = job.value?.publisher?.uid;
-        if (!targetUid) {
-            uni.showToast({ title: '缺少发布者信息', icon: 'none' });
-            return;
-        }
-        const created: any = await applicationApi.create({
-            receiverUid: targetUid,
-            contextType: 'DEMAND',
-            contextId: Number(job.value.id),
-            content: `您好，我想申请沟通这个${job.value.subjectName || '家教'}需求。`,
-            clientRequestId: `mp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        });
-        uni.showToast({ title: '申请已发送', icon: 'success' });
-        if (created?.id) {
-            setTimeout(() => {
-                uni.navigateTo({ url: `/pages/application/detail?id=${created.id}` });
-            }, 450);
-        }
-    } catch (error) {
-        console.error(error);
-        uni.showToast({ title: '申请发送失败', icon: 'none' });
-    }
+    const mode = normalizeLower(job.value?.classMode);
+    if (mode === 'online') applyTeachingMode.value = 'ONLINE';
+    else if (mode === 'offline') applyTeachingMode.value = 'OFFLINE';
+    else applyTeachingMode.value = 'ONLINE';
+    applyContent.value = `您好，我想申请沟通这个${job.value.subjectName || '家教'}需求。`;
+    showApplyModal.value = true;
 };
+
+function closeApplyModal() {
+  if (applyBusy.value) return;
+  showApplyModal.value = false;
+}
+
+async function submitApply() {
+  if (!job.value || applyBusy.value) return;
+  const targetUid = job.value?.publisher?.uid;
+  if (!targetUid) {
+    uni.showToast({ title: '缺少发布者信息', icon: 'none' });
+    return;
+  }
+  const content = String(applyContent.value || '').trim();
+  if (!content) {
+    uni.showToast({ title: '请填写申请语', icon: 'none' });
+    return;
+  }
+  if (!availableTeachingModeOptions.value.some((it) => it.value === applyTeachingMode.value)) {
+    uni.showToast({ title: '请选择需求支持的授课形式', icon: 'none' });
+    return;
+  }
+  applyBusy.value = true;
+  try {
+    const created: any = await applicationApi.create({
+      receiverUid: targetUid,
+      contextType: 'DEMAND',
+      contextId: Number(job.value.id),
+      content,
+      teachingMode: applyTeachingMode.value,
+      clientRequestId: `mp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    });
+    uni.showToast({ title: '申请已发送', icon: 'success' });
+    showApplyModal.value = false;
+    if (created?.id) {
+      latestApplication.value = {
+        id: Number(created.id),
+        senderUid: Number(userStore.userInfo?.id || 0),
+        receiverUid: Number(targetUid),
+        contextType: 'DEMAND',
+        contextId: Number(job.value.id),
+        content,
+        status: 'PENDING',
+        teachingMode: applyTeachingMode.value,
+      } as TutorApplication;
+      setTimeout(() => {
+        uni.navigateTo({ url: `/pages/application/detail?id=${created.id}` });
+      }, 450);
+    }
+  } catch (error) {
+    console.error(error);
+    uni.showToast({ title: '申请发送失败', icon: 'none' });
+  } finally {
+    applyBusy.value = false;
+  }
+}
+
+function applicationStatusText(status?: string) {
+  const s = String(status || '').toUpperCase();
+  if (s === 'PENDING') return '待处理';
+  if (s === 'ACCEPTED') return '已通过';
+  if (s === 'REJECTED') return '已拒绝';
+  return s || '未知';
+}
+
+function applicationHint(item: TutorApplication) {
+  if (item.status === 'PENDING') return '等待需求方处理你的申请';
+  if (item.chatAccessStatus === 'PAYMENT_REQUIRED') return '待教师支付信息费';
+  if (item.chatAccessStatus === 'CHAT_ENABLED') return '聊天已开放，可继续确认合作';
+  if (item.status === 'REJECTED') return '本次申请已结束，可重新发起';
+  return '可进入申请详情查看';
+}
+
+function openLatestApplication() {
+  if (!latestApplication.value?.id) return;
+  uni.navigateTo({ url: `/pages/application/detail?id=${latestApplication.value.id}` });
+}
+
+function enterLatestChat() {
+  if (!latestApplication.value?.roomId) return;
+  uni.navigateTo({ url: `/pages/chat/room?id=${latestApplication.value.roomId}` });
+}
 </script>
 
 <style lang="scss" scoped>
@@ -507,5 +648,85 @@ const handleContact = async () => {
 .loading-text {
   color: var(--muted);
   font-size: 14px;
+}
+
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 60;
+}
+
+.modal {
+  width: min(560px, 100%);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--text);
+}
+
+.form-item {
+  display: grid;
+  gap: 8px;
+}
+
+.label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.mode-seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mode-item {
+  height: 40px;
+  line-height: 40px;
+  border-radius: 12px;
+  text-align: center;
+  color: #5d6972;
+  background: #f3f5f6;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mode-item.active {
+  color: #fff;
+  background: #0f766e;
+}
+
+.textarea {
+  min-height: 88px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 12px;
+  background: #fff;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 </style>

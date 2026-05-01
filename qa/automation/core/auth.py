@@ -22,6 +22,18 @@ SEED_TEACHER = SeedUser(user_id=206, phone="13812345006", role_enum="TEACHER", r
 SEED_STUDENT = SeedUser(user_id=113, phone="15268836913", role_enum="STUDENT", role_code="student")
 
 
+def seed_user_from_env(prefix: str, default: SeedUser) -> SeedUser:
+    user_id = int(os.getenv(f"{prefix}_USER_ID", str(default.user_id)))
+    phone = os.getenv(f"{prefix}_PHONE", default.phone)
+    role_enum = os.getenv(f"{prefix}_ROLE_ENUM", default.role_enum).upper()
+    role_code = os.getenv(f"{prefix}_ROLE_CODE", default.role_code).lower()
+    if role_enum not in {"TEACHER", "STUDENT"}:
+        raise RuntimeError(f"{prefix}_ROLE_ENUM must be TEACHER or STUDENT")
+    if role_code not in {"teacher", "student"}:
+        raise RuntimeError(f"{prefix}_ROLE_CODE must be teacher or student")
+    return SeedUser(user_id=user_id, phone=phone, role_enum=role_enum, role_code=role_code)
+
+
 def mint_jwt(*, phone: str, user_id: int, role_code: str, secret: str, issuer: str, ttl_hours: int = 24) -> str:
     now = datetime.now(tz=timezone.utc)
     payload = {

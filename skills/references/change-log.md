@@ -15,6 +15,33 @@
 
 ## 2026-04-20
 
+## 2026-05-01
+
+- 请求：
+  梳理项目 Git 提交规范，并新增每次提交/推送/MR 都应遵循的仓库专属 skill
+- 涉及区域：
+  `skills/`
+- 已检查背景：
+  现有项目 skill、分支与生产部署约定、GitHub Actions 生产发布链路说明
+- 验证：
+  检查了新增 `skills/git-commit-workflow/SKILL.md` 的 frontmatter、中文规范、dev/master/MR/生产部署约束
+- 新增说明：
+  仓库现在有独立 Git 工作流 skill：提交必须有中文说明；默认提交并推送 `dev`；通过 MR/PR 合并到 `master`；`master` 合并/推送会触发生产自动部署
+
+## 2026-05-01
+
+- 请求：
+  收紧 Git 提交规范：commit subject 必须包含中文，并要求每次提交前先更新远程代码
+- 涉及区域：
+  `skills/git-commit-workflow/SKILL.md`、`skills/SKILL.md`
+- 已检查背景：
+  当前 dev/master 分支约定、GitHub Actions 生产发布链路、刚才提交里 subject 英文但 body 中文导致 `git log --oneline` 不直观的问题
+- 验证：
+  执行了 `git fetch origin`、`git pull --ff-only origin dev`，确认 `dev` 与 `origin/dev` 已同步
+  检查了 Git workflow skill 的 frontmatter 与标准流程编号
+- 新增说明：
+  后续提交 subject 必须包含中文；英文 Conventional Commit 只能作为可选前缀；提交前必须先拉取目标分支最新代码，不能在落后或冲突未处理时继续提交
+
 ## 2026-04-23
 
 - 请求：

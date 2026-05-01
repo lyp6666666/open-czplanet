@@ -18,6 +18,17 @@ import type { WhiteboardSaveState } from '@/modules/whiteboard/whiteboardTypes'
 const route = useRoute()
 const router = useRouter()
 
+type PreissuedJoinToken = {
+  sessionId: number
+  serverUrl: string
+  roomName?: string
+  participantIdentity?: string
+  participantName?: string
+  accessToken: string
+  expireAt?: string
+  source?: string
+}
+
 const courseId = computed(() => Number(route.params.courseId))
 const loading = ref(false)
 const connecting = ref(false)
@@ -73,6 +84,24 @@ let aiAudioUplink: { stop: () => void } | null = null
 let videoDockDragOrigin: { pointerX: number; pointerY: number; dockX: number; dockY: number } | null = null
 let activeScreenShareTrack: Parameters<typeof attachTrackToElement>[0] | null = null
 let insightPanelDragOrigin: { pointerX: number; width: number } | null = null
+
+function readPreissuedJoinToken(): PreissuedJoinToken | null {
+  const accessToken = String(route.query.accessToken || '').trim()
+  const serverUrl = String(route.query.serverUrl || '').trim()
+  if (!accessToken || !serverUrl) return null
+  const sessionId = Number(route.query.sessionId || session.value?.sessionId || 0)
+  if (!(sessionId > 0)) return null
+  return {
+    sessionId,
+    serverUrl,
+    roomName: String(route.query.roomName || '').trim() || undefined,
+    participantIdentity: String(route.query.participantIdentity || '').trim() || undefined,
+    participantName: String(route.query.participantName || '').trim() || undefined,
+    accessToken,
+    expireAt: String(route.query.expireAt || '').trim() || undefined,
+    source: String(route.query.source || '').trim() || undefined,
+  }
+}
 
 const toolItems = [
   { key: 'whiteboard', label: '白板', icon: '✎' },
@@ -718,11 +747,22 @@ async function connectRoom() {
   error.value = null
   connectionState.value = 'connecting'
   try {
-    const tokenResp = await liveApi.joinToken(session.value.sessionId, {
-      clientType: 'WEB',
-      deviceFingerprint: `web-${Date.now()}`,
-      joinMode: 'CLASSROOM',
-    })
+    const preissued = readPreissuedJoinToken()
+    const tokenResp = preissued && preissued.sessionId === session.value.sessionId
+      ? {
+          serverUrl: preissued.serverUrl,
+          accessToken: preissued.accessToken,
+          participantIdentity: preissued.participantIdentity || '',
+          participantName: preissued.participantName || '',
+          roomName: preissued.roomName || '',
+          expireAt: preissued.expireAt || '',
+          provider: 'LIVEKIT',
+        }
+      : await liveApi.joinToken(session.value.sessionId, {
+          clientType: 'WEB',
+          deviceFingerprint: `web-${Date.now()}`,
+          joinMode: 'CLASSROOM',
+        })
     const client = new LiveRoomClient()
     roomClient = client
     roomClientView.value = client

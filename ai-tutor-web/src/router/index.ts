@@ -31,6 +31,7 @@ const LessonAiSummaryPage = () => import('@/pages/course/LessonAiSummaryPage.vue
 const LivePreparePage = () => import('@/pages/live/LivePreparePage.vue')
 const LivePermissionGuidePage = () => import('@/pages/live/LivePermissionGuidePage.vue')
 const LiveClassroomPage = () => import('@/pages/live/LiveClassroomPage.vue')
+const LiveMpBridgePage = () => import('@/pages/live/LiveMpBridgePage.vue')
 const OrgAuthPage = () => import('@/pages/org/OrgAuthPage.vue')
 const OrgChangePasswordPage = () => import('@/pages/org/OrgChangePasswordPage.vue')
 const OrgPostPage = () => import('@/pages/org/OrgPostPage.vue')
@@ -278,6 +279,11 @@ export const router = createRouter({
       path: '/live/prepare/:courseId',
       name: 'livePrepare',
       component: LivePreparePage,
+    },
+    {
+      path: '/live/mp-bridge',
+      name: 'liveMpBridge',
+      component: LiveMpBridgePage,
     },
     {
       path: '/live/permission-help',

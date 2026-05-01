@@ -24,6 +24,20 @@
         <button class="retry-btn" @click="refreshAll">重新加载</button>
       </view>
 
+      <view v-else-if="todoCards.length" class="todo-strip">
+        <view
+          v-for="card in todoCards"
+          :key="card.key"
+          class="todo-card"
+          :class="card.tone"
+          @click="openTodo(card)"
+        >
+          <text class="todo-num">{{ card.count }}</text>
+          <text class="todo-title">{{ card.title }}</text>
+          <text class="todo-desc">{{ card.desc }}</text>
+        </view>
+      </view>
+
       <view v-else-if="roomList.length === 0" class="empty-state in-page">
         <text class="tip">暂无聊天</text>
         <text class="subtip">发起申请并完成信息费支付后，会出现聊天会话。</text>
@@ -49,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { chatApi } from '@/api/chat';
 import { applicationApi } from '@/api/application';
 import { onShow, onHide, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app';
@@ -63,7 +77,40 @@ const cursor = ref<number | null>(null);
 const isLast = ref(false);
 const loadingMore = ref(false);
 const loadError = ref('');
+const receivedPendingCount = ref(0);
+const sentPendingCount = ref(0);
+const chatReadyApplicationCount = ref(0);
 let timer: any = null;
+
+const todoCards = computed(() => {
+  return [
+    {
+      key: 'received',
+      title: '待你处理',
+      desc: '优先处理收到的申请',
+      count: receivedPendingCount.value,
+      tone: 'pending',
+      tab: 'received',
+    },
+    {
+      key: 'sent',
+      title: '等待回复',
+      desc: '查看已发出申请进度',
+      count: sentPendingCount.value,
+      tone: 'soft',
+      tab: 'sent',
+    },
+    {
+      key: 'ready',
+      title: '已可聊天',
+      desc: '信息费已完成，可继续推进',
+      count: chatReadyApplicationCount.value,
+      tone: 'ready',
+      tab: 'received',
+      chatReadyOnly: true,
+    },
+  ].filter((card) => card.count > 0);
+});
 
 function normalizeCursor(v: unknown): number | null {
   if (v == null) return null;
@@ -103,6 +150,26 @@ const fetchApplicationUnread = async () => {
   }
 };
 
+const fetchApplicationSummary = async () => {
+  try {
+    const [receivedPage, sentPage] = await Promise.all([
+      applicationApi.received({ pageSize: 20 }),
+      applicationApi.sent({ pageSize: 20 }),
+    ]);
+    const receivedList = Array.isArray(receivedPage?.list) ? receivedPage.list : [];
+    const sentList = Array.isArray(sentPage?.list) ? sentPage.list : [];
+    receivedPendingCount.value = receivedList.filter((it: any) => String(it.status || '').toUpperCase() === 'PENDING').length;
+    sentPendingCount.value = sentList.filter((it: any) => String(it.status || '').toUpperCase() === 'PENDING').length;
+    chatReadyApplicationCount.value = [...receivedList, ...sentList].filter(
+      (it: any) => String(it.chatAccessStatus || '').toUpperCase() === 'CHAT_ENABLED',
+    ).length;
+  } catch {
+    receivedPendingCount.value = 0;
+    sentPendingCount.value = 0;
+    chatReadyApplicationCount.value = 0;
+  }
+};
+
 const enterRoom = (roomId: number) => {
   uni.navigateTo({ url: `/pages/chat/room?id=${roomId}` });
 };
@@ -123,6 +190,7 @@ const startPolling = () => {
     timer = setInterval(() => {
       fetchRooms(true);
       fetchApplicationUnread();
+      fetchApplicationSummary();
     }, 5000);
 };
 
@@ -151,6 +219,7 @@ function refreshAll() {
   loadingMore.value = false;
   void fetchRooms(true);
   void fetchApplicationUnread();
+  void fetchApplicationSummary();
 }
 
 function loadMore() {
@@ -175,6 +244,17 @@ const goLogin = () => {
 const goApplications = () => {
   uni.navigateTo({ url: '/pages/application/list' });
 };
+
+function openTodo(card: any) {
+  if (card.chatReadyOnly) {
+    uni.navigateTo({ url: '/pages/application/list?tab=received&chatAccessStatus=CHAT_ENABLED' });
+    return;
+  }
+  const status = card.key === 'received' || card.key === 'sent' ? 'PENDING' : '';
+  const query = [`tab=${card.tab}`];
+  if (status) query.push(`status=${status}`);
+  uni.navigateTo({ url: `/pages/application/list?${query.join('&')}` });
+}
 </script>
 
 <style lang="scss" scoped>
@@ -286,6 +366,60 @@ const goApplications = () => {
   line-height: 22px;
   text-align: center;
   font-size: 11px;
+}
+
+.todo-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.todo-card {
+  min-height: 88px;
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(17, 24, 39, 0.06);
+  box-sizing: border-box;
+}
+
+.todo-card.pending {
+  background: #fff4dc;
+}
+
+.todo-card.soft {
+  background: #eef3f5;
+}
+
+.todo-card.ready {
+  background: #e3f7f1;
+}
+
+.todo-num,
+.todo-title,
+.todo-desc {
+  display: block;
+}
+
+.todo-num {
+  color: #111827;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.todo-title {
+  margin-top: 6px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.todo-desc {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .chat-list {
