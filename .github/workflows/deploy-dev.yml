@@ -1,0 +1,90 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: dev-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout dev code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install deploy dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
+      - name: Prepare SSH key
+        env:
+          TEST_SERVER_SSH_KEY: ${{ secrets.TEST_SERVER_SSH_KEY || secrets.SERVER_SSH_KEY }}
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+        run: |
+          test -n "$TEST_SERVER_SSH_KEY"
+          test -n "$TEST_SERVER_HOST"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$TEST_SERVER_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "$TEST_SERVER_PORT" "$TEST_SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync code to test server
+        env:
+          REMOTE_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
+          REMOTE_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          REMOTE_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+          REMOTE_PATH: ${{ secrets.TEST_SERVER_PATH || '/opt/ai-platform' }}
+          REMOTE_SYNC_DELETE: ${{ vars.TEST_REMOTE_SYNC_DELETE || '1' }}
+        run: |
+          bash scripts/sync_remote_code.sh
+
+      - name: Restart test environment
+        env:
+          TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+          TEST_SERVER_PATH: ${{ secrets.TEST_SERVER_PATH || '/opt/ai-platform' }}
+          TEST_MANAGE_INFRA: ${{ vars.TEST_MANAGE_INFRA || 'auto' }}
+          TEST_INFRA_CONTAINERS: ${{ vars.TEST_INFRA_CONTAINERS || 'mysql redis rabbitmq minio minio_init livekit' }}
+          TEST_NACOS_GRPC_CHECK: ${{ vars.TEST_NACOS_GRPC_CHECK || 'warn' }}
+          TEST_NACOS_SERVER_ADDR: ${{ vars.TEST_NACOS_SERVER_ADDR || '111.228.20.88:8848' }}
+          TEST_FRONTEND_HOST: ${{ vars.TEST_FRONTEND_HOST || '0.0.0.0' }}
+          TEST_LIVEKIT_WS_URL: ${{ vars.TEST_LIVEKIT_WS_URL }}
+          TEST_ADMIN_WEB_BASE_PATH: ${{ vars.TEST_ADMIN_WEB_BASE_PATH || '/admin/' }}
+          TEST_ENABLE_AI_AGENT: ${{ vars.TEST_ENABLE_AI_AGENT || '1' }}
+          TEST_AI_AGENT_HOST: ${{ vars.TEST_AI_AGENT_HOST || '127.0.0.1' }}
+        run: |
+          if [ -z "$TEST_LIVEKIT_WS_URL" ]; then
+            TEST_LIVEKIT_WS_URL="ws://$TEST_SERVER_HOST/livekit"
+          fi
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "cd '$TEST_SERVER_PATH' && STOP_INFRA='0' sh scripts/dev_all_down.sh || true"
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "cd '$TEST_SERVER_PATH' && MANAGE_INFRA='$TEST_MANAGE_INFRA' INFRA_CONTAINERS='$TEST_INFRA_CONTAINERS' NACOS_GRPC_CHECK='$TEST_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$TEST_NACOS_SERVER_ADDR' FRONTEND_HOST='$TEST_FRONTEND_HOST' LIVEKIT_WS_URL='$TEST_LIVEKIT_WS_URL' ADMIN_WEB_BASE_PATH='$TEST_ADMIN_WEB_BASE_PATH' ENABLE_AI_AGENT='$TEST_ENABLE_AI_AGENT' AI_AGENT_HOST='$TEST_AI_AGENT_HOST' sh scripts/dev_all_up.sh"
+
+      - name: Verify test deployment
+        env:
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          TEST_GATEWAY_PORT: ${{ vars.TEST_GATEWAY_PORT || '18080' }}
+          TEST_AI_AGENT_PORT: ${{ vars.TEST_AI_AGENT_PORT || '18086' }}
+          TEST_ENABLE_AI_AGENT: ${{ vars.TEST_ENABLE_AI_AGENT || '1' }}
+        run: |
+          curl -fsS --max-time 10 "http://$TEST_SERVER_HOST:$TEST_GATEWAY_PORT/actuator/health"
+          if [ "$TEST_ENABLE_AI_AGENT" = "1" ] || [ "$TEST_ENABLE_AI_AGENT" = "true" ] || [ "$TEST_ENABLE_AI_AGENT" = "yes" ]; then
+            curl -fsS --max-time 10 "http://$TEST_SERVER_HOST:$TEST_AI_AGENT_PORT/health"
+          fi
