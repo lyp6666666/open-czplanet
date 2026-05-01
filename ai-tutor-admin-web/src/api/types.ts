@@ -103,6 +103,21 @@ export interface AdminHomeCarouselItem {
   updateTime?: string | null
 }
 
+export type AdminCustomerServiceChannelType = 'WECHAT_PERSONAL' | 'WECHAT_WORK'
+
+export interface AdminCustomerServiceConfig {
+  enabled: boolean
+  channelType: AdminCustomerServiceChannelType
+  displayName: string
+  wechatNo?: string | null
+  qqNo?: string | null
+  qrCodeUrl?: string | null
+  qrCodeObjectKey?: string | null
+  serviceTime: string
+  description?: string | null
+  updateTime?: string | null
+}
+
 export interface AdminInviteRelation {
   id: number
   inviterUid: number

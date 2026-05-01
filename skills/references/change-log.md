@@ -551,3 +551,18 @@
   核对了 `dev_all_up.sh` 中 `MANAGE_INFRA=auto` 的本地 Docker 中间件管理逻辑，以及 Nacos 自动选择本机 `127.0.0.1:8848` 或远端 dev 隧道 `127.0.0.1:18848` 的逻辑
 - 新增说明：
   日常测试优先使用 `dev_local_*`；应用进程和 MySQL/Redis/RabbitMQ/MinIO/LiveKit 等中间件默认本机运行，Nacos 是常见例外，不应因此误判其它中间件也在远端
+
+## 2026-05-01
+
+- 请求：
+  将用户端人工客服联系方式改为可配置，支持管理端维护微信/QQ/企业微信二维码，并让浮窗读取动态配置
+- 涉及区域：
+  `ai-tutor-web`、`ai-tutor-admin-web`、`ai-tutor-admin`、`tutor-appointment-service`、`sqlDoc/`、`docs/nacos/templates`
+- 已检查背景：
+  管理后台、用户端 Web、appointment 公开接口、Nacos 共享配置和数据库 schema 同步规则
+- 验证：
+  运行了 `./mvnw -pl ai-tutor-admin test`、`./mvnw -pl tutor-appointment-service test`
+  运行了用户端与管理端 `npm run typecheck` 和客服相关文件 eslint
+  已将 `20260501_customer_service_config_create.sql` 应用到 `111.228.20.88` 共享 MySQL，并验证 `customer_service_config` 表和 id=1 默认行存在
+- 新增说明：
+  人工客服联系方式以数据库 `customer_service_config` 为准；Nacos 的 `customer-service.*` 只用于首次初始化和 DB 缺失时兜底

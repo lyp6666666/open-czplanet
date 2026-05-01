@@ -8,6 +8,7 @@ import com.ai.tutor.admin.model.vo.DashboardStatsResponse;
 import com.ai.tutor.admin.model.vo.DisputeDetailResponse;
 import com.ai.tutor.admin.model.vo.PageResult;
 import com.ai.tutor.admin.service.AdminAuthService;
+import com.ai.tutor.admin.service.AdminCustomerServiceConfigService;
 import com.ai.tutor.admin.service.AdminDashboardService;
 import com.ai.tutor.admin.service.AdminHomeCarouselService;
 import com.ai.tutor.admin.service.AdminInviteService;
@@ -23,6 +24,7 @@ import com.ai.tutor.admin.model.entity.StudentJobPosting;
 import com.ai.tutor.admin.model.entity.TeacherProfile;
 import com.ai.tutor.admin.model.entity.RefundRequestRecord;
 import com.ai.tutor.admin.model.vo.AdminHomeCarouselItemVO;
+import com.ai.tutor.admin.model.vo.AdminCustomerServiceConfigVO;
 import com.ai.tutor.admin.model.vo.AdminInviteSystemConfigVO;
 import com.ai.tutor.admin.model.vo.RefundRequestDetailResponse;
 import com.ai.tutor.admin.storage.MinioProperties;
@@ -99,6 +101,34 @@ public class AdminTestApplication {
 
             @Override
             public void delete(Long id, Long adminUid) {
+            }
+        };
+    }
+
+    @Bean
+    public AdminCustomerServiceConfigService adminCustomerServiceConfigService() {
+        return new AdminCustomerServiceConfigService() {
+            @Override
+            public AdminCustomerServiceConfigVO config() {
+                return AdminCustomerServiceConfigVO.builder()
+                        .enabled(true)
+                        .channelType("WECHAT_WORK")
+                        .displayName("人工客服")
+                        .wechatNo("ai-tutor-service")
+                        .qqNo("123456789")
+                        .serviceTime("周一至周日 09:00-21:00")
+                        .description("请添加客服微信或 QQ 获取人工协助")
+                        .build();
+            }
+
+            @Override
+            public AdminCustomerServiceConfigVO save(com.ai.tutor.admin.model.dto.AdminCustomerServiceConfigRequest request, Long adminUid) {
+                return config();
+            }
+
+            @Override
+            public AdminCustomerServiceConfigVO uploadQrCode(MultipartFile file, Long adminUid) {
+                return config();
             }
         };
     }

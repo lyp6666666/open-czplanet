@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
+import { getCustomerServiceConfig } from '@/api/customerService'
+import type { CustomerServiceConfigResp } from '@/api/customerService'
 import { customerServiceConfig } from '@/constants/customerService'
 import { useToastStore } from '@/stores/toast'
 
@@ -9,6 +11,7 @@ const route = useRoute()
 const toast = useToastStore()
 const open = ref(false)
 const serviceRoot = ref<HTMLElement | null>(null)
+const config = ref<CustomerServiceConfigResp>({ ...customerServiceConfig })
 const position = ref<{ x: number; y: number } | null>(null)
 const dragging = ref(false)
 const suppressNextClick = ref(false)
@@ -24,6 +27,9 @@ let dragStart:
   | null = null
 
 const isLifted = computed(() => route.path.startsWith('/chat') || route.path.startsWith('/pay/'))
+const visible = computed(() => config.value.enabled !== false)
+const channelLabel = computed(() => (config.value.channelType === 'WECHAT_WORK' ? '企业微信' : '微信'))
+const copyWechatSuccessText = computed(() => `${channelLabel.value}已复制`)
 const rootStyle = computed(() => {
   if (!position.value) return undefined
   return {
@@ -46,6 +52,19 @@ async function copyText(text: string, successText: string) {
     toast.show(successText, 'success')
   } catch {
     toast.show('复制失败，请手动复制', 'error')
+  }
+}
+
+async function loadConfig() {
+  try {
+    const remote = await getCustomerServiceConfig()
+    config.value = {
+      ...customerServiceConfig,
+      ...remote,
+      channelType: remote.channelType === 'WECHAT_PERSONAL' ? 'WECHAT_PERSONAL' : 'WECHAT_WORK',
+    }
+  } catch {
+    config.value = { ...customerServiceConfig }
   }
 }
 
@@ -127,6 +146,7 @@ function onResize() {
 }
 
 onMounted(() => {
+  void loadConfig()
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('resize', onResize)
 })
@@ -141,6 +161,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
+    v-if="visible"
     ref="serviceRoot"
     class="customer-service"
     :class="{ lifted: isLifted, open }"
@@ -190,22 +211,51 @@ onBeforeUnmount(() => {
             </div>
             <div class="contact-main">
               <div class="contact-label">
-                微信
+                {{ channelLabel }}
               </div>
               <div class="contact-value">
-                {{ customerServiceConfig.wechat }}
+                {{ config.displayName }}
+              </div>
+              <div
+                v-if="config.wechatNo"
+                class="contact-note"
+              >
+                {{ config.wechatNo }}
               </div>
             </div>
             <button
+              v-if="config.wechatNo"
               class="copy-btn"
               type="button"
-              @click="copyText(customerServiceConfig.wechat, '微信号已复制')"
+              @click="copyText(config.wechatNo || '', copyWechatSuccessText)"
             >
               复制
             </button>
           </div>
 
-          <div class="contact-row">
+          <div
+            v-if="config.qrCodeUrl"
+            class="qr-card"
+          >
+            <img
+              class="qr-image"
+              :src="config.qrCodeUrl"
+              :alt="`${channelLabel}二维码`"
+            >
+            <div class="qr-copy">
+              <div class="qr-title">
+                扫码添加{{ channelLabel }}
+              </div>
+              <div class="qr-sub">
+                {{ config.description || '添加客服时请备注身份与手机号' }}
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="config.qqNo"
+            class="contact-row"
+          >
             <div
               class="contact-icon qq"
               aria-hidden="true"
@@ -220,13 +270,13 @@ onBeforeUnmount(() => {
                 QQ
               </div>
               <div class="contact-value">
-                {{ customerServiceConfig.qq }}
+                {{ config.qqNo }}
               </div>
             </div>
             <button
               class="copy-btn"
               type="button"
-              @click="copyText(customerServiceConfig.qq, 'QQ号已复制')"
+              @click="copyText(config.qqNo || '', 'QQ号已复制')"
             >
               复制
             </button>
@@ -234,7 +284,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="service-time">
-          服务时间：{{ customerServiceConfig.serviceTime }}
+          服务时间：{{ config.serviceTime }}
         </div>
       </div>
     </Transition>
@@ -399,6 +449,50 @@ onBeforeUnmount(() => {
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.contact-note {
+  margin-top: 3px;
+  color: #6f81a8;
+  font-size: 12px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.qr-card {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(80, 112, 195, 0.12);
+  border-radius: 12px;
+  background: rgba(45, 98, 242, 0.05);
+}
+
+.qr-image {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.qr-copy {
+  min-width: 0;
+}
+
+.qr-title {
+  color: #13295f;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.qr-sub {
+  margin-top: 5px;
+  color: #6f81a8;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .copy-btn {

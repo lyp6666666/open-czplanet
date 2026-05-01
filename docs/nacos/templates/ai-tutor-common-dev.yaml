@@ -27,6 +27,21 @@ dev:
   # 是否在接口响应里暴露短信验证码（仅 DEV 建议开启；PROD 禁止开启）
   exposeSmsCode: false
 
+# 人工客服联系方式兜底配置
+# - 管理端保存后以数据库 customer_service_config 为准
+# - 这里用于首次初始化和 DB 配置缺失时兜底
+customer-service:
+  enabled: true
+  # WECHAT_WORK 企业微信；WECHAT_PERSONAL 个人微信
+  channelType: WECHAT_WORK
+  displayName: 创智星球客服
+  wechatNo: ai_tutor_service
+  qqNo: "123456789"
+  # 可填写 MinIO objectKey，例如 customer-service/wecom.png；为空则不展示二维码
+  qrCodeObjectKey:
+  serviceTime: "09:00 - 22:00"
+  description: "添加客服时请备注：家长/老师 + 手机号"
+
 # 对象存储（MinIO）
 storage:
   minio:

@@ -163,3 +163,18 @@ CREATE TABLE room_read_state (
   create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE customer_service_config (
+  id BIGINT PRIMARY KEY,
+  enabled TINYINT NOT NULL DEFAULT 1,
+  channel_type VARCHAR(32) NOT NULL DEFAULT 'WECHAT_WORK',
+  display_name VARCHAR(80) NOT NULL DEFAULT '创智星球客服',
+  wechat_no VARCHAR(80),
+  qq_no VARCHAR(32),
+  qr_code_object_key VARCHAR(255),
+  service_time VARCHAR(64) NOT NULL DEFAULT '09:00 - 22:00',
+  description VARCHAR(255),
+  update_admin_id BIGINT,
+  create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

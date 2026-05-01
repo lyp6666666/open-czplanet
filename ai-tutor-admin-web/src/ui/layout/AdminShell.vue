@@ -3,33 +3,98 @@
     <aside class="sidebar card">
       <div class="brand">
         <div class="brand-dot" />
-        <div class="brand-title">AI Tutor Admin</div>
+        <div class="brand-title">
+          AI Tutor Admin
+        </div>
       </div>
 
       <nav class="nav">
-        <RouterLink class="nav-link" to="/dashboard">仪表盘</RouterLink>
-        <RouterLink class="nav-link" to="/home-carousel">首页轮播</RouterLink>
-        <RouterLink class="nav-link" to="/users">用户管理</RouterLink>
-        <RouterLink class="nav-link" to="/organizations">机构账号</RouterLink>
-        <RouterLink class="nav-link" to="/jobs">需求审核</RouterLink>
-        <RouterLink class="nav-link" to="/verification">教师认证</RouterLink>
-        <RouterLink class="nav-link" to="/invite">邀请返利</RouterLink>
-        <RouterLink class="nav-link" to="/refunds">退款纠纷</RouterLink>
-        <RouterLink class="nav-link" to="/payments">付款记录</RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/dashboard"
+        >
+          仪表盘
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/home-carousel"
+        >
+          首页轮播
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/customer-service"
+        >
+          客服配置
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/users"
+        >
+          用户管理
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/organizations"
+        >
+          机构账号
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/jobs"
+        >
+          需求审核
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/verification"
+        >
+          教师认证
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/invite"
+        >
+          邀请返利
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/refunds"
+        >
+          退款纠纷
+        </RouterLink>
+        <RouterLink
+          class="nav-link"
+          to="/payments"
+        >
+          付款记录
+        </RouterLink>
       </nav>
 
       <div class="sidebar-footer">
         <div class="user">
-          <div class="user-name">{{ nicknameText }}</div>
-          <div class="user-sub">ID: {{ userIdText }}</div>
+          <div class="user-name">
+            {{ nicknameText }}
+          </div>
+          <div class="user-sub">
+            ID: {{ userIdText }}
+          </div>
         </div>
-        <button class="btn btn-muted" type="button" @click="onLogout">退出登录</button>
+        <button
+          class="btn btn-muted"
+          type="button"
+          @click="onLogout"
+        >
+          退出登录
+        </button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar card">
-        <div class="topbar-title">{{ title }}</div>
+        <div class="topbar-title">
+          {{ title }}
+        </div>
         <div class="topbar-right" />
       </header>
 
@@ -54,6 +119,7 @@ const title = computed(() => {
   const name = String(route.name || '')
   if (name === 'dashboard') return '仪表盘'
   if (name === 'homeCarousel') return '首页轮播'
+  if (name === 'customerService') return '客服配置'
   if (name === 'users') return '用户管理'
   if (name === 'organizations') return '机构账号'
   if (name === 'jobs') return '需求审核'
