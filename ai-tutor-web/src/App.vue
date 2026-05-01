@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
+import CustomerServiceFloat from '@/ui/common/CustomerServiceFloat.vue'
 import AppTopBar from '@/ui/layout/AppTopBar.vue'
 import Toast from '@/ui/common/Toast.vue'
+import { customerServiceConfig, customerServiceHiddenPathPrefixes } from '@/constants/customerService'
 import { useAuthStore } from '@/stores/auth'
 import { useChatRealtimeStore } from '@/stores/chatRealtime'
 
@@ -35,6 +37,11 @@ const useAppFrame = computed(() => {
 })
 
 const canUseChatRealtime = computed(() => auth.user?.userType === 1 || auth.user?.userType === 2)
+const showCustomerService = computed(() => {
+  if (!customerServiceConfig.enabled) return false
+  const p = route.path
+  return !customerServiceHiddenPathPrefixes.some((prefix) => p === prefix || p.startsWith(prefix))
+})
 const currentChatRoomId = computed<number | null>(() => {
   const raw = route.params.roomId
   const roomId = typeof raw === 'string' ? Number(raw) : Array.isArray(raw) ? Number(raw[0]) : Number.NaN
@@ -88,11 +95,19 @@ onErrorCaptured((err) => {
 </script>
 
 <template>
-  <div v-if="fatalError" class="fatal">
-    <div class="title">页面渲染失败</div>
+  <div
+    v-if="fatalError"
+    class="fatal"
+  >
+    <div class="title">
+      页面渲染失败
+    </div>
     <pre class="detail">{{ String(fatalError) }}</pre>
   </div>
-  <div v-else-if="useAppFrame" class="app">
+  <div
+    v-else-if="useAppFrame"
+    class="app"
+  >
     <AppTopBar />
     <main class="main">
       <div class="container">
@@ -101,6 +116,7 @@ onErrorCaptured((err) => {
     </main>
   </div>
   <RouterView v-else />
+  <CustomerServiceFloat v-if="showCustomerService" />
   <Toast />
 </template>
 
