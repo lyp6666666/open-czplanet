@@ -23,6 +23,8 @@ esac
 NACOS_NAMESPACE="${NACOS_NAMESPACE:-$DEFAULT_NACOS_NAMESPACE}"
 NACOS_CONFIG_NAMESPACE="${NACOS_CONFIG_NAMESPACE:-$NACOS_NAMESPACE}"
 NACOS_DISCOVERY_NAMESPACE="${NACOS_DISCOVERY_NAMESPACE:-$NACOS_NAMESPACE}"
+NACOS_USERNAME="${NACOS_USERNAME:-}"
+NACOS_PASSWORD="${NACOS_PASSWORD:-}"
 NACOS_GRPC_CHECK="${NACOS_GRPC_CHECK:-fail}"
 
 JWT_ISSUER="${JWT_ISSUER:-ai-tutor}"
@@ -149,7 +151,7 @@ ensure_nacos_server_addr
 echo "[dev_all_up] 应用进程启动位置：本机"
 echo "[dev_all_up] 配置中心访问地址：$NACOS_SERVER_ADDR"
 
-export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE LIVEKIT_API_KEY LIVEKIT_API_SECRET LIVEKIT_WS_URL OPS_VERIFY_TOKEN DEV_EXPOSE_SMS_CODE
+export JWT_ISSUER JWT_SECRET_PRIMARY GATEWAY_JWT_ISSUER GATEWAY_JWT_SECRET GATEWAY_SIGN_SECRET JWT_SECRETS_0 GATEWAY_JWT_SECRETS_0 NACOS_SERVER_ADDR NACOS_CONFIG_NAMESPACE NACOS_DISCOVERY_NAMESPACE NACOS_USERNAME NACOS_PASSWORD LIVEKIT_API_KEY LIVEKIT_API_SECRET LIVEKIT_WS_URL OPS_VERIFY_TOKEN DEV_EXPOSE_SMS_CODE
 SPRING_APPLICATION_JSON=$(cat <<EOF
 {"ops":{"verifyToken":"$OPS_VERIFY_TOKEN"},"dev":{"exposeSmsCode":$DEV_EXPOSE_SMS_CODE},"livekit":{"apiKey":"$LIVEKIT_API_KEY","apiSecret":"$LIVEKIT_API_SECRET","wsUrl":"$LIVEKIT_WS_URL"}}
 EOF
@@ -464,6 +466,8 @@ start_service() {
       NACOS_SERVER_ADDR="$NACOS_SERVER_ADDR" \
       NACOS_CONFIG_NAMESPACE="$NACOS_CONFIG_NAMESPACE" \
       NACOS_DISCOVERY_NAMESPACE="$NACOS_DISCOVERY_NAMESPACE" \
+      NACOS_USERNAME="$NACOS_USERNAME" \
+      NACOS_PASSWORD="$NACOS_PASSWORD" \
       SPRING_APPLICATION_JSON="$SPRING_APPLICATION_JSON" \
       ./mvnw -q -Dmaven.test.skip=true -f "$svc_dir/pom.xml" spring-boot:run)"
     echo "$runtime_pid" >"$pid_file"
@@ -568,6 +572,8 @@ start_ai_agent_service() {
       printf "export NACOS_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_NAMESPACE" | sed "s/'/'\\\\''/g")"
       printf "export NACOS_CONFIG_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_CONFIG_NAMESPACE" | sed "s/'/'\\\\''/g")"
       printf "export NACOS_DISCOVERY_NAMESPACE='%s'\n" "$(printf "%s" "$NACOS_DISCOVERY_NAMESPACE" | sed "s/'/'\\\\''/g")"
+      printf "export NACOS_USERNAME='%s'\n" "$(printf "%s" "$NACOS_USERNAME" | sed "s/'/'\\\\''/g")"
+      printf "export NACOS_PASSWORD='%s'\n" "$(printf "%s" "$NACOS_PASSWORD" | sed "s/'/'\\\\''/g")"
       printf "export SPRING_PROFILES_ACTIVE='%s'\n" "$(printf "%s" "$SPRING_PROFILES_ACTIVE" | sed "s/'/'\\\\''/g")"
       uv run --active --python .venv/bin/python python scripts/export_nacos_env.py
     } >"$ai_agent_env_file"

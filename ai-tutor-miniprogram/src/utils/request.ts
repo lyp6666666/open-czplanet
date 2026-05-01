@@ -10,11 +10,25 @@ const normalizeBaseUrl = (raw: unknown): string | null => {
 const ENV_BASE_URL = normalizeBaseUrl((import.meta as any).env?.VITE_API_BASE_URL);
 const STORAGE_BASE_URL_KEY = 'ai_tutor_api_base_url';
 const DEFAULT_BASE_URL = 'http://localhost:8080';
+const PROD = (import.meta as any).env?.PROD === true;
+
+const isLocalLikeBaseUrl = (raw: unknown) => {
+  const normalized = normalizeBaseUrl(raw);
+  if (!normalized) return false;
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(normalized);
+};
 
 export const getBaseUrl = () =>
   normalizeBaseUrl(uni.getStorageSync(STORAGE_BASE_URL_KEY)) ??
   ENV_BASE_URL ??
   DEFAULT_BASE_URL;
+
+if (PROD) {
+  const currentBaseUrl = getBaseUrl();
+  if (!currentBaseUrl || isLocalLikeBaseUrl(currentBaseUrl)) {
+    throw new Error('生产构建禁止使用 localhost/127.0.0.1 作为小程序 API Base URL，请设置有效的 VITE_API_BASE_URL。');
+  }
+}
 
 export const setBaseUrl = (raw: string) => {
   const normalized = normalizeBaseUrl(raw);

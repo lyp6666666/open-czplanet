@@ -49,6 +49,24 @@ def funds_student_token(api_client: ApiClient, qa_config: QAConfig) -> str:
     return login_or_mint_seed_user(api_client, seed, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
 
 
+@pytest.fixture(scope="session")
+def course_teacher_token(api_client: ApiClient, qa_config: QAConfig) -> str:
+    seed = seed_user_from_env(
+        "QA_COURSE_SMOKE_TEACHER",
+        SeedUser(user_id=910103, phone="18611721003", role_enum="TEACHER", role_code="teacher"),
+    )
+    return login_or_mint_seed_user(api_client, seed, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
+
+
+@pytest.fixture(scope="session")
+def course_student_token(api_client: ApiClient, qa_config: QAConfig) -> str:
+    seed = seed_user_from_env(
+        "QA_COURSE_SMOKE_STUDENT",
+        SeedUser(user_id=910003, phone="18611720003", role_enum="STUDENT", role_code="student"),
+    )
+    return login_or_mint_seed_user(api_client, seed, jwt_secret=qa_config.jwt_secret, jwt_issuer=qa_config.jwt_issuer)
+
+
 @pytest.fixture
 def authed_client(api_client: ApiClient, teacher_token: str) -> Iterator[ApiClient]:
     api_client.set_bearer_token(teacher_token)

@@ -59,6 +59,26 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+如果当前机器没有全局 `pytest` / `poetry` 命令，至少需要先准备一个可执行环境，例如：
+
+```bash
+cd qa/automation
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+playwright install chromium
+pytest --collect-only tests/api/test_course_lesson_smoke.py
+```
+
+如果 QA 环境未开放 `GET /internal/debug/sms-code`，可以改为手工验证码模式：
+
+```bash
+export QA_LOGIN_MODE=otp
+export QA_SMS_CODE=<刚收到的验证码>
+```
+
+这样自动化会跳过短信读取接口，直接使用 `QA_SMS_CODE` 登录。
+
 ## 执行
 
 ```bash
@@ -98,6 +118,48 @@ export QA_ADMIN_PASSWORD=<测试机后台密码>
 产物输出：
 - `artifacts/junit-*.xml`
 - `artifacts/ui/*.png`（UI 失败截图）
+
+### 课程 / 课节动作自动化
+
+新增的 API client / smoke 用例：
+
+- `api/course_client.py`
+- `api/schedule_client.py`
+- `api/appointment_client.py`
+- `api/live_client.py`
+- `tests/api/test_course_lesson_smoke.py`
+
+建议环境变量：
+
+```bash
+export QA_API_BASE_URL=http://117.72.111.39:18080
+export QA_LOGIN_MODE=otp
+export QA_SMS_CODE=<测试手机收到的验证码>
+export QA_COURSE_SMOKE_COURSE_ID=982001
+export QA_COURSE_SMOKE_TEACHER_USER_ID=910103
+export QA_COURSE_SMOKE_TEACHER_PHONE=18611721003
+export QA_COURSE_SMOKE_STUDENT_USER_ID=910003
+export QA_COURSE_SMOKE_STUDENT_PHONE=18611720003
+export QA_COURSE_SMOKE_ACCEPTED_EVENT_ID=983001
+export QA_COURSE_SMOKE_COMPLETED_EVENT_ID=983002
+export QA_COURSE_SMOKE_LIVE_SESSION_ID=984002
+```
+
+执行：
+
+```bash
+cd qa/automation
+pytest tests/api/test_course_lesson_smoke.py
+```
+
+说明：
+
+- 用例现在会先探测课程 seed 是否真实存在。
+- 如果测试环境未导入 `982001 / 983001 / 983002 / 984002` 这套 QA 课程链路，测试会以 `skip` 收口，并明确提示是“环境缺 seed”，而不是报前端接口脚本失败。
+- 2026-05-01 对 `http://117.72.111.39:18080` 的实测结果：
+  - 本地后门账号 `29999999999 / 1886`、`19999999999 / 1668` 可正常登录；
+  - 但它们仅有资料/支付联调数据，没有 `courses` / `schedule events`；
+  - 课程 smoke 目标 seed `910103 / 910003 / 982001 / 983001 / 984002` 当前在 117 上未命中，`/user/me` 返回 `40400`，课程详情返回“课程不存在”。
 
 ## 常用环境变量
 

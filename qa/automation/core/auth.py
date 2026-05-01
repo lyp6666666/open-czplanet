@@ -52,6 +52,9 @@ def send_sms_code(client: ApiClient, phone: str) -> None:
 
 
 def peek_sms_code(client: ApiClient, phone: str) -> str:
+    manual_code = os.getenv("QA_SMS_CODE")
+    if isinstance(manual_code, str) and manual_code.strip():
+        return manual_code.strip()
     path = os.getenv("QA_SMS_PEEK_PATH", "/internal/debug/sms-code")
     prefix = os.getenv("QA_SMS_PEEK_PREFIX", "sms:code:")
     data = client.get_data(path, params={"phone": phone, "prefix": prefix})
