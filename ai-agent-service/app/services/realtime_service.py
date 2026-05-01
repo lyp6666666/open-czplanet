@@ -11,7 +11,11 @@ from app.core.config import get_settings
 from app.realtime.graph import REALTIME_GRAPH
 from app.realtime.state_store import RealtimeStateStore
 from app.repositories.realtime_repository import (
+    LessonEpisodeRepository,
     LessonStageSummaryRepository,
+    LessonSummaryPatchRepository,
+    LessonTeachingEventRepository,
+    LessonTurnRepository,
     LiveLessonSessionRepository,
     TranscriptRepository,
 )
@@ -65,6 +69,7 @@ class RealtimeLessonService:
             {
                 "lessonId": lesson_id,
                 "sessionId": session_id,
+                "createdAtTs": int(time.time()),
                 "mode": request.realtimeAiMode,
                 "asrEnabled": asr_enabled,
                 "llmEnabled": llm_enabled,
@@ -95,6 +100,7 @@ class RealtimeLessonService:
                 is_final=segment.isFinal,
             )
         graph_result = REALTIME_GRAPH.invoke({"lesson_id": lesson_id, "segment": payload})
+        self._persist_agent_memory(lesson_id, graph_result)
         if graph_result.get("summary"):
             with session_scope() as session:
                 LessonStageSummaryRepository(session).save(
@@ -208,3 +214,39 @@ class RealtimeLessonService:
         with session_scope() as session:
             LiveLessonSessionRepository(session).update_status(lesson_id, "FINALIZED")
         return state
+
+    def _persist_agent_memory(self, lesson_id: int, graph_result: dict) -> None:
+        try:
+            with session_scope() as session:
+                turn = graph_result.get("turn")
+                if turn:
+                    LessonTurnRepository(session).save(lesson_id=lesson_id, turn=turn)
+                events = graph_result.get("events") or []
+                if events:
+                    LessonTeachingEventRepository(session).save_many(
+                        lesson_id=lesson_id,
+                        events=events,
+                    )
+                patch = graph_result.get("patch")
+                guard = graph_result.get("guard") or {}
+                if patch:
+                    trigger_reasons = (graph_result.get("decision") or {}).get("triggerReasons") or []
+                    status = "ACCEPTED" if guard.get("accepted") else "REJECTED"
+                    LessonSummaryPatchRepository(session).save(
+                        lesson_id=lesson_id,
+                        patch=patch,
+                        status=status,
+                        trigger_reasons=trigger_reasons,
+                        guard=guard,
+                    )
+                    projection = graph_result.get("projection") or {}
+                    outline = projection.get("minutesOutline") or []
+                    if guard.get("accepted") and outline:
+                        LessonEpisodeRepository(session).save_from_section(
+                            lesson_id=lesson_id,
+                            section=outline[-1],
+                            patch=patch,
+                        )
+        except Exception:
+            # Realtime memory persistence must not break classroom transcript ingestion.
+            return

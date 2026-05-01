@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from app.core.config import get_settings
 from app.queue.redis_queue import get_redis
@@ -20,11 +20,16 @@ class RealtimeStateStore:
     def create_session_state(self, lesson_id: int, state: Dict) -> None:
         state = dict(state)
         state.setdefault("segmentCount", 0)
+        state.setdefault("turnCount", 0)
+        state.setdefault("eventCount", 0)
+        state.setdefault("memoryVersion", 0)
+        state.setdefault("summaryVersion", 0)
         state.setdefault("studentQuestions", [])
         state.setdefault("homeworkCandidates", [])
         state.setdefault("keyPoints", [])
         state.setdefault("minutesOutline", [])
         state.setdefault("activeSectionTitle", None)
+        state.setdefault("guardRejectedCount", 0)
         state.setdefault("status", "ACTIVE")
         self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
 
@@ -52,8 +57,43 @@ class RealtimeStateStore:
         self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
         return count
 
+    def append_turn(self, lesson_id: int, turn: Dict) -> int:
+        key = _key(lesson_id, "turns")
+        self.redis.rpush(key, json.dumps(turn, ensure_ascii=False))
+        self.redis.ltrim(key, -max(self.settings.realtime_transcript_buffer_size, 100), -1)
+        state = self.get_state(lesson_id)
+        count = int(state.get("turnCount") or 0) + 1
+        state["turnCount"] = count
+        state["memoryVersion"] = int(state.get("memoryVersion") or 0) + 1
+        state["openTurn"] = turn
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return count
+
+    def append_events(self, lesson_id: int, events: List[Dict]) -> int:
+        if not events:
+            return int((self.get_state(lesson_id) or {}).get("eventCount") or 0)
+        key = _key(lesson_id, "teaching_events")
+        for event in events:
+            self.redis.rpush(key, json.dumps(event, ensure_ascii=False))
+        self.redis.ltrim(key, -max(self.settings.realtime_transcript_buffer_size, 100), -1)
+        state = self.get_state(lesson_id)
+        count = int(state.get("eventCount") or 0) + len(events)
+        state["eventCount"] = count
+        state["memoryVersion"] = int(state.get("memoryVersion") or 0) + 1
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return count
+
     def recent_segments(self, lesson_id: int, limit: int = 80) -> List[Dict]:
-        raw_items = self.redis.lrange(_key(lesson_id, "transcript"), -limit, -1)
+        return self._recent_json_list(_key(lesson_id, "transcript"), limit)
+
+    def recent_turns(self, lesson_id: int, limit: int = 12) -> List[Dict]:
+        return self._recent_json_list(_key(lesson_id, "turns"), limit)
+
+    def recent_events(self, lesson_id: int, limit: int = 20) -> List[Dict]:
+        return self._recent_json_list(_key(lesson_id, "teaching_events"), limit)
+
+    def _recent_json_list(self, key: str, limit: int) -> List[Dict]:
+        raw_items = self.redis.lrange(key, -limit, -1)
         result = []
         for raw in raw_items:
             if isinstance(raw, bytes):
@@ -104,6 +144,72 @@ class RealtimeStateStore:
             values = summary.get(field) or []
             if values:
                 state[field] = values
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return state
+
+    def apply_summary_projection(
+        self,
+        lesson_id: int,
+        projection: Dict,
+        *,
+        patch: Dict,
+        trigger_reasons: List[str],
+        guard: Dict,
+    ) -> Dict:
+        state = self.get_state(lesson_id)
+        state["minutesOutline"] = projection.get("minutesOutline") or []
+        state["studentQuestions"] = projection.get("studentQuestions") or []
+        state["homeworkCandidates"] = projection.get("homeworkCandidates") or []
+        state["keyPoints"] = projection.get("keyPoints") or []
+        state["latestStageSummary"] = projection.get("latestStageSummary")
+        state["activeSectionTitle"] = projection.get("activeSectionTitle")
+        state["currentTopic"] = projection.get("currentTopic") or state.get("currentTopic")
+        state["summaryVersion"] = int(state.get("summaryVersion") or 0) + 1
+        state["lastLlmSummaryTs"] = int(time.time())
+        state["lastLlmSegmentCount"] = int(state.get("segmentCount") or 0)
+        state["lastStrongPatchTs"] = int(time.time())
+        if not state.get("firstSummaryAt"):
+            state["firstSummaryAt"] = int(time.time())
+        state["lastPatchId"] = patch.get("patchId")
+        state["lastPatchType"] = patch.get("patchType")
+        state["lastTriggerReasons"] = trigger_reasons
+        state["lastGuardStatus"] = guard.get("severity") or "pass"
+        state["guardAccepted"] = guard.get("accepted")
+        if projection.get("studentLearningState"):
+            state["studentLearningState"] = projection.get("studentLearningState")
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return state
+
+    def update_learning_state(self, lesson_id: int, learning_state: Dict) -> Dict:
+        state = self.get_state(lesson_id)
+        state["studentLearningState"] = learning_state
+        state["memoryVersion"] = int(state.get("memoryVersion") or 0) + 1
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return state
+
+    def record_guard_rejection(
+        self,
+        lesson_id: int,
+        *,
+        patch: Dict,
+        trigger_reasons: List[str],
+        guard: Dict,
+    ) -> Dict:
+        state = self.get_state(lesson_id)
+        state["guardRejectedCount"] = int(state.get("guardRejectedCount") or 0) + 1
+        state["lastRejectedPatchId"] = patch.get("patchId")
+        state["lastTriggerReasons"] = trigger_reasons
+        state["lastGuardReasons"] = guard.get("reasons") or []
+        state["lastGuardStatus"] = guard.get("severity") or "reject"
+        self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
+        return state
+
+    def record_orchestrator_decision(self, lesson_id: int, decision: Dict) -> Dict:
+        state = self.get_state(lesson_id)
+        state["lastOrchestratorDecision"] = decision.get("decision")
+        state["lastTriggerReasons"] = decision.get("triggerReasons") or []
+        if decision.get("suppressedTriggerReasons"):
+            state["suppressedTriggerReasons"] = decision.get("suppressedTriggerReasons")
         self.redis.set(_key(lesson_id, "state"), json.dumps(state, ensure_ascii=False))
         return state
 

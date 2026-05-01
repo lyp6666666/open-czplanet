@@ -121,6 +121,76 @@ class AiLessonStageSummary(Base):
     created_at: Mapped[str] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
+class AiLessonTurn(Base):
+    __tablename__ = "ai_lesson_turn"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lesson_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    turn_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    speaker: Mapped[str] = mapped_column(String(32), nullable=False)
+    start_segment: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    end_segment: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    role_hint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class AiLessonTeachingEvent(Base):
+    __tablename__ = "ai_lesson_teaching_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lesson_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    event_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    topic: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evidence_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+    created_at: Mapped[str] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+
+class AiLessonEpisode(Base):
+    __tablename__ = "ai_lesson_episode"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lesson_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    episode_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    stage_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    topic: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    start_segment: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    end_segment: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    key_points_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    student_questions_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    homework_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    evidence_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+    created_at: Mapped[str] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[str] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class AiLessonSummaryPatch(Base):
+    __tablename__ = "ai_lesson_summary_patch"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lesson_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    patch_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    patch_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    trigger_reasons_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    patch_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    guard_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[str] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+
 settings = get_settings()
 engine = create_engine(
     _normalize_database_url(settings.database_url),

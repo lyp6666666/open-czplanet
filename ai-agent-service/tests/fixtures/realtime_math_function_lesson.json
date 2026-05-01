@@ -1,0 +1,12 @@
+[
+  {"seq": 1, "speaker": "teacher", "text": "我们先回顾上节课的一次函数。"},
+  {"seq": 2, "speaker": "teacher", "text": "一次函数的一般形式是 y 等于 kx 加 b。"},
+  {"seq": 3, "speaker": "teacher", "text": "这里的重点是 k 决定图像的倾斜程度。"},
+  {"seq": 4, "speaker": "student", "text": "为什么 k 越大图像越陡？"},
+  {"seq": 5, "speaker": "teacher", "text": "因为横坐标变化相同时，纵坐标变化越大，直线看起来就越陡。"},
+  {"seq": 6, "speaker": "teacher", "text": "接下来我们看一个例题。"},
+  {"seq": 7, "speaker": "teacher", "text": "已知直线经过两个点，先求 k，再求 b。"},
+  {"seq": 8, "speaker": "student", "text": "我这里不会代入第二个点。"},
+  {"seq": 9, "speaker": "teacher", "text": "注意先把第一个点代入求出关系式，再用第二个点校验。"},
+  {"seq": 10, "speaker": "teacher", "text": "课后作业是完成讲义第十二到十四页，并整理今天这道错题。"}
+]

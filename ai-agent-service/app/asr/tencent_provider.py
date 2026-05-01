@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Dict, Optional
 
 from app.asr.base import RealtimeASRProvider, TranscriptCallback
 from app.core.config import get_settings

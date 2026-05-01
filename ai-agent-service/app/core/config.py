@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     realtime_transcript_buffer_size: int = 500
     realtime_min_audio_rms: float = 0.012
     realtime_silence_pause_seconds: int = 20
+    realtime_agent_enabled: bool = True
+    realtime_agent_first_summary_min_turns: int = 4
+    realtime_agent_recent_turn_limit: int = 12
+    realtime_agent_recent_event_limit: int = 20
+    realtime_agent_strong_cooldown_seconds: int = 90
+    realtime_agent_event_density_threshold: int = 5
+    realtime_agent_max_section_items: int = 6
 
     tencent_asr_enabled: bool = False
     tencent_asr_app_id: Optional[str] = None
