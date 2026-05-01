@@ -321,10 +321,7 @@ onBeforeUnmount(() => {
   right: max(18px, env(safe-area-inset-right));
   bottom: max(22px, env(safe-area-inset-bottom));
   z-index: 1200;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
+  width: max-content;
 }
 
 .customer-service.lifted {
@@ -332,6 +329,9 @@ onBeforeUnmount(() => {
 }
 
 .service-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
   width: min(300px, calc(100vw - 32px));
   padding: 14px;
   border: 1px solid rgba(45, 98, 242, 0.14);
