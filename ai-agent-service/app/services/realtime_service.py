@@ -196,9 +196,11 @@ class RealtimeLessonService:
         text = str(event.get("text") or "").strip()
         if not text:
             return
+        event_speaker = str(event.get("speaker") or "").strip()
+        resolved_speaker = event_speaker if event_speaker and event_speaker != "unknown" else speaker
         segment = TranscriptSegmentInput(
             seq=int(event.get("seq") or int(time.time() * 1000)),
-            speaker=event.get("speaker") or speaker or "unknown",
+            speaker=resolved_speaker or "unknown",
             startMs=int(event.get("startMs") or 0),
             endMs=int(event.get("endMs") or 0),
             text=text,

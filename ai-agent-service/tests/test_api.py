@@ -163,6 +163,34 @@ def test_realtime_audio_chunk_silence_does_not_trigger_asr(tmp_path, monkeypatch
     assert state["rawState"]["asrListening"] is False
 
 
+def test_asr_unknown_speaker_falls_back_to_audio_chunk_speaker(monkeypatch):
+    from app.schemas.realtime import TranscriptSegmentInput
+    from app.services.realtime_service import RealtimeLessonService
+
+    captured = {}
+
+    def fake_accept_segment(self, lesson_id: int, segment: TranscriptSegmentInput):
+        captured["lesson_id"] = lesson_id
+        captured["segment"] = segment
+
+    monkeypatch.setattr(RealtimeLessonService, "accept_segment", fake_accept_segment)
+
+    RealtimeLessonService()._handle_asr_event(
+        982008,
+        "teacher",
+        {
+            "seq": 1,
+            "speaker": "unknown",
+            "text": "作业是完成讲义第一题。",
+            "isFinal": False,
+        },
+    )
+
+    assert captured["lesson_id"] == 982008
+    assert captured["segment"].speaker == "teacher"
+    assert captured["segment"].text == "作业是完成讲义第一题。"
+
+
 def test_metrics_endpoint_exposes_prometheus_samples(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
 
