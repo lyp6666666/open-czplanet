@@ -19,11 +19,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install deploy dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rsync
-
       - name: Prepare SSH key
         env:
           TEST_SERVER_SSH_KEY: ${{ secrets.TEST_SERVER_SSH_KEY || secrets.SERVER_SSH_KEY }}
@@ -37,55 +32,36 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p "$TEST_SERVER_PORT" "$TEST_SERVER_HOST" >> ~/.ssh/known_hosts
 
-      - name: Package dev artifact
-        run: |
-          git archive --format=tar.gz --output="/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" HEAD
-
-      - name: Upload artifact to test server
+      - name: Prepare test server bare repo
         env:
           TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
           TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+          TEST_SERVER_GIT_DIR: ${{ secrets.TEST_SERVER_GIT_DIR || '/opt/ai-platform.git' }}
         run: |
-          CHUNK_DIR="/tmp/ai-platform-dev-${GITHUB_SHA}.chunks"
-          mkdir -p "$CHUNK_DIR"
-          split -b 4m -d -a 3 "/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" "$CHUNK_DIR/part-"
-
           ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
             -o StrictHostKeyChecking=yes \
             "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "rm -rf '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks' && mkdir -p '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks'"
+            "if [ ! -d '$TEST_SERVER_GIT_DIR' ]; then git init --bare '$TEST_SERVER_GIT_DIR'; fi"
 
-          for chunk in "$CHUNK_DIR"/part-*; do
-            success=0
-            for attempt in 1 2 3; do
-              if timeout 120 rsync -az --partial --append-verify \
-                -e "ssh -i ~/.ssh/id_ed25519 -p $TEST_SERVER_PORT -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8" \
-                "$chunk" \
-                "$TEST_SERVER_USER@$TEST_SERVER_HOST:/tmp/ai-platform-dev-${GITHUB_SHA}.chunks/"; then
-                success=1
-                break
-              fi
-              sleep 5
-            done
-            test "$success" = "1"
-          done
-
-          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
-            -o StrictHostKeyChecking=yes \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "cat /tmp/ai-platform-dev-${GITHUB_SHA}.chunks/part-* > '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz' && rm -rf '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks'"
-
-          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
-            -o StrictHostKeyChecking=yes \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "gzip -t '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz'"
+      - name: Push dev code to test server
+        env:
+          TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+          TEST_SERVER_GIT_DIR: ${{ secrets.TEST_SERVER_GIT_DIR || '/opt/ai-platform.git' }}
+        run: |
+          git remote remove test-server-deploy 2>/dev/null || true
+          git remote add test-server-deploy "ssh://$TEST_SERVER_USER@$TEST_SERVER_HOST:$TEST_SERVER_PORT$TEST_SERVER_GIT_DIR"
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -p $TEST_SERVER_PORT -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4" \
+            git push --force test-server-deploy "HEAD:refs/heads/dev"
 
       - name: Deploy on test server
         env:
           TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
           TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+          TEST_SERVER_GIT_DIR: ${{ secrets.TEST_SERVER_GIT_DIR || '/opt/ai-platform.git' }}
           TEST_SERVER_PATH: ${{ secrets.TEST_SERVER_PATH || '/opt/ai-platform' }}
           TEST_MANAGE_INFRA: ${{ vars.TEST_MANAGE_INFRA || 'auto' }}
           TEST_INFRA_CONTAINERS: ${{ vars.TEST_INFRA_CONTAINERS || 'mysql redis rabbitmq minio minio_init livekit' }}
@@ -122,4 +98,4 @@ jobs:
              AI_AGENT_HOST='$TEST_AI_AGENT_HOST' \
              GATEWAY_PORT='$TEST_GATEWAY_PORT' \
              AI_AGENT_PORT='$TEST_AI_AGENT_PORT' \
-             /usr/local/bin/ai-platform-dev-deploy.sh '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz' '${GITHUB_SHA}'"
+             /usr/local/bin/ai-platform-dev-deploy.sh '$TEST_SERVER_GIT_DIR' '${GITHUB_SHA}'"

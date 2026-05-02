@@ -2,7 +2,7 @@
 
 set -eu
 
-ARCHIVE_PATH="${1:-}"
+SOURCE_PATH="${1:-}"
 REVISION="${2:-unknown}"
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/ai-platform}"
@@ -35,8 +35,8 @@ require_cmd() {
   fi
 }
 
-if [ -z "$ARCHIVE_PATH" ] || [ ! -f "$ARCHIVE_PATH" ]; then
-  log "usage: $0 /tmp/ai-platform-dev-<sha>.tar.gz <sha>"
+if [ -z "$SOURCE_PATH" ]; then
+  log "usage: $0 <archive.tar.gz|bare-repo.git> <sha>"
   exit 1
 fi
 
@@ -45,11 +45,23 @@ require_cmd rsync
 require_cmd curl
 
 log "revision=$REVISION"
-log "archive=$ARCHIVE_PATH"
+log "source=$SOURCE_PATH"
 log "deployPath=$DEPLOY_PATH"
 
 mkdir -p "$RELEASE_DIR" "$DEPLOY_PATH"
-tar -xzf "$ARCHIVE_PATH" -C "$RELEASE_DIR"
+
+if [ -f "$SOURCE_PATH" ]; then
+  log "extracting release archive"
+  tar -xzf "$SOURCE_PATH" -C "$RELEASE_DIR"
+elif [ -d "$SOURCE_PATH" ]; then
+  require_cmd git
+  log "exporting release from bare repo"
+  git --git-dir="$SOURCE_PATH" rev-parse --verify "$REVISION^{commit}" >/dev/null
+  git --git-dir="$SOURCE_PATH" archive "$REVISION" | tar -xf - -C "$RELEASE_DIR"
+else
+  log "source not found: $SOURCE_PATH"
+  exit 1
+fi
 
 if [ -f "$DEPLOY_PATH/scripts/dev_all_down.sh" ]; then
   log "stopping current test services"
@@ -120,7 +132,9 @@ PY
 esac
 
 log "cleanup old release archives"
-rm -f "$ARCHIVE_PATH"
+if [ -f "$SOURCE_PATH" ]; then
+  rm -f "$SOURCE_PATH"
+fi
 find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort | head -n -5 | xargs -r rm -rf
 
 log "deployment complete"
