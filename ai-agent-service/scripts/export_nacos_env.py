@@ -81,7 +81,6 @@ def main() -> int:
         "AI_AGENT_TENCENT_ASR_ENGINE_MODEL_TYPE": tencent_asr.get("engine-model-type"),
         "AI_AGENT_TENCENT_ASR_VOICE_FORMAT": tencent_asr.get("voice-format"),
         "AI_AGENT_TENCENT_ASR_NEED_VAD": tencent_asr.get("need-vad"),
-        "AI_AGENT_TENCENT_SPEECH_SDK_PATH": tencent_asr.get("speech-sdk-path"),
     }
 
     for key, value in mappings.items():

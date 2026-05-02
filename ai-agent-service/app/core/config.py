@@ -52,7 +52,6 @@ class Settings(BaseSettings):
     tencent_asr_engine_model_type: str = "16k_zh"
     tencent_asr_voice_format: int = 1
     tencent_asr_need_vad: int = 1
-    tencent_speech_sdk_path: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_prefix="AI_AGENT_",

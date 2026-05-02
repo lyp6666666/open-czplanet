@@ -53,5 +53,4 @@ ai-agent:
     engine-model-type: "16k_zh"
     voice-format: 1
     need-vad: 1
-    # 如果服务器上通过 git clone 方式挂载官方 SDK，可填写绝对路径
-    speech-sdk-path: "<TODO:TENCENT_SPEECH_SDK_PATH>"
+    # 腾讯实时语音 SDK 由 ai-agent-service/scripts/bootstrap_env.sh 安装到 uv 环境，无需配置本机路径。

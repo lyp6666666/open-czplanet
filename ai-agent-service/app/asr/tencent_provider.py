@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from typing import Dict, Optional
 
 from app.asr.base import RealtimeASRProvider, TranscriptCallback
@@ -12,9 +10,8 @@ from app.core.config import get_settings
 class TencentRealtimeASRProvider(RealtimeASRProvider):
     """Tencent Cloud realtime ASR adapter based on tencentcloud-speech-sdk-python.
 
-    The official SDK is not published as a normal package in this repository. Production deployments
-    should mount or install TencentCloud/tencentcloud-speech-sdk-python and configure
-    AI_AGENT_TENCENT_SPEECH_SDK_PATH when needed.
+    The official realtime SDK is installed into the uv-managed Python environment by the service
+    bootstrap script. Runtime code should import it from the active environment only.
     """
 
     def __init__(self):
@@ -31,7 +28,6 @@ class TencentRealtimeASRProvider(RealtimeASRProvider):
     def create_session(self, *, lesson_id: int, callback: TranscriptCallback):
         if not self.available():
             raise ValueError("tencent_asr_not_configured")
-        self._ensure_sdk_path()
         from asr import speech_recognizer
         from common import credential
 
@@ -55,7 +51,6 @@ class TencentRealtimeASRProvider(RealtimeASRProvider):
         return recognizer
 
     def session_closed(self, session) -> bool:
-        self._ensure_sdk_path()
         from asr import speech_recognizer
 
         return getattr(session, "status", None) in {
@@ -65,7 +60,6 @@ class TencentRealtimeASRProvider(RealtimeASRProvider):
         }
 
     def write_audio(self, session, audio: bytes) -> bool:
-        self._ensure_sdk_path()
         from asr import speech_recognizer
 
         if getattr(session, "status", None) in {
@@ -76,14 +70,6 @@ class TencentRealtimeASRProvider(RealtimeASRProvider):
             return False
         session.write(audio)
         return True
-
-    def _ensure_sdk_path(self) -> None:
-        sdk_path = self.settings.tencent_speech_sdk_path
-        if not sdk_path:
-            return
-        path = str(Path(sdk_path).expanduser().resolve())
-        if path not in sys.path:
-            sys.path.insert(0, path)
 
 
 class _TencentListener:
