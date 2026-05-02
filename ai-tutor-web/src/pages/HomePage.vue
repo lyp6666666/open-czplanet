@@ -829,6 +829,7 @@ onUnmounted(() => {
 
 .visual-frame {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-self: start;
   gap: 20px;
   min-width: 0;
@@ -870,6 +871,10 @@ onUnmounted(() => {
 
 .classroom-board {
   display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .teacher-stage {
