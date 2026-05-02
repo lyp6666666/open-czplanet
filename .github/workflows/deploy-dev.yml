@@ -57,6 +57,7 @@ jobs:
           TEST_INFRA_CONTAINERS: ${{ vars.TEST_INFRA_CONTAINERS || 'mysql redis rabbitmq minio minio_init livekit' }}
           TEST_NACOS_GRPC_CHECK: ${{ vars.TEST_NACOS_GRPC_CHECK || 'warn' }}
           TEST_NACOS_SERVER_ADDR: ${{ vars.TEST_NACOS_SERVER_ADDR || '127.0.0.1:18848' }}
+          TEST_NACOS_TUNNEL_HOST: ${{ vars.TEST_NACOS_TUNNEL_HOST || '111.228.20.88' }}
           TEST_AUTO_VERIFY_DB_SCHEMA: ${{ vars.TEST_AUTO_VERIFY_DB_SCHEMA || '0' }}
           TEST_FRONTEND_HOST: ${{ vars.TEST_FRONTEND_HOST || '0.0.0.0' }}
           TEST_LIVEKIT_WS_URL: ${{ vars.TEST_LIVEKIT_WS_URL }}
@@ -72,6 +73,11 @@ jobs:
             -o StrictHostKeyChecking=yes \
             "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
             "cd '$TEST_SERVER_PATH' && STOP_INFRA='0' sh scripts/dev_all_down.sh || true"
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "cd '$TEST_SERVER_PATH' && REMOTE_HOST='$TEST_NACOS_TUNNEL_HOST' bash scripts/nacos_tunnel.sh start"
 
           ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
             -o StrictHostKeyChecking=yes \

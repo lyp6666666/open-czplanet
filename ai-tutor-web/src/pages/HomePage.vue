@@ -823,11 +823,15 @@ onUnmounted(() => {
 
 .hero-visual {
   display: grid;
+  align-self: start;
+  min-width: 0;
 }
 
 .visual-frame {
   display: grid;
+  align-self: start;
   gap: 20px;
+  min-width: 0;
   padding: 26px;
   border-radius: 30px;
   background:
@@ -873,11 +877,14 @@ onUnmounted(() => {
   overflow: hidden;
   border-radius: 28px;
   background: linear-gradient(180deg, #d9e7ff 0%, #f3f7ff 100%);
-  min-height: 420px;
-  aspect-ratio: 16 / 11;
+  height: clamp(360px, 30vw, 500px);
+  min-height: 0;
 }
 
 .teacher-stage-swiper,
+.teacher-stage :deep(.swiper),
+.teacher-stage :deep(.swiper-wrapper),
+.teacher-stage :deep(.swiper-slide),
 .hero-slide-button {
   width: 100%;
   height: 100%;
@@ -894,7 +901,7 @@ onUnmounted(() => {
 .teacher-photo {
   width: 100%;
   height: 100%;
-  min-height: 420px;
+  min-height: 0;
   object-fit: contain;
   object-position: center;
   background: linear-gradient(180deg, #e3edff 0%, #f6f9ff 100%);
@@ -1479,13 +1486,8 @@ onUnmounted(() => {
     flex-direction: column;
   }
 
-  .teacher-stage,
-  .teacher-photo {
-    min-height: 280px;
-  }
-
   .teacher-stage {
-    aspect-ratio: 16 / 12;
+    height: 300px;
   }
 
   .teacher-float {
