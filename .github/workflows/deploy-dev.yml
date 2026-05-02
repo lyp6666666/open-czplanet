@@ -47,10 +47,34 @@ jobs:
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
           TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
         run: |
-          rsync -az --partial --append-verify \
-            -e "ssh -i ~/.ssh/id_ed25519 -p $TEST_SERVER_PORT -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8" \
-            "/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST:/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz"
+          CHUNK_DIR="/tmp/ai-platform-dev-${GITHUB_SHA}.chunks"
+          mkdir -p "$CHUNK_DIR"
+          split -b 4m -d -a 3 "/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" "$CHUNK_DIR/part-"
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "rm -rf '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks' && mkdir -p '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks'"
+
+          for chunk in "$CHUNK_DIR"/part-*; do
+            success=0
+            for attempt in 1 2 3; do
+              if timeout 120 rsync -az --partial --append-verify \
+                -e "ssh -i ~/.ssh/id_ed25519 -p $TEST_SERVER_PORT -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8" \
+                "$chunk" \
+                "$TEST_SERVER_USER@$TEST_SERVER_HOST:/tmp/ai-platform-dev-${GITHUB_SHA}.chunks/"; then
+                success=1
+                break
+              fi
+              sleep 5
+            done
+            test "$success" = "1"
+          done
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "cat /tmp/ai-platform-dev-${GITHUB_SHA}.chunks/part-* > '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz' && rm -rf '/tmp/ai-platform-dev-${GITHUB_SHA}.chunks'"
 
           ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
             -o StrictHostKeyChecking=yes \
