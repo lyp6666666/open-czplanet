@@ -19,6 +19,11 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Install deploy dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
       - name: Prepare SSH key
         env:
           TEST_SERVER_SSH_KEY: ${{ secrets.TEST_SERVER_SSH_KEY || secrets.SERVER_SSH_KEY }}
@@ -42,10 +47,15 @@ jobs:
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
           TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
         run: |
-          scp -i ~/.ssh/id_ed25519 -P "$TEST_SERVER_PORT" \
-            -o StrictHostKeyChecking=yes \
+          rsync -az --partial --append-verify \
+            -e "ssh -i ~/.ssh/id_ed25519 -p $TEST_SERVER_PORT -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8" \
             "/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" \
             "$TEST_SERVER_USER@$TEST_SERVER_HOST:/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz"
+
+          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
+            "gzip -t '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz'"
 
       - name: Deploy on test server
         env:
