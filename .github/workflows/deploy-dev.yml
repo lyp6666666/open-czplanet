@@ -19,11 +19,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Install deploy dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rsync
-
       - name: Prepare SSH key
         env:
           TEST_SERVER_SSH_KEY: ${{ secrets.TEST_SERVER_SSH_KEY || secrets.SERVER_SSH_KEY }}
@@ -37,17 +32,22 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -p "$TEST_SERVER_PORT" "$TEST_SERVER_HOST" >> ~/.ssh/known_hosts
 
-      - name: Sync code to test server
-        env:
-          REMOTE_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
-          REMOTE_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
-          REMOTE_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
-          REMOTE_PATH: ${{ secrets.TEST_SERVER_PATH || '/opt/ai-platform' }}
-          REMOTE_SYNC_DELETE: ${{ vars.TEST_REMOTE_SYNC_DELETE || '1' }}
+      - name: Package dev artifact
         run: |
-          bash scripts/sync_remote_code.sh
+          git archive --format=tar.gz --output="/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" HEAD
 
-      - name: Restart test environment
+      - name: Upload artifact to test server
+        env:
+          TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
+          TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 -P "$TEST_SERVER_PORT" \
+            -o StrictHostKeyChecking=yes \
+            "/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz" \
+            "$TEST_SERVER_USER@$TEST_SERVER_HOST:/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz"
+
+      - name: Deploy on test server
         env:
           TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
           TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
@@ -64,6 +64,8 @@ jobs:
           TEST_ADMIN_WEB_BASE_PATH: ${{ vars.TEST_ADMIN_WEB_BASE_PATH || '/admin/' }}
           TEST_ENABLE_AI_AGENT: ${{ vars.TEST_ENABLE_AI_AGENT || '1' }}
           TEST_AI_AGENT_HOST: ${{ vars.TEST_AI_AGENT_HOST || '127.0.0.1' }}
+          TEST_GATEWAY_PORT: ${{ vars.TEST_GATEWAY_PORT || '18080' }}
+          TEST_AI_AGENT_PORT: ${{ vars.TEST_AI_AGENT_PORT || '18086' }}
         run: |
           if [ -z "$TEST_LIVEKIT_WS_URL" ]; then
             TEST_LIVEKIT_WS_URL="ws://$TEST_SERVER_HOST/livekit"
@@ -72,31 +74,18 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
             -o StrictHostKeyChecking=yes \
             "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "cd '$TEST_SERVER_PATH' && STOP_INFRA='0' sh scripts/dev_all_down.sh || true"
-
-          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
-            -o StrictHostKeyChecking=yes \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "cd '$TEST_SERVER_PATH' && REMOTE_HOST='$TEST_NACOS_TUNNEL_HOST' bash scripts/nacos_tunnel.sh start"
-
-          ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
-            -o StrictHostKeyChecking=yes \
-            "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-            "cd '$TEST_SERVER_PATH' && AUTO_VERIFY_DB_SCHEMA='$TEST_AUTO_VERIFY_DB_SCHEMA' MANAGE_INFRA='$TEST_MANAGE_INFRA' INFRA_CONTAINERS='$TEST_INFRA_CONTAINERS' NACOS_GRPC_CHECK='$TEST_NACOS_GRPC_CHECK' NACOS_SERVER_ADDR='$TEST_NACOS_SERVER_ADDR' FRONTEND_HOST='$TEST_FRONTEND_HOST' LIVEKIT_WS_URL='$TEST_LIVEKIT_WS_URL' ADMIN_WEB_BASE_PATH='$TEST_ADMIN_WEB_BASE_PATH' ENABLE_AI_AGENT='$TEST_ENABLE_AI_AGENT' AI_AGENT_HOST='$TEST_AI_AGENT_HOST' sh scripts/dev_all_up.sh"
-
-      - name: Verify test deployment
-        env:
-          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST || '117.72.111.39' }}
-          TEST_GATEWAY_PORT: ${{ vars.TEST_GATEWAY_PORT || '18080' }}
-          TEST_AI_AGENT_PORT: ${{ vars.TEST_AI_AGENT_PORT || '18086' }}
-          TEST_ENABLE_AI_AGENT: ${{ vars.TEST_ENABLE_AI_AGENT || '1' }}
-          TEST_SERVER_USER: ${{ secrets.TEST_SERVER_USER || 'root' }}
-          TEST_SERVER_PORT: ${{ secrets.TEST_SERVER_PORT || '22' }}
-        run: |
-          curl -fsS --max-time 10 "http://$TEST_SERVER_HOST:$TEST_GATEWAY_PORT/actuator/health"
-          if [ "$TEST_ENABLE_AI_AGENT" = "1" ] || [ "$TEST_ENABLE_AI_AGENT" = "true" ] || [ "$TEST_ENABLE_AI_AGENT" = "yes" ]; then
-            ssh -i ~/.ssh/id_ed25519 -p "$TEST_SERVER_PORT" \
-              -o StrictHostKeyChecking=yes \
-              "$TEST_SERVER_USER@$TEST_SERVER_HOST" \
-              "curl -fsS --max-time 10 'http://127.0.0.1:$TEST_AI_AGENT_PORT/health'"
-          fi
+            "DEPLOY_PATH='$TEST_SERVER_PATH' \
+             MANAGE_INFRA='$TEST_MANAGE_INFRA' \
+             INFRA_CONTAINERS='$TEST_INFRA_CONTAINERS' \
+             NACOS_GRPC_CHECK='$TEST_NACOS_GRPC_CHECK' \
+             NACOS_SERVER_ADDR='$TEST_NACOS_SERVER_ADDR' \
+             TEST_NACOS_TUNNEL_HOST='$TEST_NACOS_TUNNEL_HOST' \
+             AUTO_VERIFY_DB_SCHEMA='$TEST_AUTO_VERIFY_DB_SCHEMA' \
+             FRONTEND_HOST='$TEST_FRONTEND_HOST' \
+             LIVEKIT_WS_URL='$TEST_LIVEKIT_WS_URL' \
+             ADMIN_WEB_BASE_PATH='$TEST_ADMIN_WEB_BASE_PATH' \
+             ENABLE_AI_AGENT='$TEST_ENABLE_AI_AGENT' \
+             AI_AGENT_HOST='$TEST_AI_AGENT_HOST' \
+             GATEWAY_PORT='$TEST_GATEWAY_PORT' \
+             AI_AGENT_PORT='$TEST_AI_AGENT_PORT' \
+             /usr/local/bin/ai-platform-dev-deploy.sh '/tmp/ai-platform-dev-${GITHUB_SHA}.tar.gz' '${GITHUB_SHA}'"
