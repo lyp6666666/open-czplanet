@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 UV_INSTALL_DIR="${UV_INSTALL_DIR:-$HOME/.local/bin}"
 UV_PYTHON_VERSION="${UV_PYTHON_VERSION:-3.11}"
 UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-.venv}"
+AI_AGENT_INSTALL_DEV_DEPS="${AI_AGENT_INSTALL_DEV_DEPS:-0}"
 
 ensure_uv() {
   PATH="$UV_INSTALL_DIR:$PATH"
@@ -39,4 +40,15 @@ if [ ! -f "$UV_PROJECT_ENVIRONMENT/.managed-by-uv" ]; then
   uv venv --python "$UV_PYTHON_VERSION" "$UV_PROJECT_ENVIRONMENT" >/dev/null
   touch "$UV_PROJECT_ENVIRONMENT/.managed-by-uv"
 fi
-uv sync --directory . --python "$UV_PROJECT_ENVIRONMENT/bin/python" --all-extras --dev >/dev/null
+case "$AI_AGENT_INSTALL_DEV_DEPS" in
+  1|true|yes)
+    uv sync --directory . --python "$UV_PROJECT_ENVIRONMENT/bin/python" --all-extras --dev >/dev/null
+    ;;
+  0|false|no)
+    uv sync --directory . --python "$UV_PROJECT_ENVIRONMENT/bin/python" --all-extras --no-dev >/dev/null
+    ;;
+  *)
+    echo "[ai-agent/bootstrap] 不支持的 AI_AGENT_INSTALL_DEV_DEPS=$AI_AGENT_INSTALL_DEV_DEPS，可选值：1/0 true/false yes/no" >&2
+    exit 1
+    ;;
+esac

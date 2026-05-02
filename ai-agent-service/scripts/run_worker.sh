@@ -10,4 +10,4 @@ if [ -n "${AI_AGENT_ENV_FILE:-}" ] && [ -f "$AI_AGENT_ENV_FILE" ]; then
 elif [ -n "${NACOS_SERVER_ADDR:-}" ]; then
   eval "$(uv run --active --python .venv/bin/python python scripts/export_nacos_env.py)"
 fi
-exec uv run --active --python .venv/bin/python python -m app.worker
+exec .venv/bin/python -m app.worker
