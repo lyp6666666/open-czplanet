@@ -874,6 +874,9 @@ onUnmounted(() => {
 
 .teacher-stage {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border-radius: 28px;
   background: linear-gradient(180deg, #d9e7ff 0%, #f3f7ff 100%);
@@ -887,6 +890,8 @@ onUnmounted(() => {
 .teacher-stage :deep(.swiper-slide),
 .hero-slide-button {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 100%;
 }
 
@@ -899,7 +904,9 @@ onUnmounted(() => {
 }
 
 .teacher-photo {
+  display: block;
   width: 100%;
+  max-width: 100%;
   height: 100%;
   min-height: 0;
   object-fit: contain;
